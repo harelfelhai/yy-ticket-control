@@ -1,0 +1,82 @@
+import Link from "next/link";
+import { he } from "@/lib/he";
+import { getPortalBoard, resolveToken } from "@/lib/services/portal";
+import { ExpiredLink } from "./expired-link";
+
+export const metadata = { title: `${he.portal.activeTitle} — ${he.app.name}` };
+
+/**
+ * הלוח האישי של הנמען החיצוני (מסך 8 באפיון).
+ *
+ * הקישור אינו מציג פנייה בודדת אלא את **כל** הפניות של הקבלן, מכל
+ * האתרים. קבלן משנה עובד בכמה פרויקטים במקביל, ולכן אין לו "אתר משלו".
+ *
+ * המסך מכוון למי שאינו משתמש קבוע במערכת: בלי תפריטים, בלי סינון, ובלי
+ * מונחים פנימיים. רק "מה מחכה לי" ו"מה כבר סגור".
+ */
+export default async function PortalPage(props: PageProps<"/p/[token]">) {
+  const { token } = await props.params;
+  const identity = await resolveToken(token);
+  if (!identity) return <ExpiredLink />;
+
+  const { active, archived } = await getPortalBoard(identity.professionalId);
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
+      <header>
+        <h1 className="text-xl font-bold">{he.portal.greeting(identity.name)}</h1>
+        <p className="text-sm text-muted">{he.portal.activeTitle}</p>
+      </header>
+
+      {active.length === 0 ? (
+        <p className="py-8 text-center text-muted">{he.portal.empty}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {active.map(({ ticket, ...assignment }) => (
+            <li key={assignment.id}>
+              <Link
+                href={`/p/${token}/${ticket.id}`}
+                className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-4"
+              >
+                <span className="font-semibold">
+                  {ticket.building?.name} · {he.directory.apartment} {ticket.apartment?.number}
+                </span>
+                <span className="text-sm text-muted">{ticket.domain?.name}</span>
+                {ticket.description ? (
+                  <span className="truncate text-sm">{ticket.description}</span>
+                ) : null}
+                <span className="text-xs text-muted">
+                  {he.assignmentStatus[assignment.status]}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {archived.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer py-2 text-sm font-bold">
+            {he.portal.archiveTitle} · {archived.length}
+          </summary>
+          <ul className="mt-2 flex flex-col gap-2">
+            {archived.map(({ ticket, ...assignment }) => (
+              <li key={assignment.id}>
+                <Link
+                  href={`/p/${token}/${ticket.id}`}
+                  className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-4 text-muted"
+                >
+                  <span className="font-medium">
+                    {ticket.building?.name} · {he.directory.apartment}{" "}
+                    {ticket.apartment?.number}
+                  </span>
+                  <span className="text-sm">{ticket.domain?.name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}

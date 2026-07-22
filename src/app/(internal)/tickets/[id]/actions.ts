@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { type ActionResult, guard } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
+import { he } from "@/lib/he";
+import { canEditAssignments } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
+import { issuePortalLink } from "@/lib/services/portal";
+import { TicketError, getTicketDetail } from "@/lib/services/tickets";
 import {
   addAssignments,
   addMessage,
@@ -85,5 +89,32 @@ export async function removeRecipientAction(
   return guard(async () => {
     await removeAssignment(await viewer(), assignmentId);
     refresh(ticketId);
+  });
+}
+
+/**
+ * מנפיק קישור גישה חדש לאיש מקצוע ומחזיר אותו למנהל להעתקה.
+ *
+ * הקישור מוצג פעם אחת בלבד — במסד נשמר רק הגיבוב. עד שתיכנס השליחה
+ * האוטומטית (M2), זו הדרך שבה קבלן מקבל גישה: המנהל מעתיק ושולח בעצמו.
+ */
+export async function issueLinkAction(
+  ticketId: string,
+  professionalId: string,
+): Promise<ActionResult<string>> {
+  return guard(async () => {
+    const current = await viewer();
+    const ticket = await getTicketDetail(ticketId);
+    if (!ticket) throw new TicketError(he.ticket.notFound);
+    if (!canEditAssignments(current, ticket)) throw new TicketError(he.common.notAllowed);
+
+    // רק למי שמשויך לפנייה הזו בפועל: הנפקת קישור למי שאינו משויך הייתה
+    // הופכת את המסך למנוע גישה לכל איש מקצוע במערכת.
+    const assigned = ticket.assignments.some(
+      (a) => a.professionalId === professionalId && a.status !== "REMOVED",
+    );
+    if (!assigned) throw new TicketError(he.common.notAllowed);
+
+    return issuePortalLink(professionalId);
   });
 }

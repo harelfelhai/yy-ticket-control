@@ -6,12 +6,14 @@ import { LearnedSelect } from "@/components/learned-select";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
-import { addRecipientsAction, removeRecipientAction } from "./actions";
+import { addRecipientsAction, issueLinkAction, removeRecipientAction } from "./actions";
 
 export interface AssignmentRow {
   id: string;
   name: string;
   status: AssignmentStatus;
+  /** null עבור נמען פנימי — הוא נכנס עם סיסמה ואינו צריך קישור */
+  professionalId: string | null;
 }
 
 export interface AvailableRecipient {
@@ -42,9 +44,26 @@ export function RecipientEditor({
   canEdit,
 }: RecipientEditorProps) {
   const [error, setError] = useState<string | null>(null);
+  const [link, setLink] = useState<string | null>(null);
+  /** למי הקישור שמוצג — כדי שהמנהל לא יעתיק קישור ולא ידע של מי הוא */
+  const [linkFor, setLinkFor] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
   const busy = pending || !hydrated;
+
+  function issueLink(professionalId: string) {
+    setError(null);
+    // מנקים את הקישור הקודם **לפני** הבקשה: אחרת, בזמן ההנפקה לקבלן השני
+    // התיבה עדיין מציגה את הקישור של הראשון, והמנהל עלול להעתיק ולשלוח
+    // לקבלן אחד את הקישור האישי של האחר.
+    setLink(null);
+    setLinkFor(professionalId);
+    startTransition(async () => {
+      const result = await issueLinkAction(ticketId, professionalId);
+      if (result.ok) setLink(result.data);
+      else setError(result.error);
+    });
+  }
 
   const active = assignments.filter((a) => a.status !== "REMOVED");
   const removed = assignments.filter((a) => a.status === "REMOVED");
@@ -83,6 +102,16 @@ export function RecipientEditor({
               <span className="min-w-0 flex-1 truncate">{assignment.name}</span>
               <span className="flex shrink-0 items-center gap-2">
                 <AssignmentStatusChip status={assignment.status} />
+                {canEdit && assignment.professionalId ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => issueLink(assignment.professionalId as string)}
+                    className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-brand disabled:opacity-60"
+                  >
+                    {he.ticket.issueLink}
+                  </button>
+                ) : null}
                 {canEdit ? (
                   <button
                     type="button"
@@ -121,6 +150,27 @@ export function RecipientEditor({
             value={null}
             onChange={add}
             disabled={busy}
+          />
+        </div>
+      ) : null}
+
+      {link ? (
+        <div className="mt-3 flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 p-3">
+          <p className="text-sm font-medium">
+            {he.ticket.linkFor(
+              assignments.find((a) => a.professionalId === linkFor)?.name ?? "",
+            )}
+          </p>
+          <p className="text-xs text-muted">{he.ticket.linkReady}</p>
+          {/* readOnly ולא טקסט רגיל: בחירה והעתקה ידנית עובדות בכל מכשיר,
+              גם כשה-clipboard API חסום או שהדפדפן אינו תומך. */}
+          <input
+            readOnly
+            dir="ltr"
+            value={link}
+            aria-label={he.ticket.issueLink}
+            onFocus={(e) => e.currentTarget.select()}
+            className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
           />
         </div>
       ) : null}

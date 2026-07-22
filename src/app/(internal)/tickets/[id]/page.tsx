@@ -130,6 +130,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           id: a.id,
           name: recipientName(a),
           status: a.status,
+          professionalId: a.professionalId,
         }))}
         available={available}
         canEdit={canEdit}

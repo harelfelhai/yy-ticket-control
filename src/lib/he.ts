@@ -134,6 +134,15 @@ export const he = {
     addRecipient: "הוסף נמען",
     removeRecipient: "הסר",
     removedRecipients: "נמענים שהוסרו",
+    // "צור קישור" ולא "העתק קישור": כל הנפקה מבטלת את הקודמת, והניסוח
+    // חייב להבהיר את זה לפני הלחיצה ולא אחריה.
+    issueLink: "צור קישור גישה",
+    // שם הנמען מוצג מעל הקישור: בפנייה עם כמה קבלנים, קישור בלי שם הוא
+    // הזמנה לשלוח לאחד את הקישור האישי של האחר.
+    linkFor: (name: string) => `קישור עבור ${name}`,
+    linkReady: "הקישור הקודם של נמען זה בוטל.",
+    copy: "העתק",
+    copied: "הועתק",
     room: "חדר",
     site: "אתר",
     chooseBuildingFirst: "בחר בניין תחילה",
@@ -201,6 +210,23 @@ export const he = {
     domainNameRequired: "יש להזין תחום",
     professionalNameRequired: "יש להזין שם איש מקצוע",
     invalidEmail: "כתובת המייל אינה תקינה",
+  },
+
+  /** פורטל הנמען החיצוני (מסך 8 באפיון) */
+  portal: {
+    greeting: (name: string) => `שלום ${name}`,
+    activeTitle: "הפניות שלך",
+    archiveTitle: "ארכיון",
+    empty: "אין כרגע פניות פתוחות אצלך",
+    emptyArchive: "אין פניות סגורות",
+    markDone: "סיימתי — טופל",
+    askQuestion: "יש לי שאלה",
+    doneNotice: "סימנת שטופל. מנהל העבודה יאשר ויסגור.",
+    questionNotice: "השאלה נשלחה למנהל העבודה.",
+    back: "חזרה לרשימה",
+    // הנוסח מהאפיון §7 — מוצג כשהקישור בוטל או שאינו קיים
+    expired: "הקישור אינו בתוקף",
+    expiredHelp: "פנה למנהל העבודה לקבלת קישור חדש.",
   },
 
   login: {
