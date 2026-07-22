@@ -346,6 +346,9 @@ model MediaFile {
   createdAt DateTime @default(now())
 
   @@index([aiStatus])
+  // בנוסף קיימים אינדקסי pg_trgm על transcription ועל extractedText,
+  // שנוצרו במיגרציה `search_trigram_indexes`. הם אינם ניתנים לביטוי כאן
+  // ואינם משפיעים על הטיפוסים — ראה את המיגרציה להסבר למה trgm ולא tsvector.
 }
 
 /// תגית — קיבוץ פניות (למשל כל ליקויי בדק בית בדירה אחת) + צ'אט קבוצתי.

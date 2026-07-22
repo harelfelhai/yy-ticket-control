@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { logoutAction } from "../login/actions";
@@ -19,9 +20,16 @@ export default async function InternalLayout({
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3">
-        <span className="font-bold">{he.app.name}</span>
+        <Link href="/board" className="font-bold">
+          {he.app.name}
+        </Link>
         <div className="flex items-center gap-3 text-sm">
-          <span className="text-muted">
+          <Link href="/search" className="min-h-10 font-medium text-brand">
+            {he.search.title}
+          </Link>
+          {/* שם המשתמש מוסתר במסך צר: הוא מידע ולא פעולה, ובמובייל הוא
+              דוחק את הקישורים שכן נלחצים. */}
+          <span className="hidden text-muted sm:inline">
             {user.name} · {he.role[user.role]}
           </span>
           <form action={logoutAction}>
