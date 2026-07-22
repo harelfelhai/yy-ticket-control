@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { MediaAttachments } from "@/components/media-attachments";
 import { AssignmentStatusChip } from "@/components/status-chip";
 import { he } from "@/lib/he";
+import { toMediaView } from "@/lib/media-view";
 import { getPortalTicket, markViewed, resolveToken } from "@/lib/services/portal";
 import { ExpiredLink } from "../expired-link";
 import { PortalActions } from "./portal-actions";
@@ -67,7 +69,12 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
                   <p className="text-xs font-medium text-muted">
                     {message.authorUser?.name ?? message.authorProfessional?.name ?? ""}
                   </p>
-                  <p className="whitespace-pre-wrap">{message.text}</p>
+                  {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
+                  {/* הטוקן נכנס לכתובת: לפורטל אין עוגיית סשן, ובלעדיו
+                      ה-route שמגיש את הקובץ אינו יודע מי מבקש. */}
+                  <MediaAttachments
+                    media={message.media.map((file) => toMediaView(file, token))}
+                  />
                 </li>
               ))}
           </ul>

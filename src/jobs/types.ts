@@ -9,6 +9,10 @@ import type { NotificationEvent } from "@/lib/notifier/types";
  */
 export const JOB_TYPES = {
   notify: "SEND_NOTIFICATION",
+  /** תמלול הקלטה קולית */
+  transcribe: "TRANSCRIBE",
+  /** חילוץ טקסט מתמונה או מ-PDF */
+  extract: "EXTRACT",
 } as const;
 
 export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];

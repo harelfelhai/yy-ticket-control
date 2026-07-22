@@ -217,6 +217,7 @@ export async function getPortalTicket(professionalId: string, ticketId: string) 
         include: {
           authorUser: { select: { name: true } },
           authorProfessional: { select: { name: true } },
+          media: { where: { uploaded: true }, orderBy: { createdAt: "asc" } },
         },
       },
     },

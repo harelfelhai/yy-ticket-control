@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import { MediaAttachments } from "@/components/media-attachments";
 import { TicketStatusChip } from "@/components/status-chip";
+import { toMediaView } from "@/lib/media-view";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
@@ -163,7 +165,8 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
               return (
                 <li key={message.id} className="rounded-xl bg-bg p-3">
                   <p className="text-xs font-medium text-muted">{author}</p>
-                  <p className="whitespace-pre-wrap">{message.text}</p>
+                  {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
+                  <MediaAttachments media={message.media.map((file) => toMediaView(file))} />
                 </li>
               );
             })}

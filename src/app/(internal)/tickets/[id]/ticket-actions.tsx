@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { ActionResult } from "@/lib/action-result";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -36,10 +37,14 @@ export function TicketActions({
   hasHandler,
 }: TicketActionsProps) {
   const [text, setText] = useState("");
+  const [files, setFiles] = useState<AttachedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
   const busy = pending || !hydrated;
+
+  // תמונה בלי כיתוב היא הודעה שלמה — ולעיתים המדויקת ביותר.
+  const canSend = text.trim().length > 0 || files.length > 0;
 
   function run(action: () => Promise<ActionResult>, onSuccess?: () => void) {
     setError(null);
@@ -63,10 +68,26 @@ export function TicketActions({
               className="rounded-xl border border-border p-3 text-base"
             />
           </label>
+
+          <MediaPicker
+            ticketId={ticketId}
+            files={files}
+            onChange={setFiles}
+            disabled={busy}
+          />
+
           <button
             type="button"
-            disabled={busy || text.trim().length === 0}
-            onClick={() => run(() => replyAction(ticketId, text), () => setText(""))}
+            disabled={busy || !canSend}
+            onClick={() =>
+              run(
+                () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
+                () => {
+                  setText("");
+                  setFiles([]);
+                },
+              )
+            }
             className="min-h-12 rounded-xl bg-brand px-4 font-semibold text-brand-fg disabled:opacity-60"
           >
             {he.ticket.send}

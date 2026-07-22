@@ -322,10 +322,18 @@ model MediaFile {
   messageId String?
   message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
-  r2Key        String  @unique
+  /// המפתח באחסון האובייקטים. השם אינו נושא את שם הספק בכוונה: בפיתוח
+  /// אותו מפתח מצביע על קובץ בדיסק, ובפרודקשן על אובייקט ב-R2.
+  storageKey String @unique
+
   mimeType     String
   sizeBytes    Int
   originalName String?
+
+  /// הקובץ נרשם לפני שהבתים עלו בפועל — ההעלאה נעשית ישירות מהדפדפן
+  /// לאחסון, ורק אז הלקוח מדווח שהיא הצליחה. רשומה שנשארת false היא
+  /// העלאה שנקטעה, ואין להציג אותה בשרשור.
+  uploaded Boolean @default(false)
 
   /// תמלול אודיו בעברית
   transcription String?

@@ -11,8 +11,8 @@ import "dotenv/config";
  * ההודעה תופיע בלוג של שרת הפיתוח, מסומנת ב-[notifier].
  */
 
-const { db } = await import("../src/lib/db.ts");
-const { createTicket } = await import("../src/lib/services/tickets.ts");
+const { db } = await import("../src/lib/db");
+const { createTicket } = await import("../src/lib/services/tickets");
 
 const stamp = Date.now();
 const manager = await db.user.findFirstOrThrow({ where: { role: "ADMIN" } });

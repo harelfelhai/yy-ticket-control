@@ -232,6 +232,39 @@ export const he = {
     invalidEmail: "כתובת המייל אינה תקינה",
   },
 
+  /** מדיה: תמונות, PDF, וידאו והקלטות קוליות */
+  media: {
+    attach: "צרף קובץ",
+    camera: "צלם",
+    record: "הקלט",
+    recording: "מקליט…",
+    stopRecording: "עצור",
+    uploading: "מעלה…",
+    remove: "הסר קובץ",
+    /** נוסח כללי בכוונה: המשתמש אינו צריך לדעת אילו סוגים מותרים, הוא צריך לדעת שזה לא יעבוד */
+    unsupportedType: "סוג הקובץ אינו נתמך. אפשר תמונה, PDF, וידאו או הקלטה.",
+    tooLarge: "הקובץ גדול מדי. המגבלה היא 50 מגה־בייט.",
+    notFound: "הקובץ לא נמצא",
+    uploadFailed: "ההעלאה נכשלה. נסה שוב.",
+    micDenied: "אין גישה למיקרופון. אשר אותה בהגדרות הדפדפן.",
+    micUnavailable: "הקלטה אינה נתמכת בדפדפן הזה",
+    /** תיאור נגיש לקובץ בשרשור */
+    fileLabel: (name: string) => `קובץ מצורף: ${name}`,
+    imageAlt: "תמונה מצורפת",
+    audioLabel: "הקלטה קולית",
+    download: "פתח",
+  },
+
+  /** תוצרי ה-AI: תמלול אודיו וחילוץ טקסט מתמונה */
+  ai: {
+    transcriptionPending: "מתמלל…",
+    transcriptionFailed: "התמלול נכשל",
+    transcriptionLabel: "תמלול",
+    extractionPending: "קורא את הטקסט…",
+    extractionFailed: "לא הצלחנו לקרוא את הטקסט",
+    extractionLabel: "טקסט שזוהה",
+  },
+
   /** פורטל הנמען החיצוני (מסך 8 באפיון) */
   portal: {
     greeting: (name: string) => `שלום ${name}`,

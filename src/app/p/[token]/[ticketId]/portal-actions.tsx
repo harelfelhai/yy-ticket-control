@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/lib/action-result";
 import { he } from "@/lib/he";
@@ -26,10 +27,20 @@ interface PortalActionsProps {
  */
 export function PortalActions({ token, ticketId, status, isClosed }: PortalActionsProps) {
   const [text, setText] = useState("");
+  const [files, setFiles] = useState<AttachedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
   const busy = pending || !hydrated;
+
+  // תגובה יכולה להיות תמונה בלבד — וזה המקרה השכיח כאן: קבלן מצלם את מה
+  // שתיקן במקום לתאר אותו במילים.
+  const canReply = text.trim().length > 0 || files.length > 0;
+
+  function clear() {
+    setText("");
+    setFiles([]);
+  }
 
   function run(action: () => Promise<ActionResult>, onSuccess?: () => void) {
     setError(null);
@@ -71,11 +82,24 @@ export function PortalActions({ token, ticketId, status, isClosed }: PortalActio
         />
       </label>
 
+      <MediaPicker
+        ticketId={ticketId}
+        token={token}
+        files={files}
+        onChange={setFiles}
+        disabled={busy}
+      />
+
       <div className="flex flex-col gap-2">
         <button
           type="button"
-          disabled={busy || text.trim().length === 0}
-          onClick={() => run(() => replyAction(token, ticketId, text), () => setText(""))}
+          disabled={busy || !canReply}
+          onClick={() =>
+            run(
+              () => replyAction(token, ticketId, text, files.map((f) => f.mediaId)),
+              clear,
+            )
+          }
           className="min-h-12 rounded-xl border border-border bg-surface px-4 font-medium disabled:opacity-60"
         >
           {he.ticket.send}
@@ -83,9 +107,14 @@ export function PortalActions({ token, ticketId, status, isClosed }: PortalActio
 
         <button
           type="button"
+          // שאלה דורשת טקסט גם כשמצורפת תמונה: תמונה בלי מילים אינה שאלה
+          // שמנהל העבודה יודע לענות עליה.
           disabled={busy || text.trim().length === 0}
           onClick={() =>
-            run(() => askQuestionAction(token, ticketId, text), () => setText(""))
+            run(
+              () => askQuestionAction(token, ticketId, text, files.map((f) => f.mediaId)),
+              clear,
+            )
           }
           className="min-h-12 rounded-xl border border-warning bg-warning/10 px-4 font-semibold text-warning disabled:opacity-60"
         >

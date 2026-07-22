@@ -47,6 +47,27 @@ export const env = {
   resendApiKey: () => optional("RESEND_API_KEY"),
   notifyFromEmail: () => optional("NOTIFY_FROM_EMAIL"),
 
+  /**
+   * הגדרות Cloudflare R2, או undefined אם אינן מלאות.
+   *
+   * הכול-או-כלום מכוון: שלושה מפתחות מתוך ארבעה אינם "כמעט מוגדר" אלא
+   * תקלה שתתגלה רק בהעלאה הראשונה, אצל מנהל שעומד בשטח עם תמונה ביד.
+   */
+  r2: () => {
+    const accountId = optional("R2_ACCOUNT_ID");
+    const accessKeyId = optional("R2_ACCESS_KEY_ID");
+    const secretAccessKey = optional("R2_SECRET_ACCESS_KEY");
+    const bucket = optional("R2_BUCKET");
+
+    if (!accountId || !accessKeyId || !secretAccessKey || !bucket) return undefined;
+    return { accountId, accessKeyId, secretAccessKey, bucket };
+  },
+
+  /** מפתח OpenAI לתמלול עברית. בלעדיו התמלול מדולג ואינו נכשל. */
+  openaiApiKey: () => optional("OPENAI_API_KEY"),
+  /** מפתח Anthropic לחילוץ טקסט מתמונות ומ-PDF */
+  anthropicApiKey: () => optional("ANTHROPIC_API_KEY"),
+
   isProduction: () => process.env.NODE_ENV === "production",
 };
 

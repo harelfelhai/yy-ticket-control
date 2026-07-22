@@ -103,14 +103,14 @@ describe("failJob", () => {
 
 describe("processNextJob", () => {
   it("מחזיר null כשאין מה לעשות", async () => {
-    expect(await processNextJob(fakeTransport().transport)).toBeNull();
+    expect(await processNextJob({ transport: fakeTransport().transport })).toBeNull();
   });
 
   it("מסמן DONE אחרי הצלחה", async () => {
     // אין שיוך כזה — הג'וב מדלג ומסתיים בהצלחה, כי אין מה לנסות שוב.
     await enqueue(db, JOB_TYPES.notify, { event: "ASSIGNED", assignmentId: "לא-קיים" });
 
-    const result = await processNextJob(fakeTransport().transport);
+    const result = await processNextJob({ transport: fakeTransport().transport });
 
     expect(result?.status).toBe("done");
     expect((await db.job.findFirstOrThrow()).status).toBe("DONE");
@@ -119,7 +119,7 @@ describe("processNextJob", () => {
   it("סוג עבודה לא מוכר נכשל במקום להיבלע", async () => {
     await db.job.create({ data: { type: "משהו-אחר", payload: {} } });
 
-    const result = await processNextJob(fakeTransport().transport);
+    const result = await processNextJob({ transport: fakeTransport().transport });
 
     expect(result?.status).toBe("failed");
     expect((await db.job.findFirstOrThrow()).lastError).toContain("משהו-אחר");
@@ -146,7 +146,7 @@ describe("drainJobs", () => {
       await enqueue(db, JOB_TYPES.notify, { event: "ASSIGNED", assignmentId: `לא-קיים-${i}` });
     }
 
-    const results = await drainJobs(fakeTransport().transport);
+    const results = await drainJobs({ transport: fakeTransport().transport });
 
     expect(results).toHaveLength(3);
     expect(await db.job.count({ where: { status: "DONE" } })).toBe(3);
@@ -159,7 +159,7 @@ describe("drainJobs", () => {
       await enqueue(db, JOB_TYPES.notify, { event: "ASSIGNED", assignmentId: `לא-קיים-${i}` });
     }
 
-    const results = await drainJobs(fakeTransport().transport, new Date(), 2);
+    const results = await drainJobs({ transport: fakeTransport().transport }, new Date(), 2);
 
     expect(results).toHaveLength(2);
     expect(await db.job.count({ where: { status: "PENDING" } })).toBe(3);
@@ -170,7 +170,7 @@ describe("drainJobs", () => {
     // שוב באותה ריקון. בלי ההשהיה הזו הלולאה הייתה רצה עד קריסה.
     await db.job.create({ data: { type: "לא-מוכר", payload: {} } });
 
-    const results = await drainJobs(fakeTransport().transport);
+    const results = await drainJobs({ transport: fakeTransport().transport });
 
     expect(results).toHaveLength(1);
     expect(results[0]?.status).toBe("failed");

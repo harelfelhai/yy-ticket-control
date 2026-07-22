@@ -201,6 +201,9 @@ export async function getTicketDetail(ticketId: string) {
         include: {
           authorUser: { select: { id: true, name: true } },
           authorProfessional: { select: { id: true, name: true } },
+          // רק קבצים שהעלאתם הושלמה: העלאה שנקטעה אינה קובץ, והצגתה
+          // בשרשור הייתה מייצרת תמונה שבורה במקום לא־כלום.
+          media: { where: { uploaded: true }, orderBy: { createdAt: "asc" } },
         },
       },
     },
@@ -311,9 +314,16 @@ async function recordEvent(
  * עבודה קיים סיכון ששניהם יטפלו באותה פנייה או שאף אחד לא. הסימון אינו
  * נועל את הפנייה ואינו מונע ממנהל אחר לפעול — הוא רק מידע.
  */
-export async function addMessage(viewer: Viewer, ticketId: string, rawText: string) {
+export async function addMessage(
+  viewer: Viewer,
+  ticketId: string,
+  rawText: string,
+  mediaIds: string[] = [],
+) {
   const text = rawText.trim();
-  if (!text) throw new TicketError(he.ticket.emptyMessage);
+  // תמונה בלי כיתוב היא הודעה לגיטימית לחלוטין — ולעיתים ההודעה המלאה
+  // ביותר. מה שאסור הוא הודעה בלי כלום.
+  if (!text && mediaIds.length === 0) throw new TicketError(he.ticket.emptyMessage);
 
   const ticket = await loadForAction(ticketId);
   denyUnless(canCommentOnTicket(viewer, ticket, ticket.assignments));
@@ -322,12 +332,22 @@ export async function addMessage(viewer: Viewer, ticketId: string, rawText: stri
     const message = await tx.message.create({
       data: {
         ticketId,
-        kind: "TEXT",
-        text,
+        kind: mediaIds.length > 0 ? "MEDIA" : "TEXT",
+        text: text || null,
         authorUserId: viewer.kind === "user" ? viewer.id : null,
         authorProfessionalId: viewer.kind === "professional" ? viewer.id : null,
       },
     });
+
+    if (mediaIds.length > 0) {
+      // רק קבצים שהועלו במלואם וטרם שויכו להודעה אחרת. בלי התנאי הזה
+      // אפשר היה לצרף להודעה בפנייה אחת קובץ ששייך לפנייה אחרת, ולעקוף
+      // את בדיקת ההרשאה שנעשית בעת ההגשה.
+      await tx.mediaFile.updateMany({
+        where: { id: { in: mediaIds }, uploaded: true, messageId: null },
+        data: { messageId: message.id },
+      });
+    }
 
     // מסמנים מטפל רק אם אין כזה עדיין: החלפה אוטומטית בכל הודעה הייתה
     // גורמת לשני מנהלים ל"גנוב" את הסימון זה מזה בכל תגובה.

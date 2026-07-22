@@ -237,7 +237,7 @@ describe("המסלול המלא דרך התור", () => {
     await makeTicket([electrician]);
     const { transport, sent } = fakeTransport();
 
-    await drainJobs(transport);
+    await drainJobs({ transport });
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe("yossi@example.com");
@@ -249,7 +249,7 @@ describe("המסלול המלא דרך התור", () => {
     await makeTicket([electrician]);
     const { transport, sent } = fakeTransport({ failTimes: 1 });
 
-    await drainJobs(transport);
+    await drainJobs({ transport });
     expect(sent).toHaveLength(0);
 
     const failed = await db.job.findFirstOrThrow();
@@ -257,7 +257,7 @@ describe("המסלול המלא דרך התור", () => {
     expect(failed.attempts).toBe(1);
 
     // הזמן מתקדם עד אחרי ההשהיה
-    await drainJobs(transport, new Date(failed.runAt.getTime() + 1000));
+    await drainJobs({ transport }, new Date(failed.runAt.getTime() + 1000));
 
     expect(sent).toHaveLength(1);
     expect((await db.job.findFirstOrThrow()).status).toBe("DONE");
@@ -266,11 +266,11 @@ describe("המסלול המלא דרך התור", () => {
   it("פתיחה מחדש מודיעה לכל הנמענים הפעילים", async () => {
     const ticket = await makeTicket([electrician]);
     await closeTicket({ kind: "user", ...manager }, ticket.id);
-    await drainJobs(fakeTransport().transport);
+    await drainJobs({ transport: fakeTransport().transport });
 
     await reopenTicket({ kind: "user", ...manager }, ticket.id);
     const { transport, sent } = fakeTransport();
-    await drainJobs(transport);
+    await drainJobs({ transport });
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.subject).toContain("נפתחה מחדש");
@@ -278,14 +278,14 @@ describe("המסלול המלא דרך התור", () => {
 
   it("הוספת נמען לפנייה קיימת מודיעה רק לו", async () => {
     const ticket = await makeTicket([plumber]);
-    await drainJobs(fakeTransport().transport);
+    await drainJobs({ transport: fakeTransport().transport });
 
     await addAssignments({ kind: "user", ...manager }, ticket.id, [
       { kind: "professional", id: electrician },
     ]);
 
     const { transport, sent } = fakeTransport();
-    await drainJobs(transport);
+    await drainJobs({ transport });
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe("yossi@example.com");
@@ -294,12 +294,12 @@ describe("המסלול המלא דרך התור", () => {
   it("שאלה מהקבלן מגיעה לפותח דרך התור", async () => {
     const ticket = await makeTicket([electrician]);
     const assignment = await assignmentOf(ticket.id, electrician);
-    await drainJobs(fakeTransport().transport);
+    await drainJobs({ transport: fakeTransport().transport });
 
     await setAssignmentStatus(assignment.id, "QUESTION", "צריך מפתח לחדר החשמל");
 
     const { transport, sent } = fakeTransport();
-    await drainJobs(transport);
+    await drainJobs({ transport });
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe("david@example.com");
@@ -311,7 +311,7 @@ describe("המסלול המלא דרך התור", () => {
     // לאנשים להפסיק לקרוא את ההתראות.
     const ticket = await makeTicket([electrician]);
     const assignment = await assignmentOf(ticket.id, electrician);
-    await drainJobs(fakeTransport().transport);
+    await drainJobs({ transport: fakeTransport().transport });
 
     await setAssignmentStatus(assignment.id, "VIEWED");
 

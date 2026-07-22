@@ -1,8 +1,19 @@
 import type { Job } from "@/generated/prisma/client";
+import { selectTextExtractor } from "@/lib/ai/extract";
+import { selectTranscriber } from "@/lib/ai/transcribe";
+import type { TextExtractor, Transcriber } from "@/lib/ai/types";
 import { selectEmailTransport } from "@/lib/notifier/email";
 import { type DeliveryOutcome, sendNotification } from "@/lib/notifier";
 import type { EmailTransport } from "@/lib/notifier/types";
-import { claimNextJob, completeJob, failJob } from "./queue";
+import {
+  type AiEngines,
+  type AiJobPayload,
+  type AiOutcome,
+  markAiFailed,
+  runTextExtraction,
+  runTranscription,
+} from "./handlers/ai";
+import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
 
 /**
@@ -26,28 +37,40 @@ const MAX_JOBS_PER_TICK = 20;
 /** השהיה אחרי כשל לא צפוי בלולאה עצמה, כדי לא להציף את הלוג */
 const ERROR_BACKOFF_MS = 10_000;
 
+export type JobOutcome = DeliveryOutcome | AiOutcome;
+
 export type JobResult =
-  | { job: Job; status: "done"; outcome?: DeliveryOutcome }
+  | { job: Job; status: "done"; outcome?: JobOutcome }
   | { job: Job; status: "failed"; error: string };
 
 /**
- * מריץ עבודה אחת מהתור, אם יש כזו. מחזיר null כשהתור ריק.
- * הערוץ מוזרק כדי שבדיקות יריצו את המסלול המלא מול ערוץ מדומה.
+ * הספקים החיצוניים שהעובד עשוי להזדקק להם.
+ *
+ * מוזרקים ולא נבחרים בפנים, כדי שבדיקה תריץ את המסלול המלא מול ספקים
+ * מדומים. שדה שלא נמסר נבחר לפי הסביבה; שדה שנמסר כ-`null` פירושו
+ * במפורש "אין ספק כזה" — וזו הדרך לבדוק את מסלול הדילוג.
  */
+export interface WorkerDeps {
+  transport?: EmailTransport;
+  transcriber?: Transcriber | null;
+  extractor?: TextExtractor | null;
+}
+
+/** מריץ עבודה אחת מהתור, אם יש כזו. מחזיר null כשהתור ריק. */
 export async function processNextJob(
-  transport?: EmailTransport,
+  deps: WorkerDeps = {},
   now: Date = new Date(),
 ): Promise<JobResult | null> {
   const job = await claimNextJob(now);
   if (!job) return null;
 
   try {
-    // בחירת הערוץ נעשית **בתוך ה-try ולכל עבודה בנפרד**, ולא כברירת מחדל
+    // בחירת הספקים נעשית **בתוך ה-try ולכל עבודה בנפרד**, ולא כברירת מחדל
     // של הפרמטר. בפרודקשן בלי מפתח Resend הבחירה זורקת — ואם היא הייתה
     // מחוץ ל-try, השגיאה הייתה נבלעת בלולאה, העבודות היו נשארות PENDING
     // לנצח, ואיש לא היה יודע למה ההודעות לא יוצאות. כך היא נרשמת על
     // העבודה עצמה, ב-`lastError`, וניתן לראות אותה.
-    const outcome = await runJob(job, transport ?? selectEmailTransport());
+    const outcome = await runJob(job, deps);
     await completeJob(job.id);
     return { job, status: "done", outcome };
   } catch (error) {
@@ -69,14 +92,14 @@ export async function processNextJob(
  * ממתין בתור ונלקח בסבב הבא, שתי שניות אחר כך.
  */
 export async function drainJobs(
-  transport?: EmailTransport,
+  deps: WorkerDeps = {},
   now: Date = new Date(),
   limit: number = MAX_JOBS_PER_TICK,
 ): Promise<JobResult[]> {
   const results: JobResult[] = [];
 
   while (results.length < limit) {
-    const next = await processNextJob(transport, now);
+    const next = await processNextJob(deps, now);
     if (!next) break;
     results.push(next);
   }
@@ -84,16 +107,48 @@ export async function drainJobs(
   return results;
 }
 
-async function runJob(job: Job, transport: EmailTransport): Promise<DeliveryOutcome | undefined> {
+async function runJob(job: Job, deps: WorkerDeps): Promise<JobOutcome> {
   switch (job.type) {
     case JOB_TYPES.notify: {
       const payload = job.payload as unknown as NotifyJobPayload;
-      return sendNotification(payload, transport);
+      return sendNotification(payload, deps.transport ?? selectEmailTransport());
     }
+
+    case JOB_TYPES.transcribe:
+      return runAi(job, deps, runTranscription);
+
+    case JOB_TYPES.extract:
+      return runAi(job, deps, runTextExtraction);
+
     default:
       // סוג לא מוכר אינו קורס בשקט: הוא נכשל, נשאר בטבלה, ומופיע כ-FAILED
       // עם הסיבה. זה קורה רק אם קוד ישן קרא לשורה שנוצרה בגרסה חדשה.
       throw new Error(`סוג עבודה לא מוכר: ${job.type}`);
+  }
+}
+
+/**
+ * מריץ עבודת AI, ומסמן כשל על הקובץ **רק כשנגמרו הניסיונות**.
+ *
+ * ההפרדה חשובה: ניסיון שנכשל יחזור בעוד דקה, ואין סיבה שהמשתמש יראה
+ * "התמלול נכשל" על משהו שייפתר לבדו. רק כשלא נותר ניסיון נוסף זו עובדה.
+ */
+async function runAi(
+  job: Job,
+  deps: WorkerDeps,
+  handler: (payload: AiJobPayload, engines: AiEngines) => Promise<AiOutcome>,
+): Promise<AiOutcome> {
+  const payload = job.payload as unknown as AiJobPayload;
+  const engines: AiEngines = {
+    transcriber: deps.transcriber !== undefined ? deps.transcriber : selectTranscriber(),
+    extractor: deps.extractor !== undefined ? deps.extractor : selectTextExtractor(),
+  };
+
+  try {
+    return await handler(payload, engines);
+  } catch (error) {
+    if (job.attempts >= MAX_ATTEMPTS) await markAiFailed(payload.mediaId, error);
+    throw error;
   }
 }
 

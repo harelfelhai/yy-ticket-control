@@ -42,3 +42,6 @@ tmp/
 .claude/
 .windsurf/
 skills-lock.json
+
+# מדיה שנשמרת מקומית בפיתוח (בפרודקשן הכול ב-Cloudflare R2)
+.localmedia/

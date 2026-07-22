@@ -38,11 +38,22 @@ function refresh(ticketId: string) {
   revalidatePath("/board");
 }
 
-const textSchema = z.string().min(1);
+const mediaIdsSchema = z.array(z.string().min(1)).max(20).optional();
 
-export async function replyAction(ticketId: string, text: string): Promise<ActionResult> {
+export async function replyAction(
+  ticketId: string,
+  text: string,
+  mediaIds?: string[],
+): Promise<ActionResult> {
   return guard(async () => {
-    await addMessage(await viewer(), ticketId, textSchema.parse(text));
+    // בלי `min(1)` על הטקסט: תגובה יכולה להיות תמונה בלבד. הכלל "לא הודעה
+    // ריקה" נאכף בשירות, שם הוא רואה גם את הקבצים.
+    await addMessage(
+      await viewer(),
+      ticketId,
+      z.string().parse(text),
+      mediaIdsSchema.parse(mediaIds) ?? [],
+    );
     refresh(ticketId);
   });
 }
