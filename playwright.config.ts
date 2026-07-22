@@ -15,6 +15,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false, // כל הבדיקות חולקות בסיס נתונים אחד
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -42,6 +43,7 @@ export default defineConfig({
     env: {
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
       APP_BASE_URL: BASE_URL,
+      SESSION_SECRET: process.env.SESSION_SECRET ?? "",
     },
   },
 });

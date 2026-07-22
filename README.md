@@ -20,7 +20,14 @@ cp .env.example .env
 npm run db:up          # מפעיל PostgreSQL מקומי ומדפיס את שלוש כתובות ה-DB
                        # (להעתיק ל-.env)
 npm run db:migrate     # מחיל את המיגרציות
+npm run db:seed        # יוצר משתמש מנהל ומדפיס את הסיסמה
 npm run dev            # http://localhost:3100
+```
+
+יש למלא ב-`.env` גם `SESSION_SECRET` (32 תווים לפחות):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ```
 
 אין צורך בדוקר ואין צורך בהרשאות מנהל: `db:up` מריץ בינאריים רשמיים של
@@ -35,7 +42,10 @@ PostgreSQL 18 מתוך `node_modules`, ושומר את הנתונים ב-`.local
 | `npm run typecheck` | בדיקת טיפוסים ללא בנייה |
 | `npm run db:up` / `db:down` | הפעלה/עצירה של ה-DB המקומי |
 | `npm run db:reset` | מחיקת הנתונים המקומיים והתחלה מאפס |
+| `npm run test` | Vitest — יחידה ואינטגרציה |
+| `npm run test:e2e` | Playwright — מובייל ודסקטופ |
 | `npm run db:migrate` | יצירת מיגרציה מהסכימה והחלתה |
+| `npm run db:seed` | נתוני התחלה (idempotent) |
 | `npm run db:deploy` | החלת מיגרציות קיימות (פרודקשן) |
 | `npm run db:studio` | דפדפן נתונים גרפי |
 
