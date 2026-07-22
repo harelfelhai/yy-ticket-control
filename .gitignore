@@ -5,6 +5,15 @@ node_modules/
 dist/
 build/
 out/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# Testing
+coverage/
+test-results/
+playwright-report/
+.playwright/
 
 # Environment & secrets
 .env

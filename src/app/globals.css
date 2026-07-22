@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/*
+ * ערכת עיצוב בסיסית — בהירה בלבד.
+ * המערכת מיועדת לעבודת שטח (שמש ישירה, כפפות), ולכן ניגודיות גבוהה
+ * ואזורי מגע נדיבים. מצב כהה לא נדרש באפיון ולכן לא מיושם — ההימנעות
+ * ממנו חוסכת תחזוקה של שתי ערכות צבע לכל רכיב סטטוס.
+ */
+@theme {
+  --font-sans: var(--font-heebo), system-ui, sans-serif;
+
+  --color-bg: #f3f5f8;
+  --color-surface: #ffffff;
+  --color-border: #d6dae1;
+  --color-fg: #131820;
+  --color-muted: #5a6472;
+
+  --color-brand: #1d4ed8;
+  --color-brand-fg: #ffffff;
+  --color-danger: #b91c1c;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+}
+
+html {
+  /* מונע הגדלת טקסט אוטומטית בסיבוב מסך ב-iOS Safari */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}

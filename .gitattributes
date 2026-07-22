@@ -1,0 +1,13 @@
+# נרמול סופי שורה: LF בריפו, המרה אוטומטית בעת checkout ב-Windows.
+# בלי זה כל קובץ שנכתב ב-LF מייצר אזהרת CRLF ומרעיש כל commit.
+* text=auto eol=lf
+
+# בינאריים — בלי נרמול
+*.docx binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
