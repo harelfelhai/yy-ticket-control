@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { he } from "@/lib/he";
+import { useHydrated } from "@/lib/use-hydrated";
 import { LearnedSelect, type LearnedOption } from "./learned-select";
 
 export interface RecipientOption extends LearnedOption {
@@ -40,7 +41,9 @@ export function RecipientPicker({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const hydrated = useHydrated();
+  const busy = saving || !hydrated;
 
   const selectedIds = new Set(value.map((r) => `${r.kind}:${r.id}`));
   const available = options.filter((o) => !selectedIds.has(`${o.kind}:${o.id}`));
@@ -55,7 +58,7 @@ export function RecipientPicker({
   }
 
   async function submitNewProfessional() {
-    setBusy(true);
+    setSaving(true);
     setError(null);
     try {
       const created = await onCreateProfessional({ name, phone, email });
@@ -67,7 +70,7 @@ export function RecipientPicker({
     } catch (e) {
       setError(e instanceof Error ? e.message : he.common.genericError);
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
@@ -165,8 +168,9 @@ export function RecipientPicker({
       ) : (
         <button
           type="button"
+          disabled={busy}
           onClick={() => setShowCreate(true)}
-          className="min-h-11 self-start px-1 text-start font-medium text-brand"
+          className="min-h-11 self-start px-1 text-start font-medium text-brand disabled:opacity-60"
         >
           {he.directory.newProfessional}
         </button>

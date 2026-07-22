@@ -1,3 +1,4 @@
+import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import {
@@ -25,7 +26,8 @@ import {
  * טקסט חופשי, כדי שהמסלול הקל יהיה בחירה בקיים ולא יצירה של חדש.
  */
 
-export class DirectoryError extends Error {}
+/** שגיאות הרשימות הנלמדות נועדו להיראות על ידי המשתמש, בעברית */
+export class DirectoryError extends UserFacingError {}
 
 /**
  * מוצא בניין קיים או יוצר חדש.

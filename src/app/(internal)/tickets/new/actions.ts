@@ -2,8 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { type ActionResult, guard } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
+import type { SelectOption } from "@/lib/options";
 import { canCreateTicketInSite } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
 import {
@@ -18,18 +20,16 @@ import { createTicket } from "@/lib/services/tickets";
 /**
  * הפעולות של מסך יצירת הפנייה.
  *
- * שני כללים חוצים:
+ * שלושה כללים חוצים:
  *
  * 1. כל פעולה מתחילה ב-`requireUser()` ובבדיקת הרשאה. Server Action היא
  *    נקודת כניסה ציבורית לכל דבר — העובדה שהיא נקראת מקומפוננטה מוגנת
  *    אינה מגינה עליה.
- * 2. שגיאות **מוחזרות כערך ולא נזרקות**. ‏Next מצנזר הודעות שגיאה של
- *    Server Actions בפרודקשן ומחליף אותן בטקסט גנרי, כך ששגיאה זרוקה
- *    הייתה מגיעה למשתמש כ"משהו השתבש" במקום "לנמען אין טלפון ואין מייל".
- *    במצב פיתוח ההודעה כן עוברת, ולכן זהו באג שבדיקות מקומיות לא תופסות.
+ * 2. שגיאות מוחזרות כערך ולא נזרקות — ראה `src/lib/action-result.ts`.
+ * 3. הקובץ אינו מייצא טיפוסים. קובץ `"use server"` חייב לייצא רק פונקציות
+ *    async, וייצוא טיפוס ממנו מפיל את המסך בזמן ריצה עם
+ *    `ReferenceError: ... is not defined`.
  */
-
-export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 const idSchema = z.string().min(1);
 
@@ -42,30 +42,10 @@ async function requireSiteAccess(siteId: string) {
   return user;
 }
 
-/**
- * עוטף פעולה והופך שגיאה צפויה להודעה למשתמש.
- * שגיאה לא צפויה ממשיכה להיזרק — היא באג שצריך להגיע ללוג ולא להיבלע.
- */
-async function guard<T>(run: () => Promise<T>): Promise<ActionResult<T>> {
-  try {
-    return { ok: true, data: await run() };
-  } catch (error) {
-    if (error instanceof DirectoryError) return { ok: false, error: error.message };
-    if (error instanceof z.ZodError) return { ok: false, error: he.common.genericError };
-    throw error;
-  }
-}
-
-export interface DirectoryOption {
-  id: string;
-  label: string;
-  hint?: string;
-}
-
 export async function createBuildingAction(
   siteId: string,
   name: string,
-): Promise<ActionResult<DirectoryOption>> {
+): Promise<ActionResult<SelectOption>> {
   return guard(async () => {
     await requireSiteAccess(siteId);
     const building = await findOrCreateBuilding(siteId, name);
@@ -77,7 +57,7 @@ export async function createApartmentAction(
   siteId: string,
   buildingId: string,
   number: string,
-): Promise<ActionResult<DirectoryOption>> {
+): Promise<ActionResult<SelectOption>> {
   return guard(async () => {
     await requireSiteAccess(siteId);
     const apartment = await findOrCreateApartment(buildingId, number);
@@ -88,7 +68,7 @@ export async function createApartmentAction(
 export async function createDomainAction(
   siteId: string,
   name: string,
-): Promise<ActionResult<DirectoryOption>> {
+): Promise<ActionResult<SelectOption>> {
   return guard(async () => {
     await requireSiteAccess(siteId);
     const domain = await findOrCreateDomain(name);
@@ -105,7 +85,7 @@ const professionalSchema = z.object({
 export async function createProfessionalAction(
   siteId: string,
   input: z.infer<typeof professionalSchema>,
-): Promise<ActionResult<DirectoryOption>> {
+): Promise<ActionResult<SelectOption>> {
   return guard(async () => {
     await requireSiteAccess(siteId);
     const professional = await findOrCreateProfessional(professionalSchema.parse(input));

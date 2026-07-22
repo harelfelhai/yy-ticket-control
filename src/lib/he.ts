@@ -115,6 +115,7 @@ export const he = {
     recipients: "נמענים",
     addRecipient: "הוסף נמען",
     removeRecipient: "הסר",
+    removedRecipients: "נמענים שהוסרו",
     room: "חדר",
     site: "אתר",
     chooseBuildingFirst: "בחר בניין תחילה",
@@ -133,6 +134,21 @@ export const he = {
     savedAsDraft: "נשמר כטיוטה. לא נשלח לאיש.",
     cannotSubmitMissing: (missing: string[]) => `לא ניתן לשגר — חסר: ${missing.join(", ")}`,
     notFound: "הפנייה לא נמצאה",
+    assignmentNotFound: "השיוך לא נמצא",
+    emptyMessage: "אין מה לשלוח",
+
+    // פעולות במסך הפנייה
+    reply: "תגובה",
+    send: "שלח",
+    close: "סגור פנייה",
+    reopen: "פתח מחדש",
+    setHandler: "סמן: אני מטפל",
+    editRecipients: "ערוך נמענים",
+    addRecipients: "הוסף",
+    confirmClose: "לסגור את הפנייה?",
+    confirmReopen: "לפתוח את הפנייה מחדש?",
+    reopenedBadge: "נפתחה מחדש",
+    handledBy: (name: string) => `${name} מטפל`,
   },
 
   /** אירועי מערכת בשרשור — מה קרה לפנייה, להבדיל ממה שמישהו כתב */

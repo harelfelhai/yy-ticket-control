@@ -3,13 +3,10 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
+import type { SelectOption } from "@/lib/options";
+import { useHydrated } from "@/lib/use-hydrated";
 
-export interface LearnedOption {
-  id: string;
-  label: string;
-  /** שורת משנה, למשל טלפון של איש מקצוע — עוזרת להבחין בין שני "יוסי" */
-  hint?: string;
-}
+export type LearnedOption = SelectOption;
 
 interface LearnedSelectProps {
   label: string;
@@ -46,6 +43,7 @@ export function LearnedSelect({
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hydrated = useHydrated();
   const listId = useId();
   const labelId = `${listId}-label`;
   const valueId = `${listId}-value`;
@@ -93,7 +91,8 @@ export function LearnedSelect({
 
       <button
         type="button"
-        disabled={disabled}
+        // מושבת עד ל-hydration: בלי זה לחיצה מוקדמת נבלעת בשקט.
+        disabled={disabled || !hydrated}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}

@@ -74,6 +74,9 @@ test.describe("יצירת פנייה", () => {
     await page.getByRole("button", { name: "שלח לנמענים" }).click();
 
     await expect(page).toHaveURL(/\/tickets\/[a-z0-9]+$/);
+    // ‏"שרשור" קיים רק במסך הפנייה — ההמתנה מוודאת שהמסך החדש כבר מוצג,
+    // כי הכתובת מתעדכנת לפניו.
+    await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toContainText("בניין א");
     await expect(page.getByText(description)).toBeVisible();
     // רצועת הנמענים ולא כל העמוד: השם מופיע גם באירוע "שויך לפנייה" בשרשור.

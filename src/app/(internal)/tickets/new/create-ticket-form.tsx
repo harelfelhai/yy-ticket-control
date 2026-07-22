@@ -5,9 +5,10 @@ import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
 import { he } from "@/lib/he";
+import { useHydrated } from "@/lib/use-hydrated";
+import type { ActionResult } from "@/lib/action-result";
+import type { SelectOption } from "@/lib/options";
 import {
-  type ActionResult,
-  type DirectoryOption,
   createApartmentAction,
   createBuildingAction,
   createDomainAction,
@@ -22,7 +23,7 @@ import {
  * בפרודקשן), בעוד שהבוררים מצפים לחריגה כדי להציג את ההודעה במקום.
  * ההמרה מרוכזת כאן ולא משוכפלת בכל קריאה.
  */
-function unwrap(result: ActionResult<DirectoryOption>): DirectoryOption {
+function unwrap(result: ActionResult<SelectOption>): SelectOption {
   if (!result.ok) throw new Error(result.error);
   return result.data;
 }
@@ -81,6 +82,10 @@ export function CreateTicketForm({
   const [recipients, setRecipients] = useState<RecipientOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const hydrated = useHydrated();
+  // מושבת עד ל-hydration: לחיצה על "שלח" לפני שהמטפלים חוברו נבלעת בשקט,
+  // והמנהל בשטח מניח שהפנייה נשלחה.
+  const busy = pending || !hydrated;
 
   const selectedBuilding = buildings.find((b) => b.id === buildingId) ?? null;
 
@@ -213,7 +218,7 @@ export function CreateTicketForm({
         <button
           type="button"
           onClick={() => submit(false)}
-          disabled={pending}
+          disabled={busy}
           className="min-h-12 flex-1 rounded-xl bg-brand px-4 text-base font-semibold text-brand-fg disabled:opacity-60"
         >
           {he.ticket.submit}
@@ -221,7 +226,7 @@ export function CreateTicketForm({
         <button
           type="button"
           onClick={() => submit(true)}
-          disabled={pending}
+          disabled={busy}
           className="min-h-12 rounded-xl border border-border bg-surface px-4 text-base font-medium disabled:opacity-60"
         >
           {he.ticket.saveDraft}
