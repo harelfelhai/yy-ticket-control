@@ -177,15 +177,23 @@ model Professional {
 }
 
 /// "קישור קסם" — טוקן נושא (bearer) לאיש מקצוע, לא לפנייה בודדת.
-/// הטוקן עצמו לעולם לא נשמר; נשמר רק ה-SHA-256 שלו, כדי שדליפת ה-DB
-/// לא תיתן גישה. ההרשאה נבדקת דינמית בכל בקשה מול שיוכים פעילים —
-/// ולכן הסרת קבלן מנתקת אותו מיידית גם אם הקישור בידיו.
+/// קישור הגישה של איש מקצוע. ההרשאה נבדקת דינמית בכל בקשה מול שיוכים
+/// פעילים — ולכן הסרת קבלן מנתקת אותו מיידית גם אם הקישור בידיו.
 model AccessToken {
   id             String       @id @default(cuid())
   professionalId String
   professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
 
-  tokenHash  String    @unique
+  /// ‏SHA-256 של הטוקן. **זהו השדה היחיד שמסלול האימות נוגע בו**: הבקשה
+  /// הנכנסת מגובבת ומושווית מולו, ואין בו שום פענוח.
+  tokenHash String @unique
+
+  /// הטוקן מוצפן (AES-256-GCM, מפתח נגזר מ-SESSION_SECRET), כדי שמנהל יוכל
+  /// לשלוח שוב את **אותו** קישור. בלי זה כל שליחה חוזרת הייתה מנפיקה טוקן
+  /// חדש והורגת את ההודעה הקודמת בוואטסאפ. ראה src/lib/tokens.ts.
+  /// ‏null אפשרי: רשומה שנוצרה לפני שהשדה קיים, או SESSION_SECRET שהוחלף.
+  tokenCipher String?
+
   createdAt  DateTime  @default(now())
   revokedAt  DateTime?
   lastUsedAt DateTime?
@@ -266,6 +274,12 @@ model Assignment {
   statusChangedAt DateTime         @default(now())
   viewedAt        DateTime?
   createdAt       DateTime         @default(now())
+
+  /// מתי יצאה בפועל הודעה אוטומטית לנמען הזה.
+  /// "נשלח" בסטטוס פירושו שהמערכת שייכה אותו — לא שמישהו יידע אותו. ההפרדה
+  /// חשובה: מנהל שרואה "נשלח" ומניח שהקבלן קיבל הודעה הוא בדיוק התרחיש
+  /// שבו פנייה יושבת ימים בלי שאיש יודע עליה.
+  notifiedAt DateTime?
 
   @@index([ticketId])
   @@index([professionalId, status])

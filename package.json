@@ -22,6 +22,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "smoke:notify": "tsx scripts/smoke-notify.mts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

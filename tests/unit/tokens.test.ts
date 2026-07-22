@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { generateToken, hashToken, portalUrl, tokensMatch } from "@/lib/tokens";
+import {
+  decryptToken,
+  encryptToken,
+  generateToken,
+  hashToken,
+  portalUrl,
+  tokensMatch,
+} from "@/lib/tokens";
+
+/** סוד בדיקה באורך שהמערכת דורשת בפועל */
+const SECRET = "a".repeat(32);
 
 describe("generateToken", () => {
   it("מייצר טוקן שונה בכל קריאה", () => {
@@ -57,5 +67,58 @@ describe("portalUrl", () => {
 
   it("אינו יוצר סלאש כפול כשהבסיס מסתיים בסלאש", () => {
     expect(portalUrl("https://example.com/", "abc")).toBe("https://example.com/p/abc");
+  });
+});
+
+/**
+ * השמירה ההפיכה של הטוקן — מה שמאפשר "שלח שוב את **אותו** קישור".
+ * בלעדיה כל שליחה חוזרת הורגת את ההודעה הקודמת בוואטסאפ של הקבלן.
+ */
+describe("encryptToken / decryptToken", () => {
+  it("מחזיר את הטוקן המקורי", () => {
+    const token = generateToken();
+    expect(decryptToken(encryptToken(token, SECRET), SECRET)).toBe(token);
+  });
+
+  it("אינו מכיל את הטוקן כטקסט גלוי", () => {
+    const token = generateToken();
+    expect(encryptToken(token, SECRET)).not.toContain(token);
+  });
+
+  it("מייצר תוצאה שונה בכל הצפנה של אותו טוקן", () => {
+    // ‏IV אקראי בכל פעם. בלעדיו שני קבלנים עם אותו טוקן (תיאורטית) היו
+    // מקבלים אותה מחרוזת, ודפוסים חוזרים הם מה שמאפשר ניתוח.
+    const token = generateToken();
+    expect(encryptToken(token, SECRET)).not.toBe(encryptToken(token, SECRET));
+  });
+
+  it("אינו מפענח עם סוד אחר", () => {
+    // זו התכונה שבזכותה דליפת בסיס הנתונים לבדה אינה שווה דבר:
+    // המפתח נגזר מ-SESSION_SECRET, שחי במשתני הסביבה.
+    const stored = encryptToken(generateToken(), SECRET);
+    expect(decryptToken(stored, "b".repeat(32))).toBeNull();
+  });
+
+  it("מזהה שינוי בנתונים ומחזיר null במקום זבל", () => {
+    // ‏GCM מאמת שלמות. בלי זה תו שהשתנה היה מחזיר "טוקן" שגוי בשקט.
+    //
+    // השינוי נעשה על הבתים ולא על תו ב-base64: התו האחרון בקידוד נושא רק
+    // חלק מהביטים, והחלפתו עלולה לפענח בדיוק לאותם בתים — כך שהבדיקה
+    // הייתה עוברת בלי לשנות דבר.
+    const stored = encryptToken(generateToken(), SECRET);
+    const [iv, cipher, tag] = stored.split(".");
+    const bytes = Buffer.from(cipher, "base64url");
+    bytes[0] ^= 0xff;
+
+    expect(decryptToken(`${iv}.${bytes.toString("base64url")}.${tag}`, SECRET)).toBeNull();
+  });
+
+  it("מחזיר null על מחרוזת שאינה בפורמט, בלי לזרוק", () => {
+    // רשומה שנוצרה לפני שהשדה קיים מגיעה לכאן כערך לא צפוי; התשובה הנכונה
+    // היא "אי אפשר לשחזר, צור קישור חדש" ולא קריסה של המסך.
+    expect(decryptToken("", SECRET)).toBeNull();
+    expect(decryptToken("סתם טקסט", SECRET)).toBeNull();
+    expect(decryptToken("a.b", SECRET)).toBeNull();
+    expect(decryptToken("a.b.c.d", SECRET)).toBeNull();
   });
 });

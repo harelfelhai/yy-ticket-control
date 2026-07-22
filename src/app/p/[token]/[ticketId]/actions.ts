@@ -59,7 +59,9 @@ export async function askQuestionAction(
     // ההודעה נשמרת לפני שינוי הסטטוס: שאלה בלי תוכן היא רק דגל אדום
     // שמנהל העבודה לא יודע מה לעשות איתו.
     await addMessage({ kind: "professional", id: identity.professionalId }, parsed.ticketId, text);
-    await setAssignmentStatus(assignment.id, "QUESTION");
+    // הטקסט מועבר גם לסטטוס, כדי שההודעה לפותח תכיל את השאלה עצמה. מייל
+    // שאומר רק "יש שאלה" מאלץ אותו להיכנס למערכת כדי לדעת על מה מדובר.
+    await setAssignmentStatus(assignment.id, "QUESTION", text);
 
     revalidatePath(`/p/${parsed.token}/${parsed.ticketId}`);
     revalidatePath(`/p/${parsed.token}`);

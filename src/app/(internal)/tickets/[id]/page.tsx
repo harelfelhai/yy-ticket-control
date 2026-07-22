@@ -11,6 +11,7 @@ import {
   canViewTicket,
 } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
+import { describeDelivery } from "@/lib/services/delivery";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
 import { RecipientEditor } from "./recipient-editor";
@@ -79,6 +80,18 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       ]
     : [];
 
+  // מצב השליחה נטען במקביל לכל הנמענים: לכל אחד יש שאילתה משלו לקישור,
+  // וסדרה טורית של חמש שאילתות מורגשת ברשת סלולרית באתר בנייה.
+  const assignmentRows = await Promise.all(
+    ticket.assignments.map(async (a) => ({
+      id: a.id,
+      name: recipientName(a),
+      status: a.status,
+      professionalId: a.professionalId,
+      ...(await describeDelivery(ticket, a)),
+    })),
+  );
+
   const location = [
     ticket.building?.name,
     ticket.apartment && `${he.directory.apartment} ${ticket.apartment.number}`,
@@ -126,12 +139,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
 
       <RecipientEditor
         ticketId={ticket.id}
-        assignments={ticket.assignments.map((a) => ({
-          id: a.id,
-          name: recipientName(a),
-          status: a.status,
-          professionalId: a.professionalId,
-        }))}
+        assignments={assignmentRows}
         available={available}
         canEdit={canEdit}
       />

@@ -33,6 +33,16 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? "github" : "list",
 
+  /**
+   * ‏60 שניות ולא 30.
+   *
+   * בדיקה כאן מריצה מסלול מלא מול שרת אמיתי, ובמצב פיתוח Turbopack מקמפל
+   * כל route בפעם הראשונה שמבקשים אותו. הקימפול הראשון של מסך הפורטל, על
+   * שרת קר ותחת עומס, חרג מ-30 שניות — וזה נראה ככשל של המערכת במקום
+   * כהמתנה לכלי הבנייה.
+   */
+  timeout: 60_000,
+
   use: {
     baseURL: BASE_URL,
     locale: "he-IL",

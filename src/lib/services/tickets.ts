@@ -1,4 +1,7 @@
+import type { Prisma } from "@/generated/prisma/client";
 import type { AssignmentStatus, Channel, Room } from "@/generated/prisma/enums";
+import { enqueue } from "@/jobs/queue";
+import { JOB_TYPES, type NotifyJobPayload } from "@/jobs/types";
 import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
@@ -13,6 +16,7 @@ import {
   isUser,
 } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
+import { ensureAccessToken, revokeAccessIfUnassigned } from "./portal";
 
 /**
  * יצירה ושיגור של פניות.
@@ -96,7 +100,12 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
     });
 
     if (!isDraft) {
-      await recordAssignmentEvents(tx, ticket.id, recipients);
+      await applyNewAssignments(
+        tx,
+        ticket.id,
+        recipients,
+        ticket.assignments.map((a) => a.id),
+      );
     }
 
     return { ticket, isDraft, missing };
@@ -137,7 +146,15 @@ export async function submitDraft(
       where: { id: ticketId },
       data: { isDraft: false, lastActivityAt: new Date() },
     });
-    await recordAssignmentEvents(tx, ticketId, unique);
+    // ‏createMany אינו מחזיר מזהים, ולכן קוראים אותם מיד אחריו. השיוכים
+    // האלה הם היחידים בפנייה — טיוטה אינה משויכת לאיש עד לשיגור.
+    const created = await tx.assignment.findMany({ where: { ticketId }, select: { id: true } });
+    await applyNewAssignments(
+      tx,
+      ticketId,
+      unique,
+      created.map((a) => a.id),
+    );
   });
 }
 
@@ -198,6 +215,45 @@ export function recipientName(assignment: TicketDetail["assignments"][number]): 
 }
 
 type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+/**
+ * מכניס לתור בקשה להודיע על אירוע בפנייה.
+ *
+ * **תמיד בתוך הטרנזאקציה של הפעולה עצמה.** זו הנקודה שכל מנגנון ההתראות
+ * נשען עליה: אם השיוך התגלגל אחורה, גם ההודעה עליו נעלמת; ואם השיוך נשמר,
+ * הבקשה להודיע שמורה יחד איתו ואינה תלויה בכך שהשליחה תצליח עכשיו.
+ *
+ * הפעולה עצמה לעולם אינה שולחת בעצמה: שרת מייל איטי היה מקפיא את המסך של
+ * מנהל שעומד מול דירה, ושרת מייל שנפל היה מפיל את השיוך.
+ */
+async function enqueueNotification(tx: Tx, payload: NotifyJobPayload): Promise<void> {
+  await enqueue(tx, JOB_TYPES.notify, payload as unknown as Prisma.InputJsonValue);
+}
+
+/**
+ * כל מה שקורה כשנמענים חדשים נכנסים לפנייה, במקום אחד.
+ *
+ * שלושת השלבים חייבים לקרות יחד ובאותה טרנזאקציה, ולכן הם אינם מפוזרים
+ * בין הקוראים: שיוך בלי אירוע נעלם מההיסטוריה, שיוך בלי קישור גישה הוא
+ * קבלן שאי אפשר לשלוח לו, ושיוך בלי ג'וב הוא בדיוק "פנייה שאיש לא ידע
+ * עליה" — הכשל שהמערכת נבנתה כדי למנוע.
+ */
+async function applyNewAssignments(
+  tx: Tx,
+  ticketId: string,
+  recipients: RecipientRef[],
+  assignmentIds: string[],
+): Promise<void> {
+  await recordAssignmentEvents(tx, ticketId, recipients);
+
+  for (const recipient of recipients) {
+    if (recipient.kind === "professional") await ensureAccessToken(tx, recipient.id);
+  }
+
+  for (const assignmentId of assignmentIds) {
+    await enqueueNotification(tx, { event: "ASSIGNED", assignmentId });
+  }
+}
 
 // ────────────────────── פעולות על פנייה קיימת ──────────────────────
 
@@ -350,6 +406,16 @@ export async function reopenTicket(viewer: Viewer, ticketId: string) {
       },
     });
     await recordEvent(tx, ticketId, "REOPENED", { userName: await actorName(tx, viewer) });
+
+    // כל נמען פעיל מקבל הודעה חוזרת. בלעדיה פתיחה מחדש היא פעולה שקטה
+    // אצל המנהל בלבד, והקבלן ממשיך להאמין שסיים.
+    const active = await tx.assignment.findMany({
+      where: { ticketId, status: { not: "REMOVED" } },
+      select: { id: true },
+    });
+    for (const assignment of active) {
+      await enqueueNotification(tx, { event: "REOPENED", assignmentId: assignment.id });
+    }
   });
 }
 
@@ -371,6 +437,8 @@ export async function addAssignments(
   if (fresh.length === 0) return;
 
   await db.$transaction(async (tx) => {
+    const affected: string[] = [];
+
     for (const recipient of fresh) {
       // ‏upsert ולא createMany: נמען שהוסר בעבר מקבל את השיוך הישן בחזרה
       // במקום שורה כפולה, וכך ההיסטוריה שלו נשמרת.
@@ -386,8 +454,9 @@ export async function addAssignments(
           where: { id: previous.id },
           data: { status: "SENT", statusChangedAt: new Date(), viewedAt: null },
         });
+        affected.push(previous.id);
       } else {
-        await tx.assignment.create({
+        const created = await tx.assignment.create({
           data: {
             ticketId,
             ...(recipient.kind === "professional"
@@ -395,11 +464,12 @@ export async function addAssignments(
               : { userId: recipient.id }),
           },
         });
+        affected.push(created.id);
       }
     }
 
     await tx.ticket.update({ where: { id: ticketId }, data: touchData() });
-    await recordAssignmentEvents(tx, ticketId, fresh);
+    await applyNewAssignments(tx, ticketId, fresh, affected);
   });
 }
 
@@ -431,6 +501,12 @@ export async function removeAssignment(viewer: Viewer, assignmentId: string) {
       recipientName: assignment.professional?.name ?? assignment.user?.name ?? "",
     });
   });
+
+  // מחוץ לטרנזאקציה בכוונה: ההסרה עצמה היא מה שחייב להצליח, וביטול הגישה
+  // הוא ניקוי שאין טעם שיגרור אחריו rollback אם ייכשל.
+  if (assignment.professionalId) {
+    await revokeAccessIfUnassigned(assignment.professionalId);
+  }
 }
 
 /**
@@ -442,6 +518,8 @@ export async function removeAssignment(viewer: Viewer, assignmentId: string) {
 export async function setAssignmentStatus(
   assignmentId: string,
   status: Extract<AssignmentStatus, "VIEWED" | "DONE" | "QUESTION">,
+  /** טקסט השאלה, כדי שהפותח יראה אותה בהודעה ולא רק "יש שאלה" */
+  note?: string,
 ) {
   const assignment = await db.assignment.findUnique({
     where: { id: assignmentId },
@@ -475,6 +553,9 @@ export async function setAssignmentStatus(
     // הכלל שונה מהאפיון המקורי. סימון טופל או שאלה כן.
     if (status !== "VIEWED") {
       await tx.ticket.update({ where: { id: assignment.ticket.id }, data: touchData() });
+      // הכדור חזר לפותח, והוא אינו יושב מול המסך. בלי ההודעה הזו שאלה של
+      // קבלן ממתינה עד שמישהו במקרה ייכנס לפנייה.
+      await enqueueNotification(tx, { event: status, assignmentId, note });
     }
 
     await recordEvent(tx, assignment.ticket.id, status, { recipientName: name });

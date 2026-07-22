@@ -42,20 +42,24 @@ async function addProfessional(page: Page, name: string, phone: string) {
   await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(name);
 }
 
-/** מנפיק קישור פורטל לקבלן מתוך מסך הפנייה ומחזיר אותו */
-async function issueLink(page: Page, contractorName: string): Promise<string> {
-  const row = page
+function recipientRow(page: Page, contractorName: string) {
+  return page
     .getByRole("list", { name: "נמענים", exact: true })
     .getByRole("listitem")
     .filter({ hasText: contractorName });
+}
 
-  await row.getByRole("button", { name: "צור קישור גישה" }).click();
+/** מציג את קישור הפורטל של קבלן מתוך מסך הפנייה ומחזיר אותו */
+async function showLink(page: Page, contractorName: string): Promise<string> {
+  await recipientRow(page, contractorName)
+    .getByRole("button", { name: `קישור גישה ${contractorName}` })
+    .click();
 
   // ההמתנה היא לכותרת שנושאת את שם הנמען, ולא רק לתיבה: בפנייה עם כמה
   // קבלנים התיבה כבר גלויה עם הקישור הקודם, וקריאה מוקדמת הייתה מחזירה
   // את הקישור של הקבלן הקודם.
   await expect(page.getByText(`קישור עבור ${contractorName}`)).toBeVisible();
-  const field = page.getByRole("textbox", { name: "צור קישור גישה" });
+  const field = page.getByRole("textbox", { name: "קישור גישה", exact: true });
   return (await field.inputValue()).replace(/^https?:\/\/[^/]+/, "");
 }
 
@@ -83,8 +87,8 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   const ticketId = ticketUrl.split("/").pop() as string;
   await expect(page.getByText("חדש", { exact: true })).toBeVisible();
 
-  const electricianLink = await issueLink(page, electrician);
-  const plumberLink = await issueLink(page, plumber);
+  const electricianLink = await showLink(page, electrician);
+  const plumberLink = await showLink(page, plumber);
 
   // ── 2. הקבלן הראשון פותח את הקישור ומסמן שסיים ────────────────────
   await page.goto(electricianLink);
@@ -152,7 +156,7 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   ).toHaveCount(2);
 });
 
-test("קישור שבוטל אינו פותח את הפורטל", async ({ page }) => {
+test("הקישור יציב בין שליחות, ו'צור קישור חדש' מבטל את הקודם", async ({ page }) => {
   const stamp = Date.now();
   const description = `תקלה ${stamp}`;
   const contractor = `קבלן ${stamp}`;
@@ -167,22 +171,33 @@ test("קישור שבוטל אינו פותח את הפורטל", async ({ page 
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
 
-  const firstLink = await issueLink(page, contractor);
+  // הצגה חוזרת מחזירה את **אותו** קישור. זו הסיבה שאפשר לשלוח שוב בבטחה:
+  // הודעה ישנה בוואטסאפ של הקבלן ממשיכה לעבוד.
+  const firstLink = await showLink(page, contractor);
   await page.reload();
-  const secondLink = await issueLink(page, contractor);
-  expect(secondLink).not.toBe(firstLink);
+  expect(await showLink(page, contractor)).toBe(firstLink);
+
+  // "צור קישור חדש" הוא המענה לקישור שדלף, ולכן הוא הורג את הקודם.
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "צור קישור חדש" }).click();
+  await expect(page.getByText("הקישור הקודם בוטל. שלח לנמען את החדש.")).toBeVisible();
+  const rotated = (
+    await page.getByRole("textbox", { name: "קישור גישה", exact: true }).inputValue()
+  ).replace(/^https?:\/\/[^/]+/, "");
+  expect(rotated).not.toBe(firstLink);
 
   await page.goto(firstLink);
   await expect(page.getByText("הקישור אינו בתוקף")).toBeVisible();
 
-  await page.goto(secondLink);
+  await page.goto(rotated);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(contractor);
 });
 
-test("קבלן שהוסר מאבד גישה מיידית, גם עם קישור תקף", async ({ page }) => {
+test("כפתור וואטסאפ מוכן לשליחה, וחיווי השליחה אומר את האמת", async ({ page }) => {
   const stamp = Date.now();
-  const description = `תקלה ${stamp}`;
+  const description = `נזילה במטבח ${stamp}`;
   const contractor = `קבלן ${stamp}`;
+  const digits = String(stamp).slice(-7);
 
   await loginAsManager(page);
   await page.goto("/tickets/new");
@@ -190,22 +205,93 @@ test("קבלן שהוסר מאבד גישה מיידית, גם עם קישור �
   await pick(page, "דירה", "1");
   await pick(page, "תחום", "חשמל");
   await page.getByLabel("תיאור").fill(description);
-  await addProfessional(page, contractor, `054-${String(stamp).slice(-7)}`);
+  await addProfessional(page, contractor, `055-${digits}`);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
 
-  const link = await issueLink(page, contractor);
-  await page.goto(link);
-  await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
+  // לקבלן הזה אין מייל, ולכן המערכת לא שלחה לו דבר — וזה נאמר במפורש.
+  // "נשלח" בסטטוס פירושו ששייכנו אותו, לא שהוא יודע.
+  const row = recipientRow(page, contractor);
+  await expect(row).toContainText("אין מייל — שלח בוואטסאפ");
 
-  // המנהל מסיר אותו
+  const whatsapp = row.getByRole("link", { name: `שלח בוואטסאפ ${contractor}` });
+  const href = await whatsapp.getAttribute("href");
+
+  expect(href).toContain(`https://wa.me/97255${digits}?text=`);
+
+  // ההודעה מוכנה בכתובת: שם הקבלן, המיקום, התיאור, והקישור האישי שלו.
+  const text = decodeURIComponent(new URL(href as string).searchParams.get("text") ?? "");
+  expect(text).toContain(`שלום ${contractor}`);
+  expect(text).toContain("בניין א דירה 1, חשמל");
+  expect(text).toContain(description);
+  expect(text).toContain("/p/");
+});
+
+/**
+ * שני הכללים שנוגעים להסרת קבלן, ושקל להחליף ביניהם:
+ *
+ * 1. **הרשאה נבדקת בכל בקשה.** קישור תקף לחלוטין מפסיק לפתוח פנייה שהוסר
+ *    ממנה — וזו הסיבה שאפשר להשאיר קישורים ללא תפוגה.
+ * 2. **קישור מבוטל כשלא נשאר כלום.** קבלן בלי שיוכים אינו אמור להחזיק סוד
+ *    חי, גם אם ממילא לא היה רואה דבר.
+ *
+ * הבדיקה עוברת את שניהם ברצף על אותו קבלן, כי בדיקה של השני בלבד הייתה
+ * מסתירה את הראשון: הקישור מת ממילא, ואי אפשר לדעת אם ההרשאה נבדקה.
+ */
+test("קבלן שהוסר מאבד את הפנייה מיידית, ואת הקישור רק כשלא נשאר לו כלום", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const first = `תקלה א ${stamp}`;
+  const second = `תקלה ב ${stamp}`;
+  const contractor = `קבלן ${stamp}`;
+
+  async function openTicket(description: string, apartment: string, existing: boolean) {
+    await page.goto("/tickets/new");
+    await pick(page, "בניין", "בניין א");
+    await pick(page, "דירה", apartment);
+    await pick(page, "תחום", "חשמל");
+    await page.getByLabel("תיאור").fill(description);
+
+    if (existing) {
+      await page.getByRole("button", { name: /^נמענים/ }).first().click();
+      await page.getByRole("option", { name: contractor }).click();
+    } else {
+      await addProfessional(page, contractor, `054-${String(stamp).slice(-7)}`);
+    }
+
+    await page.getByRole("button", { name: "שלח לנמענים" }).click();
+    await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  }
+
+  async function removeFrom(description: string) {
+    await page.goto("/board");
+    await page.getByRole("link").filter({ hasText: description }).click();
+    await page.getByRole("button", { name: `הסר ${contractor}` }).click();
+    await expect(page.getByRole("list", { name: "נמענים שהוסרו" })).toContainText(contractor);
+  }
+
   await loginAsManager(page);
-  await page.goto("/board");
-  await page.getByRole("link").filter({ hasText: description }).click();
-  await page.getByRole("button", { name: `הסר ${contractor}` }).click();
-  await expect(page.getByRole("list", { name: "נמענים שהוסרו" })).toContainText(contractor);
+  await openTicket(first, "1", false);
+  const link = await showLink(page, contractor);
+  await openTicket(second, "2", true);
 
-  // אותו קישור בדיוק — הפנייה כבר לא שם
   await page.goto(link);
-  await expect(page.getByText("אין כרגע פניות פתוחות אצלך")).toBeVisible();
+  await expect(page.getByRole("link").filter({ hasText: first })).toBeVisible();
+  await expect(page.getByRole("link").filter({ hasText: second })).toBeVisible();
+
+  // ── כלל 1: הוסר מפנייה אחת — אותו קישור, בלעדיה ──────────────────
+  await loginAsManager(page);
+  await removeFrom(first);
+
+  await page.goto(link);
+  await expect(page.getByRole("link").filter({ hasText: second })).toBeVisible();
+  await expect(page.getByRole("link").filter({ hasText: first })).toHaveCount(0);
+
+  // ── כלל 2: הוסר מהאחרונה — הקישור עצמו מת ────────────────────────
+  await loginAsManager(page);
+  await removeFrom(second);
+
+  await page.goto(link);
+  await expect(page.getByText("הקישור אינו בתוקף")).toBeVisible();
 });

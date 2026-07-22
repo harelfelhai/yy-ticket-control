@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { canEditAssignments } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
-import { issuePortalLink } from "@/lib/services/portal";
+import { ensurePortalLink, rotatePortalLink } from "@/lib/services/portal";
 import { TicketError, getTicketDetail } from "@/lib/services/tickets";
 import {
   addAssignments,
@@ -93,28 +93,50 @@ export async function removeRecipientAction(
 }
 
 /**
- * מנפיק קישור גישה חדש לאיש מקצוע ומחזיר אותו למנהל להעתקה.
+ * מוודא שהמנהל רשאי לטפל בקישור של איש המקצוע הזה, בהקשר הפנייה הזו.
  *
- * הקישור מוצג פעם אחת בלבד — במסד נשמר רק הגיבוב. עד שתיכנס השליחה
- * האוטומטית (M2), זו הדרך שבה קבלן מקבל גישה: המנהל מעתיק ושולח בעצמו.
+ * רק למי שמשויך לפנייה בפועל: בלי הבדיקה הזו מסך פנייה כלשהו היה הופך
+ * למנוע שמנפיק גישה לכל איש מקצוע במערכת.
  */
-export async function issueLinkAction(
+async function requireLinkPermission(ticketId: string, professionalId: string): Promise<void> {
+  const current = await viewer();
+  const ticket = await getTicketDetail(ticketId);
+  if (!ticket) throw new TicketError(he.ticket.notFound);
+  if (!canEditAssignments(current, ticket)) throw new TicketError(he.common.notAllowed);
+
+  const assigned = ticket.assignments.some(
+    (a) => a.professionalId === professionalId && a.status !== "REMOVED",
+  );
+  if (!assigned) throw new TicketError(he.common.notAllowed);
+}
+
+/**
+ * מחזיר את קישור הגישה של הקבלן — הקיים, או חדש אם אין לו.
+ *
+ * זו הפעולה שמאחורי "שלח שוב את הקישור", והיא **אינה** הורגת את הקישור
+ * שכבר אצלו בוואטסאפ. ההפרדה מ-`rotateLinkAction` היא כל העניין.
+ */
+export async function getLinkAction(
   ticketId: string,
   professionalId: string,
 ): Promise<ActionResult<string>> {
   return guard(async () => {
-    const current = await viewer();
-    const ticket = await getTicketDetail(ticketId);
-    if (!ticket) throw new TicketError(he.ticket.notFound);
-    if (!canEditAssignments(current, ticket)) throw new TicketError(he.common.notAllowed);
+    await requireLinkPermission(ticketId, professionalId);
+    return ensurePortalLink(professionalId);
+  });
+}
 
-    // רק למי שמשויך לפנייה הזו בפועל: הנפקת קישור למי שאינו משויך הייתה
-    // הופכת את המסך למנוע גישה לכל איש מקצוע במערכת.
-    const assigned = ticket.assignments.some(
-      (a) => a.professionalId === professionalId && a.status !== "REMOVED",
-    );
-    if (!assigned) throw new TicketError(he.common.notAllowed);
-
-    return issuePortalLink(professionalId);
+/**
+ * מנפיק קישור חדש ומבטל את הקודם — לשימוש כשקישור הגיע לאדם הלא נכון.
+ * הכפתור בממשק מבקש אישור מפורש, כי הפעולה מנתקת את הקבלן עד שיקבל את
+ * הקישור החדש.
+ */
+export async function rotateLinkAction(
+  ticketId: string,
+  professionalId: string,
+): Promise<ActionResult<string>> {
+  return guard(async () => {
+    await requireLinkPermission(ticketId, professionalId);
+    return rotatePortalLink(professionalId);
   });
 }

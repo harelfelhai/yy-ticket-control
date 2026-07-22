@@ -6,7 +6,12 @@ import { LearnedSelect } from "@/components/learned-select";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
-import { addRecipientsAction, issueLinkAction, removeRecipientAction } from "./actions";
+import {
+  addRecipientsAction,
+  getLinkAction,
+  removeRecipientAction,
+  rotateLinkAction,
+} from "./actions";
 
 export interface AssignmentRow {
   id: string;
@@ -14,6 +19,10 @@ export interface AssignmentRow {
   status: AssignmentStatus;
   /** null עבור נמען פנימי — הוא נכנס עם סיסמה ואינו צריך קישור */
   professionalId: string | null;
+  /** מצב השליחה האוטומטית אליו, כטקסט מוכן */
+  deliveryNote: string;
+  /** כתובת wa.me עם ההודעה מוכנה, או null כשאין טלפון */
+  waUrl: string | null;
 }
 
 export interface AvailableRecipient {
@@ -31,11 +40,15 @@ interface RecipientEditorProps {
 }
 
 /**
- * רצועת הנמענים עם הסטטוס האישי של כל אחד.
+ * רצועת הנמענים: מי משויך, מה הסטטוס האישי שלו, והאם הוא בכלל יודע.
  *
- * זו התשובה לשאלה שהמנהל שואל בפועל — "מי כבר טיפל ומי לא". שיוך שהוסר
- * נשאר מוצג באפור: המידע ההיסטורי חשוב ("שלחתי לו והוא לא הגיב"), אבל
- * ברור שהוא כבר לא בתמונה.
+ * ההפרדה בין שני האחרונים היא העיקר. "נשלח" הוא סטטוס השיוך — הוא אומר
+ * שהמערכת שייכה אותו, לא שמישהו יידע אותו. שורת השליחה שמתחתיו אומרת את
+ * הדבר השני, וההבחנה הזו היא ההבדל בין מנהל שיודע שהקבלן קיבל לבין מנהל
+ * שמניח שכן.
+ *
+ * שיוך שהוסר נשאר מוצג באפור: המידע ההיסטורי חשוב ("שלחתי לו והוא לא
+ * הגיב"), אבל ברור שהוא כבר לא בתמונה.
  */
 export function RecipientEditor({
   ticketId,
@@ -44,29 +57,37 @@ export function RecipientEditor({
   canEdit,
 }: RecipientEditorProps) {
   const [error, setError] = useState<string | null>(null);
-  const [link, setLink] = useState<string | null>(null);
-  /** למי הקישור שמוצג — כדי שהמנהל לא יעתיק קישור ולא ידע של מי הוא */
-  const [linkFor, setLinkFor] = useState<string | null>(null);
+  const [link, setLink] = useState<{ forId: string; url: string; rotated: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
   const busy = pending || !hydrated;
 
-  function issueLink(professionalId: string) {
+  const active = assignments.filter((a) => a.status !== "REMOVED");
+  const removed = assignments.filter((a) => a.status === "REMOVED");
+
+  function showLink(professionalId: string) {
     setError(null);
-    // מנקים את הקישור הקודם **לפני** הבקשה: אחרת, בזמן ההנפקה לקבלן השני
-    // התיבה עדיין מציגה את הקישור של הראשון, והמנהל עלול להעתיק ולשלוח
-    // לקבלן אחד את הקישור האישי של האחר.
+    // מנקים את הקישור הקודם **לפני** הבקשה: אחרת, בזמן הטעינה עבור הקבלן
+    // השני התיבה עדיין מציגה את הקישור של הראשון, והמנהל עלול להעתיק
+    // ולשלוח לאחד את הקישור האישי של האחר.
     setLink(null);
-    setLinkFor(professionalId);
     startTransition(async () => {
-      const result = await issueLinkAction(ticketId, professionalId);
-      if (result.ok) setLink(result.data);
+      const result = await getLinkAction(ticketId, professionalId);
+      if (result.ok) setLink({ forId: professionalId, url: result.data, rotated: false });
       else setError(result.error);
     });
   }
 
-  const active = assignments.filter((a) => a.status !== "REMOVED");
-  const removed = assignments.filter((a) => a.status === "REMOVED");
+  function rotate(professionalId: string) {
+    if (!confirm(he.ticket.confirmRotateLink)) return;
+    setError(null);
+    setLink(null);
+    startTransition(async () => {
+      const result = await rotateLinkAction(ticketId, professionalId);
+      if (result.ok) setLink({ forId: professionalId, url: result.data, rotated: true });
+      else setError(result.error);
+    });
+  }
 
   function add(id: string | null) {
     const option = available.find((o) => o.id === id);
@@ -93,37 +114,86 @@ export function RecipientEditor({
       {active.length === 0 ? (
         <p className="text-sm text-muted">{he.reason.noRecipients}</p>
       ) : (
-        <ul aria-label={he.ticket.recipients} className="flex flex-col gap-2">
+        <ul aria-label={he.ticket.recipients} className="flex flex-col gap-3">
           {active.map((assignment) => (
-            <li key={assignment.id} className="flex items-center justify-between gap-2">
-              {/* min-w-0 + truncate: שם ארוך מקצר את עצמו במקום למעוך את
-                  הכפתור שלצדו. בלי זה הכפתור נמעך ל-16 פיקסלים על מסך
-                  טלפון — יעד מגע בלתי אפשרי, ובפועל לחיצות פשוט מתפספסות. */}
-              <span className="min-w-0 flex-1 truncate">{assignment.name}</span>
-              <span className="flex shrink-0 items-center gap-2">
-                <AssignmentStatusChip status={assignment.status} />
-                {canEdit && assignment.professionalId ? (
+            <li key={assignment.id} className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                {/* min-w-0 + truncate: שם ארוך מקצר את עצמו במקום למעוך את
+                    הכפתור שלצדו. בלי זה הכפתור נמעך ל-16 פיקסלים על מסך
+                    טלפון — יעד מגע בלתי אפשרי, ובפועל לחיצות מתפספסות. */}
+                <span className="min-w-0 flex-1 truncate">{assignment.name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <AssignmentStatusChip status={assignment.status} />
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => remove(assignment.id)}
+                      aria-label={`${he.ticket.removeRecipient} ${assignment.name}`}
+                      className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-danger disabled:opacity-60"
+                    >
+                      {he.ticket.removeRecipient}
+                    </button>
+                  ) : null}
+                </span>
+              </div>
+
+              <p className="text-xs text-muted">{assignment.deliveryNote}</p>
+
+              {canEdit && assignment.professionalId ? (
+                <div className="flex flex-wrap gap-2">
+                  {/* קישור רגיל ולא כפתור: הוא חייב לפתוח את וואטסאפ ישירות
+                      מלחיצת המשתמש. פתיחה מתוך תשובה אסינכרונית נחסמת
+                      כחלון קופץ — בדיוק בדפדפני המובייל שבהם זה נחוץ. */}
+                  {assignment.waUrl ? (
+                    <a
+                      href={assignment.waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${he.ticket.sendWhatsApp} ${assignment.name}`}
+                      className="flex min-h-11 items-center rounded-lg bg-brand px-3 text-sm font-medium text-brand-fg"
+                    >
+                      {he.ticket.sendWhatsApp}
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => issueLink(assignment.professionalId as string)}
-                    className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-brand disabled:opacity-60"
+                    onClick={() => showLink(assignment.professionalId as string)}
+                    aria-label={`${he.ticket.showLink} ${assignment.name}`}
+                    className="min-h-11 rounded-lg border border-border px-3 text-sm font-medium disabled:opacity-60"
                   >
-                    {he.ticket.issueLink}
+                    {he.ticket.showLink}
                   </button>
-                ) : null}
-                {canEdit ? (
+                </div>
+              ) : null}
+
+              {link !== null && link.forId === assignment.professionalId ? (
+                <div className="flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 p-3">
+                  <p className="text-sm font-medium">{he.ticket.linkFor(assignment.name)}</p>
+                  <p className="text-xs text-muted">
+                    {link.rotated ? he.ticket.linkRotated : he.ticket.linkStable}
+                  </p>
+                  {/* readOnly ולא טקסט רגיל: בחירה והעתקה ידנית עובדות בכל
+                      מכשיר, גם כשה-clipboard API חסום או שאינו נתמך. */}
+                  <input
+                    readOnly
+                    dir="ltr"
+                    value={link.url}
+                    aria-label={he.ticket.showLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
+                  />
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => remove(assignment.id)}
-                    aria-label={`${he.ticket.removeRecipient} ${assignment.name}`}
-                    className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-danger disabled:opacity-60"
+                    onClick={() => rotate(assignment.professionalId as string)}
+                    className="min-h-11 self-start px-1 text-sm font-medium text-danger disabled:opacity-60"
                   >
-                    {he.ticket.removeRecipient}
+                    {he.ticket.rotateLink}
                   </button>
-                ) : null}
-              </span>
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -150,27 +220,6 @@ export function RecipientEditor({
             value={null}
             onChange={add}
             disabled={busy}
-          />
-        </div>
-      ) : null}
-
-      {link ? (
-        <div className="mt-3 flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 p-3">
-          <p className="text-sm font-medium">
-            {he.ticket.linkFor(
-              assignments.find((a) => a.professionalId === linkFor)?.name ?? "",
-            )}
-          </p>
-          <p className="text-xs text-muted">{he.ticket.linkReady}</p>
-          {/* readOnly ולא טקסט רגיל: בחירה והעתקה ידנית עובדות בכל מכשיר,
-              גם כשה-clipboard API חסום או שהדפדפן אינו תומך. */}
-          <input
-            readOnly
-            dir="ltr"
-            value={link}
-            aria-label={he.ticket.issueLink}
-            onFocus={(e) => e.currentTarget.select()}
-            className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
           />
         </div>
       ) : null}

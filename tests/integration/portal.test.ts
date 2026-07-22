@@ -1,11 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import {
+  ensurePortalLink,
   getPortalBoard,
   getPortalTicket,
-  issuePortalLink,
   markViewed,
+  readPortalLink,
   resolveToken,
+  revokeAccessIfUnassigned,
+  rotatePortalLink,
 } from "@/lib/services/portal";
 import {
   closeTicket,
@@ -59,31 +62,107 @@ function tokenFrom(url: string): string {
   return url.split("/p/")[1] ?? "";
 }
 
-describe("issuePortalLink", () => {
-  it("מנפיק קישור ושומר רק את הגיבוב", async () => {
-    const url = await issuePortalLink(electrician);
+describe("rotatePortalLink", () => {
+  it("שומר גיבוב לאימות ועותק מוצפן לשליחה חוזרת — אף אחד מהם אינו הטוקן", async () => {
+    const url = await rotatePortalLink(electrician);
     const token = tokenFrom(url);
 
     const stored = await db.accessToken.findFirstOrThrow({
       where: { professionalId: electrician },
     });
-    expect(stored.tokenHash).not.toBe(token);
     expect(stored.tokenHash).toHaveLength(64);
+    expect(stored.tokenHash).not.toBe(token);
+    expect(stored.tokenCipher).not.toBeNull();
+    expect(stored.tokenCipher).not.toContain(token);
   });
 
-  it("הנפקה חוזרת מבטלת את הקישור הקודם", async () => {
-    // קישור נטוש שממשיך לעבוד הוא בדיוק מה שהופך "ללא תפוגה" לסיכון.
-    const first = await issuePortalLink(electrician);
-    const second = await issuePortalLink(electrician);
+  it("מבטל את הקישור הקודם", async () => {
+    // זו הפעולה לקישור שדלף. קישור נטוש שממשיך לעבוד הוא בדיוק מה שהופך
+    // "ללא תפוגה" לסיכון.
+    const first = await rotatePortalLink(electrician);
+    const second = await rotatePortalLink(electrician);
 
+    expect(first).not.toBe(second);
     expect(await resolveToken(tokenFrom(first))).toBeNull();
     expect(await resolveToken(tokenFrom(second))).not.toBeNull();
   });
 });
 
+describe("ensurePortalLink — הקישור היציב", () => {
+  it("מחזיר את אותו קישור בכל קריאה", async () => {
+    // זו הסיבה שאפשר לכתוב בממשק "שלח שוב את הקישור": הודעה ישנה
+    // בוואטסאפ של הקבלן ממשיכה לעבוד.
+    const first = await ensurePortalLink(electrician);
+    const second = await ensurePortalLink(electrician);
+
+    expect(second).toBe(first);
+    expect(await db.accessToken.count({ where: { professionalId: electrician } })).toBe(1);
+  });
+
+  it("מנפיק חדש כשאין קישור פעיל", async () => {
+    const link = await ensurePortalLink(electrician);
+    expect(await resolveToken(tokenFrom(link))).not.toBeNull();
+  });
+
+  it("מנפיק חדש כשהעותק השמור אינו ניתן לפענוח", async () => {
+    // קורה כש-SESSION_SECRET הוחלף. אין מה להציג למנהל מלבד קישור חדש.
+    await rotatePortalLink(electrician);
+    await db.accessToken.updateMany({
+      where: { professionalId: electrician },
+      data: { tokenCipher: "זבל" },
+    });
+
+    const link = await ensurePortalLink(electrician);
+    expect(await resolveToken(tokenFrom(link))).not.toBeNull();
+  });
+});
+
+describe("readPortalLink", () => {
+  it("מחזיר null כשאין קישור, בלי ליצור אחד", async () => {
+    // מסך הפנייה קורא לזה בטעינה. יצירת סוד בזמן רינדור היא הפתעה שרצה
+    // גם בטעינה מוקדמת של הדפדפן ובכל רענון.
+    expect(await readPortalLink(electrician)).toBeNull();
+    expect(await db.accessToken.count()).toBe(0);
+  });
+
+  it("מחזיר את הקישור הקיים", async () => {
+    const created = await rotatePortalLink(electrician);
+    expect(await readPortalLink(electrician)).toBe(created);
+  });
+});
+
+describe("revokeAccessIfUnassigned", () => {
+  it("מבטל את הגישה כשלא נותר ולו שיוך אחד", async () => {
+    const ticket = await makeTicket();
+    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
+    const link = await ensurePortalLink(electrician);
+
+    await db.assignment.update({ where: { id: assignment.id }, data: { status: "REMOVED" } });
+    expect(await revokeAccessIfUnassigned(electrician)).toBe(true);
+
+    expect(await resolveToken(tokenFrom(link))).toBeNull();
+  });
+
+  it("אינו מבטל כשנותרו שיוכים אחרים, גם בפניות סגורות", async () => {
+    // הארכיון של הקבלן נשאר נגיש לו. מי שסיים עבודה אתמול לא אמור לגלות
+    // מחר שהקישור מת.
+    const open = await makeTicket();
+    const closed = await makeTicket();
+    await closeTicket({ kind: "user", ...manager }, closed.id);
+
+    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: open.id } });
+    const link = await ensurePortalLink(electrician);
+
+    await db.assignment.update({ where: { id: assignment.id }, data: { status: "REMOVED" } });
+    expect(await revokeAccessIfUnassigned(electrician)).toBe(false);
+
+    expect(await resolveToken(tokenFrom(link))).not.toBeNull();
+  });
+});
+
 describe("resolveToken", () => {
   it("מזהה את איש המקצוע", async () => {
-    const url = await issuePortalLink(electrician);
+    const url = await rotatePortalLink(electrician);
     const identity = await resolveToken(tokenFrom(url));
     expect(identity?.professionalId).toBe(electrician);
     expect(identity?.name).toBe("יוסי");
@@ -95,7 +174,7 @@ describe("resolveToken", () => {
   });
 
   it("מעדכן את זמן השימוש האחרון", async () => {
-    const url = await issuePortalLink(electrician);
+    const url = await rotatePortalLink(electrician);
     await resolveToken(tokenFrom(url));
 
     const stored = await db.accessToken.findFirstOrThrow({

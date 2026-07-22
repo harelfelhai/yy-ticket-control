@@ -36,5 +36,21 @@ export const env = {
   /** הבסיס לקישורי הקסם שנשלחים לקבלנים — חייב להיות כתובת שהם יכולים לפתוח */
   appBaseUrl: () => required("APP_BASE_URL"),
 
+  /**
+   * מפתח Resend וכתובת השולח.
+   *
+   * אופציונליים בכוונה: בלעדיהם המערכת כותבת את המייל ללוג במקום לשלוח,
+   * וכל צינור השליחה נשאר ניתן להרצה בפיתוח ובבדיקות בלי חשבון חיצוני
+   * ובלי לשלוח דואר לאיש. בפרודקשן ההיעדר שלהם הוא כשל — ראה
+   * `selectEmailTransport`.
+   */
+  resendApiKey: () => optional("RESEND_API_KEY"),
+  notifyFromEmail: () => optional("NOTIFY_FROM_EMAIL"),
+
   isProduction: () => process.env.NODE_ENV === "production",
 };
+
+/** מחרוזת ריקה נחשבת כלא-מוגדר: כך שורה ריקה ב-.env אינה מתחזה לערך */
+function optional(name: string): string | undefined {
+  return process.env[name] || undefined;
+}
