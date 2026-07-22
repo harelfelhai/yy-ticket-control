@@ -5,6 +5,7 @@ import {
   type Viewer,
   canCloseTicket,
   canCommentOnTicket,
+  canCreateTicketInSite,
   canDeleteTicket,
   canEditAssignments,
   canReopenTicket,
@@ -91,6 +92,22 @@ describe("hasActiveAssignment", () => {
     // תזכורן: מנהל משייך פנייה לעצמו. אסור שהשוואת המזהים תתבלבל בין הסוגים.
     expect(hasActiveAssignment(managerA, [assignedTo(managerA)])).toBe(true);
     expect(hasActiveAssignment(managerA, [assignedTo(contractor)])).toBe(false);
+  });
+});
+
+describe("canCreateTicketInSite", () => {
+  it("מנהל מערכת ובעלים פותחים פניות בכל אתר", () => {
+    expect(canCreateTicketInSite(admin, SITE_B)).toBe(true);
+    expect(canCreateTicketInSite(owner, SITE_B)).toBe(true);
+  });
+
+  it("מנהל עבודה פותח רק באתר שלו", () => {
+    expect(canCreateTicketInSite(managerA, SITE_A)).toBe(true);
+    expect(canCreateTicketInSite(managerA, SITE_B)).toBe(false);
+  });
+
+  it("נמען אינו פותח פניות — הוא מקבל אותן", () => {
+    expect(canCreateTicketInSite(contractor, SITE_A)).toBe(false);
   });
 });
 

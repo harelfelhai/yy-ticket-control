@@ -28,6 +28,10 @@ export const he = {
     close: "סגור",
     back: "חזרה",
     search: "חיפוש",
+    choose: "בחר",
+    noResults: "אין תוצאות",
+    notAllowed: "אין לך הרשאה לפעולה הזו",
+    optional: "לא חובה",
     genericError: "משהו השתבש. נסה שוב.",
   },
 
@@ -106,12 +110,57 @@ export const he = {
     closed: "הפנייה נסגרה",
   },
 
+  ticket: {
+    description: "תיאור",
+    recipients: "נמענים",
+    addRecipient: "הוסף נמען",
+    removeRecipient: "הסר",
+    room: "חדר",
+    site: "אתר",
+    chooseBuildingFirst: "בחר בניין תחילה",
+    noSite: "לא משויך אתר. פנה למנהל המערכת.",
+    chooseSite: "באיזה אתר נפתחת הפנייה?",
+    noLocation: "ללא בניין ודירה",
+    noDomain: "ללא תחום",
+    openedBy: "נפתחה על ידי",
+    thread: "שרשור",
+    threadEmpty: "אין עדיין הודעות",
+    newTicket: "+ פנייה חדשה",
+    createTitle: "פנייה חדשה",
+    submit: "שלח לנמענים",
+    saveDraft: "שמור כטיוטה",
+    sentTo: (names: string[]) => `הפנייה נשלחה ל${names.join(", ")}.`,
+    savedAsDraft: "נשמר כטיוטה. לא נשלח לאיש.",
+    cannotSubmitMissing: (missing: string[]) => `לא ניתן לשגר — חסר: ${missing.join(", ")}`,
+    notFound: "הפנייה לא נמצאה",
+  },
+
+  /** אירועי מערכת בשרשור — מה קרה לפנייה, להבדיל ממה שמישהו כתב */
+  event: {
+    assigned: (name: string) => `${name} שויך לפנייה`,
+    removed: (name: string) => `${name} הוסר מהפנייה`,
+    viewed: (name: string) => `${name} צפה בפנייה`,
+    done: (name: string) => `${name} סימן: טופל`,
+    question: (name: string) => `${name} שאל שאלה`,
+    closed: (name: string) => `${name} סגר את הפנייה`,
+    reopened: (name: string) => `${name} פתח את הפנייה מחדש`,
+    handlerSet: (name: string) => `${name} מטפל בפנייה`,
+  },
+
   /** הרשימות הנלמדות: בניין, דירה, תחום, איש מקצוע */
   directory: {
     building: "בניין",
     apartment: "דירה",
     domain: "תחום",
     professional: "איש מקצוע",
+    professionalName: "שם",
+    phone: "טלפון",
+    email: "מייל",
+    newProfessional: "+ איש מקצוע חדש",
+    // נוסח מלא ולא "שמור": במסך היצירה יש גם "שמור כטיוטה", ושני כפתורים
+    // שנקראים דומה הם טעות לחיצה שמאבדת את מה שהוקלד.
+    saveProfessional: "שמור איש מקצוע",
+    contactRequiredHint: "צריך טלפון או מייל — בלעדיהם אי אפשר לשלוח אליו את הפנייה",
     createNew: (value: string) => `צור חדש: "${value}"`,
     buildingNameRequired: "יש להזין שם בניין",
     apartmentNumberRequired: "יש להזין מספר דירה",

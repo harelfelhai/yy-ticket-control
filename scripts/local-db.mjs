@@ -33,8 +33,14 @@ export const LOCAL_DB = {
   database: "yy_dev",
   /** בסיס הצל שבו Prisma מריץ מיגרציות כדי לזהות סטייה */
   shadowDatabase: "yy_shadow",
-  /** בסיס נפרד לבדיקות, כדי שריצת בדיקות לא תמחק נתוני פיתוח */
+  /** בסיס נפרד לבדיקות אינטגרציה, כדי שריצת בדיקות לא תמחק נתוני פיתוח */
   testDatabase: "yy_test",
+  /**
+   * בסיס נפרד ל-E2E. בדיקות האינטגרציה מרוקנות את הבסיס שלהן בין בדיקות,
+   * ובדיקות E2E מסתמכות על נתוני seed קיימים — שיתוף בסיס אחד גרם לכך
+   * שריצת אינטגרציה השאירה אתרים זרים וה-E2E בחר את האתר הלא נכון.
+   */
+  e2eDatabase: "yy_e2e",
 };
 
 const url = (database) =>
@@ -44,6 +50,7 @@ export const localDbUrls = {
   database: url(LOCAL_DB.database),
   shadow: url(LOCAL_DB.shadowDatabase),
   test: url(LOCAL_DB.testDatabase),
+  e2e: url(LOCAL_DB.e2eDatabase),
 };
 
 function exe(name) {
@@ -98,7 +105,12 @@ async function ensureDatabases() {
   const client = new pg.Client({ connectionString: url("postgres") });
   await client.connect();
   try {
-    for (const name of [LOCAL_DB.database, LOCAL_DB.shadowDatabase, LOCAL_DB.testDatabase]) {
+    for (const name of [
+      LOCAL_DB.database,
+      LOCAL_DB.shadowDatabase,
+      LOCAL_DB.testDatabase,
+      LOCAL_DB.e2eDatabase,
+    ]) {
       const { rowCount } = await client.query("select 1 from pg_database where datname = $1", [name]);
       if (rowCount === 0) {
         // ‏identifier לא ניתן לפרמטריזציה; השמות כאן קבועים בקוד ולא מגיעים מקלט.
@@ -129,6 +141,7 @@ async function start() {
   console.log(`\nDATABASE_URL="${localDbUrls.database}"`);
   console.log(`SHADOW_DATABASE_URL="${localDbUrls.shadow}"`);
   console.log(`TEST_DATABASE_URL="${localDbUrls.test}"`);
+  console.log(`E2E_DATABASE_URL="${localDbUrls.e2e}"`);
 }
 
 function stop() {

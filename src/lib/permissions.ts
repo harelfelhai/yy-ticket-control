@@ -67,6 +67,17 @@ export function canViewTicket(
 }
 
 /**
+ * פתיחת פנייה חדשה באתר נתון.
+ * בעלים פותח פניות בכל אתר (אפיון §5.ז), מנהל עבודה רק בשלו, ונמען כלל לא —
+ * הוא מקבל פניות ואינו יוצר אותן.
+ */
+export function canCreateTicketInSite(viewer: Viewer, siteId: string): boolean {
+  if (!isUser(viewer)) return false;
+  if (viewer.role === "SITE_MANAGER") return viewer.siteId === siteId;
+  return true;
+}
+
+/**
  * סגירה היא שיקול דעת אנושי, ולכן שמורה לפותח או למנהל המערכת (אפיון §5.א).
  * ‏"טופל" מנמען הוא דיווח, לא אימות — ולכן נמען לעולם אינו סוגר.
  * גם בעלים אינו סוגר פנייה שלא פתח.

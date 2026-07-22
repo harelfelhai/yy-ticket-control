@@ -5,13 +5,24 @@ import { defineConfig, devices } from "@playwright/test";
  * בדיקות מקצה לקצה מול שרת Next אמיתי.
  *
  * שתי הכרעות:
- * - פורט 3101 ובסיס הבדיקות (ולא 3100 ובסיס הפיתוח), כדי שאפשר יהיה להריץ
- *   E2E בזמן ששרת הפיתוח פתוח, ובלי שהבדיקות יזהמו נתוני פיתוח.
+ * - פורט 3101 ובסיס נתונים ייעודי ל-E2E (`yy_e2e`), ולא 3100 ובסיס הפיתוח.
+ *   כך אפשר להריץ E2E בזמן ששרת הפיתוח פתוח, בלי לזהם נתוני פיתוח, ובלי
+ *   להתנגש בבדיקות האינטגרציה — שמרוקנות את הבסיס שלהן בין בדיקות ולכן
+ *   היו משאירות כאן ישויות זרות.
  * - שני מכשירים: מובייל הוא מסלול השימוש העיקרי (מנהל עבודה בשטח), דסקטופ
  *   נדרש למסך ההזנה המרוכזת מבדק בית. באג שנוגע רק לאחד מהם קורה בפועל.
  */
 const PORT = 3101;
 const BASE_URL = `http://localhost:${PORT}`;
+
+/**
+ * ‏E2E_PRODUCTION=1 מריץ מול בנייה של פרודקשן במקום מול שרת הפיתוח.
+ *
+ * זה לא ניואנס: ‏Next מצנזר הודעות שגיאה של Server Actions בפרודקשן
+ * ומחליף אותן בטקסט גנרי. שגיאה שנזרקת במקום להיות מוחזרת כערך נראית
+ * תקינה לחלוטין בפיתוח, ומגיעה למשתמש כ"משהו השתבש" בפרודקשן.
+ */
+const PRODUCTION = process.env.E2E_PRODUCTION === "1";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -36,14 +47,17 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: `npx next dev -p ${PORT}`,
+    command: PRODUCTION
+      ? `npx next build && npx next start -p ${PORT}`
+      : `npx next dev -p ${PORT}`,
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    reuseExistingServer: !process.env.CI && !PRODUCTION,
+    timeout: 300_000,
     env: {
-      DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+      DATABASE_URL: process.env.E2E_DATABASE_URL ?? "",
       APP_BASE_URL: BASE_URL,
       SESSION_SECRET: process.env.SESSION_SECRET ?? "",
+      NODE_ENV: PRODUCTION ? "production" : "development",
     },
   },
 });

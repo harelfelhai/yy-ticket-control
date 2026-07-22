@@ -17,9 +17,9 @@ export const E2E_ADMIN = {
  * התחברות ידועים מראש; בפרודקשן המשתנה נשאר ריק ונוצרת סיסמה אקראית.
  */
 export default function globalSetup() {
-  const url = process.env.TEST_DATABASE_URL;
+  const url = process.env.E2E_DATABASE_URL;
   if (!url) {
-    throw new Error("TEST_DATABASE_URL אינו מוגדר. הרץ `npm run db:up` והעתק את הערך ל-.env");
+    throw new Error("E2E_DATABASE_URL אינו מוגדר. הרץ `npm run db:up` והעתק את הערך ל-.env");
   }
 
   // ‏Playwright מריץ את הקובץ כ-CommonJS, ולכן `import.meta.url` אינו זמין.

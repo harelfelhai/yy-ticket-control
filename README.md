@@ -43,11 +43,18 @@ PostgreSQL 18 מתוך `node_modules`, ושומר את הנתונים ב-`.local
 | `npm run db:up` / `db:down` | הפעלה/עצירה של ה-DB המקומי |
 | `npm run db:reset` | מחיקת הנתונים המקומיים והתחלה מאפס |
 | `npm run test` | Vitest — יחידה ואינטגרציה |
-| `npm run test:e2e` | Playwright — מובייל ודסקטופ |
+| `npm run test:e2e` | Playwright — מובייל ודסקטופ, מול שרת פיתוח |
+| `npm run test:e2e:prod` | אותן בדיקות מול בנייה של פרודקשן (ראה הערה למטה) |
 | `npm run db:migrate` | יצירת מיגרציה מהסכימה והחלתה |
 | `npm run db:seed` | נתוני התחלה (idempotent) |
 | `npm run db:deploy` | החלת מיגרציות קיימות (פרודקשן) |
 | `npm run db:studio` | דפדפן נתונים גרפי |
+
+### למה יש בדיקות E2E גם מול פרודקשן
+
+‏Next מצנזר הודעות שגיאה של Server Actions בפרודקשן ומחליף אותן בטקסט
+גנרי. שגיאה שנזרקת במקום להיות מוחזרת כערך נראית תקינה לחלוטין בפיתוח,
+ומגיעה למשתמש כ"משהו השתבש" בפרודקשן. `test:e2e:prod` תופס את זה.
 
 ## סטאק
 

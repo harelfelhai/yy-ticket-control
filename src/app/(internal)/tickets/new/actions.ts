@@ -1,0 +1,169 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { requireUser } from "@/lib/auth";
+import { he } from "@/lib/he";
+import { canCreateTicketInSite } from "@/lib/permissions";
+import { toViewer } from "@/lib/session";
+import {
+  DirectoryError,
+  findOrCreateApartment,
+  findOrCreateBuilding,
+  findOrCreateDomain,
+  findOrCreateProfessional,
+} from "@/lib/services/directory";
+import { createTicket } from "@/lib/services/tickets";
+
+/**
+ * הפעולות של מסך יצירת הפנייה.
+ *
+ * שני כללים חוצים:
+ *
+ * 1. כל פעולה מתחילה ב-`requireUser()` ובבדיקת הרשאה. Server Action היא
+ *    נקודת כניסה ציבורית לכל דבר — העובדה שהיא נקראת מקומפוננטה מוגנת
+ *    אינה מגינה עליה.
+ * 2. שגיאות **מוחזרות כערך ולא נזרקות**. ‏Next מצנזר הודעות שגיאה של
+ *    Server Actions בפרודקשן ומחליף אותן בטקסט גנרי, כך ששגיאה זרוקה
+ *    הייתה מגיעה למשתמש כ"משהו השתבש" במקום "לנמען אין טלפון ואין מייל".
+ *    במצב פיתוח ההודעה כן עוברת, ולכן זהו באג שבדיקות מקומיות לא תופסות.
+ */
+
+export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+const idSchema = z.string().min(1);
+
+/** מוודא שהמשתמש רשאי לפעול באתר, ומחזיר את המשתמש */
+async function requireSiteAccess(siteId: string) {
+  const user = await requireUser();
+  if (!canCreateTicketInSite(toViewer(user), siteId)) {
+    throw new DirectoryError(he.common.notAllowed);
+  }
+  return user;
+}
+
+/**
+ * עוטף פעולה והופך שגיאה צפויה להודעה למשתמש.
+ * שגיאה לא צפויה ממשיכה להיזרק — היא באג שצריך להגיע ללוג ולא להיבלע.
+ */
+async function guard<T>(run: () => Promise<T>): Promise<ActionResult<T>> {
+  try {
+    return { ok: true, data: await run() };
+  } catch (error) {
+    if (error instanceof DirectoryError) return { ok: false, error: error.message };
+    if (error instanceof z.ZodError) return { ok: false, error: he.common.genericError };
+    throw error;
+  }
+}
+
+export interface DirectoryOption {
+  id: string;
+  label: string;
+  hint?: string;
+}
+
+export async function createBuildingAction(
+  siteId: string,
+  name: string,
+): Promise<ActionResult<DirectoryOption>> {
+  return guard(async () => {
+    await requireSiteAccess(siteId);
+    const building = await findOrCreateBuilding(siteId, name);
+    return { id: building.id, label: building.name };
+  });
+}
+
+export async function createApartmentAction(
+  siteId: string,
+  buildingId: string,
+  number: string,
+): Promise<ActionResult<DirectoryOption>> {
+  return guard(async () => {
+    await requireSiteAccess(siteId);
+    const apartment = await findOrCreateApartment(buildingId, number);
+    return { id: apartment.id, label: apartment.number };
+  });
+}
+
+export async function createDomainAction(
+  siteId: string,
+  name: string,
+): Promise<ActionResult<DirectoryOption>> {
+  return guard(async () => {
+    await requireSiteAccess(siteId);
+    const domain = await findOrCreateDomain(name);
+    return { id: domain.id, label: domain.name };
+  });
+}
+
+const professionalSchema = z.object({
+  name: z.string(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+});
+
+export async function createProfessionalAction(
+  siteId: string,
+  input: z.infer<typeof professionalSchema>,
+): Promise<ActionResult<DirectoryOption>> {
+  return guard(async () => {
+    await requireSiteAccess(siteId);
+    const professional = await findOrCreateProfessional(professionalSchema.parse(input));
+    return {
+      id: professional.id,
+      label: professional.name,
+      hint: professional.phone ?? professional.email ?? undefined,
+    };
+  });
+}
+
+const recipientSchema = z.object({
+  kind: z.enum(["professional", "user"]),
+  id: idSchema,
+});
+
+const createTicketSchema = z.object({
+  siteId: idSchema,
+  buildingId: idSchema.nullable(),
+  apartmentId: idSchema.nullable(),
+  domainId: idSchema.nullable(),
+  room: z
+    .enum([
+      "SALON",
+      "KITCHEN",
+      "BEDROOM",
+      "BATHROOM",
+      "WC",
+      "BALCONY",
+      "MAMAD",
+      "STAIRWELL",
+      "PARKING",
+      "LOBBY",
+      "COMMON",
+    ])
+    .nullable(),
+  description: z.string(),
+  recipients: z.array(recipientSchema),
+  saveAsDraft: z.boolean(),
+});
+
+/**
+ * יוצר את הפנייה ומעביר למסך שלה.
+ *
+ * ‏redirect בהצלחה ולא החזרת מזהה: המשתמש בשטח צריך לראות מיד שהפנייה
+ * קיימת ולמי היא נשלחה. `redirect` זורק חריגה מיוחדת ב-Next, ולכן הוא
+ * נמצא מחוץ ל-`guard` — אחרת היא הייתה נתפסת ומדווחת כשגיאה.
+ */
+export async function createTicketAction(
+  input: z.infer<typeof createTicketSchema>,
+): Promise<{ error: string } | undefined> {
+  const result = await guard(async () => {
+    const parsed = createTicketSchema.parse(input);
+    const user = await requireSiteAccess(parsed.siteId);
+    const { ticket } = await createTicket(user, parsed);
+    return ticket.id;
+  });
+
+  if (!result.ok) return { error: result.error };
+  redirect(`/tickets/${result.data}`);
+}
