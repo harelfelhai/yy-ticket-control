@@ -1,0 +1,273 @@
+import { describe, expect, it } from "vitest";
+import { he } from "@/lib/he";
+import {
+  type AssignmentView,
+  type TicketView,
+  activeAssignments,
+  daysWithoutActivity,
+  deriveBoardSection,
+  deriveTicketStatus,
+  isStale,
+  reasonText,
+} from "@/lib/ticket-status";
+
+const NOW = new Date("2026-03-15T09:00:00Z");
+
+function daysAgo(days: number): Date {
+  return new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function ticket(overrides: Partial<TicketView> = {}): TicketView {
+  return {
+    isDraft: false,
+    closedAt: null,
+    escalated: false,
+    lastActivityAt: NOW,
+    handlerName: null,
+    ...overrides,
+  };
+}
+
+function to(status: AssignmentView["status"], recipientName = "נמען"): AssignmentView {
+  return { status, recipientName };
+}
+
+describe("deriveTicketStatus — טבלת העדיפויות של §3.5", () => {
+  it("שורה 1: פנייה סגורה היא סגורה, גם אם יש בה שאלה פתוחה", () => {
+    expect(deriveTicketStatus(ticket({ closedAt: NOW }), [to("QUESTION")])).toBe("CLOSED");
+  });
+
+  it("שורה 1 גוברת גם על טיוטה", () => {
+    expect(deriveTicketStatus(ticket({ closedAt: NOW, isDraft: true }), [])).toBe("CLOSED");
+  });
+
+  it("שורה 2: טיוטה, כל עוד לא נסגרה", () => {
+    expect(deriveTicketStatus(ticket({ isDraft: true }), [])).toBe("DRAFT");
+  });
+
+  it("שורה 3: שאלה של נמען אחד גוברת על טופל של כל השאר", () => {
+    const status = deriveTicketStatus(ticket(), [to("DONE"), to("DONE"), to("QUESTION")]);
+    expect(status).toBe("AWAITING_OPENER_QUESTION");
+  });
+
+  it("שורה 4: כל הנמענים סימנו טופל", () => {
+    expect(deriveTicketStatus(ticket(), [to("DONE"), to("DONE")])).toBe(
+      "AWAITING_OPENER_APPROVAL",
+    );
+  });
+
+  it("שורה 5: חלק סימנו טופל", () => {
+    expect(deriveTicketStatus(ticket(), [to("DONE"), to("VIEWED"), to("SENT")])).toBe("PARTIAL");
+  });
+
+  it("שורה 6: מישהו צפה ואיש לא הגיב", () => {
+    expect(deriveTicketStatus(ticket(), [to("VIEWED"), to("SENT")])).toBe("VIEWED");
+  });
+
+  it("שורה 7: אף אחד לא צפה", () => {
+    expect(deriveTicketStatus(ticket(), [to("SENT"), to("SENT")])).toBe("NEW");
+  });
+});
+
+describe("deriveTicketStatus — מקרי קצה", () => {
+  it("פנייה בלי שיוכים כלל היא חדשה, ולא נעלמת ולא נסגרת מעצמה", () => {
+    expect(deriveTicketStatus(ticket(), [])).toBe("NEW");
+  });
+
+  it("פנייה שכל נמעניה הוסרו חוזרת להיות חדשה וממתינה לשיוך", () => {
+    expect(deriveTicketStatus(ticket(), [to("REMOVED"), to("REMOVED")])).toBe("NEW");
+  });
+
+  it("שיוך שהוסר אינו נספר בחישוב 'כולם סיימו'", () => {
+    // בלי סינון ההוסרים, שיוך REMOVED היה מונע 'כולם סיימו' לנצח.
+    expect(deriveTicketStatus(ticket(), [to("DONE"), to("REMOVED")])).toBe(
+      "AWAITING_OPENER_APPROVAL",
+    );
+  });
+
+  it("שיוך שהוסר אינו יוצר שאלה פתוחה", () => {
+    expect(deriveTicketStatus(ticket(), [to("REMOVED"), to("SENT")])).toBe("NEW");
+  });
+
+  it("נמען יחיד שסיים מעביר את הפנייה לאישור ולא לטיפול חלקי", () => {
+    expect(deriveTicketStatus(ticket(), [to("DONE")])).toBe("AWAITING_OPENER_APPROVAL");
+  });
+
+  it("שאלה אחרי טופל מחזירה את הפנייה למצב שאלה", () => {
+    // מצב אמיתי: קבלן סימן טופל, ואז חזר עם שאלה על אותה פנייה.
+    expect(deriveTicketStatus(ticket(), [to("QUESTION")])).toBe("AWAITING_OPENER_QUESTION");
+  });
+
+  it("פתיחה מחדש מחזירה את כולם ל'נשלח' והפנייה חוזרת להיות חדשה", () => {
+    // "נפתח מחדש" אינו סטטוס נפרד (§3.5) — הפנייה חוזרת להתנהג לפי הכללים.
+    expect(deriveTicketStatus(ticket({ closedAt: null }), [to("SENT"), to("SENT")])).toBe("NEW");
+  });
+});
+
+describe("activeAssignments", () => {
+  it("מסנן רק שיוכים שהוסרו", () => {
+    const all = [to("SENT"), to("REMOVED"), to("DONE"), to("QUESTION"), to("VIEWED")];
+    expect(activeAssignments(all).map((a) => a.status)).toEqual([
+      "SENT",
+      "DONE",
+      "QUESTION",
+      "VIEWED",
+    ]);
+  });
+});
+
+describe("deriveBoardSection — אצל מי הכדור", () => {
+  it("סגור הולך לארכיון", () => {
+    expect(deriveBoardSection("CLOSED", false)).toBe("ARCHIVE");
+  });
+
+  it("סגור נשאר בארכיון גם אם סומן כמוסלם", () => {
+    expect(deriveBoardSection("CLOSED", true)).toBe("ARCHIVE");
+  });
+
+  it.each(["DRAFT", "AWAITING_OPENER_QUESTION", "AWAITING_OPENER_APPROVAL"] as const)(
+    "%s דורש פעולה מהצוות",
+    (status) => {
+      expect(deriveBoardSection(status, false)).toBe("ACTION_REQUIRED");
+    },
+  );
+
+  it.each(["PARTIAL", "VIEWED", "NEW"] as const)("%s נשאר אצל הנמענים", (status) => {
+    expect(deriveBoardSection(status, false)).toBe("WITH_RECIPIENTS");
+  });
+
+  it.each(["PARTIAL", "VIEWED", "NEW"] as const)(
+    "%s עובר ל'דורש ממך' כשהוא מוסלם",
+    (status) => {
+      expect(deriveBoardSection(status, true)).toBe("ACTION_REQUIRED");
+    },
+  );
+});
+
+describe("היעדר תנועה", () => {
+  it("סופר ימים שלמים בלבד", () => {
+    expect(daysWithoutActivity(ticket({ lastActivityAt: daysAgo(9) }), NOW)).toBe(9);
+  });
+
+  it("6 ימים עדיין לא חוצים את הסף", () => {
+    expect(isStale(ticket({ lastActivityAt: daysAgo(6) }), NOW)).toBe(false);
+  });
+
+  it("7 ימים חוצים את הסף", () => {
+    expect(isStale(ticket({ lastActivityAt: daysAgo(7) }), NOW)).toBe(true);
+  });
+
+  it("פנייה סגורה לעולם אינה מוסלמת", () => {
+    expect(isStale(ticket({ lastActivityAt: daysAgo(30), closedAt: NOW }), NOW)).toBe(false);
+  });
+
+  it("טיוטה אינה מוסלמת — היא ממילא כבר ב'דורש ממך'", () => {
+    expect(isStale(ticket({ lastActivityAt: daysAgo(30), isDraft: true }), NOW)).toBe(false);
+  });
+});
+
+describe("reasonText — למה הפנייה נמצאת כאן", () => {
+  it("שאלה של נמען אחד מציגה את שמו", () => {
+    const text = reasonText(ticket(), [to("QUESTION", "יוסי"), to("SENT", "משה")], NOW);
+    expect(text).toBe("יוסי שאל שאלה");
+  });
+
+  it("שאלה של כמה נמענים מציגה שם אחד ומונה את השאר", () => {
+    const text = reasonText(
+      ticket(),
+      [to("QUESTION", "יוסי"), to("QUESTION", "משה"), to("QUESTION", "דני")],
+      NOW,
+    );
+    expect(text).toBe("יוסי ועוד 2 שאלו שאלה");
+  });
+
+  it("טיפול חלקי מציג את היחס בדיוק כמו באפיון", () => {
+    const text = reasonText(ticket(), [to("DONE"), to("DONE"), to("SENT")], NOW);
+    expect(text).toBe("2 מתוך 3 סיימו");
+  });
+
+  it("היחס מתעלם משיוכים שהוסרו", () => {
+    const text = reasonText(ticket(), [to("DONE"), to("SENT"), to("REMOVED")], NOW);
+    expect(text).toBe("1 מתוך 2 סיימו");
+  });
+
+  it("הסלמה מציגה את מספר הימים בפועל", () => {
+    const stale = ticket({ escalated: true, lastActivityAt: daysAgo(9) });
+    expect(reasonText(stale, [to("SENT")], NOW)).toBe("ללא תנועה 9 ימים");
+  });
+
+  it("שאלה פתוחה גוברת על הסלמה — היא מה שממתין לתשובה", () => {
+    const stale = ticket({ escalated: true, lastActivityAt: daysAgo(9) });
+    expect(reasonText(stale, [to("QUESTION", "יוסי")], NOW)).toBe("יוסי שאל שאלה");
+  });
+
+  it("ממתין לאישור גובר על הסלמה", () => {
+    const stale = ticket({ escalated: true, lastActivityAt: daysAgo(12) });
+    expect(reasonText(stale, [to("DONE")], NOW)).toBe(he.reason.allDone);
+  });
+
+  it("מציג מי מטפל כשאין סיבה דחופה יותר", () => {
+    const withHandler = ticket({ handlerName: "דוד" });
+    expect(reasonText(withHandler, [to("VIEWED")], NOW)).toBe("דוד מטפל");
+  });
+
+  it("טיוטה מוסברת כטיוטה", () => {
+    expect(reasonText(ticket({ isDraft: true }), [], NOW)).toBe(he.reason.draft);
+  });
+
+  it("פנייה סגורה מוסברת כסגורה", () => {
+    expect(reasonText(ticket({ closedAt: NOW }), [to("DONE")], NOW)).toBe(he.reason.closed);
+  });
+
+  it("פנייה בלי נמענים אומרת זאת במפורש ולא נשארת בלי הסבר", () => {
+    expect(reasonText(ticket(), [], NOW)).toBe(he.reason.noRecipients);
+  });
+
+  it("פנייה שנשלחה וטרם נצפתה אומרת זאת", () => {
+    expect(reasonText(ticket(), [to("SENT")], NOW)).toBe(he.reason.awaitingFirstView);
+  });
+
+  it("נצפה בלי תגובה אומר זאת", () => {
+    expect(reasonText(ticket(), [to("VIEWED")], NOW)).toBe(he.reason.viewedNoReply);
+  });
+
+  it("לכל מצב אפשרי יש טקסט סיבה — אף כרטיס לא נשאר בלי הסבר", () => {
+    const cases: AssignmentView[][] = [
+      [],
+      [to("SENT")],
+      [to("VIEWED")],
+      [to("DONE")],
+      [to("QUESTION")],
+      [to("REMOVED")],
+      [to("DONE"), to("SENT")],
+    ];
+    for (const assignments of cases) {
+      for (const t of [ticket(), ticket({ isDraft: true }), ticket({ closedAt: NOW })]) {
+        expect(reasonText(t, assignments, NOW).length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("תרגום לעברית", () => {
+  it("לכל סטטוס נגזר יש תווית", () => {
+    const statuses = [
+      "CLOSED",
+      "DRAFT",
+      "AWAITING_OPENER_QUESTION",
+      "AWAITING_OPENER_APPROVAL",
+      "PARTIAL",
+      "VIEWED",
+      "NEW",
+    ] as const;
+    for (const status of statuses) {
+      expect(he.ticketStatus[status]).toBeTruthy();
+    }
+  });
+
+  it("לכל קבוצה בלוח יש כותרת", () => {
+    expect(he.boardSection.ACTION_REQUIRED).toBe("דורש ממך");
+    expect(he.boardSection.WITH_RECIPIENTS).toBe("אצל הנמענים");
+    expect(he.boardSection.ARCHIVE).toBe("ארכיון");
+  });
+});
