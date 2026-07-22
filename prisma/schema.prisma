@@ -1,0 +1,380 @@
+// מודל הנתונים של מערכת בקרת הפניות.
+// ממפה את §3 באפיון הפונקציונלי (docs/specs/ticket-control-pre-plan.md).
+//
+// שתי הכרעות מבנה שחוזרות לאורך כל הקובץ:
+//
+// 1. סטטוס הוא תכונה של ה*שיוך*, לא של הפנייה. פנייה אחת יכולה להיות משויכת
+//    לכמה אנשי מקצוע, וכל אחד מהם מתקדם בקצב שלו. סטטוס הפנייה מחושב מהם
+//    בזמן קריאה (src/lib/ticket-status.ts) ולא נשמר — כדי שלא ייווצר מצב שבו
+//    השדה השמור והשיוכים סותרים זה את זה.
+// 2. מחיקות מוגבלות ב-Restrict כברירת מחדל. פנייה אמיתית לא נמחקת לעולם;
+//    מחיקה שמורה לכפילות או לתקלה, ומבוצעת בידי מנהל מערכת בלבד. Cascade
+//    מופיע רק היכן שהרשומה חסרת משמעות בלי ההורה שלה (שיוך, הודעה, קובץ).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ────────────────────────────── ספירות ──────────────────────────────
+
+/// תפקיד יחיד למשתמש פנימי (אפיון §5.ג). אין שילוב תפקידים.
+enum Role {
+  ADMIN // מנהל מערכת — גישה מלאה, כולל מחיקה
+  OWNER // בעלים/הנהלה — קריאה רחבה, פתיחת פניות
+  SITE_MANAGER // מנהל עבודה — אתר אחד בלבד
+}
+
+/// כיצד הפנייה נכנסה למערכת (אפיון §3.2 שדה 13).
+enum Channel {
+  SELF // המשתמש פתח בעצמו במערכת
+  MANAGEMENT // הועבר מההנהלה
+  WHATSAPP // הגיע מבוט וואטסאפ — רדום בגרסה זו, ראה Gate G8
+}
+
+enum Room {
+  SALON
+  KITCHEN
+  BEDROOM
+  BATHROOM
+  WC
+  BALCONY
+  MAMAD
+  STAIRWELL
+  PARKING
+  LOBBY
+  COMMON
+}
+
+/// מצב הטיפול של נמען יחיד בפנייה (אפיון §3.4).
+enum AssignmentStatus {
+  SENT // שוגר אליו, טרם נצפה
+  VIEWED // פתח את הקישור
+  DONE // סימן "טופל" — ממתין לאישור הפותח
+  QUESTION // שאל שאלה — הכדור חזר לפותח
+  REMOVED // הוסר מהפנייה; מאבד גישה, ההיסטוריה נשמרת
+}
+
+enum AiStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum MessageKind {
+  TEXT
+  MEDIA
+  EVENT // אירוע מערכת בשרשור (שויך/הוסר/נסגר...) — אין לו מחבר אנושי
+}
+
+// ────────────────────────────── ישויות ליבה ──────────────────────────────
+
+model User {
+  id           String  @id @default(cuid())
+  role         Role
+  name         String
+  phone        String  @unique
+  email        String? @unique
+  passwordHash String
+
+  /// חובה עבור SITE_MANAGER (מנהל עבודה משויך לאתר אחד), null עבור ADMIN/OWNER.
+  /// לא נאכף ב-DB אלא בשכבת השירות, כי האילוץ תלוי בערך של role.
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  createdTickets  Ticket[]     @relation("TicketCreatedBy")
+  handlingTickets Ticket[]     @relation("TicketHandler")
+  closedTickets   Ticket[]     @relation("TicketClosedBy")
+  assignments     Assignment[] // כנמען פנימי, כולל תזכורן לעצמו
+  messages        Message[]
+  createdTags     Tag[]
+
+  @@index([siteId, active])
+}
+
+model Site {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  buildings Building[]
+  users     User[]
+  tickets   Ticket[]
+}
+
+/// בניין נלמד תוך כדי עבודה ולא מוגדר מראש (הכרעת המשתמש).
+/// הסיכון המודע: שני שמות לאותו בניין ("א'" / "בניין א") מפצלים דוחות ותגיות.
+/// המיטיגציה היא בממשק — הבניינים מוצגים כרשימת בחירה קצרה ולא כשדה טקסט חופשי.
+model Building {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  name   String
+
+  apartments Apartment[]
+  tickets    Ticket[]
+
+  @@unique([siteId, name])
+}
+
+model Apartment {
+  id         String   @id @default(cuid())
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+
+  /// מספר דירה מנורמל (trim, ללא אפס מוביל) — הנרמול נעשה בשכבת השירות
+  /// כדי ש-"07" ו-"7" לא ייצרו שתי דירות.
+  number String
+
+  /// הדייר קשור לדירה ולא לפנייה (אפיון §3.2 שדה 11), כי אותו דייר חוזר בפניות רבות.
+  residentName String?
+
+  tickets Ticket[]
+
+  @@unique([buildingId, number])
+}
+
+/// תחום מקצועי (חשמל, אינסטלציה...) — רשימה נלמדת (אפיון §3.1).
+model Domain {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  tickets Ticket[]
+}
+
+/// נמען חיצוני: קבלן משנה או איש מקצוע. אין לו סיסמה — הוא נכנס בקישור אישי.
+model Professional {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+
+  // "חובה טלפון או מייל" נאכף בשכבת השירות: זהו אילוץ עסקי שתלוי בערוץ
+  // השליחה בפועל, ועדיף שיחזיר שגיאה מוסברת בעברית ולא כשל אילוץ גולמי.
+
+  tokens      AccessToken[]
+  assignments Assignment[]
+  messages    Message[]
+  tagAccess   TagAccess[]
+}
+
+/// "קישור קסם" — טוקן נושא (bearer) לאיש מקצוע, לא לפנייה בודדת.
+/// הטוקן עצמו לעולם לא נשמר; נשמר רק ה-SHA-256 שלו, כדי שדליפת ה-DB
+/// לא תיתן גישה. ההרשאה נבדקת דינמית בכל בקשה מול שיוכים פעילים —
+/// ולכן הסרת קבלן מנתקת אותו מיידית גם אם הקישור בידיו.
+model AccessToken {
+  id             String       @id @default(cuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  @@index([professionalId, revokedAt])
+}
+
+model Ticket {
+  id String @id @default(cuid())
+
+  /// מספר פנייה קריא לאדם, לשימוש בשיחות ובהודעות יוצאות.
+  seq Int @unique @default(autoincrement())
+
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  // ארבעת אלה null רק בטיוטה — פנייה משוגרת חייבת את כולם (אפיון §3.2).
+  buildingId  String?
+  building    Building?  @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  apartmentId String?
+  apartment   Apartment? @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+  domainId    String?
+  domain      Domain?    @relation(fields: [domainId], references: [id], onDelete: Restrict)
+  room        Room?
+
+  description String  @default("")
+  channel     Channel
+
+  /// טיוטה: נשמרה אך לא שוגרה ואיש לא קיבל אותה (אפיון §2.5).
+  isDraft Boolean @default(false)
+
+  createdById String
+  createdBy   User   @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// "מי מטפל" (אפיון §5.ד) — נקבע ידנית או אוטומטית לפי מי שכתב בשרשור.
+  handlerId String?
+  handler   User?   @relation("TicketHandler", fields: [handlerId], references: [id], onDelete: SetNull)
+
+  closedAt    DateTime?
+  closedById  String?
+  closedBy    User?     @relation("TicketClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  reopenCount Int       @default(0)
+
+  /// כל הודעה או שינוי סטטוס מעדכן. זהו הבסיס להסלמת 7 הימים:
+  /// האפיון המקורי הסלים פניות "שלא נצפו", אבל בשיוך מרובה די בקבלן אחד
+  /// שפותח את הקישור כדי שההסלמה לא תופעל לעולם — גם אם השאר מתעלמים חודש.
+  lastActivityAt DateTime @default(now())
+
+  /// סומן על ידי הג'וב היומי כדורש התערבות.
+  escalated Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  assignments Assignment[]
+  messages    Message[]
+  tags        TicketTag[]
+
+  @@index([siteId, closedAt])
+  @@index([lastActivityAt])
+  @@index([createdById])
+  @@index([handlerId])
+}
+
+/// שיוך פנייה↔נמען. הסטטוס יושב כאן ולא על הפנייה (אפיון §3.4).
+model Assignment {
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // בדיוק אחד מהשניים מאוכלס — נאכף בשכבת השירות.
+  // נמען פנימי משמש גם ל"תזכורן": הפותח משייך את הפנייה לעצמו.
+  professionalId String?
+  professional   Professional? @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  status          AssignmentStatus @default(SENT)
+  statusChangedAt DateTime         @default(now())
+  viewedAt        DateTime?
+  createdAt       DateTime         @default(now())
+
+  @@index([ticketId])
+  @@index([professionalId, status])
+  @@index([userId, status])
+}
+
+/// הודעה בשרשור פנייה, או בצ'אט של תגית. בדיוק אחד מ-ticketId/tagId מאוכלס.
+model Message {
+  id       String  @id @default(cuid())
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tagId    String?
+  tag      Tag?    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  kind MessageKind
+  text String?
+
+  /// ASSIGNED / REMOVED / VIEWED / DONE / QUESTION / CLOSED / REOPENED / HANDLER_SET
+  eventType String?
+
+  /// שמות ופרטים לתצוגת האירוע, כדי שהשרשור יישאר קריא גם אם הישות שונתה מאז.
+  eventMeta Json?
+
+  // שניהם null עבור kind = EVENT.
+  authorUserId         String?
+  authorUser           User?         @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  authorProfessionalId String?
+  authorProfessional   Professional? @relation(fields: [authorProfessionalId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  media MediaFile[]
+
+  @@index([ticketId, createdAt])
+  @@index([tagId, createdAt])
+}
+
+model MediaFile {
+  id        String   @id @default(cuid())
+  messageId String?
+  message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  r2Key        String  @unique
+  mimeType     String
+  sizeBytes    Int
+  originalName String?
+
+  /// תמלול אודיו בעברית
+  transcription String?
+
+  /// טקסט שחולץ מתמונה או PDF
+  extractedText String?
+
+  aiStatus  AiStatus @default(PENDING)
+  aiError   String?
+  createdAt DateTime @default(now())
+
+  @@index([aiStatus])
+}
+
+/// תגית — קיבוץ פניות (למשל כל ליקויי בדק בית בדירה אחת) + צ'אט קבוצתי.
+/// חשוב: פתיחת תגית לאיש מקצוע חושפת לו את הצ'אט בלבד ולעולם לא את הפניות.
+model Tag {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  tickets  TicketTag[]
+  access   TagAccess[]
+  messages Message[]
+}
+
+model TicketTag {
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tagId    String
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+  @@index([tagId])
+}
+
+/// למי התגית פתוחה. גישה לצ'אט בלבד.
+model TagAccess {
+  tagId          String
+  tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  grantedAt      DateTime     @default(now())
+
+  @@id([tagId, professionalId])
+  @@index([professionalId])
+}
+
+/// תור עבודות בטבלה, במקום Redis. instance יחיד, עשרות עבודות ביום —
+/// תשתית תור חיצונית הייתה עלות תפעול בלי תמורה.
+model Job {
+  id String @id @default(cuid())
+
+  /// TRANSCRIBE / OCR / SEND_EMAIL / DAILY_ESCALATION / BACKUP
+  type      String
+  payload   Json
+  status    JobStatus @default(PENDING)
+  attempts  Int       @default(0)
+  runAt     DateTime  @default(now())
+  lastError String?
+  createdAt DateTime  @default(now())
+
+  @@index([status, runAt])
+}

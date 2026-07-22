@@ -29,3 +29,16 @@ Thumbs.db
 # Logs & temp
 *.log
 tmp/
+
+# Prisma — נוצר מחדש ב-`prisma generate`, לא נשמר בגיט
+/src/generated/prisma
+
+# בסיס הנתונים המקומי (PostgreSQL שרץ מ-node_modules)
+.localdb/
+
+# מיומנויות סוכן ש-`prisma init` מייצר. מכילות סימלינקים ו-~500KB תיעוד
+# שאפשר לשחזר בכל רגע; אין סיבה לגרור אותן דרך הריפו.
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
