@@ -106,6 +106,20 @@ export const he = {
     closed: "הפנייה נסגרה",
   },
 
+  /** הרשימות הנלמדות: בניין, דירה, תחום, איש מקצוע */
+  directory: {
+    building: "בניין",
+    apartment: "דירה",
+    domain: "תחום",
+    professional: "איש מקצוע",
+    createNew: (value: string) => `צור חדש: "${value}"`,
+    buildingNameRequired: "יש להזין שם בניין",
+    apartmentNumberRequired: "יש להזין מספר דירה",
+    domainNameRequired: "יש להזין תחום",
+    professionalNameRequired: "יש להזין שם איש מקצוע",
+    invalidEmail: "כתובת המייל אינה תקינה",
+  },
+
   login: {
     title: "כניסה למערכת",
     identifierLabel: "טלפון או מייל",

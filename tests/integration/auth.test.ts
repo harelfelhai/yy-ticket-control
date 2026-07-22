@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { authenticate, hashPassword, normalizeIdentifier, verifyPassword } from "@/lib/auth";
+import { authenticate, hashPassword, identifierCandidates, verifyPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resetDb } from "../helpers/reset-db";
 
@@ -41,9 +41,13 @@ describe("גיבוב סיסמאות", () => {
   });
 });
 
-describe("normalizeIdentifier", () => {
-  it("מסיר רווחים ומאחיד אותיות, כדי שמייל לא ייכשל בגלל אות גדולה", () => {
-    expect(normalizeIdentifier("  Manager@Example.COM ")).toBe("manager@example.com");
+describe("identifierCandidates", () => {
+  it("מייל מנורמל לאותיות קטנות", () => {
+    expect(identifierCandidates("  Manager@Example.COM ").email).toBe("manager@example.com");
+  });
+
+  it("טלפון מנורמל לצורה מקומית אחת", () => {
+    expect(identifierCandidates("050-111-2222").phone).toBe("0501112222");
   });
 });
 
@@ -71,6 +75,13 @@ describe("authenticate", () => {
   it("מזהה מייל גם באותיות גדולות ועם רווחים", async () => {
     await createUser();
     expect(await authenticate("  Manager@Example.com  ", PASSWORD)).not.toBeNull();
+  });
+
+  it("מזהה טלפון שהוקלד עם מקפים, אף שהוא נשמר בלעדיהם", async () => {
+    // המשתמש לא זוכר באיזו צורה הוקלד המספר שלו במערכת. שתי הצורות חייבות לעבוד.
+    await createUser();
+    expect(await authenticate("050-111-2222", PASSWORD)).not.toBeNull();
+    expect(await authenticate("+972 50 111 2222", PASSWORD)).not.toBeNull();
   });
 
   it("דוחה סיסמה שגויה", async () => {

@@ -1,6 +1,7 @@
 import { hash, verify } from "@node-rs/argon2";
 import { redirect } from "next/navigation";
 import { db } from "./db";
+import { normalizeEmail, normalizePhone } from "./normalize";
 import { type SessionUser, destroySession, getSessionUser } from "./session";
 
 /**
@@ -37,9 +38,18 @@ export async function verifyPassword(passwordHash: string, password: string): Pr
   }
 }
 
-/** מזהה התחברות: טלפון או כתובת מייל. המשתמש בוחר לפי מה שנוח לו. */
-export function normalizeIdentifier(identifier: string): string {
-  return identifier.trim().toLowerCase();
+/**
+ * מזהה התחברות: טלפון או כתובת מייל, לפי מה שנוח למשתמש.
+ *
+ * מחזיר את שתי הצורות ולא מנחש איזו מהן נכונה. הסיבה: מנהל עבודה שהוקלד
+ * במערכת כ-"050-123-4567" ומקליד בהתחברות "0501234567" חייב להתחבר, וכך
+ * גם ההפך. ניחוש לפי צורת הקלט היה נכשל בדיוק במקרים האלה.
+ */
+export function identifierCandidates(identifier: string): {
+  phone: string;
+  email: string;
+} {
+  return { phone: normalizePhone(identifier), email: normalizeEmail(identifier) };
 }
 
 /**
@@ -55,10 +65,15 @@ export async function authenticate(
   identifier: string,
   password: string,
 ): Promise<SessionUser | null> {
-  const value = normalizeIdentifier(identifier);
+  const { phone, email } = identifierCandidates(identifier);
 
   const user = await db.user.findFirst({
-    where: { OR: [{ phone: value }, { email: value }] },
+    where: {
+      OR: [
+        ...(phone ? [{ phone }] : []),
+        ...(email ? [{ email }] : []),
+      ],
+    },
   });
 
   if (!user || !user.active) {
