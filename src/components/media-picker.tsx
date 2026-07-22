@@ -16,7 +16,13 @@ export interface AttachedFile {
 }
 
 interface MediaPickerProps {
-  ticketId: string;
+  /**
+   * הפנייה שאליה הקובץ מיועד.
+   *
+   * חסר במסך היצירה: שם הפנייה עדיין אינה קיימת, והקובץ נשמר בלי שיוך עד
+   * שהיא נוצרת. זהו המסלול העיקרי בשטח — מצלמים קודם, ממלאים אחר כך.
+   */
+  ticketId?: string;
   /** קיים כשהמעלה הוא נמען חיצוני בפורטל */
   token?: string;
   files: AttachedFile[];

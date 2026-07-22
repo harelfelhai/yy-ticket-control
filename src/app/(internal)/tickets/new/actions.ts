@@ -124,6 +124,7 @@ const createTicketSchema = z.object({
     .nullable(),
   description: z.string(),
   recipients: z.array(recipientSchema),
+  mediaIds: z.array(idSchema).max(20).optional(),
   saveAsDraft: z.boolean(),
 });
 

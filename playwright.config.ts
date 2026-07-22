@@ -68,6 +68,9 @@ export default defineConfig({
       APP_BASE_URL: BASE_URL,
       SESSION_SECRET: process.env.SESSION_SECRET ?? "",
       NODE_ENV: PRODUCTION ? "production" : "development",
+      // בבנייה של פרודקשן אין חשבון Cloudflare, והמערכת מסרבת לנחש. זהו
+      // ויתור מפורש: זו בנייה ולא פריסה, והקבצים יושבים על הדיסק המקומי.
+      MEDIA_STORAGE: "local",
     },
   },
 });

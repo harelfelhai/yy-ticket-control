@@ -63,6 +63,14 @@ export const env = {
     return { accountId, accessKeyId, secretAccessKey, bucket };
   },
 
+  /**
+   * ויתור מפורש על אחסון בענן גם בבנייה של פרודקשן.
+   *
+   * קיים כדי להבדיל בין "שכחתי להגדיר R2" לבין "החלטתי שהקבצים על הדיסק".
+   * ההבדל הזה חייב להיאמר בסביבה ולא להיות מנוחש — ראה `selectStorage`.
+   */
+  forceLocalStorage: () => optional("MEDIA_STORAGE") === "local",
+
   /** מפתח OpenAI לתמלול עברית. בלעדיו התמלול מדולג ואינו נכשל. */
   openaiApiKey: () => optional("OPENAI_API_KEY"),
   /** מפתח Anthropic לחילוץ טקסט מתמונות ומ-PDF */

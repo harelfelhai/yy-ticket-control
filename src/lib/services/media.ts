@@ -31,7 +31,14 @@ import type { UploadTarget } from "@/lib/storage";
 export class MediaError extends UserFacingError {}
 
 export interface RegisterMediaInput {
-  ticketId: string;
+  /**
+   * הפנייה שאליה הקובץ מיועד.
+   *
+   * אופציונלי, כי במסך היצירה הפנייה עדיין אינה קיימת — וזה בדיוק המסלול
+   * שבו מצלמים: המנהל עומד מול הדירה, מצלם, ורק אז ממלא את השדות. קובץ
+   * בלי פנייה שמור אך אינו נגיש לאיש עד שהוא מצורף להודעה.
+   */
+  ticketId?: string;
   mimeType: string;
   sizeBytes: number;
   originalName?: string;
@@ -61,12 +68,19 @@ export async function registerMedia(
     throw new MediaError(he.media.tooLarge);
   }
 
-  const ticket = await db.ticket.findUnique({
-    where: { id: input.ticketId },
-    include: { assignments: true },
-  });
-  if (!ticket) throw new MediaError(he.ticket.notFound);
-  if (!canCommentOnTicket(viewer, ticket, ticket.assignments)) {
+  if (input.ticketId) {
+    const ticket = await db.ticket.findUnique({
+      where: { id: input.ticketId },
+      include: { assignments: true },
+    });
+    if (!ticket) throw new MediaError(he.ticket.notFound);
+    if (!canCommentOnTicket(viewer, ticket, ticket.assignments)) {
+      throw new MediaError(he.common.notAllowed);
+    }
+  } else if (viewer.kind !== "user") {
+    // בלי פנייה אין מה לבדוק מולה, ולכן המסלול פתוח למשתמשים פנימיים
+    // בלבד — הם היחידים שפותחים פניות. נמען חיצוני חייב לציין פנייה
+    // קיימת שהוא משויך אליה.
     throw new MediaError(he.common.notAllowed);
   }
 

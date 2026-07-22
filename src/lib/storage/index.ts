@@ -11,13 +11,20 @@ export type { MediaStorage, UploadTarget } from "./types";
  *
  * בפרודקשן חוסר הגדרה הוא כשל רועש: מערכת שנראית עובדת ובשקט מאבדת את
  * התמונה שמנהל צילם בשטח היא בדיוק מה שהמערכת נועדה למנוע.
+ *
+ * `MEDIA_STORAGE=local` הוא ויתור **מפורש** על הכלל הזה. הוא נדרש בשני
+ * מצבים אמיתיים: בדיקות שרצות מול בנייה של פרודקשן (בנייה, לא פריסה),
+ * והתקנה על שרת יחיד שבו הקבצים יושבים על הדיסק במכוון. ההבדל בין
+ * "שכחתי להגדיר" לבין "החלטתי כך" חייב להיות מפורש בסביבה, ולא ניחוש.
  */
 export function selectStorage(): MediaStorage {
   const config = env.r2();
   if (config) return r2Storage(config);
 
-  if (env.isProduction()) {
-    throw new Error("אחסון המדיה אינו מוגדר: חסרים משתני R2_*. ראה .env.example");
+  if (env.isProduction() && !env.forceLocalStorage()) {
+    throw new Error(
+      "אחסון המדיה אינו מוגדר: חסרים משתני R2_*. להרצה מקומית מכוונת הגדר MEDIA_STORAGE=local",
+    );
   }
 
   return localStorage(env.appBaseUrl());

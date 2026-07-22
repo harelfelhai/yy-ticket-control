@@ -19,7 +19,8 @@ import { resolveViewer } from "@/lib/services/viewer";
  */
 
 const registerSchema = z.object({
-  ticketId: z.string().min(1),
+  /** חסר במסך היצירה — ראה `registerMedia` */
+  ticketId: z.string().min(1).optional(),
   mimeType: z.string().min(1).max(200),
   sizeBytes: z.number().int().positive(),
   originalName: z.string().max(300).optional(),

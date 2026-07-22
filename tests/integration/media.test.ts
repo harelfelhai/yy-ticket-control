@@ -216,6 +216,86 @@ describe("getViewableMedia", () => {
   });
 });
 
+describe("מדיה במסך היצירה — לפני שהפנייה קיימת", () => {
+  it("משתמש פנימי רשאי להעלות בלי פנייה", async () => {
+    // זהו המסלול בשטח: מצלמים מול הדירה, וממלאים את השדות אחר כך.
+    const { mediaId } = await registerMedia(managerViewer, photo);
+    expect(await db.mediaFile.findUniqueOrThrow({ where: { id: mediaId } })).toBeTruthy();
+  });
+
+  it("נמען חיצוני אינו רשאי — הוא חייב פנייה שהוא משויך אליה", async () => {
+    // בלי פנייה אין מול מה לבדוק הרשאה. קבלן אינו פותח פניות ממילא.
+    await expect(
+      registerMedia({ kind: "professional", id: contractor }, photo),
+    ).rejects.toThrow(MediaError);
+  });
+
+  it("הקבצים נכנסים לשרשור של הפנייה שנוצרת", async () => {
+    const { mediaId } = await registerMedia(managerViewer, photo);
+    await confirmUpload(mediaId);
+
+    const { ticket } = await createTicket(manager, {
+      siteId,
+      ...base,
+      description: "סדק בקיר",
+      recipients: [{ kind: "professional", id: contractor }],
+      mediaIds: [mediaId],
+    });
+
+    const stored = await db.mediaFile.findUniqueOrThrow({
+      where: { id: mediaId },
+      include: { message: true },
+    });
+    expect(stored.message?.ticketId).toBe(ticket.id);
+    expect(stored.message?.kind).toBe("MEDIA");
+  });
+
+  it("כמה קבצים נכנסים להודעה אחת ולא לארבע", async () => {
+    // מנהל שצילם ארבע תמונות של אותה תקלה תיאר אירוע אחד.
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const { mediaId } = await registerMedia(managerViewer, photo);
+      await confirmUpload(mediaId);
+      ids.push(mediaId);
+    }
+
+    const { ticket } = await createTicket(manager, {
+      siteId,
+      ...base,
+      description: "כמה תמונות",
+      recipients: [{ kind: "professional", id: contractor }],
+      mediaIds: ids,
+    });
+
+    const messages = await db.message.findMany({
+      where: { ticketId: ticket.id, kind: "MEDIA" },
+      include: { media: true },
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.media).toHaveLength(3);
+  });
+
+  it("גם טיוטה שומרת את הצילום", async () => {
+    // הצילום נעשה לפני שהשדות מולאו, והוא המידע שהכי קשה לשחזר — אי אפשר
+    // לחזור לדירה ולצלם שוב אחרי שהקבלן תיקן.
+    const { mediaId } = await registerMedia(managerViewer, photo);
+    await confirmUpload(mediaId);
+
+    const { ticket, isDraft } = await createTicket(manager, {
+      siteId,
+      description: "",
+      mediaIds: [mediaId],
+    });
+
+    expect(isDraft).toBe(true);
+    const stored = await db.mediaFile.findUniqueOrThrow({
+      where: { id: mediaId },
+      include: { message: true },
+    });
+    expect(stored.message?.ticketId).toBe(ticket.id);
+  });
+});
+
 describe("אחסון מקומי", () => {
   it("כותב וקורא את הבתים בפועל", async () => {
     // הדרייבר המקומי אינו מימוש מדומה: הוא כותב קבצים אמיתיים, ולכן כל

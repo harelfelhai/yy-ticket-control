@@ -121,6 +121,42 @@ test("מנהל מצרף תמונה לתגובה, והקבלן רואה אותה 
     .toBeGreaterThan(0);
 });
 
+test("מנהל מצלם לפני שהפנייה קיימת, והתמונה נכנסת איתה", async ({ page }) => {
+  // המסלול העיקרי בשטח: עומדים מול הדירה, מצלמים, וממלאים אחר כך.
+  const stamp = Date.now();
+  const description = `אריח שבור ${stamp}`;
+
+  await loginAsManager(page);
+  await page.goto("/tickets/new");
+
+  // הצילום קודם — לפני שנבחרו בניין, דירה ותחום.
+  await fileInput(page).setInputFiles(pngFile("before.png"));
+  await expect(
+    page.getByRole("list", { name: "צרף קובץ" }).getByRole("img", { name: "תמונה מצורפת" }),
+  ).toBeVisible();
+
+  await pick(page, "בניין", "בניין א");
+  await pick(page, "דירה", "1");
+  await pick(page, "תחום", "חשמל");
+  await page.getByLabel("תיאור").fill(description);
+  await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
+  await page.getByLabel("שם").fill(`רצף ${stamp}`);
+  await page.getByLabel("טלפון").fill(`059-${String(stamp).slice(-7)}`);
+  await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
+  await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(
+    `רצף ${stamp}`,
+  );
+
+  await page.getByRole("button", { name: "שלח לנמענים" }).click();
+  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+
+  const image = page.getByRole("img", { name: "before.png" });
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() => image.evaluate((node: HTMLImageElement) => node.naturalWidth))
+    .toBeGreaterThan(0);
+});
+
 test("קבלן מגיב בתמונה בלי לכתוב מילה", async ({ page }) => {
   // התרחיש מהאפיון: הקבלן מצלם את מה שתיקן. תמונה בלי כיתוב היא הודעה
   // שלמה, ולעיתים המדויקת ביותר.
@@ -146,6 +182,52 @@ test("קבלן מגיב בתמונה בלי לכתוב מילה", async ({ page 
   await page.goto("/board");
   await page.getByRole("link").filter({ hasText: description }).click();
   await expect(page.getByRole("img", { name: "fixed.png" })).toBeVisible();
+});
+
+test("קובץ בגודל אמיתי עובר במלואו", async ({ page }) => {
+  /**
+   * כל שאר בדיקות המדיה מעלות קובץ של 70 בתים, וזה לא מייצג דבר: תמונה
+   * מטלפון היא כמה מגה־בייטים. הסיכון האמיתי הוא מגבלת גודל גוף בקשה
+   * בשרת או בשכבת האירוח — כשל שהיה מתגלה רק בפרודקשן, אצל מנהל שמנסה
+   * להעלות צילום של דירה.
+   *
+   * ‏PDF ולא תמונה: המבנה הפנימי אינו נבדק בשרת, וכך אפשר לייצר קובץ
+   * גדול באמת בלי לקודד תמונה של שלושה מגה־בייטים.
+   */
+  const stamp = Date.now();
+  const megabytes = 3;
+  const big = Buffer.alloc(megabytes * 1024 * 1024, 0x41);
+  big.write("%PDF-1.4\n", 0);
+
+  await loginAsManager(page);
+  const { description } = await openTicketWithContractor(page, stamp);
+
+  await fileInput(page).setInputFiles({
+    name: "דוח בדק בית.pdf",
+    mimeType: "application/pdf",
+    buffer: big,
+  });
+
+  // אין תצוגה מקדימה ל-PDF, ולכן מחכים לשם הקובץ בצ'יפ.
+  await expect(page.getByRole("list", { name: "צרף קובץ" })).toContainText("דוח בדק בית.pdf");
+  // בשמות ההודעות ולא לפי role="alert": ב-Next במצב פיתוח קיים אזור
+  // הכרזה נגיש עם אותו role, והוא היה מזוהה ככשל.
+  await expect(page.getByText("ההעלאה נכשלה")).toHaveCount(0);
+  await expect(page.getByText("הקובץ גדול מדי")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "שלח", exact: true }).click();
+
+  const link = page.getByRole("link", { name: /דוח בדק בית\.pdf/ });
+  await expect(link).toBeVisible();
+
+  // ההורדה מחזירה את כל הבתים — לא קובץ קטוע.
+  const href = (await link.getAttribute("href")) as string;
+  const response = await page.request.get(href);
+  expect(response.status()).toBe(200);
+  expect((await response.body()).byteLength).toBe(big.byteLength);
+
+  // והפנייה עצמה לא נפגעה בדרך.
+  await expect(page.getByText(description)).toBeVisible();
 });
 
 test("קובץ של פנייה אחת אינו נגיש לקבלן של פנייה אחרת", async ({ page }) => {

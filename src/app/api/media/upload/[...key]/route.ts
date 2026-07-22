@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { env } from "@/lib/env";
-import { MAX_FILE_BYTES } from "@/lib/storage";
+import { MAX_FILE_BYTES, selectStorage } from "@/lib/storage";
 import { writeLocalObject } from "@/lib/storage/local";
 
 /**
@@ -17,7 +16,12 @@ import { writeLocalObject } from "@/lib/storage/local";
  * קיים.
  */
 export async function PUT(request: Request, context: RouteContext<"/api/media/upload/[...key]">) {
-  if (env.r2() || env.isProduction()) {
+  // התנאי נשען על **אותה החלטה** שבנתה את כתובת ההעלאה, ולא על שכפול שלה.
+  // בגרסה קודמת היו כאן שני תנאים נפרדים שביטאו את אותה כוונה, והם נפרדו:
+  // `selectStorage` כיבד את MEDIA_STORAGE=local וה-route לא, ולכן הכתובת
+  // הוחזרה ללקוח אך ההעלאה אליה נדחתה ב-404. אם יש רק מקור אמת אחד, אין
+  // מה שייפרד.
+  if (selectStorage().name !== "local") {
     return NextResponse.json({ error: "not available" }, { status: 404 });
   }
 

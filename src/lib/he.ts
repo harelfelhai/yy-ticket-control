@@ -197,6 +197,9 @@ export const he = {
     sentTo: (names: string[]) => `הפנייה נשלחה ל${names.join(", ")}.`,
     savedAsDraft: "נשמר כטיוטה. לא נשלח לאיש.",
     cannotSubmitMissing: (missing: string[]) => `לא ניתן לשגר — חסר: ${missing.join(", ")}`,
+    /** שחזור טופס שנשמר בדפדפן — ראה src/lib/offline-draft.ts */
+    draftRestored: "שוחזר מה שהקלדת קודם",
+    pendingRetry: "מנסה לשלוח שוב…",
     notFound: "הפנייה לא נמצאה",
     assignmentNotFound: "השיוך לא נמצא",
     emptyMessage: "אין מה לשלוח",

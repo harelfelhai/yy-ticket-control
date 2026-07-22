@@ -43,6 +43,8 @@ export interface CreateTicketInput {
   description?: string;
   channel?: Channel;
   recipients?: RecipientRef[];
+  /** קבצים שהועלו לפני שהפנייה נוצרה — צילום מהשטח, הקלטה קולית */
+  mediaIds?: string[];
   /** שמירה מפורשת כטיוטה, גם כשכל השדות מלאים */
   saveAsDraft?: boolean;
 }
@@ -99,6 +101,10 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
       include: { assignments: true },
     });
 
+    // המדיה מצורפת גם לטיוטה: הצילום נעשה לפני שהשדות מולאו, והוא המידע
+    // שהכי קשה לשחזר — אי אפשר לחזור לדירה ולצלם שוב אחרי שהקבלן תיקן.
+    await attachInitialMedia(tx, ticket.id, actor.id, input.mediaIds ?? []);
+
     if (!isDraft) {
       await applyNewAssignments(
         tx,
@@ -109,6 +115,31 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
     }
 
     return { ticket, isDraft, missing };
+  });
+}
+
+/**
+ * מצרף לפנייה חדשה את הקבצים שהועלו לפני שנוצרה.
+ *
+ * הודעה אחת עם כל הקבצים ולא הודעה לכל קובץ: מנהל שצילם ארבע תמונות של
+ * אותה תקלה תיאר אירוע אחד, ופיצול לארבע הודעות היה קובר את התיאור שכתב.
+ */
+async function attachInitialMedia(
+  tx: Tx,
+  ticketId: string,
+  authorUserId: string,
+  mediaIds: string[],
+): Promise<void> {
+  if (mediaIds.length === 0) return;
+
+  const message = await tx.message.create({
+    data: { ticketId, kind: "MEDIA", authorUserId },
+  });
+
+  // רק קבצים שהועלו במלואם וטרם שויכו — אותו תנאי כמו בתגובה רגילה.
+  await tx.mediaFile.updateMany({
+    where: { id: { in: mediaIds }, uploaded: true, messageId: null },
+    data: { messageId: message.id },
   });
 }
 
