@@ -2,7 +2,7 @@ import type { AssignmentStatus, Channel, Room } from "@/generated/prisma/enums";
 import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
-import { normalizeName } from "@/lib/normalize";
+import { normalizeText } from "@/lib/normalize";
 import {
   type Viewer,
   canCloseTicket,
@@ -53,7 +53,7 @@ export function missingRequiredFields(input: CreateTicketInput): string[] {
   if (!input.buildingId) missing.push(he.directory.building);
   if (!input.apartmentId) missing.push(he.directory.apartment);
   if (!input.domainId) missing.push(he.directory.domain);
-  if (!normalizeName(input.description ?? "")) missing.push(he.ticket.description);
+  if (!normalizeText(input.description ?? "")) missing.push(he.ticket.description);
   if (!input.recipients?.length) missing.push(he.ticket.recipients);
   return missing;
 }
@@ -84,7 +84,7 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
         apartmentId: input.apartmentId ?? null,
         domainId: input.domainId ?? null,
         room: input.room ?? null,
-        description: normalizeName(input.description ?? ""),
+        description: normalizeText(input.description ?? ""),
         channel: input.channel ?? "SELF",
         isDraft,
         createdById: actor.id,

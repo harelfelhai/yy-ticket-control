@@ -5,6 +5,7 @@ import {
   normalizeEmail,
   normalizeName,
   normalizePhone,
+  normalizeText,
 } from "@/lib/normalize";
 
 describe("normalizeName", () => {
@@ -71,6 +72,33 @@ describe("normalizeApartmentNumber", () => {
 
   it("שתי צורות של אותה דירה מגיעות לאותה תוצאה", () => {
     expect(normalizeApartmentNumber("07")).toBe(normalizeApartmentNumber("7"));
+  });
+});
+
+describe("normalizeText — טקסט חופשי", () => {
+  it("שומר ירידות שורה, שהן חלק מהמידע", () => {
+    // תיאור שנכתב בשלוש שורות בשטח אינו אמור להתמוטט לשורה אחת.
+    expect(normalizeText("אין חשמל\nבסלון\nוגם במטבח")).toBe("אין חשמל\nבסלון\nוגם במטבח");
+  });
+
+  it("מכווץ רווחים וטאבים בתוך שורה", () => {
+    expect(normalizeText("אין   חשמל\tבסלון")).toBe("אין חשמל בסלון");
+  });
+
+  it("מסיר רווחים בקצוות של כל שורה", () => {
+    expect(normalizeText("  שורה א  \n   שורה ב  ")).toBe("שורה א\nשורה ב");
+  });
+
+  it("מצמצם רצף שורות ריקות לשורה ריקה אחת", () => {
+    expect(normalizeText("א\n\n\n\nב")).toBe("א\n\nב");
+  });
+
+  it("מנרמל סופי שורה של Windows", () => {
+    expect(normalizeText("א\r\nב")).toBe("א\nב");
+  });
+
+  it("טקסט של רווחים בלבד הופך למחרוזת ריקה", () => {
+    expect(normalizeText("  \n \t \n ")).toBe("");
   });
 });
 

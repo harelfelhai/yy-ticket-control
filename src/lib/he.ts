@@ -90,6 +90,24 @@ export const he = {
     ARCHIVE: "ארכיון",
   } satisfies Record<BoardSection, string>,
 
+  board: {
+    title: "הלוח",
+    empty: "אין פניות להצגה",
+    emptySection: "אין כאן כלום",
+    tourMode: "מצב סיור",
+    tourDrafts: "טיוטות להשלמה",
+    filters: "מסננים",
+    clearFilters: "נקה מסננים",
+    allDirections: "הכול",
+    opened: "הפניתי",
+    received: "קיבלתי",
+    allBuildings: "כל הבניינים",
+    allDomains: "כל התחומים",
+    allRecipients: "כל הנמענים",
+    ageDays: (days: number) => (days === 0 ? "היום" : days === 1 ? "אתמול" : `לפני ${days} ימים`),
+    count: (n: number) => `${n}`,
+  },
+
   /**
    * טקסט הסיבה על כרטיס הפנייה — למה הפנייה נמצאת בקבוצה שבה היא נמצאת.
    * האפיון מדגיש שבלי הטקסט הזה פנייה קופצת בין קבוצות בלי שהמשתמש עשה
