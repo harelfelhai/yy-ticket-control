@@ -9,6 +9,7 @@ interface Option {
 }
 
 interface BoardFiltersProps {
+  sites: Option[];
   buildings: Option[];
   domains: Option[];
   recipients: Option[];
@@ -23,7 +24,7 @@ interface BoardFiltersProps {
  * "אחורה" בדפדפן עובד כמצופה. המחיר הוא סבב שרת לכל שינוי — זניח מול
  * המחיר של מנהל שמאבד את הסינון בכל לחיצה.
  */
-export function BoardFilters({ buildings, domains, recipients, tags }: BoardFiltersProps) {
+export function BoardFilters({ sites, buildings, domains, recipients, tags }: BoardFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -46,7 +47,7 @@ export function BoardFilters({ buildings, domains, recipients, tags }: BoardFilt
   const syncKey = params.toString();
 
   const tour = params.get("tour") === "1";
-  const hasFilters = ["direction", "building", "domain", "recipient", "tag"].some((k) =>
+  const hasFilters = ["direction", "site", "building", "domain", "recipient", "tag"].some((k) =>
     params.get(k),
   );
 
@@ -55,6 +56,25 @@ export function BoardFilters({ buildings, domains, recipients, tags }: BoardFilt
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* בורר האתר מוצג רק למי שרואה יותר מאחד (בעלים, מנהל מערכת). מנהל
+          עבודה מקובע לאתרו, ואין לו מה לסנן. */}
+      {sites.length > 1 ? (
+        <select
+          key={`site-${syncKey}`}
+          aria-label={he.ticket.site}
+          defaultValue={params.get("site") ?? ""}
+          onChange={(e) => update("site", e.target.value)}
+          className={selectClass}
+        >
+          <option value="">{he.board.allSites}</option>
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
+
       <select
         key={`direction-${syncKey}`}
         aria-label={he.board.opened}

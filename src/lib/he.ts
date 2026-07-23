@@ -110,6 +110,7 @@ export const he = {
     allDirections: "הכול",
     opened: "הפניתי",
     received: "קיבלתי",
+    allSites: "כל האתרים",
     allBuildings: "כל הבניינים",
     allDomains: "כל התחומים",
     allRecipients: "כל הנמענים",
@@ -117,6 +118,19 @@ export const he = {
     batchEntry: "הזנה מרוכזת",
     ageDays: (days: number) => (days === 0 ? "היום" : days === 1 ? "אתמול" : `לפני ${days} ימים`),
     count: (n: number) => `${n}`,
+  },
+
+  /** תצוגת הבעלים (מסך 10) — סיכום חוצה-אתרים */
+  overview: {
+    navLink: "סקירה",
+    title: "סקירת אתרים",
+    subtitle: "תמונת מצב לכל אתר. לחיצה על מספר פותחת את הרשימה.",
+    empty: "אין עדיין אתרים",
+    open: "פתוחות",
+    awaitingManager: "ממתינות למנהל",
+    stale: "ללא תנועה 7+ ימים",
+    /** למי שאינו בעלים או מנהל מערכת — אין לו תצוגה חוצת-אתרים */
+    forbidden: "התצוגה הזו זמינה לבעלים ולמנהל המערכת בלבד",
   },
 
   /** מסך החיפוש (מסך 9 באפיון) */

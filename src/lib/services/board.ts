@@ -20,6 +20,8 @@ import {
 export interface BoardFilters {
   /** "הפניתי" מול "קיבלתי" — החיתוך המרכזי באפיון §3.6 */
   direction?: "opened" | "received";
+  /** סינון לאתר — רלוונטי רק למי שרואה יותר מאחד (בעלים, מנהל מערכת) */
+  siteId?: string;
   buildingId?: string;
   domainId?: string;
   /** מזהה איש מקצוע או משתמש פנימי */
@@ -29,6 +31,8 @@ export interface BoardFilters {
 
 export interface BoardData {
   sections: Record<BoardSection, BoardCard[]>;
+  /** האתרים שהצופה רשאי לסנן לפיהם — ריק למנהל עבודה (מקובע לאתרו) */
+  sites: { id: string; name: string }[];
   buildings: { id: string; name: string }[];
   domains: { id: string; name: string }[];
   recipients: { id: string; name: string }[];
@@ -50,9 +54,14 @@ export async function getBoard(
   // מנהל עבודה מוגבל לאתר שלו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז).
   const siteScope = user.role === "SITE_MANAGER" && user.siteId ? { siteId: user.siteId } : {};
 
+  // סינון אתר מפורש חל רק על מי שאינו מקובע לאתר — בעלים ומנהל מערכת.
+  // למנהל עבודה הוא חסר משמעות, וכך גם אינו יכול לעקוף את ה-siteScope שלו.
+  const siteFilter = !user.siteId && filters.siteId ? { siteId: filters.siteId } : {};
+
   const tickets = await db.ticket.findMany({
     where: {
       ...siteScope,
+      ...siteFilter,
       ...(filters.direction === "opened" ? { createdById: user.id } : {}),
       ...(filters.direction === "received"
         ? { assignments: { some: { userId: user.id, status: { not: "REMOVED" } } } }
@@ -120,7 +129,11 @@ export async function getBoard(
     });
   }
 
-  const [buildings, domains, professionals, tags] = await Promise.all([
+  const [sites, buildings, domains, professionals, tags] = await Promise.all([
+    // רשימת האתרים לבורר — ריקה למנהל עבודה, שכן אין לו מה לסנן.
+    user.siteId
+      ? Promise.resolve([] as { id: string; name: string }[])
+      : db.site.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.building.findMany({
       where: user.siteId ? { siteId: user.siteId } : {},
       orderBy: { name: "asc" },
@@ -131,6 +144,6 @@ export async function getBoard(
     db.tag.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
-  return { sections, buildings, domains, recipients: professionals, tags };
+  return { sections, sites, buildings, domains, recipients: professionals, tags };
 }
 

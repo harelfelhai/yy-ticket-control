@@ -193,6 +193,31 @@ describe("getBoard — מסננים", () => {
     expect(board.sections.WITH_RECIPIENTS).toHaveLength(1);
     expect(board.sections.WITH_RECIPIENTS[0]?.buildingName).toBe("בניין ב");
   });
+
+  it("מנהל מערכת מסנן לאתר יחיד — הצלילה מתצוגת הבעלים", async () => {
+    await makeTicket(manager); // אתר א
+    await createTicket(admin, {
+      siteId: siteB,
+      description: "תקלה באתר ב",
+      recipients: [{ kind: "professional", id: plumber }],
+    });
+
+    const board = await getBoard(asUser(admin), { siteId: siteB }, NOW);
+    const all = [...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS];
+    expect(all).toHaveLength(1);
+    expect(all[0]?.descriptionLine).toBe("תקלה באתר ב");
+    // מנהל מערכת מקבל את רשימת האתרים לבורר.
+    expect(board.sites.map((s) => s.name)).toEqual(["אתר א", "אתר ב"]);
+  });
+
+  it("מנהל עבודה מקובע לאתרו — מסנן אתר אחר אינו עוקף אותו", async () => {
+    await makeTicket(manager); // אתר א
+    // ניסיון לסנן לאתר ב (למשל דרך URL) מתעלם, כי מנהל העבודה מקובע לאתרו.
+    const board = await getBoard(asUser(manager), { siteId: siteB }, NOW);
+    expect(board.sections.WITH_RECIPIENTS).toHaveLength(1);
+    // ואין לו בורר אתרים — הרשימה ריקה.
+    expect(board.sites).toEqual([]);
+  });
 });
 
 describe("getBoard — תוכן הכרטיס", () => {

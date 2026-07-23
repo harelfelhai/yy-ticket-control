@@ -33,6 +33,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
       : single(params.direction) === "received"
         ? "received"
         : undefined,
+    siteId: single(params.site),
     buildingId: single(params.building),
     domainId: single(params.domain),
     recipientId: single(params.recipient),
@@ -51,6 +52,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
     <div className="flex flex-col gap-4 p-4 pb-24">
       <Suspense>
         <BoardFilters
+          sites={board.sites}
           buildings={board.buildings}
           domains={board.domains}
           recipients={board.recipients}

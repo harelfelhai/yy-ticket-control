@@ -24,6 +24,12 @@ export default async function InternalLayout({
           {he.app.name}
         </Link>
         <div className="flex items-center gap-3 text-sm">
+          {/* תצוגת הבעלים חוצת-אתרים; למנהל עבודה, המקובע לאתר אחד, אין בה צורך */}
+          {user.role !== "SITE_MANAGER" ? (
+            <Link href="/overview" className="min-h-10 font-medium text-brand">
+              {he.overview.navLink}
+            </Link>
+          ) : null}
           {/* הזנה מרוכזת מיועדת לדסקטופ (אפיון מסך 5), ולכן מוסתרת במובייל */}
           <Link href="/tickets/batch" className="hidden min-h-10 font-medium text-brand md:inline">
             {he.batch.navLink}
