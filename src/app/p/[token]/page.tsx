@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { he } from "@/lib/he";
 import { getPortalBoard, resolveToken } from "@/lib/services/portal";
+import { listPortalTagChats } from "@/lib/services/tags";
 import { ExpiredLink } from "./expired-link";
 
 export const metadata = { title: `${he.portal.activeTitle} — ${he.app.name}` };
@@ -19,7 +20,10 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
   const identity = await resolveToken(token);
   if (!identity) return <ExpiredLink />;
 
-  const { active, archived } = await getPortalBoard(identity.professionalId);
+  const [{ active, archived }, tagChats] = await Promise.all([
+    getPortalBoard(identity.professionalId),
+    listPortalTagChats(identity.professionalId),
+  ]);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
@@ -53,6 +57,25 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
           ))}
         </ul>
       )}
+
+      {tagChats.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-bold">{he.portal.groupChatsTitle}</h2>
+          <ul className="flex flex-col gap-2">
+            {tagChats.map((tag) => (
+              <li key={tag.id}>
+                <Link
+                  href={`/p/${token}/tag/${tag.id}`}
+                  className="flex items-center gap-2 rounded-2xl border border-border bg-surface p-4 font-medium"
+                >
+                  <span aria-hidden>💬</span>
+                  {tag.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {archived.length > 0 ? (
         <details>

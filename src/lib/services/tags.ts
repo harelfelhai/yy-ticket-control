@@ -12,7 +12,7 @@ import {
 } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
-import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
+import { ensureAccessToken, ensurePortalLink, revokeAccessIfOrphaned } from "./portal";
 
 /**
  * תגיות: קיבוץ פניות + צ׳אט קבוצתי (אפיון §3.1, מסך 6).
@@ -359,6 +359,28 @@ export async function revokeTagAccess(
   });
 
   await revokeAccessIfOrphaned(professionalId);
+}
+
+/**
+ * מחזיר את קישור הפורטל של קבלן שנפתחה לו התגית, כדי שהמנהל ישלח לו אותו.
+ *
+ * זהו החוליה שסוגרת את "פתח לקבלנים": קבלן שנפתחה לו תגית בלבד (בלי שיוך
+ * לאף פנייה) קיבל טוקן ב-`grantTagAccess`, אבל בלי הקישור אין למנהל מה
+ * לשלוח. מחזיר את הקישור **הקיים** ואינו מבטל דבר — כמו במסך הפנייה.
+ */
+export async function getTagContractorLink(
+  viewer: Viewer,
+  tagId: string,
+  professionalId: string,
+): Promise<string> {
+  denyUnless(canManageTagAccess(viewer));
+
+  const grant = await db.tagAccess.findUnique({
+    where: { tagId_professionalId: { tagId, professionalId } },
+  });
+  if (!grant) throw new TagError(he.common.notAllowed);
+
+  return ensurePortalLink(professionalId);
 }
 
 /** רושם אירוע מערכת בצ׳אט התגית (נפתחה/בוטלה גישה) */

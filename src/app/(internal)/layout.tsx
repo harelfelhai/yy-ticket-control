@@ -24,6 +24,9 @@ export default async function InternalLayout({
           {he.app.name}
         </Link>
         <div className="flex items-center gap-3 text-sm">
+          <Link href="/tags" className="min-h-10 font-medium text-brand">
+            {he.tag.navLink}
+          </Link>
           <Link href="/search" className="min-h-10 font-medium text-brand">
             {he.search.title}
           </Link>

@@ -9,6 +9,7 @@ import {
   addTagToTicket,
   findOrCreateTag,
   getPortalTagChat,
+  getTagContractorLink,
   getTagDetail,
   grantTagAccess,
   listPortalTagChats,
@@ -46,6 +47,8 @@ async function makeTicket(siteId: string, createdById: string, closed = false) {
 beforeEach(async () => {
   const { resetDb } = await import("../helpers/reset-db");
   await resetDb();
+  // ‏getTagContractorLink בונה קישור פורטל, שדורש בסיס כתובת.
+  process.env.APP_BASE_URL ??= "http://localhost:3100";
 
   siteAId = (await db.site.create({ data: { name: "אתר א" } })).id;
   siteBId = (await db.site.create({ data: { name: "אתר ב" } })).id;
@@ -261,6 +264,27 @@ describe("פתיחת תגית לקבלנים", () => {
     const tag = await findOrCreateTag("בדק בית", adminId);
     const owner: Viewer = { kind: "user", id: "u-owner", role: "OWNER", siteId: null };
     await expect(grantTagAccess(owner, tag.id, [electricianId])).rejects.toThrow(TagError);
+  });
+});
+
+describe("getTagContractorLink — החוליה שסוגרת את הפתיחה", () => {
+  it("מחזיר קישור פורטל לקבלן שנפתחה לו התגית", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    await grantTagAccess(adminViewer, tag.id, [electricianId]);
+    const link = await getTagContractorLink(adminViewer, tag.id, electricianId);
+    expect(link).toContain("/p/");
+  });
+
+  it("מסרב לקבלן שהתגית לא נפתחה לו", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    await expect(getTagContractorLink(adminViewer, tag.id, electricianId)).rejects.toThrow(TagError);
+  });
+
+  it("בעלים אינו רשאי לשלוף קישור", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    await grantTagAccess(adminViewer, tag.id, [electricianId]);
+    const owner: Viewer = { kind: "user", id: "u-owner", role: "OWNER", siteId: null };
+    await expect(getTagContractorLink(owner, tag.id, electricianId)).rejects.toThrow(TagError);
   });
 });
 
