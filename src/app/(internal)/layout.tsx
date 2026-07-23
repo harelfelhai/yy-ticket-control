@@ -24,6 +24,10 @@ export default async function InternalLayout({
           {he.app.name}
         </Link>
         <div className="flex items-center gap-3 text-sm">
+          {/* הזנה מרוכזת מיועדת לדסקטופ (אפיון מסך 5), ולכן מוסתרת במובייל */}
+          <Link href="/tickets/batch" className="hidden min-h-10 font-medium text-brand md:inline">
+            {he.batch.navLink}
+          </Link>
           <Link href="/tags" className="min-h-10 font-medium text-brand">
             {he.tag.navLink}
           </Link>

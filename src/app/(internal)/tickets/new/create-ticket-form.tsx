@@ -6,6 +6,7 @@ import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
 import { he } from "@/lib/he";
+import { ROOMS } from "@/lib/rooms";
 import {
   type OfflineDraft,
   clearDraft,
@@ -48,20 +49,6 @@ interface CreateTicketFormProps {
   domains: LearnedOption[];
   recipients: RecipientOption[];
 }
-
-const ROOMS: Room[] = [
-  "SALON",
-  "KITCHEN",
-  "BEDROOM",
-  "BATHROOM",
-  "WC",
-  "BALCONY",
-  "MAMAD",
-  "STAIRWELL",
-  "PARKING",
-  "LOBBY",
-  "COMMON",
-];
 
 /**
  * מסך יצירת פנייה מהירה (מסך 4 באפיון).

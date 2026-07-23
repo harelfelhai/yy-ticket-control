@@ -45,6 +45,8 @@ export interface CreateTicketInput {
   recipients?: RecipientRef[];
   /** קבצים שהועלו לפני שהפנייה נוצרה — צילום מהשטח, הקלטה קולית */
   mediaIds?: string[];
+  /** תגיות לחבר לפנייה כבר ביצירה — בשימוש בהזנה המרוכזת (התגית המשותפת) */
+  tagIds?: string[];
   /** שמירה מפורשת כטיוטה, גם כשכל השדות מלאים */
   saveAsDraft?: boolean;
 }
@@ -104,6 +106,15 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
     // המדיה מצורפת גם לטיוטה: הצילום נעשה לפני שהשדות מולאו, והוא המידע
     // שהכי קשה לשחזר — אי אפשר לחזור לדירה ולצלם שוב אחרי שהקבלן תיקן.
     await attachInitialMedia(tx, ticket.id, actor.id, input.mediaIds ?? []);
+
+    // תגיות התחלתיות, באותה טרנזאקציה: בהזנה מרוכזת פנייה שנוצרה בלי
+    // התגית המשותפת שלה נעלמת מקבוצת הליקויים של הדירה.
+    if (input.tagIds?.length) {
+      await tx.ticketTag.createMany({
+        data: input.tagIds.map((tagId) => ({ ticketId: ticket.id, tagId })),
+        skipDuplicates: true,
+      });
+    }
 
     if (!isDraft) {
       await applyNewAssignments(

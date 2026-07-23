@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { canCreateTicketInSite } from "@/lib/permissions";
+import { ROOMS } from "@/lib/rooms";
 import { toViewer } from "@/lib/session";
 import {
   DirectoryError,
@@ -107,21 +108,7 @@ const createTicketSchema = z.object({
   buildingId: idSchema.nullable(),
   apartmentId: idSchema.nullable(),
   domainId: idSchema.nullable(),
-  room: z
-    .enum([
-      "SALON",
-      "KITCHEN",
-      "BEDROOM",
-      "BATHROOM",
-      "WC",
-      "BALCONY",
-      "MAMAD",
-      "STAIRWELL",
-      "PARKING",
-      "LOBBY",
-      "COMMON",
-    ])
-    .nullable(),
+  room: z.enum(ROOMS).nullable(),
   description: z.string(),
   recipients: z.array(recipientSchema),
   mediaIds: z.array(idSchema).max(20).optional(),
