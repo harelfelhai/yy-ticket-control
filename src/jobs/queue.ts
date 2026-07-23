@@ -35,8 +35,10 @@ export async function enqueue(
   client: Client,
   type: JobType,
   payload: Prisma.InputJsonValue,
+  /** מתי העבודה תהיה זמינה. ברירת המחדל היא מיד; ג'וב יומי מתזמן קדימה. */
+  runAt?: Date,
 ): Promise<void> {
-  await client.job.create({ data: { type, payload } });
+  await client.job.create({ data: { type, payload, ...(runAt ? { runAt } : {}) } });
 }
 
 /**

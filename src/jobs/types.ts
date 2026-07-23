@@ -13,6 +13,8 @@ export const JOB_TYPES = {
   transcribe: "TRANSCRIBE",
   /** חילוץ טקסט מתמונה או מ-PDF */
   extract: "EXTRACT",
+  /** סימון פניות ללא תנועה כמוסלמות — רץ יומית ומתזמן את עצמו מחדש */
+  escalate: "DAILY_ESCALATION",
 } as const;
 
 export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];

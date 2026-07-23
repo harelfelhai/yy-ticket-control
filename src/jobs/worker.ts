@@ -13,6 +13,11 @@ import {
   runTextExtraction,
   runTranscription,
 } from "./handlers/ai";
+import {
+  type EscalationOutcome,
+  ensureDailyEscalationScheduled,
+  runDailyEscalation,
+} from "./handlers/escalation";
 import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
 
@@ -37,7 +42,7 @@ const MAX_JOBS_PER_TICK = 20;
 /** השהיה אחרי כשל לא צפוי בלולאה עצמה, כדי לא להציף את הלוג */
 const ERROR_BACKOFF_MS = 10_000;
 
-export type JobOutcome = DeliveryOutcome | AiOutcome;
+export type JobOutcome = DeliveryOutcome | AiOutcome | EscalationOutcome;
 
 export type JobResult =
   | { job: Job; status: "done"; outcome?: JobOutcome }
@@ -70,7 +75,7 @@ export async function processNextJob(
     // מחוץ ל-try, השגיאה הייתה נבלעת בלולאה, העבודות היו נשארות PENDING
     // לנצח, ואיש לא היה יודע למה ההודעות לא יוצאות. כך היא נרשמת על
     // העבודה עצמה, ב-`lastError`, וניתן לראות אותה.
-    const outcome = await runJob(job, deps);
+    const outcome = await runJob(job, deps, now);
     await completeJob(job.id);
     return { job, status: "done", outcome };
   } catch (error) {
@@ -107,7 +112,7 @@ export async function drainJobs(
   return results;
 }
 
-async function runJob(job: Job, deps: WorkerDeps): Promise<JobOutcome> {
+async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome> {
   switch (job.type) {
     case JOB_TYPES.notify: {
       const payload = job.payload as unknown as NotifyJobPayload;
@@ -119,6 +124,15 @@ async function runJob(job: Job, deps: WorkerDeps): Promise<JobOutcome> {
 
     case JOB_TYPES.extract:
       return runAi(job, deps, runTextExtraction);
+
+    case JOB_TYPES.escalate: {
+      const escalated = await runDailyEscalation(now);
+      // מתזמן את המחרת רק אחרי שהריצה הצליחה. אם היא נכשלה, הג'וב חוזר
+      // לתור ומנסה שוב, והתזמון הבא ייווצר כשיצליח — כך אין יום שנדלג
+      // עליו בשקט בגלל כשל רגעי.
+      await ensureDailyEscalationScheduled(now);
+      return { kind: "escalation", escalated };
+    }
 
     default:
       // סוג לא מוכר אינו קורס בשקט: הוא נכשל, נשאר בטבלה, ומופיע כ-FAILED
@@ -163,6 +177,12 @@ let running = false;
 export function startWorker(): void {
   if (running) return;
   running = true;
+
+  // מוודא שההסלמה היומית מתוזמנת כבר בעלייה, בלי לחכות לסבב הראשון. אם
+  // התזמון אבד (השרת היה למטה ב-06:00), הג'וב הממתין מתוזמן כעת ונלקח מיד.
+  void ensureDailyEscalationScheduled(new Date()).catch((error) => {
+    console.error("[jobs] תזמון ההסלמה היומית נכשל", error);
+  });
 
   const tick = async () => {
     try {
