@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import type { Viewer } from "@/lib/permissions";
 import { confirmUpload, registerMedia } from "@/lib/services/media";
 import { RESULT_LIMIT, searchTickets } from "@/lib/services/search";
+import { addTagMessage, addTagToTicket, findOrCreateTag } from "@/lib/services/tags";
 import { addMessage, closeTicket, createTicket } from "@/lib/services/tickets";
 import type { SessionUser } from "@/lib/session";
 import { resetDb } from "../helpers/reset-db";
@@ -148,6 +149,19 @@ describe("חיפוש חופשי", () => {
   it("מחזיר ריק כשאין התאמה", async () => {
     await makeTicket("משהו אחר");
     expect((await searchTickets(admin, { query: "אלומיניום" })).cards).toHaveLength(0);
+  });
+
+  it("מוצא פנייה לפי טקסט בצ׳אט התגית המשותפת", async () => {
+    // דוח בדק בית יושב בצ׳אט התגית (מסך 5, אזור א׳), והאפיון דורש שהטקסט
+    // שלו יהיה "זמין לחיפוש". חיפוש מילה מהדוח מעלה את כל פניות התגית —
+    // גם אחת שהמילה אינה מופיעה בתיאורה כלל.
+    const ticket = await makeTicket("החלפת שקע בסלון");
+    const tag = await findOrCreateTag("בדק בית דירה 12", admin.id);
+    await addTagToTicket(adminViewer, ticket.id, tag.name);
+    await addTagMessage(adminViewer, tag.id, "מצורף דוח: ליקוי איטום במרפסת השירות");
+
+    const { cards } = await searchTickets(admin, { query: "איטום במרפסת" });
+    expect(cards.map((c) => c.id)).toContain(ticket.id);
   });
 });
 

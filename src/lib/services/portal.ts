@@ -113,20 +113,25 @@ export async function rotatePortalLink(professionalId: string): Promise<string> 
 }
 
 /**
- * מבטל את גישת איש המקצוע אם לא נותר לו ולו שיוך פעיל אחד.
+ * מבטל את גישת איש המקצוע אם לא נותר לו דבר שדורש גישה — לא שיוך פעיל
+ * ולא תגית שנפתחה לו.
  *
- * נקרא בהסרת נמען (תוכנית M2.1). הרציונל: קבלן בלי שיוכים כבר אינו עובד
- * איתנו, ואין סיבה שיחזיק בידיו סוד חי — גם אם הפורטל היה מציג לו רשימה
- * ריקה ממילא.
+ * נקרא בהסרת נמען (M2) ובביטול גישת תגית (M4). הרציונל: קבלן בלי שיוכים
+ * ובלי צ׳אט פתוח כבר אינו עובד איתנו, ואין סיבה שיחזיק בידיו סוד חי.
  *
- * הספירה כוללת גם פניות סגורות בכוונה: הארכיון שלו נשאר נגיש לו, וקבלן
- * שסיים עבודה אתמול אינו אמור לגלות מחר שהקישור מת.
+ * **שני התנאים הכרחיים.** קבלן שנפתחה לו תגית אך אינו משויך לאף פנייה
+ * צריך קישור חי כדי להגיע לצ׳אט — ספירת שיוכים לבדה הייתה הורגת לו אותו.
+ * וההפך: קבלן ששויך לפניות אך התגית שלו בוטלה שומר על גישתו לפניות.
+ *
+ * הספירה כוללת גם פניות סגורות בכוונה: הארכיון שלו נשאר נגיש, וקבלן שסיים
+ * עבודה אתמול אינו אמור לגלות מחר שהקישור מת.
  */
-export async function revokeAccessIfUnassigned(professionalId: string): Promise<boolean> {
-  const remaining = await db.assignment.count({
-    where: { professionalId, status: { not: "REMOVED" } },
-  });
-  if (remaining > 0) return false;
+export async function revokeAccessIfOrphaned(professionalId: string): Promise<boolean> {
+  const [assignments, tagGrants] = await Promise.all([
+    db.assignment.count({ where: { professionalId, status: { not: "REMOVED" } } }),
+    db.tagAccess.count({ where: { professionalId } }),
+  ]);
+  if (assignments > 0 || tagGrants > 0) return false;
 
   const { count } = await db.accessToken.updateMany({
     where: { professionalId, revokedAt: null },

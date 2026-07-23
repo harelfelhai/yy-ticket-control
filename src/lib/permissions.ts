@@ -142,17 +142,59 @@ export function canSetHandler(
 
 /**
  * צ׳אט התגית. תגית סגורה כברירת מחדל, ופתיחתה היא פעולה מפורשת (אפיון §5.ה).
+ *
+ * משתמש פנימי רואה כל צ׳אט תגית — הצ׳אט הוא מרחב תיאום בין המשרד לקבלנים,
+ * ואינו ממודר לפי אתר באפיון (בשונה מרשימת הפניות שבתגית, שכן ממודרת —
+ * ראה `canViewTagTickets`). נמען חיצוני רואה רק תגית שנפתחה לו במפורש.
  */
 export function canViewTagChat(viewer: Viewer, grantedProfessionalIds: readonly string[]): boolean {
   if (viewer.kind === "professional") return grantedProfessionalIds.includes(viewer.id);
   return true;
 }
 
+/** כתיבה בצ׳אט התגית זהה לצפייה בו: מי שרואה את הצ׳אט רשאי גם לכתוב בו */
+export function canPostTagChat(
+  viewer: Viewer,
+  grantedProfessionalIds: readonly string[],
+): boolean {
+  return canViewTagChat(viewer, grantedProfessionalIds);
+}
+
 /**
  * רשימת הפניות שבתגית.
  * זו הנקודה הרגישה ביותר במודל ההרשאות: פתיחת תגית לנמען חושפת לו את הצ׳אט
  * **בלבד**. נמען לעולם אינו רואה פנייה שלא שויכה אליו — גם לא דרך התגית.
+ *
+ * מחזיר true לכל משתמש פנימי, אבל **אין די בכך**: מנהל עבודה רואה רק את
+ * פניות האתר שלו, ולכן רשימת הפניות שבתגית מסוננת נוסף לכך דרך
+ * `canViewTicket` על כל פנייה (ראה `getTagDetail`).
  */
 export function canViewTagTickets(viewer: Viewer): boolean {
   return isUser(viewer);
+}
+
+/**
+ * תיוג פנייה — הוספה והסרה של תגיות (אפיון §3.2 שדה 12: "הפותח או כל מנהל").
+ *
+ * מוגדר בנפרד אך מאציל ל-`canEditAssignments`: קבוצת המורשים זהה היום (מנהל
+ * מערכת, מנהל האתר, או הפותח), ואצילה — ולא העתקת התנאים — שומרת מקור אמת
+ * אחד. השם הנפרד קיים כי זהו כלל אפיון עצמאי, שעשוי להשתנות בלי לגעת בשיוך.
+ */
+export function canTagTicket(viewer: Viewer, ticket: TicketAccessView): boolean {
+  return canEditAssignments(viewer, ticket);
+}
+
+/**
+ * פתיחת תגית לקבלנים — הענקת גישה או ביטולה.
+ *
+ * זו פעולה תפעולית של תיאום, ולכן שמורה למנהל המערכת ולמנהל העבודה — ולא
+ * לבעלים, שתפקידו צפייה ופתיחת פניות (אפיון §5.ז). קבוצת הליקויים והקבלנים
+ * שמתאמים סביבה הם עניינו של מי שמנהל את העבודה בפועל.
+ *
+ * הערה: אינו ממודר לפי אתר. תגית עשויה לחצות אתרים, וצ׳אט התגית גלוי ממילא
+ * לכל מנהל פנימי; פתיחתו לקבלן היא בחירה מפורשת של המנהל. בקנה המידה של
+ * חברה אחת עם צוות קטן זו החלטה סבירה — אם יידרש מידור, זה המקום לשנותו.
+ */
+export function canManageTagAccess(viewer: Viewer): boolean {
+  return isUser(viewer) && (viewer.role === "ADMIN" || viewer.role === "SITE_MANAGER");
 }

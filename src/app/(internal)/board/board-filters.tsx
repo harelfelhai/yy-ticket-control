@@ -12,6 +12,7 @@ interface BoardFiltersProps {
   buildings: Option[];
   domains: Option[];
   recipients: Option[];
+  tags: Option[];
 }
 
 /**
@@ -22,7 +23,7 @@ interface BoardFiltersProps {
  * "אחורה" בדפדפן עובד כמצופה. המחיר הוא סבב שרת לכל שינוי — זניח מול
  * המחיר של מנהל שמאבד את הסינון בכל לחיצה.
  */
-export function BoardFilters({ buildings, domains, recipients }: BoardFiltersProps) {
+export function BoardFilters({ buildings, domains, recipients, tags }: BoardFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -45,7 +46,9 @@ export function BoardFilters({ buildings, domains, recipients }: BoardFiltersPro
   const syncKey = params.toString();
 
   const tour = params.get("tour") === "1";
-  const hasFilters = ["direction", "building", "domain", "recipient"].some((k) => params.get(k));
+  const hasFilters = ["direction", "building", "domain", "recipient", "tag"].some((k) =>
+    params.get(k),
+  );
 
   const selectClass =
     "min-h-11 rounded-xl border border-border bg-surface px-3 text-sm";
@@ -108,6 +111,25 @@ export function BoardFilters({ buildings, domains, recipients }: BoardFiltersPro
           </option>
         ))}
       </select>
+
+      {/* מסנן התגית מוצג רק כשיש תגיות: מסך ריק של בורר בלי אפשרויות הוא
+          רעש למי שעדיין לא התחיל לתייג. */}
+      {tags.length > 0 ? (
+        <select
+          key={`tag-${syncKey}`}
+          aria-label={he.tag.label}
+          defaultValue={params.get("tag") ?? ""}
+          onChange={(e) => update("tag", e.target.value)}
+          className={selectClass}
+        >
+          <option value="">{he.board.allTags}</option>
+          {tags.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
 
       <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm">
         <input

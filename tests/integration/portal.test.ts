@@ -7,7 +7,7 @@ import {
   markViewed,
   readPortalLink,
   resolveToken,
-  revokeAccessIfUnassigned,
+  revokeAccessIfOrphaned,
   rotatePortalLink,
 } from "@/lib/services/portal";
 import {
@@ -131,14 +131,14 @@ describe("readPortalLink", () => {
   });
 });
 
-describe("revokeAccessIfUnassigned", () => {
+describe("revokeAccessIfOrphaned", () => {
   it("מבטל את הגישה כשלא נותר ולו שיוך אחד", async () => {
     const ticket = await makeTicket();
     const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
     const link = await ensurePortalLink(electrician);
 
     await db.assignment.update({ where: { id: assignment.id }, data: { status: "REMOVED" } });
-    expect(await revokeAccessIfUnassigned(electrician)).toBe(true);
+    expect(await revokeAccessIfOrphaned(electrician)).toBe(true);
 
     expect(await resolveToken(tokenFrom(link))).toBeNull();
   });
@@ -154,7 +154,23 @@ describe("revokeAccessIfUnassigned", () => {
     const link = await ensurePortalLink(electrician);
 
     await db.assignment.update({ where: { id: assignment.id }, data: { status: "REMOVED" } });
-    expect(await revokeAccessIfUnassigned(electrician)).toBe(false);
+    expect(await revokeAccessIfOrphaned(electrician)).toBe(false);
+
+    expect(await resolveToken(tokenFrom(link))).not.toBeNull();
+  });
+
+  it("אינו מבטל כשנפתחה לקבלן תגית — גם בלי אף שיוך", async () => {
+    // קבלן שנפתחה לו תגית בלבד חייב קישור חי כדי להגיע לצ׳אט. ספירת שיוכים
+    // לבדה הייתה הורגת לו אותו ברגע שהוסר מפנייה או שמעולם לא שויך.
+    const ticket = await makeTicket();
+    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
+    const link = await ensurePortalLink(electrician);
+
+    const tag = await db.tag.create({ data: { name: "בדק בית דירה 3", createdById: manager.id } });
+    await db.tagAccess.create({ data: { tagId: tag.id, professionalId: electrician } });
+
+    await db.assignment.update({ where: { id: assignment.id }, data: { status: "REMOVED" } });
+    expect(await revokeAccessIfOrphaned(electrician)).toBe(false);
 
     expect(await resolveToken(tokenFrom(link))).not.toBeNull();
   });

@@ -24,6 +24,7 @@ export interface BoardFilters {
   domainId?: string;
   /** מזהה איש מקצוע או משתמש פנימי */
   recipientId?: string;
+  tagId?: string;
 }
 
 export interface BoardData {
@@ -31,6 +32,7 @@ export interface BoardData {
   buildings: { id: string; name: string }[];
   domains: { id: string; name: string }[];
   recipients: { id: string; name: string }[];
+  tags: { id: string; name: string }[];
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -67,6 +69,7 @@ export async function getBoard(
             },
           }
         : {}),
+      ...(filters.tagId ? { tags: { some: { tagId: filters.tagId } } } : {}),
     },
     orderBy: { lastActivityAt: "desc" },
     include: {
@@ -117,7 +120,7 @@ export async function getBoard(
     });
   }
 
-  const [buildings, domains, professionals] = await Promise.all([
+  const [buildings, domains, professionals, tags] = await Promise.all([
     db.building.findMany({
       where: user.siteId ? { siteId: user.siteId } : {},
       orderBy: { name: "asc" },
@@ -125,8 +128,9 @@ export async function getBoard(
     }),
     db.domain.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.professional.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.tag.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
-  return { sections, buildings, domains, recipients: professionals };
+  return { sections, buildings, domains, recipients: professionals, tags };
 }
 

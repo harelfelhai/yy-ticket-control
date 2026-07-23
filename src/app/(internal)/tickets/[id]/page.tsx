@@ -14,10 +14,13 @@ import {
 } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
 import { describeDelivery } from "@/lib/services/delivery";
+import { listTags, listTicketTags } from "@/lib/services/tags";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
+import { canTagTicket } from "@/lib/permissions";
 import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
 import { RecipientEditor } from "./recipient-editor";
 import { TicketActions } from "./ticket-actions";
+import { TicketTags } from "./ticket-tags";
 import { ThreadEvent } from "./thread-event";
 
 /**
@@ -94,6 +97,13 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
     })),
   );
 
+  const canTag = canTagTicket(viewer, ticket);
+  // רשימת כל התגיות נטענת רק כשמותר לתייג — למי שרואה בלבד די בתגיות הפנייה.
+  const [ticketTags, allTags] = await Promise.all([
+    listTicketTags(ticket.id),
+    canTag ? listTags() : Promise.resolve([]),
+  ]);
+
   const location = [
     ticket.building?.name,
     ticket.apartment && `${he.directory.apartment} ${ticket.apartment.number}`,
@@ -144,6 +154,13 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         assignments={assignmentRows}
         available={available}
         canEdit={canEdit}
+      />
+
+      <TicketTags
+        ticketId={ticket.id}
+        initial={ticketTags.map((t) => ({ id: t.id, label: t.name }))}
+        all={allTags.map((t) => ({ id: t.id, label: t.name }))}
+        canEdit={canTag}
       />
 
       <section className="rounded-2xl border border-border bg-surface p-4">

@@ -16,7 +16,7 @@ import {
   isUser,
 } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
-import { ensureAccessToken, revokeAccessIfUnassigned } from "./portal";
+import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
 
 /**
  * יצירה ושיגור של פניות.
@@ -556,7 +556,7 @@ export async function removeAssignment(viewer: Viewer, assignmentId: string) {
   // מחוץ לטרנזאקציה בכוונה: ההסרה עצמה היא מה שחייב להצליח, וביטול הגישה
   // הוא ניקוי שאין טעם שיגרור אחריו rollback אם ייכשל.
   if (assignment.professionalId) {
-    await revokeAccessIfUnassigned(assignment.professionalId);
+    await revokeAccessIfOrphaned(assignment.professionalId);
   }
 }
 

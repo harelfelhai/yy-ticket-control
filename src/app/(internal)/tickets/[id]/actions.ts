@@ -7,7 +7,9 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { canEditAssignments } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
+import type { SelectOption } from "@/lib/options";
 import { ensurePortalLink, rotatePortalLink } from "@/lib/services/portal";
+import { addTagToTicket, removeTagFromTicket } from "@/lib/services/tags";
 import { TicketError, getTicketDetail } from "@/lib/services/tickets";
 import {
   addAssignments,
@@ -99,6 +101,31 @@ export async function removeRecipientAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     await removeAssignment(await viewer(), assignmentId);
+    refresh(ticketId);
+  });
+}
+
+/**
+ * מתייג פנייה. מקבל שם ולא מזהה: התגית נלמדת, ותיוג בשם שאינו קיים יוצר
+ * אותה. מחזיר את התגית כדי שהממשק יוסיף אותה מיד בלי סבב רענון.
+ */
+export async function addTicketTagAction(
+  ticketId: string,
+  name: string,
+): Promise<ActionResult<SelectOption>> {
+  return guard(async () => {
+    const tag = await addTagToTicket(await viewer(), ticketId, z.string().parse(name));
+    refresh(ticketId);
+    return { id: tag.id, label: tag.name };
+  });
+}
+
+export async function removeTicketTagAction(
+  ticketId: string,
+  tagId: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await removeTagFromTicket(await viewer(), ticketId, z.string().min(1).parse(tagId));
     refresh(ticketId);
   });
 }

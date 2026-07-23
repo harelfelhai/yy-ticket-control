@@ -36,6 +36,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
     buildingId: single(params.building),
     domainId: single(params.domain),
     recipientId: single(params.recipient),
+    tagId: single(params.tag),
   };
 
   const board = await getBoard(user, filters, new Date());
@@ -53,6 +54,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
           buildings={board.buildings}
           domains={board.domains}
           recipients={board.recipients}
+          tags={board.tags}
         />
       </Suspense>
 

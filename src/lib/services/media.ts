@@ -4,7 +4,12 @@ import { UserFacingError } from "@/lib/action-result";
 import { canExtractText } from "@/lib/ai/extract";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
-import { type Viewer, canCommentOnTicket, canViewTicket } from "@/lib/permissions";
+import {
+  type Viewer,
+  canCommentOnTicket,
+  canViewTagChat,
+  canViewTicket,
+} from "@/lib/permissions";
 import {
   MAX_FILE_BYTES,
   buildStorageKey,
@@ -140,7 +145,13 @@ function aiJobFor(mimeType: string): JobType | null {
 }
 
 /**
- * שולף קובץ להגשה, אחרי בדיקת הרשאה על הפנייה שאליה הוא שייך.
+ * שולף קובץ להגשה, אחרי בדיקת הרשאה על ההקשר שאליו הוא שייך.
+ *
+ * לקובץ שני הקשרים אפשריים, לפי סוג ההודעה שהוא מצורף אליה:
+ * - **הודעת פנייה** — ההרשאה נבדקת על הפנייה (`canViewTicket`).
+ * - **הודעת צ׳אט תגית** — ההרשאה נבדקת על הצ׳אט (`canViewTagChat`): קבלן
+ *   רואה את הקובץ רק אם התגית נפתחה לו. בלי הענף הזה דוח בדק בית שיושב
+ *   בצ׳אט התגית לא היה נגיש לאיש, כי הוא אינו מצורף לשום פנייה.
  *
  * קובץ שאינו קשור להודעה כלשהי אינו נגיש לאיש מלבד מי שהעלה אותו — והוא
  * ממילא במצב ביניים קצר, בין הרישום לבין צירופו להודעה.
@@ -150,7 +161,10 @@ export async function getViewableMedia(viewer: Viewer, mediaId: string) {
     where: { id: mediaId },
     include: {
       message: {
-        include: { ticket: { include: { assignments: true } } },
+        include: {
+          ticket: { include: { assignments: true } },
+          tag: { include: { access: { select: { professionalId: true } } } },
+        },
       },
     },
   });
@@ -158,9 +172,16 @@ export async function getViewableMedia(viewer: Viewer, mediaId: string) {
   if (!media || !media.uploaded) return null;
 
   const ticket = media.message?.ticket;
-  if (!ticket) return null;
-  if (!canViewTicket(viewer, ticket, ticket.assignments)) return null;
+  if (ticket) {
+    return canViewTicket(viewer, ticket, ticket.assignments) ? media : null;
+  }
 
-  return media;
+  const tag = media.message?.tag;
+  if (tag) {
+    const grantedIds = tag.access.map((a) => a.professionalId);
+    return canViewTagChat(viewer, grantedIds) ? media : null;
+  }
+
+  return null;
 }
 

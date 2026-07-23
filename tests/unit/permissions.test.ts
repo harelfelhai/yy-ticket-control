@@ -8,8 +8,11 @@ import {
   canCreateTicketInSite,
   canDeleteTicket,
   canEditAssignments,
+  canManageTagAccess,
+  canPostTagChat,
   canReopenTicket,
   canSetHandler,
+  canTagTicket,
   canViewTagChat,
   canViewTagTickets,
   canViewTicket,
@@ -243,5 +246,29 @@ describe("תגיות — הפתיחה חושפת צ׳אט ולא פניות", ()
 
   it("משתמש פנימי רואה את רשימת הפניות של התגית", () => {
     expect(canViewTagTickets(managerA)).toBe(true);
+  });
+
+  it("כתיבה בצ׳אט זהה לצפייה בו", () => {
+    expect(canPostTagChat(contractor, [contractor.id])).toBe(true);
+    expect(canPostTagChat(otherContractor, [contractor.id])).toBe(false);
+    expect(canPostTagChat(managerA, [])).toBe(true);
+  });
+
+  it("תיוג פנייה מותר לפותח ולכל מנהל, זהה לעריכת נמענים", () => {
+    // אצילה ל-canEditAssignments: אותה קבוצת מורשים, מקור אמת אחד.
+    const t = ticket({ createdById: managerA.id });
+    expect(canTagTicket(admin, t)).toBe(canEditAssignments(admin, t));
+    expect(canTagTicket(managerA2, t)).toBe(true); // מנהל אחר באתר
+    expect(canTagTicket(managerB, ticket({ siteId: SITE_A }))).toBe(false); // אתר אחר
+    expect(canTagTicket(owner, ticket({ createdById: owner.id }))).toBe(true); // בעלים שפתח
+    expect(canTagTicket(contractor, t)).toBe(false); // נמען לא מתייג
+  });
+
+  it("פתיחת תגית לקבלנים שמורה למנהל מערכת ולמנהל עבודה בלבד", () => {
+    // בעלים תפקידו צפייה ופתיחת פניות, לא תיאום קבלנים סביב קבוצת ליקויים.
+    expect(canManageTagAccess(admin)).toBe(true);
+    expect(canManageTagAccess(managerA)).toBe(true);
+    expect(canManageTagAccess(owner)).toBe(false);
+    expect(canManageTagAccess(contractor)).toBe(false);
   });
 });

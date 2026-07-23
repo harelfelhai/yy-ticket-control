@@ -9,6 +9,7 @@ import {
   deriveTicketStatus,
   reasonText,
 } from "@/lib/ticket-status";
+import { tagChatTextMatch } from "./tags";
 
 /**
  * חיפוש (מסך 9 באפיון).
@@ -154,10 +155,15 @@ function scope(user: SessionUser, filters: SearchFilters): Prisma.TicketWhereInp
 }
 
 /**
- * ארבעת המקומות שבהם טקסט של פנייה יכול לחיות.
+ * המקומות שבהם טקסט שקשור לפנייה יכול לחיות.
  *
  * ‏`insensitive` נדרש גם בעברית: העברית אינה מבחינה ברישיות, אבל השאילתה
  * חוצה גם טקסט באנגלית — שמות מוצרים, קודים, ומה שחולץ מדוח.
+ *
+ * הענף האחרון חוצה את **צ׳אט התגית**: דוח בדק בית שהועלה בהזנה המרוכזת
+ * יושב כהודעה בצ׳אט התגית המשותפת (מסך 5, אזור א׳), והטקסט שחולץ ממנו
+ * חייב להיות "זמין לחיפוש" (האפיון). כך חיפוש מילה מהדוח מעלה את כל פניות
+ * הבדק בית של אותה דירה, ולא רק את זו שבמקרה כתובה בתיאורה.
  */
 function textMatch(query: string): Prisma.TicketWhereInput {
   const contains = { contains: query, mode: "insensitive" as const };
@@ -168,6 +174,7 @@ function textMatch(query: string): Prisma.TicketWhereInput {
       { messages: { some: { text: contains } } },
       { messages: { some: { media: { some: { transcription: contains } } } } },
       { messages: { some: { media: { some: { extractedText: contains } } } } },
+      tagChatTextMatch(query),
     ],
   };
 }
