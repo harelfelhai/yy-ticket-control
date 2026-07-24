@@ -64,6 +64,10 @@ export default defineConfig({
   projects: [
     { name: "mobile", use: { ...devices["Pixel 5"] } },
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+    // מנוע WebKit על מכשיר iPhone — הקירוב הקרוב ביותר ל-iOS Safari. מוגבל
+    // דרך testMatch למסלול ה-QA בלבד, כדי לא להכפיל את כל החבילה תחת WebKit
+    // (עלות זמן), אך עדיין לתפוס פערי רינדור של Safari במסכי הליבה.
+    { name: "safari-qa", use: { ...devices["iPhone 13"] }, testMatch: /mobile-qa\.spec\.ts/ },
   ],
 
   webServer: {
