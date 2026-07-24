@@ -1,0 +1,30 @@
+# תצורת הפריסה של Railway כקוד (מקור אמת אחד, נשמר בגיט).
+# מתעד את מה שאחרת נקבע ידנית ב-UI ונשכח: פקודת המיגרציה, פקודת ההרצה,
+# ובדיקת הבריאות. סודות אינם כאן לעולם — הם ב-Railway Variables.
+#
+# הבנאי: Railpack (ברירת המחדל הנוכחית של Railway, יורש Nixpacks). הוא מזהה
+# Next.js ובונה אותו לבד. התוספת היחידה שלנו היא ב-railpack.json: התקנת
+# postgresql-client לזמן ריצה, בשביל ג'וב הגיבוי הלילי (pg_dump/pg_restore).
+
+[build]
+builder = "RAILPACK"
+
+[deploy]
+# רץ פעם אחת לפני שהגרסה החדשה עולה לאוויר, בתמונת הריצה. כאן מוחלות
+# המיגרציות שטרם הוחלו (`prisma migrate deploy` — אידמפוטנטי, בלי shadow DB).
+# כשל כאן עוצר את הפריסה — וזה רצוי: עדיף לא לעלות מאשר לעלות מול סכימה ישנה.
+preDeployCommand = ["npm run db:deploy"]
+
+# `next start` בלי `-p` מאזין על משתנה הסביבה PORT ש-Railway מזריק (או 3000
+# כברירת מחדל). לא להשתמש ב-`npm start` — הוא נעול לפורט 3100 של הפיתוח.
+startCommand = "npm run start:prod"
+
+# מסך ההתחברות ציבורי, מחזיר 200 בלי לגעת ב-DB, וכבר מכוסה ב-E2E. משמש
+# כבדיקת בריאות: הוא מאשר שהשרת עלה ומגיש HTTP, לא רק שהפורט פתוח.
+healthcheckPath = "/login"
+healthcheckTimeout = 300
+
+# הפעלה מחדש רק על כשל (לא בלולאה אינסופית). instance יחיד — התור והעובד
+# רצים בתוך הפרוסס, ואין מצב של שני עובדים שמתנגשים על אותו ג'וב.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
