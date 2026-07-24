@@ -1,0 +1,70 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { he } from "@/lib/he";
+import { useHydrated } from "@/lib/use-hydrated";
+import { renameDomainAction } from "../actions";
+
+interface DomainRow {
+  id: string;
+  name: string;
+}
+
+/**
+ * רשימת התחומים עם שינוי שם בשורה.
+ *
+ * שינוי שם קיים כדי לתקן שגיאת הקלדה שיצרה תחום כמעט-כפול. איחוד תחומים
+ * אינו בתחולה, ולכן שינוי לשם שכבר קיים נדחה — וזה מוצג למשתמש.
+ */
+export function DomainsList({ domains }: { domains: DomainRow[] }) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {domains.map((domain) => (
+        <DomainItem key={domain.id} domain={domain} />
+      ))}
+    </ul>
+  );
+}
+
+function DomainItem({ domain }: { domain: DomainRow }) {
+  const [name, setName] = useState(domain.name);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const hydrated = useHydrated();
+
+  const dirty = name.trim() !== domain.name && name.trim().length > 0;
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await renameDomainAction(domain.id, name);
+      if (!result.ok) setError(result.error);
+    });
+  }
+
+  return (
+    <li className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-3">
+      <div className="flex items-center gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-label={domain.name}
+          className="min-h-11 flex-1 rounded-lg border border-border px-3 text-base"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !hydrated || !dirty}
+          className="min-h-11 rounded-xl border border-border bg-surface px-4 text-sm font-medium disabled:opacity-40"
+        >
+          {he.admin.renameDomain}
+        </button>
+      </div>
+      {error ? (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
+    </li>
+  );
+}

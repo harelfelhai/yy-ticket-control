@@ -40,6 +40,12 @@ export default async function InternalLayout({
           <Link href="/search" className="min-h-10 font-medium text-brand">
             {he.search.title}
           </Link>
+          {/* אזור הניהול — למנהל המערכת הראשי בלבד (אפיון §5.ז) */}
+          {user.role === "ADMIN" ? (
+            <Link href="/admin" className="min-h-10 font-medium text-brand">
+              {he.admin.navLink}
+            </Link>
+          ) : null}
           {/* שם המשתמש מוסתר במסך צר: הוא מידע ולא פעולה, ובמובייל הוא
               דוחק את הקישורים שכן נלחצים. */}
           <span className="hidden text-muted sm:inline">

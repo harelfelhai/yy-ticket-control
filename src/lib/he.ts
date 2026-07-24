@@ -133,6 +133,72 @@ export const he = {
     forbidden: "התצוגה הזו זמינה לבעלים ולמנהל המערכת בלבד",
   },
 
+  /** מסכי הניהול (11–15 באפיון) — למנהל המערכת הראשי בלבד */
+  admin: {
+    navLink: "ניהול",
+    title: "ניהול המערכת",
+    forbidden: "אזור הניהול זמין למנהל המערכת בלבד",
+
+    // רכזת הניהול
+    sites: "אתרים",
+    users: "משתמשים",
+    professionals: "אנשי מקצוע",
+    domains: "תחומים",
+    tags: "תגיות",
+    manageTags: "ניהול תגיות ונראות",
+
+    // אתרים
+    newSite: "אתר חדש",
+    siteName: "שם האתר",
+    addSite: "הוסף אתר",
+    siteManagers: "מנהלי עבודה",
+    noManagers: "אין מנהל משויך",
+    siteExists: "כבר קיים אתר בשם הזה",
+    siteNameRequired: "יש להזין שם אתר",
+
+    // משתמשים
+    newUser: "משתמש חדש",
+    userName: "שם",
+    userPhone: "טלפון",
+    userEmail: "מייל",
+    userRole: "תפקיד",
+    userSite: "אתר",
+    userPassword: "סיסמה ראשונית",
+    addUser: "הוסף משתמש",
+    activate: "הפעל",
+    deactivate: "השבת",
+    inactiveBadge: "מושבת",
+    noSite: "ללא אתר",
+    userNameRequired: "יש להזין שם משתמש",
+    passwordTooShort: (min: number) => `הסיסמה חייבת להיות באורך ${min} תווים לפחות`,
+    siteManagerNeedsSite: "מנהל עבודה חייב להיות משויך לאתר",
+    ownerAdminNoSite: "בעלים ומנהל מערכת אינם משויכים לאתר",
+    phoneTaken: "הטלפון כבר רשום למשתמש אחר",
+    emailTaken: "המייל כבר רשום למשתמש אחר",
+    cannotDeactivateSelf: "אי אפשר להשבית את המשתמש שאיתו אתה מחובר",
+
+    // אנשי מקצוע
+    editProfessional: "ערוך",
+    saveProfessional: "שמור",
+    mergeHeading: "איחוד כפילויות",
+    mergeHint: "בוחרים את איש המקצוע שיישאר. כל הפניות, הגישות וההיסטוריה של השני עוברות אליו, והוא נמחק.",
+    mergeKeep: "להשאיר",
+    mergeDrop: "לאחד ולמחוק",
+    mergeButton: "אחד",
+    mergeSame: "אי אפשר לאחד איש מקצוע עם עצמו",
+    mergeConfirm: (drop: string, keep: string) =>
+      `לאחד את "${drop}" לתוך "${keep}"? "${drop}" יימחק, וכל מה ששייך לו יעבור. הפעולה אינה הפיכה.`,
+    merged: (keep: string) => `הכפילות אוחדה. הכול הועבר ל"${keep}".`,
+    professionalNotFound: "איש המקצוע לא נמצא",
+    activeTickets: (n: number) => (n === 1 ? "פנייה פעילה אחת" : `${n} פניות פעילות`),
+
+    // תחומים
+    newDomain: "תחום חדש",
+    addDomain: "הוסף תחום",
+    renameDomain: "שנה שם",
+    domainExists: "כבר קיים תחום בשם הזה",
+  },
+
   /** מסך החיפוש (מסך 9 באפיון) */
   search: {
     title: "חיפוש",

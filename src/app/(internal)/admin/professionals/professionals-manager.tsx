@@ -1,0 +1,206 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { he } from "@/lib/he";
+import { useHydrated } from "@/lib/use-hydrated";
+import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
+
+interface ProfessionalRow {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  activeAssignments: number;
+}
+
+/**
+ * ניהול אנשי מקצוע (מסך 13): עריכת פרטים ואיחוד כפילויות.
+ *
+ * האיחוד הוא הפעולה הרגישה: הוא מוחק איש מקצוע ומעביר את כל ההיסטוריה שלו
+ * לאחר. לכן היא דורשת אישור מפורש שמזכיר את שני השמות — לחיצה בטעות מאבדת
+ * זהות שלמה.
+ */
+export function ProfessionalsManager({ professionals }: { professionals: ProfessionalRow[] }) {
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const hydrated = useHydrated();
+  const busy = pending || !hydrated;
+
+  const [keepId, setKeepId] = useState("");
+  const [dropId, setDropId] = useState("");
+
+  const byId = (id: string) => professionals.find((p) => p.id === id);
+
+  function merge() {
+    setNotice(null);
+    setError(null);
+    const keep = byId(keepId);
+    const drop = byId(dropId);
+    if (!keep || !drop) return;
+    if (!window.confirm(he.admin.mergeConfirm(drop.name, keep.name))) return;
+
+    startTransition(async () => {
+      const result = await mergeProfessionalsAction(keepId, dropId);
+      if (result.ok) {
+        setNotice(he.admin.merged(result.data));
+        setKeepId("");
+        setDropId("");
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* איחוד כפילויות */}
+      <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+        <h2 className="text-sm font-semibold">{he.admin.mergeHeading}</h2>
+        <p className="text-xs text-muted">{he.admin.mergeHint}</p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            {he.admin.mergeKeep}
+            <select
+              value={keepId}
+              onChange={(e) => setKeepId(e.target.value)}
+              className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base"
+            >
+              <option value="">{he.common.choose}</option>
+              {professionals.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            {he.admin.mergeDrop}
+            <select
+              value={dropId}
+              onChange={(e) => setDropId(e.target.value)}
+              className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base"
+            >
+              <option value="">{he.common.choose}</option>
+              {professionals
+                .filter((p) => p.id !== keepId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+
+        <button
+          type="button"
+          onClick={merge}
+          disabled={busy || !keepId || !dropId}
+          className="min-h-11 self-start rounded-xl bg-brand px-6 font-medium text-brand-fg disabled:opacity-60"
+        >
+          {he.admin.mergeButton}
+        </button>
+
+        {notice ? (
+          <p className="rounded-xl bg-success/10 p-3 text-sm font-medium text-success">{notice}</p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-sm font-medium text-danger">
+            {error}
+          </p>
+        ) : null}
+      </section>
+
+      <ul className="flex flex-col gap-2">
+        {professionals.map((professional) => (
+          <ProfessionalItem key={professional.id} professional={professional} disabled={busy} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProfessionalItem({
+  professional,
+  disabled,
+}: {
+  professional: ProfessionalRow;
+  disabled: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(professional.name);
+  const [phone, setPhone] = useState(professional.phone ?? "");
+  const [email, setEmail] = useState(professional.email ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateProfessionalAction(professional.id, { name, phone, email });
+      if (result.ok) setEditing(false);
+      else setError(result.error);
+    });
+  }
+
+  const inputClass = "min-h-11 rounded-lg border border-border px-3 text-base";
+
+  if (!editing) {
+    return (
+      <li className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium">{professional.name}</span>
+          <span className="text-sm text-muted" dir="ltr">
+            {professional.phone ?? professional.email ?? ""}
+          </span>
+          <span className="text-xs text-muted">
+            {he.admin.activeTickets(professional.activeAssignments)}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          disabled={disabled}
+          className="min-h-10 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-50"
+        >
+          {he.admin.editProfessional}
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+      <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+      <div className="grid grid-cols-2 gap-2">
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" inputMode="tel" className={inputClass} />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" inputMode="email" className={inputClass} />
+      </div>
+      {error ? (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending}
+          className="min-h-11 flex-1 rounded-xl bg-brand px-4 font-medium text-brand-fg disabled:opacity-60"
+        >
+          {he.admin.saveProfessional}
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="min-h-11 rounded-xl border border-border px-4"
+        >
+          {he.common.cancel}
+        </button>
+      </div>
+    </li>
+  );
+}
