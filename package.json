@@ -24,6 +24,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "smoke:notify": "tsx scripts/smoke-notify.mts",
+    "gen:icons": "node scripts/gen-icons.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
