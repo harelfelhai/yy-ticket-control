@@ -1,35 +1,48 @@
 /**
- * חישוב זמן הריצה של הג'וב היומי — לוגיקה טהורה, בלי DB.
+ * חישוב זמן הריצה של הג'ובים היומיים — לוגיקה טהורה, בלי DB.
  *
- * מופרד מ-`handlers/escalation.ts` (שנוגע ב-DB) בכוונה: חישוב "06:00 הבא
- * בשעון ישראל" הוא בדיוק המקום שבו טמון באג עונת הקיץ, והוא חייב להיות
- * ניתן לבדיקת יחידה בלי חיבור לבסיס נתונים.
+ * מופרד מה-handlers (שנוגעים ב-DB) בכוונה: חישוב "השעה ה-X הבאה בשעון
+ * ישראל" הוא בדיוק המקום שבו טמון באג עונת הקיץ, והוא חייב להיות ניתן
+ * לבדיקת יחידה בלי חיבור לבסיס נתונים.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TZ = "Asia/Jerusalem";
 
-/** השעה (שעון ישראל) שבה רצה ההסלמה היומית. */
+/** השעה (שעון ישראל) שבה רצה ההסלמה היומית — בוקר, כשמנהל פותח את הלוח. */
 export const ESCALATION_HOUR = 6;
 
+/** השעה (שעון ישראל) שבה רץ הגיבוי הלילי — שעה שקטה, הרחק מעומס היום. */
+export const BACKUP_HOUR = 3;
+
 /**
- * ה-06:00 (שעון ישראל) הבא אחרי `now`, כרגע UTC.
+ * ה-`hour`:00 (שעון ישראל) הבא אחרי `now`, כרגע UTC.
  *
- * הזמן נשמר ב-UTC (כל המערכת כך), אבל הג'וב חייב לרוץ ב-06:00 מקומי —
- * שעה שבה מנהל פותח את הלוח בבוקר ורואה מה הוסלם בלילה. עונת הקיץ מזיזה
- * את ישראל בין UTC+2 ל-UTC+3, ולכן ההיסט מחושב מתוך `Intl` ליום היעד
- * ולא מקובע. 06:00 רחוק ממעבר שעון הקיץ (02:00), ולכן ההיסט יציב סביבו.
+ * הזמן נשמר ב-UTC (כל המערכת כך), אבל הג'ובים חייבים לרוץ בשעון מקומי.
+ * עונת הקיץ מזיזה את ישראל בין UTC+2 ל-UTC+3, ולכן ההיסט מחושב מתוך `Intl`
+ * ליום היעד ולא מקובע. השעות שבשימוש (03:00, 06:00) רחוקות ממעבר שעון הקיץ
+ * (02:00), ולכן ההיסט יציב סביבן.
  */
-export function nextEscalationRun(now: Date): Date {
+export function nextIsraelHour(now: Date, hour: number): Date {
   const today = israelParts(now);
-  let target = israelWallClockToUtc(today.year, today.month, today.day, ESCALATION_HOUR);
+  let target = israelWallClockToUtc(today.year, today.month, today.day, hour);
 
   if (target.getTime() <= now.getTime()) {
     const tomorrow = israelParts(new Date(now.getTime() + DAY_MS));
-    target = israelWallClockToUtc(tomorrow.year, tomorrow.month, tomorrow.day, ESCALATION_HOUR);
+    target = israelWallClockToUtc(tomorrow.year, tomorrow.month, tomorrow.day, hour);
   }
 
   return target;
+}
+
+/** ה-06:00 הבא בשעון ישראל — מתי לסמן פניות ללא תנועה. */
+export function nextEscalationRun(now: Date): Date {
+  return nextIsraelHour(now, ESCALATION_HOUR);
+}
+
+/** ה-03:00 הבא בשעון ישראל — מתי לגבות את בסיס הנתונים. */
+export function nextBackupRun(now: Date): Date {
+  return nextIsraelHour(now, BACKUP_HOUR);
 }
 
 interface IsraelParts {

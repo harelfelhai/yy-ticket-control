@@ -15,6 +15,8 @@ export const JOB_TYPES = {
   extract: "EXTRACT",
   /** סימון פניות ללא תנועה כמוסלמות — רץ יומית ומתזמן את עצמו מחדש */
   escalate: "DAILY_ESCALATION",
+  /** גיבוי בסיס הנתונים — רץ יומית ומתזמן את עצמו מחדש */
+  backup: "DAILY_BACKUP",
 } as const;
 
 export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];

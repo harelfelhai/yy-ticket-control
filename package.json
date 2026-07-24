@@ -22,6 +22,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:restore": "tsx scripts/restore-backup.ts",
     "db:studio": "prisma studio",
     "smoke:notify": "tsx scripts/smoke-notify.mts",
     "gen:icons": "node scripts/gen-icons.mjs",

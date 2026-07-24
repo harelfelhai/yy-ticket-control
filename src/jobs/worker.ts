@@ -14,6 +14,11 @@ import {
   runTranscription,
 } from "./handlers/ai";
 import {
+  type BackupOutcome,
+  ensureDailyBackupScheduled,
+  runDailyBackup,
+} from "./handlers/backup";
+import {
   type EscalationOutcome,
   ensureDailyEscalationScheduled,
   runDailyEscalation,
@@ -43,7 +48,7 @@ const MAX_JOBS_PER_TICK = 20;
 /** השהיה אחרי כשל לא צפוי בלולאה עצמה, כדי לא להציף את הלוג */
 const ERROR_BACKOFF_MS = 10_000;
 
-export type JobOutcome = DeliveryOutcome | AiOutcome | EscalationOutcome;
+export type JobOutcome = DeliveryOutcome | AiOutcome | EscalationOutcome | BackupOutcome;
 
 export type JobResult =
   | { job: Job; status: "done"; outcome?: JobOutcome }
@@ -138,6 +143,14 @@ async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome
       return { kind: "escalation", escalated };
     }
 
+    case JOB_TYPES.backup: {
+      const outcome = await runDailyBackup(now);
+      // מתזמן את המחרת רק אחרי הצלחה, כמו ההסלמה: גיבוי שנכשל חוזר לתור
+      // ומנסה שוב, והתזמון הבא ייווצר כשיצליח — כך אין לילה שנדלג עליו בשקט.
+      await ensureDailyBackupScheduled(now);
+      return outcome;
+    }
+
     default:
       // סוג לא מוכר אינו קורס בשקט: הוא נכשל, נשאר בטבלה, ומופיע כ-FAILED
       // עם הסיבה. זה קורה רק אם קוד ישן קרא לשורה שנוצרה בגרסה חדשה.
@@ -182,10 +195,13 @@ export function startWorker(): void {
   if (running) return;
   running = true;
 
-  // מוודא שההסלמה היומית מתוזמנת כבר בעלייה, בלי לחכות לסבב הראשון. אם
-  // התזמון אבד (השרת היה למטה ב-06:00), הג'וב הממתין מתוזמן כעת ונלקח מיד.
+  // מוודא שהג'ובים היומיים מתוזמנים כבר בעלייה, בלי לחכות לסבב הראשון. אם
+  // התזמון אבד (השרת היה למטה בשעת היעד), הג'וב הממתין מתוזמן כעת ונלקח מיד.
   void ensureDailyEscalationScheduled(new Date()).catch((error) => {
     console.error("[jobs] תזמון ההסלמה היומית נכשל", error);
+  });
+  void ensureDailyBackupScheduled(new Date()).catch((error) => {
+    console.error("[jobs] תזמון הגיבוי היומי נכשל", error);
   });
 
   const tick = async () => {

@@ -76,6 +76,29 @@ export const env = {
   /** מפתח Anthropic לחילוץ טקסט מתמונות ומ-PDF */
   anthropicApiKey: () => optional("ANTHROPIC_API_KEY"),
 
+  /**
+   * נתיב ל-pg_dump ול-pg_restore. בפרודקשן הם על ה-PATH (מותקנים בקונטיינר),
+   * ולכן ברירת המחדל היא השם בלבד. מקומית, ב-Windows, embedded-postgres אינו
+   * כולל אותם — מצביעים ל-scoop דרך .env (ראה .env.example).
+   */
+  pgDumpPath: () => optional("PG_DUMP_PATH") ?? "pg_dump",
+  pgRestorePath: () => optional("PG_RESTORE_PATH") ?? "pg_restore",
+
+  /**
+   * ה-bucket השני ב-R2 כיעד לגיבוי הלילי — ה-fallback של Gate G6 (חשבון
+   * Google One, בלי service account). אותם פרטי חיבור של R2, שם bucket אחר.
+   * undefined → הגיבוי נכתב לתיקייה מקומית (פיתוח ובדיקות).
+   */
+  backupR2: () => {
+    const accountId = optional("R2_ACCOUNT_ID");
+    const accessKeyId = optional("R2_ACCESS_KEY_ID");
+    const secretAccessKey = optional("R2_SECRET_ACCESS_KEY");
+    const bucket = optional("R2_BACKUP_BUCKET");
+
+    if (!accountId || !accessKeyId || !secretAccessKey || !bucket) return undefined;
+    return { accountId, accessKeyId, secretAccessKey, bucket };
+  },
+
   isProduction: () => process.env.NODE_ENV === "production",
 };
 

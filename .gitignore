@@ -45,3 +45,6 @@ skills-lock.json
 
 # מדיה שנשמרת מקומית בפיתוח (בפרודקשן הכול ב-Cloudflare R2)
 .localmedia/
+
+# גיבויי בסיס הנתונים בפיתוח (בפרודקשן ב-bucket השני ב-R2)
+.backups/
