@@ -94,3 +94,25 @@ test("מנהל מערכת מאחד שני אנשי מקצוע כפולים", asy
   // הכפיל נמחק — אינו מופיע עוד ברשימה.
   await expect(page.getByText(drop)).toHaveCount(0);
 });
+
+test("מנהל מערכת מוחק פנייה כפולה — אישור כפול", async ({ page }) => {
+  const stamp = Date.now();
+  const description = `פנייה כפולה למחיקה ${stamp}`;
+
+  await loginAsAdmin(page);
+  await createTicketWithProfessional(page, description, `קבלן ${stamp}`, `053${String(stamp).slice(-7)}`);
+  const ticketUrl = new URL(page.url()).pathname;
+
+  // לחיצה ראשונה רק חושפת את האזהרה — אישור כפול.
+  await page.getByRole("button", { name: "מחק פנייה" }).click();
+  await expect(page.getByText("הפנייה וכל השרשור שלה יימחקו לצמיתות. הפעולה אינה הפיכה.")).toBeVisible();
+
+  // לחיצה שנייה על הכפתור האדום הנפרד מוחקת, ומעבירה ללוח.
+  await page.getByRole("button", { name: "כן, מחק לצמיתות" }).click();
+  await expect(page).toHaveURL(/\/board$/);
+  await expect(page.getByRole("link").filter({ hasText: description })).toHaveCount(0);
+
+  // הפנייה עצמה נעלמה — כניסה ישירה לכתובתה כבר אינה מציגה את השרשור.
+  await page.goto(ticketUrl);
+  await expect(page.getByRole("heading", { name: "שרשור" })).toHaveCount(0);
+});

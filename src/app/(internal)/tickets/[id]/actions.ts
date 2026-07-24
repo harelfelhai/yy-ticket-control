@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { type ActionResult, guard } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
@@ -15,6 +16,7 @@ import {
   addAssignments,
   addMessage,
   closeTicket,
+  deleteTicket,
   removeAssignment,
   reopenTicket,
   setHandler,
@@ -79,6 +81,24 @@ export async function setHandlerAction(ticketId: string): Promise<ActionResult> 
     await setHandler(await viewer(), ticketId);
     refresh(ticketId);
   });
+}
+
+/**
+ * מוחק פנייה (מנהל מערכת בלבד) ומעביר ללוח — מסך הפנייה כבר לא קיים.
+ *
+ * ‏redirect בהצלחה ולא החזרת ערך: ה-`redirect` זורק חריגה מיוחדת ב-Next
+ * ולכן הוא מחוץ ל-`guard`, אחרת היא הייתה נתפסת ומדווחת כשגיאה.
+ */
+export async function deleteTicketAction(
+  ticketId: string,
+): Promise<{ error: string } | undefined> {
+  const result = await guard(async () => {
+    await deleteTicket(await viewer(), z.string().min(1).parse(ticketId));
+  });
+
+  if (!result.ok) return { error: result.error };
+  revalidatePath("/board");
+  redirect("/board");
 }
 
 const recipientsSchema = z.array(

@@ -7,11 +7,13 @@ import {
   addMessage,
   closeTicket,
   createTicket,
+  deleteTicket,
   removeAssignment,
   reopenTicket,
   setAssignmentStatus,
   setHandler,
 } from "@/lib/services/tickets";
+import { ensurePortalLink, resolveToken } from "@/lib/services/portal";
 import type { SessionUser } from "@/lib/session";
 import { deriveTicketStatus } from "@/lib/ticket-status";
 import { resetDb } from "../helpers/reset-db";
@@ -460,5 +462,38 @@ describe("מחזור חיים מלא", () => {
 
     await reopenTicket(asUser(opener), ticket.id);
     expect(await statusOf(ticket.id)).toBe("NEW");
+  });
+});
+
+describe("deleteTicket — למנהל מערכת בלבד, לכפילות", () => {
+  it("מנהל מערכת מוחק פנייה עם כל השרשור והשיוכים", async () => {
+    const ticket = await makeTicket();
+    await addMessage(asUser(opener), ticket.id, "הערה");
+
+    await deleteTicket(asUser(admin), ticket.id);
+
+    expect(await db.ticket.findUnique({ where: { id: ticket.id } })).toBeNull();
+    // ה-cascade ניקה את השיוכים וההודעות.
+    expect(await db.assignment.count({ where: { ticketId: ticket.id } })).toBe(0);
+    expect(await db.message.count({ where: { ticketId: ticket.id } })).toBe(0);
+  });
+
+  it("הפותח עצמו אינו מוחק — מחיקה שמורה למנהל המערכת", async () => {
+    const ticket = await makeTicket();
+    await expect(deleteTicket(asUser(opener), ticket.id)).rejects.toThrow(he.common.notAllowed);
+    // הפנייה נשארה.
+    expect(await db.ticket.findUnique({ where: { id: ticket.id } })).not.toBeNull();
+  });
+
+  it("מבטל את קישור הקבלן אם המחיקה הותירה אותו בלי שיוכים", async () => {
+    const ticket = await makeTicket([electrician]);
+    const link = await ensurePortalLink(electrician);
+    const token = link.split("/p/")[1] as string;
+    expect(await resolveToken(token)).not.toBeNull();
+
+    await deleteTicket(asUser(admin), ticket.id);
+
+    // הקבלן היה משויך רק לפנייה שנמחקה — הקישור מת.
+    expect(await resolveToken(token)).toBeNull();
   });
 });

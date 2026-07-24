@@ -10,6 +10,7 @@ import {
   type Viewer,
   canCloseTicket,
   canCommentOnTicket,
+  canDeleteTicket,
   canEditAssignments,
   canReopenTicket,
   canSetHandler,
@@ -568,6 +569,38 @@ export async function removeAssignment(viewer: Viewer, assignmentId: string) {
   // הוא ניקוי שאין טעם שיגרור אחריו rollback אם ייכשל.
   if (assignment.professionalId) {
     await revokeAccessIfOrphaned(assignment.professionalId);
+  }
+}
+
+/**
+ * מוחק פנייה לצמיתות — למנהל המערכת בלבד, לכפילות ולרשומה שגויה (אפיון §5.ז).
+ *
+ * זו הדלת האחורית היחידה של הכלל "פנייה לא נעלמת": אין מחיקה אוטומטית
+ * בשום תנאי, והמחיקה הידנית שמורה למנהל המערכת ומאחורי אישור כפול בממשק.
+ * השרשור, השיוכים והמדיה נמחקים ב-cascade (ראה הסכימה).
+ *
+ * הקבצים באחסון עצמו אינם נמחקים כאן — כמו בכל המדיה בגרסה זו (Gate G5).
+ * מחיקת פנייה היא אירוע נדיר (כפילות), והשארת אובייקט יתום באחסון עדיפה
+ * על מחיקה שיכולה להיכשל באמצע ולהשאיר את ה-DB והאחסון בסתירה.
+ */
+export async function deleteTicket(viewer: Viewer, ticketId: string) {
+  const ticket = await loadForAction(ticketId);
+  denyUnless(canDeleteTicket(viewer));
+
+  // הקבלנים ששויכו — אחרי המחיקה ייתכן שלא נותר להם דבר, ואז הקישור מת.
+  const professionalIds = [
+    ...new Set(
+      ticket.assignments
+        .map((a) => a.professionalId)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+
+  await db.ticket.delete({ where: { id: ticketId } });
+
+  // מחוץ למחיקה: ביטול הגישה הוא ניקוי, ואין טעם שיגרור rollback אם ייכשל.
+  for (const professionalId of professionalIds) {
+    await revokeAccessIfOrphaned(professionalId);
   }
 }
 

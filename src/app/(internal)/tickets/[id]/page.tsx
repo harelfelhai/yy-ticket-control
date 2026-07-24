@@ -8,6 +8,7 @@ import { he } from "@/lib/he";
 import {
   canCloseTicket,
   canCommentOnTicket,
+  canDeleteTicket,
   canEditAssignments,
   canSetHandler,
   canViewTicket,
@@ -18,6 +19,7 @@ import { listTags, listTicketTags } from "@/lib/services/tags";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { canTagTicket } from "@/lib/permissions";
 import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
+import { DeleteTicket } from "./delete-ticket";
 import { RecipientEditor } from "./recipient-editor";
 import { TicketActions } from "./ticket-actions";
 import { TicketTags } from "./ticket-tags";
@@ -199,6 +201,9 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         canSetHandler={canSetHandler(viewer, ticket, ticket.assignments)}
         hasHandler={ticket.handlerId !== null}
       />
+
+      {/* מחיקה — למנהל מערכת בלבד, בתחתית המסך והרחק מפעולות היום-יום */}
+      {canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
     </div>
   );
 }
