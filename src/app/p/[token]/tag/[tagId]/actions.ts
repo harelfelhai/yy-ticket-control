@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { type ActionResult, guard } from "@/lib/action-result";
+import { type ActionResult, UserFacingError, guard } from "@/lib/action-result";
+import { he } from "@/lib/he";
+import { allowPortalAction } from "@/lib/services/portal";
 import { resolveViewer } from "@/lib/services/viewer";
 import { addTagMessage } from "@/lib/services/tags";
 
@@ -24,6 +26,11 @@ export async function portalTagMessageAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     const viewer = await resolveViewer(z.string().min(1).parse(token));
+    // אותה הגבלת קצב כמו בפעולות הפנייה, לפי מזהה איש המקצוע — הצפת הצ׳אט
+    // הקבוצתי היא בדיוק סוג ה-abuse שהיא נועדה למנוע.
+    if (viewer.kind === "professional" && !(await allowPortalAction(viewer.id))) {
+      throw new UserFacingError(he.portal.tooManyActions);
+    }
     await addTagMessage(viewer, z.string().min(1).parse(tagId), z.string().parse(text));
     revalidatePath(`/p/${token}/tag/${tagId}`);
   });

@@ -18,6 +18,7 @@ import {
   ensureDailyEscalationScheduled,
   runDailyEscalation,
 } from "./handlers/escalation";
+import { cleanupRateLimits } from "@/lib/rate-limit";
 import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
 
@@ -127,6 +128,9 @@ async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome
 
     case JOB_TYPES.escalate: {
       const escalated = await runDailyEscalation(now);
+      // ניקוי יומי של חלונות הגבלת-קצב שפגו — כאן, כי זו כבר נקודת התחזוקה
+      // היומית של המערכת, ואין צורך בג'וב נפרד לזה.
+      await cleanupRateLimits(now);
       // מתזמן את המחרת רק אחרי שהריצה הצליחה. אם היא נכשלה, הג'וב חוזר
       // לתור ומנסה שוב, והתזמון הבא ייווצר כשיצליח — כך אין יום שנדלג
       // עליו בשקט בגלל כשל רגעי.

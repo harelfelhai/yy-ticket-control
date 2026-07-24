@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { type ActionResult, guard } from "@/lib/action-result";
 import { he } from "@/lib/he";
-import { resolveToken } from "@/lib/services/portal";
+import { allowPortalAction, resolveToken } from "@/lib/services/portal";
 import { TicketError, addMessage, setAssignmentStatus } from "@/lib/services/tickets";
 import { db } from "@/lib/db";
 
@@ -30,6 +30,12 @@ async function requireActiveAssignment(token: string, ticketId: string) {
     where: { professionalId: identity.professionalId, ticketId, status: { not: "REMOVED" } },
   });
   if (!assignment) throw new TicketError(he.common.notAllowed);
+
+  // הגבלת קצב אחרי אימות הזהות והשיוך: חלה על כל פעולות הכתיבה (תגובה,
+  // שאלה, סימון טופל), שכולן עוברות דרך כאן. קבלן שהוסר כבר נחסם למעלה.
+  if (!(await allowPortalAction(identity.professionalId))) {
+    throw new TicketError(he.portal.tooManyActions);
+  }
 
   return { identity, assignment };
 }

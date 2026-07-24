@@ -2,6 +2,7 @@ import { hash, verify } from "@node-rs/argon2";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 import { normalizeEmail, normalizePhone } from "./normalize";
+import { clearRateLimit, consumeRateLimit, peekRateLimit } from "./rate-limit";
 import { type SessionUser, destroySession, getSessionUser } from "./session";
 
 /**
@@ -86,6 +87,63 @@ export async function authenticate(
   }
 
   return { id: user.id, name: user.name, role: user.role, siteId: user.siteId };
+}
+
+/**
+ * הגבלת קצב על התחברות — הגנה מפני ניחוש סיסמאות (brute force).
+ *
+ * ההגבלה נספרת **לפי מזהה ההתחברות ולא לפי IP**: היא חסינה לזיוף כותרות
+ * proxy ובלתי-תלויה בתצורת הפריסה (ראה `rate-limit.ts`), ואינה נכשלת כשכל
+ * המשתמשים יושבים מאחורי אותה כתובת משרד. נספרים **כשלונות בלבד**, והתחברות
+ * מוצלחת מאפסת את המונה.
+ *
+ * הכרעה מודעת: מזהה חסום נחסם גם מול הסיסמה הנכונה עד תום החלון. זה פותח
+ * וקטור נודניק — תוקף שמכיר מזהה יכול לנעול משתמש ל-15 דקות בכשלים מכוונים.
+ * לכלי פנימי של 6 משתמשים זו עלות מקובלת: החסימה רכה, זמנית, ומתאפסת לבד,
+ * והחלופה (הגבלה לפי IP) חלשה יותר — היא ניתנת לעקיפה בסיבוב כתובות.
+ */
+export const LOGIN_MAX_FAILURES = 8;
+export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * מפתח ההגבלה, מנורמל כך שצורות שונות של אותו מזהה נספרות יחד: "0501234567"
+ * ו-"050-123-4567" הן אותו חשבון, ואסור שכל צורה תקבל מכסת ניסיונות משלה.
+ */
+export function loginRateKey(identifier: string): string {
+  const trimmed = identifier.trim().toLowerCase();
+  if (trimmed.includes("@")) return `login:${normalizeEmail(identifier)}`;
+  return `login:${normalizePhone(identifier) || trimmed}`;
+}
+
+export type ThrottledAuth =
+  | { ok: true; user: SessionUser }
+  | { ok: false; reason: "invalid" }
+  | { ok: false; reason: "rate_limited"; retryAfterSeconds: number };
+
+/**
+ * מאמת התחברות עם הגבלת קצב. בודק חסימה *לפני* אימות הסיסמה (כדי לא לבזבז
+ * גיבוב argon2 על מזהה חסום), סופר את הכשל אחריו, ומאפס בהצלחה.
+ */
+export async function authenticateThrottled(
+  identifier: string,
+  password: string,
+  now: Date = new Date(),
+): Promise<ThrottledAuth> {
+  const key = loginRateKey(identifier);
+
+  const gate = await peekRateLimit(key, LOGIN_MAX_FAILURES, now);
+  if (!gate.allowed) {
+    return { ok: false, reason: "rate_limited", retryAfterSeconds: gate.retryAfterSeconds };
+  }
+
+  const user = await authenticate(identifier, password);
+  if (!user) {
+    await consumeRateLimit(key, LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, now);
+    return { ok: false, reason: "invalid" };
+  }
+
+  await clearRateLimit(key);
+  return { ok: true, user };
 }
 
 /**

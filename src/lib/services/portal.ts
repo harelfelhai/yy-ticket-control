@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import {
   decryptToken,
   encryptToken,
@@ -138,6 +139,30 @@ export async function revokeAccessIfOrphaned(professionalId: string): Promise<bo
     data: { revokedAt: new Date() },
   });
   return count > 0;
+}
+
+/**
+ * הגבלת קצב לפעולות כתיבה של קבלן בפורטל — הגנה מפני הצפה (spam) של הודעות
+ * או ריצוד סטטוסים.
+ *
+ * מפתח לפי **מזהה איש המקצוע** (הזהות שהטוקן קובע), לא לפי IP: חסין לזיוף
+ * ובלתי-תלוי בפריסה. חל רק על פעולות כתיבה — טעינת דף היא קריאה זולה ולא-
+ * abusive, וממילא הטוקן בן 128 הביט בלתי-בר-ניחוש, כך שאין מה למנוע בניחוש.
+ */
+export const PORTAL_ACTION_LIMIT = 30;
+export const PORTAL_ACTION_WINDOW_MS = 60_000;
+
+export async function allowPortalAction(
+  professionalId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const { allowed } = await consumeRateLimit(
+    `portal:${professionalId}`,
+    PORTAL_ACTION_LIMIT,
+    PORTAL_ACTION_WINDOW_MS,
+    now,
+  );
+  return allowed;
 }
 
 export interface PortalIdentity {

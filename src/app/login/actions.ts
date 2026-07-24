@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { authenticate } from "@/lib/auth";
+import { authenticateThrottled } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { createSession, destroySession } from "@/lib/session";
 
@@ -37,13 +37,16 @@ export async function loginAction(
     return { error: he.login.missingFields };
   }
 
-  const user = await authenticate(parsed.data.identifier, parsed.data.password);
-  if (!user) {
+  const result = await authenticateThrottled(parsed.data.identifier, parsed.data.password);
+  if (!result.ok) {
+    if (result.reason === "rate_limited") {
+      return { error: he.login.tooManyAttempts(Math.ceil(result.retryAfterSeconds / 60)) };
+    }
     // הודעה אחת לכל סוגי הכישלון, כדי שלא ניתן יהיה למפות מי רשום במערכת.
     return { error: he.login.invalidCredentials };
   }
 
-  await createSession(user);
+  await createSession(result.user);
 
   // מקבלים רק יעד יחסי. `next` מגיע מכתובת ה-URL, וקבלה של כתובת מלאה
   // הייתה הופכת את מסך ההתחברות למנוע הפניות לאתרים חיצוניים.
