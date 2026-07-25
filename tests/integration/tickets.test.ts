@@ -1,11 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { JOB_TYPES } from "@/jobs/types";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import type { SessionUser } from "@/lib/session";
+import { toViewer } from "@/lib/session";
 import {
   TicketError,
   createTicket,
   dedupeRecipients,
+  deleteDraft,
   missingRequiredFields,
   submitDraft,
 } from "@/lib/services/tickets";
@@ -131,6 +134,19 @@ describe("createTicket", () => {
     expect(await db.message.count({ where: { ticketId: ticket.id } })).toBe(0);
   });
 
+  it("טיוטה שומרת את הנמענים שנבחרו ב-draftRecipients, לטעינה מראש בהשלמה", async () => {
+    const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
+
+    const stored = await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(stored.draftRecipients).toEqual([{ kind: "professional", id: professionalId }]);
+  });
+
+  it("פנייה משוגרת אינה שומרת draftRecipients", async () => {
+    const { ticket } = await createTicket(actor, fullInput());
+    const stored = await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(stored.draftRecipients).toBeNull();
+  });
+
   it("שיוך לנמען פנימי עובד — זהו התזכורן", async () => {
     const { ticket } = await createTicket(
       actor,
@@ -163,24 +179,34 @@ describe("createTicket", () => {
 });
 
 describe("submitDraft", () => {
-  it("משגר טיוטה מלאה: יוצר שיוכים ומסיר את סימון הטיוטה", async () => {
+  it("משגר טיוטה מלאה: שיוכים, אירוע, ג'וב התראה, ומרוקן draftRecipients", async () => {
     const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
 
-    await submitDraft(ticket.id, [{ kind: "professional", id: professionalId }]);
+    await submitDraft(toViewer(actor), ticket.id, [{ kind: "professional", id: professionalId }]);
 
     const updated = await db.ticket.findUniqueOrThrow({
       where: { id: ticket.id },
       include: { assignments: true },
     });
     expect(updated.isDraft).toBe(false);
+    expect(updated.draftRecipients).toBeNull();
     expect(updated.assignments).toHaveLength(1);
+    expect(updated.assignments[0]?.status).toBe("SENT");
+
+    // אירוע שיוך בשרשור + ג'וב התראה — כמו כל שיגור, כי מכאן אנשים מקבלים הודעה.
+    const events = await db.message.findMany({
+      where: { ticketId: ticket.id, kind: "EVENT", eventType: "ASSIGNED" },
+    });
+    expect(events).toHaveLength(1);
+    const jobs = await db.job.count({ where: { type: JOB_TYPES.notify } });
+    expect(jobs).toBe(1);
   });
 
   it("מסרב לשגר טיוטה שחסרים בה שדות, ואומר מה חסר", async () => {
     const { ticket } = await createTicket(actor, { siteId, description: "משהו" });
 
     await expect(
-      submitDraft(ticket.id, [{ kind: "professional", id: professionalId }]),
+      submitDraft(toViewer(actor), ticket.id, [{ kind: "professional", id: professionalId }]),
     ).rejects.toThrow(TicketError);
 
     const unchanged = await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
@@ -189,10 +215,64 @@ describe("submitDraft", () => {
 
   it("מסרב לשגר בלי נמענים", async () => {
     const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
-    await expect(submitDraft(ticket.id, [])).rejects.toThrow(he.ticket.recipients);
+    await expect(submitDraft(toViewer(actor), ticket.id, [])).rejects.toThrow(he.ticket.recipients);
   });
 
   it("פנייה שאינה קיימת מחזירה שגיאה מובנת", async () => {
-    await expect(submitDraft("no-such-id", [])).rejects.toThrow(he.ticket.notFound);
+    await expect(submitDraft(toViewer(actor), "no-such-id", [])).rejects.toThrow(he.ticket.notFound);
+  });
+
+  it("מנהל אתר אחר אינו רשאי לשגר את הטיוטה", async () => {
+    const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
+
+    const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
+    const stranger = await db.user.create({
+      data: {
+        role: "SITE_MANAGER",
+        name: "מנהל זר",
+        phone: "0500000009",
+        passwordHash: "x",
+        siteId: otherSite.id,
+      },
+    });
+
+    await expect(
+      submitDraft(toViewer({ id: stranger.id, name: stranger.name, role: stranger.role, siteId: stranger.siteId }), ticket.id, [
+        { kind: "professional", id: professionalId },
+      ]),
+    ).rejects.toThrow(he.common.notAllowed);
+
+    const unchanged = await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(unchanged.isDraft).toBe(true);
+  });
+
+  it("שיגור פנייה שכבר שוגרה הוא no-op — אינו יוצר שיוכים כפולים", async () => {
+    const { ticket } = await createTicket(actor, fullInput());
+    // שוגרה כבר ביצירה. שיגור חוזר לא אמור להוסיף שיוך.
+    await submitDraft(toViewer(actor), ticket.id, [{ kind: "professional", id: professionalId }]);
+
+    const assignments = await db.assignment.count({ where: { ticketId: ticket.id } });
+    expect(assignments).toBe(1);
+  });
+});
+
+describe("deleteDraft", () => {
+  it("הפותח מוחק את הטיוטה שלו", async () => {
+    const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
+    await deleteDraft(toViewer(actor), ticket.id);
+    expect(await db.ticket.findUnique({ where: { id: ticket.id } })).toBeNull();
+  });
+
+  it("מנהל מערכת מוחק טיוטה של כל אתר", async () => {
+    const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
+    const admin: SessionUser = { id: "a", name: "מנהל מערכת", role: "ADMIN", siteId: null };
+    await deleteDraft(toViewer(admin), ticket.id);
+    expect(await db.ticket.findUnique({ where: { id: ticket.id } })).toBeNull();
+  });
+
+  it("אינו מוחק פנייה שאינה טיוטה — 'פנייה אמיתית אינה נמחקת'", async () => {
+    const { ticket } = await createTicket(actor, fullInput());
+    await expect(deleteDraft(toViewer(actor), ticket.id)).rejects.toThrow(he.common.notAllowed);
+    expect(await db.ticket.findUnique({ where: { id: ticket.id } })).not.toBeNull();
   });
 });

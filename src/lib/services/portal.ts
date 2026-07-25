@@ -205,7 +205,9 @@ export async function resolveToken(token: string): Promise<PortalIdentity | null
  */
 export async function getPortalBoard(professionalId: string) {
   const assignments = await db.assignment.findMany({
-    where: { professionalId, status: { not: "REMOVED" } },
+    // סינון טיוטות הוא הגנה בעומק: לטיוטה אין שיוכים בפועל, אבל אם אי-פעם
+    // ייווצר כזה, טיוטה שלא נשלחה לאיש לא תופיע בלוח של הקבלן.
+    where: { professionalId, status: { not: "REMOVED" }, ticket: { isDraft: false } },
     orderBy: { ticket: { lastActivityAt: "desc" } },
     include: {
       ticket: {
@@ -232,7 +234,7 @@ export async function getPortalBoard(professionalId: string) {
  */
 export async function getPortalTicket(professionalId: string, ticketId: string) {
   const assignment = await db.assignment.findFirst({
-    where: { professionalId, ticketId, status: { not: "REMOVED" } },
+    where: { professionalId, ticketId, status: { not: "REMOVED" }, ticket: { isDraft: false } },
   });
   if (!assignment) return null;
 

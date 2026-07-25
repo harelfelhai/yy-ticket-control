@@ -6,8 +6,10 @@ import {
   canCloseTicket,
   canCommentOnTicket,
   canCreateTicketInSite,
+  canDeleteDraft,
   canDeleteTicket,
   canEditAssignments,
+  canEditTicketFields,
   canManageTagAccess,
   canPostTagChat,
   canReopenTicket,
@@ -181,6 +183,40 @@ describe("canEditAssignments", () => {
 
   it("נמען אינו עורך נמענים", () => {
     expect(canEditAssignments(contractor, ticket())).toBe(false);
+  });
+});
+
+describe("canEditTicketFields — אותה קבוצה כמו עריכת נמענים", () => {
+  it("מנהל מערכת, מנהל האתר והפותח רשאים; בעלים-לא-פותח ונמען לא", () => {
+    const t = ticket({ createdById: managerA.id });
+    expect(canEditTicketFields(admin, ticket({ siteId: SITE_B }))).toBe(true);
+    expect(canEditTicketFields(managerA2, t)).toBe(true); // מנהל אחר באתר
+    expect(canEditTicketFields(managerB, ticket({ siteId: SITE_A }))).toBe(false); // אתר אחר
+    expect(canEditTicketFields(owner, ticket({ createdById: owner.id }))).toBe(true); // בעלים שפתח
+    expect(canEditTicketFields(owner, t)).toBe(false); // בעלים שלא פתח
+    expect(canEditTicketFields(contractor, t)).toBe(false); // נמען
+  });
+});
+
+describe("canDeleteDraft — טיוטה בלבד, לקבוצה שמנהלת את הפנייה", () => {
+  const draft = (o: Partial<TicketAccessView> = {}) => ({ ...ticket(o), isDraft: true });
+  const live = (o: Partial<TicketAccessView> = {}) => ({ ...ticket(o), isDraft: false });
+
+  it("פותח, מנהל האתר ומנהל מערכת מוחקים טיוטה", () => {
+    expect(canDeleteDraft(managerA, draft({ createdById: managerA.id }))).toBe(true);
+    expect(canDeleteDraft(managerA2, draft({ createdById: managerA.id }))).toBe(true);
+    expect(canDeleteDraft(admin, draft({ siteId: SITE_B }))).toBe(true);
+  });
+
+  it("בעלים שלא פתח ונמען אינם מוחקים טיוטה", () => {
+    expect(canDeleteDraft(owner, draft({ createdById: managerA.id }))).toBe(false);
+    expect(canDeleteDraft(contractor, draft())).toBe(false);
+  });
+
+  it("פנייה שאינה טיוטה אינה נמחקת במסלול הזה — גם לא בידי הפותח", () => {
+    // הכלל "פנייה אמיתית אינה נמחקת" נשמר: המסלול הזה חוסם על isDraft.
+    expect(canDeleteDraft(managerA, live({ createdById: managerA.id }))).toBe(false);
+    expect(canDeleteDraft(admin, live())).toBe(false);
   });
 });
 

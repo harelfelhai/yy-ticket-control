@@ -228,6 +228,15 @@ describe("getPortalBoard", () => {
     expect(board.active).toHaveLength(0);
     expect(board.archived).toHaveLength(0);
   });
+
+  it("טיוטה אינה מוצגת בפורטל — גם אם אי-פעם נוצר עליה שיוך (הגנה בעומק)", async () => {
+    // מייצרים מצב שלא אמור לקרות בזרימה רגילה: טיוטה עם שיוך.
+    const ticket = await makeTicket();
+    await db.ticket.update({ where: { id: ticket.id }, data: { isDraft: true } });
+
+    expect(await getPortalBoard(electrician)).toEqual({ active: [], archived: [] });
+    expect(await getPortalTicket(electrician, ticket.id)).toBeNull();
+  });
 });
 
 describe("getPortalTicket — הטוקן מזהה, השיוכים קובעים", () => {

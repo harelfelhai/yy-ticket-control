@@ -12,6 +12,8 @@ import {
   reopenTicket,
   setAssignmentStatus,
   setHandler,
+  updateResidentName,
+  updateTicketFields,
 } from "@/lib/services/tickets";
 import { ensurePortalLink, resolveToken } from "@/lib/services/portal";
 import type { SessionUser } from "@/lib/session";
@@ -495,5 +497,123 @@ describe("deleteTicket — למנהל מערכת בלבד, לכפילות", () =
 
     // הקבלן היה משויך רק לפנייה שנמחקה — הקישור מת.
     expect(await resolveToken(token)).toBeNull();
+  });
+});
+
+describe("טיוטה — שיוך וסגירה חסומים", () => {
+  async function makeDraft() {
+    const { ticket } = await createTicket(opener, {
+      siteId,
+      ...base,
+      description: "אין חשמל",
+      recipients: [{ kind: "professional", id: electrician }],
+      saveAsDraft: true,
+    });
+    return ticket;
+  }
+
+  it("הוספת נמען לטיוטה נחסמת — ואינה יוצרת ג'וב התראה", async () => {
+    const draft = await makeDraft();
+
+    await expect(
+      addAssignments(asUser(opener), draft.id, [{ kind: "professional", id: plumber }]),
+    ).rejects.toThrow(he.ticket.draftNoRecipientEdit);
+
+    // הכשל הקריטי שהבדיקה מקבעת: טיוטה לא שולחת התראה לאיש.
+    expect(await db.job.count()).toBe(0);
+    expect(await db.assignment.count({ where: { ticketId: draft.id } })).toBe(0);
+  });
+
+  it("סגירת טיוטה נחסמת — משגרים או מוחקים, לא סוגרים", async () => {
+    const draft = await makeDraft();
+    await expect(closeTicket(asUser(opener), draft.id)).rejects.toThrow(he.ticket.cannotCloseDraft);
+
+    const unchanged = await db.ticket.findUniqueOrThrow({ where: { id: draft.id } });
+    expect(unchanged.closedAt).toBeNull();
+  });
+});
+
+describe("updateTicketFields", () => {
+  it("מעדכן תיאור ותחום ורושם אירוע בשרשור עם השדות שהשתנו", async () => {
+    const ticket = await makeTicket();
+    const newDomain = await db.domain.create({ data: { name: "אינסטלציה" } });
+
+    await updateTicketFields(asUser(opener), ticket.id, {
+      description: "התיאור המעודכן",
+      domainId: newDomain.id,
+    });
+
+    const updated = await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(updated.description).toBe("התיאור המעודכן");
+    expect(updated.domainId).toBe(newDomain.id);
+
+    const event = await db.message.findFirstOrThrow({
+      where: { ticketId: ticket.id, kind: "EVENT", eventType: "FIELDS_EDITED" },
+    });
+    expect(event.eventMeta).toMatchObject({ fields: `${he.directory.domain}, ${he.ticket.description}` });
+  });
+
+  it("לא רושם אירוע כשדבר לא השתנה בפועל", async () => {
+    const ticket = await makeTicket();
+    await updateTicketFields(asUser(opener), ticket.id, { description: "אין חשמל" });
+
+    const events = await db.message.count({
+      where: { ticketId: ticket.id, kind: "EVENT", eventType: "FIELDS_EDITED" },
+    });
+    expect(events).toBe(0);
+  });
+
+  it("מנהל עבודה מאתר אחר אינו רשאי לערוך שדות", async () => {
+    const ticket = await makeTicket();
+    const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
+    const stranger: Viewer = {
+      kind: "user",
+      id: (
+        await db.user.create({
+          data: {
+            role: "SITE_MANAGER",
+            name: "זר",
+            phone: "0508888888",
+            passwordHash: "x",
+            siteId: otherSite.id,
+          },
+        })
+      ).id,
+      role: "SITE_MANAGER",
+      siteId: otherSite.id,
+    };
+
+    await expect(
+      updateTicketFields(stranger, ticket.id, { description: "פריצה" }),
+    ).rejects.toThrow(he.common.notAllowed);
+  });
+
+  it("דוחה בניין ששייך לאתר אחר — אין זיהום חוצה-אתרים", async () => {
+    const ticket = await makeTicket();
+    const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
+    const foreignBuilding = await db.building.create({
+      data: { siteId: otherSite.id, name: "בניין זר" },
+    });
+
+    await expect(
+      updateTicketFields(asUser(opener), ticket.id, { buildingId: foreignBuilding.id }),
+    ).rejects.toThrow(he.directory.locationMismatch);
+  });
+});
+
+describe("updateResidentName", () => {
+  it("מעדכן את שם הדייר של הדירה — מתגלגל לכל הפניות של הדירה", async () => {
+    const ticket = await makeTicket();
+    await updateResidentName(asUser(opener), ticket.id, "משפחת כהן");
+
+    const apartment = await db.apartment.findUniqueOrThrow({ where: { id: base.apartmentId } });
+    expect(apartment.residentName).toBe("משפחת כהן");
+  });
+
+  it("נמען אינו רשאי לערוך שם דייר", async () => {
+    const ticket = await makeTicket();
+    await expect(
+      updateResidentName({ kind: "professional", id: electrician }, ticket.id, "דייר"),
+    ).rejects.toThrow(he.common.notAllowed);
   });
 });

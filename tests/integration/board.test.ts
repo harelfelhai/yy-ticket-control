@@ -93,6 +93,20 @@ describe("getBoard — קיבוץ לפי אצל מי הכדור", () => {
     expect(board.sections.ACTION_REQUIRED[0]?.status).toBe("DRAFT");
   });
 
+  it("טיוטות מוצמדות לראש 'דורש ממך', לפני פניות אחרות שדורשות טיפול", async () => {
+    // קודם פנייה שתעבור ל"דורש ממך" (שאלה), ואז טיוטה — הטיוטה חייבת לקפוץ לראש.
+    const ticket = await makeTicket(manager);
+    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
+    await setAssignmentStatus(assignment.id, "QUESTION");
+    await makeTicket(manager, { saveAsDraft: true });
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+    expect(board.sections.ACTION_REQUIRED).toHaveLength(2);
+    // הטיוטה ראשונה, למרות שנוצרה אחרי — היא לא נדחפת אל מחוץ למסך.
+    expect(board.sections.ACTION_REQUIRED[0]?.status).toBe("DRAFT");
+    expect(board.sections.ACTION_REQUIRED[1]?.status).toBe("AWAITING_OPENER_QUESTION");
+  });
+
   it("פנייה סגורה עוברת לארכיון", async () => {
     const ticket = await makeTicket(manager);
     await closeTicket({ kind: "user", ...manager }, ticket.id);

@@ -1,4 +1,4 @@
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import type { AssignmentStatus, Channel, Room } from "@/generated/prisma/enums";
 import { enqueue } from "@/jobs/queue";
 import { JOB_TYPES, type NotifyJobPayload } from "@/jobs/types";
@@ -10,13 +10,16 @@ import {
   type Viewer,
   canCloseTicket,
   canCommentOnTicket,
+  canDeleteDraft,
   canDeleteTicket,
   canEditAssignments,
+  canEditTicketFields,
   canReopenTicket,
   canSetHandler,
   isUser,
 } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
+import { assertLocationInSite } from "./directory";
 import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
 
 /**
@@ -96,6 +99,11 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
         description: normalizeText(input.description ?? ""),
         channel: input.channel ?? "SELF",
         isDraft,
+        // נמעני הטיוטה נשמרים כ-JSON כדי שמסך ההשלמה יוכל לטעון אותם מראש
+        // ולשגר; בפנייה משוגרת הם כבר שיוכים אמיתיים, והשדה מתרוקן.
+        draftRecipients: isDraft
+          ? (recipients as unknown as Prisma.InputJsonValue)
+          : Prisma.DbNull,
         createdById: actor.id,
         // טיוטה אינה משויכת לאיש עד לשיגור: שיוך פירושו שמישהו קיבל את
         // הפנייה, וטיוטה במפורש לא נשלחה לאיש (אפיון §2.5).
@@ -156,16 +164,22 @@ async function attachInitialMedia(
 }
 
 /**
- * משגר טיוטה: יוצר את השיוכים ומסיר את סימון הטיוטה.
+ * משגר טיוטה: יוצר את השיוכים, מסיר את סימון הטיוטה, ושולח התראות.
  * נכשל אם עדיין חסרים שדות — שיגור הוא הרגע שבו אנשים אמיתיים מקבלים
  * התראה, ואין טעם לשלוח פנייה חסרה.
+ *
+ * ההרשאה נבדקת (`canEditTicketFields`): שיגור הוא פעולה של מי שמנהל את
+ * הפנייה, לא של כל מי שמחזיק את המזהה שלה.
  */
 export async function submitDraft(
+  viewer: Viewer,
   ticketId: string,
   recipients: RecipientRef[],
 ): Promise<void> {
-  const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
-  if (!ticket) throw new TicketError(he.ticket.notFound);
+  const ticket = await loadForAction(ticketId);
+  denyUnless(canEditTicketFields(viewer, ticket));
+  // כבר שוגרה: יציאה שקטה מונעת יצירת שיוכים כפולים אם השיגור נלחץ פעמיים.
+  if (!ticket.isDraft) return;
 
   const unique = dedupeRecipients(recipients);
   const missing = missingRequiredFields({
@@ -182,22 +196,21 @@ export async function submitDraft(
   }
 
   await db.$transaction(async (tx) => {
-    await tx.assignment.createMany({
-      data: unique.map((r) => ({ ticketId, ...toAssignmentData([r])[0] })),
-    });
+    // לולאת create ולא createMany: createMany אינו מחזיר מזהים, והם דרושים
+    // מיד ל-applyNewAssignments (אירועים, קישורי גישה, וג'ובי התראה).
+    const assignmentIds: string[] = [];
+    for (const recipient of unique) {
+      const created = await tx.assignment.create({
+        data: { ticketId, ...toAssignmentData([recipient])[0] },
+      });
+      assignmentIds.push(created.id);
+    }
     await tx.ticket.update({
       where: { id: ticketId },
-      data: { isDraft: false, lastActivityAt: new Date() },
+      // draftRecipients מתרוקן: מרגע זה הנמענים הם שיוכים אמיתיים.
+      data: { isDraft: false, draftRecipients: Prisma.DbNull, ...touchData() },
     });
-    // ‏createMany אינו מחזיר מזהים, ולכן קוראים אותם מיד אחריו. השיוכים
-    // האלה הם היחידים בפנייה — טיוטה אינה משויכת לאיש עד לשיגור.
-    const created = await tx.assignment.findMany({ where: { ticketId }, select: { id: true } });
-    await applyNewAssignments(
-      tx,
-      ticketId,
-      unique,
-      created.map((a) => a.id),
-    );
+    await applyNewAssignments(tx, ticketId, unique, assignmentIds);
   });
 }
 
@@ -350,6 +363,99 @@ async function recordEvent(
   });
 }
 
+/** שדות הפנייה הניתנים לעריכה (אפיון §3.2) */
+export interface TicketFieldsInput {
+  buildingId?: string | null;
+  apartmentId?: string | null;
+  domainId?: string | null;
+  room?: Room | null;
+  description?: string;
+}
+
+/**
+ * עורך את שדות הפנייה עצמה — בניין, דירה, תחום, חדר ותיאור (אפיון §3.2).
+ *
+ * משמש בשני מסלולים: השלמת טיוטה חסרה, ותיקון פנייה משוגרת. רק שדות
+ * שנשלחו ובאמת השתנו נכתבים, ורק הם נכנסים לאירוע השרשור — כדי שההיסטוריה
+ * תתאר מה שונה ולא "נגעו בפנייה". מזהי המיקום מאומתים מול אתר הפנייה, כי
+ * הם מגיעים מהלקוח ומנהל אתר לא אמור להצליח לשייך בניין של אתר אחר.
+ */
+export async function updateTicketFields(
+  viewer: Viewer,
+  ticketId: string,
+  fields: TicketFieldsInput,
+) {
+  const ticket = await loadForAction(ticketId);
+  denyUnless(canEditTicketFields(viewer, ticket));
+
+  await assertLocationInSite({
+    siteId: ticket.siteId,
+    buildingId: fields.buildingId ?? ticket.buildingId,
+    apartmentId: fields.apartmentId ?? ticket.apartmentId,
+  });
+
+  const data: Prisma.TicketUncheckedUpdateInput = {};
+  const changed: string[] = [];
+
+  if (fields.buildingId !== undefined && fields.buildingId !== ticket.buildingId) {
+    data.buildingId = fields.buildingId;
+    changed.push(he.directory.building);
+  }
+  if (fields.apartmentId !== undefined && fields.apartmentId !== ticket.apartmentId) {
+    data.apartmentId = fields.apartmentId;
+    changed.push(he.directory.apartment);
+  }
+  if (fields.domainId !== undefined && fields.domainId !== ticket.domainId) {
+    data.domainId = fields.domainId;
+    changed.push(he.directory.domain);
+  }
+  if (fields.room !== undefined && fields.room !== ticket.room) {
+    data.room = fields.room;
+    changed.push(he.ticket.room);
+  }
+  if (fields.description !== undefined) {
+    const normalized = normalizeText(fields.description);
+    if (normalized !== ticket.description) {
+      data.description = normalized;
+      changed.push(he.ticket.description);
+    }
+  }
+
+  // כלום לא השתנה בפועל — לא כותבים אירוע ריק לשרשור.
+  if (changed.length === 0) return ticket;
+
+  return db.$transaction(async (tx) => {
+    const updated = await tx.ticket.update({
+      where: { id: ticketId },
+      data: { ...data, ...touchData() },
+    });
+    await recordEvent(tx, ticketId, "FIELDS_EDITED", {
+      userName: await actorName(tx, viewer),
+      fields: changed.join(", "),
+    });
+    return updated;
+  });
+}
+
+/**
+ * מעדכן את שם הדייר של הדירה (אפיון §3.2 שדה 11).
+ *
+ * הדייר קשור ל**דירה** ולא לפנייה, כי אותו דייר חוזר בפניות רבות על אותה
+ * דירה. לכן העריכה מעדכנת את `Apartment.residentName`, ומתגלגלת לכל
+ * הפניות של אותה דירה — בדיוק ההתנהגות שהאפיון מתאר ("מעדכן את הדירה").
+ */
+export async function updateResidentName(viewer: Viewer, ticketId: string, rawName: string) {
+  const ticket = await loadForAction(ticketId);
+  denyUnless(canEditTicketFields(viewer, ticket));
+  if (!ticket.apartmentId) throw new TicketError(he.ticket.noLocation);
+
+  const name = normalizeText(rawName);
+  await db.apartment.update({
+    where: { id: ticket.apartmentId },
+    data: { residentName: name || null },
+  });
+}
+
 /**
  * מוסיף תגובה לשרשור.
  *
@@ -431,6 +537,8 @@ export async function setHandler(viewer: Viewer, ticketId: string) {
 export async function closeTicket(viewer: Viewer, ticketId: string) {
   const ticket = await loadForAction(ticketId);
   denyUnless(canCloseTicket(viewer, ticket));
+  // טיוטה לא נסגרת — היא לא נשלחה לאיש. משגרים אותה או מוחקים.
+  if (ticket.isDraft) throw new TicketError(he.ticket.cannotCloseDraft);
   if (ticket.closedAt) return;
 
   await db.$transaction(async (tx) => {
@@ -490,6 +598,9 @@ export async function addAssignments(
 ) {
   const ticket = await loadForAction(ticketId);
   denyUnless(canEditAssignments(viewer, ticket));
+  // בטיוטה עורכים נמענים דרך מסך ההשלמה, לא כאן: הוספת שיוך משגרת התראה
+  // אמיתית, וטיוטה במפורש לא נשלחה לאיש (אפיון §2.5).
+  if (ticket.isDraft) throw new TicketError(he.ticket.draftNoRecipientEdit);
 
   const existing = new Set(
     ticket.assignments
@@ -552,6 +663,9 @@ export async function removeAssignment(viewer: Viewer, assignmentId: string) {
   });
   if (!assignment) throw new TicketError(he.ticket.assignmentNotFound);
   denyUnless(canEditAssignments(viewer, assignment.ticket));
+  // הגנה בעומק: לטיוטה אין שיוכים בפועל, אבל הכלל אחיד — עריכת נמענים בטיוטה
+  // נעשית דרך מסך ההשלמה.
+  if (assignment.ticket.isDraft) throw new TicketError(he.ticket.draftNoRecipientEdit);
   if (assignment.status === "REMOVED") return;
 
   await db.$transaction(async (tx) => {
@@ -602,6 +716,21 @@ export async function deleteTicket(viewer: Viewer, ticketId: string) {
   for (const professionalId of professionalIds) {
     await revokeAccessIfOrphaned(professionalId);
   }
+}
+
+/**
+ * מוחק טיוטה (אפיון מסך 7).
+ *
+ * בשונה מ-`deleteTicket`, הפעולה הזו פתוחה גם למנהל העבודה ולפותח, לא רק
+ * למנהל המערכת — כי טיוטה מעולם לא נשלחה לאיש ואינה "פנייה אמיתית". אין
+ * כאן קבלנים לבטל להם גישה: לטיוטה אין שיוכים ולא הונפקו לה קישורים, וגם
+ * אין מדיה שצריך לתאם (הצילומים שצורפו נמחקים ב-cascade כמו בכל פנייה).
+ */
+export async function deleteDraft(viewer: Viewer, ticketId: string) {
+  const ticket = await loadForAction(ticketId);
+  denyUnless(canDeleteDraft(viewer, ticket));
+
+  await db.ticket.delete({ where: { id: ticketId } });
 }
 
 /**

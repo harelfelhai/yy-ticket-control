@@ -63,6 +63,46 @@ export async function findOrCreateDomain(rawName: string) {
   return db.domain.upsert({ where: { name }, update: {}, create: { name } });
 }
 
+/**
+ * מאמת ששיוך מיקום לפנייה עקבי: הבניין שייך לאתר, והדירה לבניין ולאתר.
+ *
+ * ההרשאה נבדקת על האתר (`canCreateTicketInSite`/`canEditTicketFields`), אבל
+ * מזהי הבניין והדירה מגיעים מהלקוח ואינם מאומתים מולו. בלי הבדיקה הזו מנהל
+ * אתר שמשיג מזהה (cuid) של בניין באתר אחר יכול לשייך אליו פנייה או ליצור
+ * תחתיו דירות — זיהום חוצה-אתרים שקט של הרשומות. שדות null אינם נבדקים:
+ * טיוטה יכולה להישמר בלי מיקום מלא.
+ */
+export async function assertLocationInSite(input: {
+  siteId: string;
+  buildingId?: string | null;
+  apartmentId?: string | null;
+}): Promise<void> {
+  if (input.buildingId) {
+    const building = await db.building.findUnique({
+      where: { id: input.buildingId },
+      select: { siteId: true },
+    });
+    if (!building || building.siteId !== input.siteId) {
+      throw new DirectoryError(he.directory.locationMismatch);
+    }
+  }
+
+  if (input.apartmentId) {
+    const apartment = await db.apartment.findUnique({
+      where: { id: input.apartmentId },
+      select: { buildingId: true, building: { select: { siteId: true } } },
+    });
+    // הדירה חייבת להשתייך לאתר, ואם נמסר גם בניין — לאותו בניין.
+    if (
+      !apartment ||
+      apartment.building.siteId !== input.siteId ||
+      (input.buildingId && apartment.buildingId !== input.buildingId)
+    ) {
+      throw new DirectoryError(he.directory.locationMismatch);
+    }
+  }
+}
+
 export interface ProfessionalInput {
   name: string;
   phone?: string | null;

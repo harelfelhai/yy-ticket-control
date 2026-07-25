@@ -225,6 +225,12 @@ model Ticket {
   /// טיוטה: נשמרה אך לא שוגרה ואיש לא קיבל אותה (אפיון §2.5).
   isDraft Boolean @default(false)
 
+  /// הנמענים שנבחרו לטיוטה, כ-`{kind:"professional"|"user", id}[]`.
+  /// נשמרים כאן ולא כ-Assignment בכוונה: שיוך פירושו שמישהו קיבל את הפנייה,
+  /// וטיוטה במפורש לא נשלחה לאיש (אפיון §2.5). בשיגור הם הופכים לשיוכים
+  /// אמיתיים והשדה מתאפס ל-null. ראה submitDraft ב-src/lib/services/tickets.ts.
+  draftRecipients Json?
+
   createdById String
   createdBy   User   @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 

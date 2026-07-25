@@ -129,6 +129,13 @@ export async function getBoard(
     });
   }
 
+  // טיוטות מוצמדות לראש "דורש ממך": הן דורשות השלמה ידנית לפני שאפשר לשגר,
+  // ואסור שפניות אחרות ידחפו אותן אל מחוץ למסך (אפיון מסך 7). המיון יציב,
+  // ולכן הסדר לפי lastActivityAt נשמר בתוך כל קבוצה.
+  sections.ACTION_REQUIRED.sort(
+    (a, b) => (a.status === "DRAFT" ? 0 : 1) - (b.status === "DRAFT" ? 0 : 1),
+  );
+
   const [sites, buildings, domains, professionals, tags] = await Promise.all([
     // רשימת האתרים לבורר — ריקה למנהל עבודה, שכן אין לו מה לסנן.
     user.siteId
