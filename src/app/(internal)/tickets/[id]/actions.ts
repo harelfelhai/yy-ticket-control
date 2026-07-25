@@ -7,6 +7,7 @@ import { type ActionResult, guard } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { canEditAssignments } from "@/lib/permissions";
+import { ROOMS } from "@/lib/rooms";
 import { toViewer } from "@/lib/session";
 import type { SelectOption } from "@/lib/options";
 import { ensurePortalLink, rotatePortalLink } from "@/lib/services/portal";
@@ -16,10 +17,14 @@ import {
   addAssignments,
   addMessage,
   closeTicket,
+  deleteDraft,
   deleteTicket,
   removeAssignment,
   reopenTicket,
   setHandler,
+  submitDraft,
+  updateResidentName,
+  updateTicketFields,
 } from "@/lib/services/tickets";
 
 /**
@@ -121,6 +126,62 @@ export async function removeRecipientAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     await removeAssignment(await viewer(), assignmentId);
+    refresh(ticketId);
+  });
+}
+
+// ── עריכת שדות, השלמת טיוטה, ומחיקתה ──────────────────────────────────
+
+const ticketFieldsSchema = z.object({
+  buildingId: z.string().min(1).nullable().optional(),
+  apartmentId: z.string().min(1).nullable().optional(),
+  domainId: z.string().min(1).nullable().optional(),
+  room: z.enum(ROOMS).nullable().optional(),
+  description: z.string().optional(),
+});
+
+export async function updateTicketFieldsAction(
+  ticketId: string,
+  fields: z.infer<typeof ticketFieldsSchema>,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await updateTicketFields(await viewer(), ticketId, ticketFieldsSchema.parse(fields));
+    refresh(ticketId);
+  });
+}
+
+export async function submitDraftAction(
+  ticketId: string,
+  recipients: z.infer<typeof recipientsSchema>,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await submitDraft(await viewer(), ticketId, recipientsSchema.parse(recipients));
+    refresh(ticketId);
+  });
+}
+
+/**
+ * מוחק טיוטה ומעביר ללוח — מסך הפנייה כבר לא קיים.
+ * ‏redirect מחוץ ל-guard, כמו ב-deleteTicketAction.
+ */
+export async function deleteDraftAction(
+  ticketId: string,
+): Promise<{ error: string } | undefined> {
+  const result = await guard(async () => {
+    await deleteDraft(await viewer(), z.string().min(1).parse(ticketId));
+  });
+
+  if (!result.ok) return { error: result.error };
+  revalidatePath("/board");
+  redirect("/board");
+}
+
+export async function updateResidentNameAction(
+  ticketId: string,
+  name: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await updateResidentName(await viewer(), ticketId, z.string().parse(name));
     refresh(ticketId);
   });
 }

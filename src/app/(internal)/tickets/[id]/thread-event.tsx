@@ -17,6 +17,8 @@ export function ThreadEvent({
   const { recipientName = "", userName = "" } = (meta ?? {}) as {
     recipientName?: string;
     userName?: string;
+    // ‏fields נשמר ב-meta של FIELDS_EDITED אך אינו מוצג בשורה בכוונה — היא
+    // נשארת קצרה, והשינוי עצמו נראה בכותרת הפנייה המעודכנת.
   };
 
   const text = describe(eventType, recipientName, userName);
@@ -43,6 +45,10 @@ function describe(eventType: string | null, recipient: string, actor: string): s
       return he.event.reopened(actor);
     case "HANDLER_SET":
       return he.event.handlerSet(actor);
+    case "FIELDS_EDITED":
+      // שם השדות שהשתנו נשמר ב-meta אבל אינו מוצג בשורה — היא נשארת קצרה
+      // ("דוד עדכן את פרטי הפנייה"), והשינוי עצמו נראה בכותרת המעודכנת.
+      return he.event.fieldsEdited(actor);
     default:
       // אירוע שאינו מוכר לא מוצג כלל, ולא כשורה ריקה או כמזהה באנגלית.
       return null;

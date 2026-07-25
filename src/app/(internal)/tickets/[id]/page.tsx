@@ -15,11 +15,13 @@ import {
 } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
 import { describeDelivery } from "@/lib/services/delivery";
+import { listSiteDirectory } from "@/lib/services/directory";
 import { listTags, listTicketTags } from "@/lib/services/tags";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { canTagTicket } from "@/lib/permissions";
 import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
 import { DeleteTicket } from "./delete-ticket";
+import { DraftCompletion } from "./draft-completion";
 import { RecipientEditor } from "./recipient-editor";
 import { TicketActions } from "./ticket-actions";
 import { TicketTags } from "./ticket-tags";
@@ -87,6 +89,17 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       ]
     : [];
 
+  // טיוטה: הרשימות הנלמדות ונמעני הטיוטה השמורים, כדי שמסך ההשלמה יציג את
+  // השדות החסרים ויאפשר לשגר. נטענים רק כשמדובר בטיוטה שהצופה רשאי לערוך.
+  const draftDirectory = ticket.isDraft && canEdit ? await listSiteDirectory(ticket.siteId) : null;
+  const draftRecipientOptions = ticket.isDraft
+    ? (
+        (ticket.draftRecipients as { kind: "professional" | "user"; id: string }[] | null) ?? []
+      )
+        .map((ref) => available.find((o) => o.id === ref.id && o.kind === ref.kind))
+        .filter((o): o is (typeof available)[number] => o !== undefined)
+    : [];
+
   // מצב השליחה נטען במקביל לכל הנמענים: לכל אחד יש שאילתה משלו לקישור,
   // וסדרה טורית של חמש שאילתות מורגשת ברשת סלולרית באתר בנייה.
   const assignmentRows = await Promise.all(
@@ -151,12 +164,46 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         </p>
       </header>
 
-      <RecipientEditor
-        ticketId={ticket.id}
-        assignments={assignmentRows}
-        available={available}
-        canEdit={canEdit}
-      />
+      {ticket.isDraft ? (
+        canEdit && draftDirectory ? (
+          <DraftCompletion
+            ticketId={ticket.id}
+            siteId={ticket.siteId}
+            buildings={draftDirectory.buildings.map((b) => ({
+              id: b.id,
+              label: b.name,
+              apartments: b.apartments.map((a) => ({ id: a.id, label: a.number })),
+            }))}
+            domains={draftDirectory.domains.map((d) => ({ id: d.id, label: d.name }))}
+            recipientOptions={available}
+            initial={{
+              buildingId: ticket.buildingId,
+              apartmentId: ticket.apartmentId,
+              domainId: ticket.domainId,
+              recipients: draftRecipientOptions,
+            }}
+            missing={{
+              building: !ticket.buildingId,
+              apartment: !ticket.apartmentId,
+              domain: !ticket.domainId,
+              description: ticket.description.trim().length === 0,
+              recipients: draftRecipientOptions.length === 0,
+            }}
+          />
+        ) : (
+          // בעלים שאינו הפותח רואה טיוטה אך אינו רשאי להשלים אותה.
+          <p className="rounded-2xl border border-danger bg-danger/5 p-4 text-sm font-semibold text-danger">
+            {he.notices.draftBanner}
+          </p>
+        )
+      ) : (
+        <RecipientEditor
+          ticketId={ticket.id}
+          assignments={assignmentRows}
+          available={available}
+          canEdit={canEdit}
+        />
+      )}
 
       <TicketTags
         ticketId={ticket.id}
@@ -196,14 +243,16 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       <TicketActions
         ticketId={ticket.id}
         isClosed={ticket.closedAt !== null}
-        canClose={canCloseTicket(viewer, ticket)}
+        // טיוטה אינה נסגרת — משגרים אותה או מוחקים דרך מסך ההשלמה.
+        canClose={canCloseTicket(viewer, ticket) && !ticket.isDraft}
         canComment={canCommentOnTicket(viewer, ticket, ticket.assignments)}
         canSetHandler={canSetHandler(viewer, ticket, ticket.assignments)}
         hasHandler={ticket.handlerId !== null}
       />
 
-      {/* מחיקה — למנהל מערכת בלבד, בתחתית המסך והרחק מפעולות היום-יום */}
-      {canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
+      {/* מחיקה — למנהל מערכת בלבד, בתחתית המסך והרחק מפעולות היום-יום.
+          בטיוטה המחיקה נעשית דרך "מחק טיוטה" במסך ההשלמה, לא כאן. */}
+      {!ticket.isDraft && canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
     </div>
   );
 }

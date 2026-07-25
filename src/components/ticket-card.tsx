@@ -20,10 +20,16 @@ export function TicketCard({ card }: { card: BoardCard }) {
     .filter(Boolean)
     .join(" · ");
 
+  // טיוטה מסומנת באדום (אפיון מסך 7): מסגרת אדומה ושורת סיבה אדומה, כדי
+  // שתיקרא מיד כ"דורש השלמה" ולא כפנייה רגילה.
+  const isDraft = card.status === "DRAFT";
+
   return (
     <Link
       href={`/tickets/${card.id}`}
-      className="flex flex-col gap-1.5 rounded-2xl border border-border bg-surface p-4"
+      className={`flex flex-col gap-1.5 rounded-2xl border bg-surface p-4 ${
+        isDraft ? "border-danger" : "border-border"
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 flex-1 font-semibold">
@@ -41,7 +47,9 @@ export function TicketCard({ card }: { card: BoardCard }) {
         <p className="truncate text-sm">{card.descriptionLine}</p>
       ) : null}
 
-      <p className="text-sm font-medium text-brand">{card.reason}</p>
+      <p className={`text-sm font-medium ${isDraft ? "text-danger" : "text-brand"}`}>
+        {card.reason}
+      </p>
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
         {card.recipientNames.length > 0 ? <span>{card.recipientNames.join(", ")}</span> : null}
