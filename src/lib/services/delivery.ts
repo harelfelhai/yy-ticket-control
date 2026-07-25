@@ -19,33 +19,52 @@ export interface DeliveryView {
   deliveryNote: string;
   /** כתובת wa.me עם ההודעה מוכנה, או null כשאין טלפון או קישור */
   waUrl: string | null;
+  /** האם יש כתובת מייל שאפשר לשלוח אליה שוב (נמען חיצוני או פנימי) */
+  canResendEmail: boolean;
+  /** מתי השתנה הסטטוס האישי לאחרונה, כטקסט מוכן */
+  statusChangedAt: string;
 }
 
+/**
+ * `includeLink` שולט אם לחשב את קישור הקסם ואת כתובת הוואטסאפ.
+ *
+ * זו הגנת אבטחה, לא רק אופטימיזציה: הקישור הוא סוד גישה של הקבלן, והוא
+ * מגיע ללקוח בתוך ה-payload של הקומפוננטה — גם אם הכפתור מוסתר ויזואלית.
+ * צופה שאינו רשאי לערוך נמענים (למשל בעלים שאינו הפותח) אינו אמור לקבל
+ * את הקישור כלל, ולכן הקריאה מדלגת עליו לגמרי במקום להסתיר אותו בממשק.
+ */
 export async function describeDelivery(
   ticket: TicketDetail,
   assignment: TicketDetail["assignments"][number],
+  includeLink: boolean,
 ): Promise<DeliveryView> {
   const professional = assignment.professional;
-  const email = professional?.email ?? null;
+  const email = professional?.email ?? assignment.user?.email ?? null;
   const phone = professional?.phone ?? null;
 
   const note = deliveryNote(
     {
       notifiedAt: assignment.notifiedAt,
-      // נמען פנימי: אין לנו כאן את המייל שלו, אבל הוא נכנס למערכת ממילא
-      // ורואה את הפנייה בלוח שלו. החיווי נוגע לשליחה החוצה.
+      // נמען פנימי: גם בלי מייל הוא נכנס למערכת ורואה את הפנייה בלוח שלו.
+      // החיווי נוגע לשליחה החוצה.
       hasEmail: Boolean(email) || assignment.userId !== null,
       hasPhone: Boolean(phone),
     },
     formatDateTime,
   );
 
-  if (!professional || !phone) return { deliveryNote: note, waUrl: null };
+  const base = {
+    deliveryNote: note,
+    canResendEmail: Boolean(email),
+    statusChangedAt: formatDateTime(assignment.statusChangedAt),
+  };
+
+  if (!includeLink || !professional || !phone) return { ...base, waUrl: null };
 
   // קריאה בלבד: מסך שנטען אינו אמור לייצר סודות. הטוקן כבר נוצר ברגע
   // השיוך (ראה ensureAccessToken), ולכן הוא נמצא כאן בפועל.
   const link = await readPortalLink(professional.id);
-  if (!link) return { deliveryNote: note, waUrl: null };
+  if (!link) return { ...base, waUrl: null };
 
   const message = composeNotification({
     event: "ASSIGNED",
@@ -54,7 +73,7 @@ export async function describeDelivery(
     link,
   });
 
-  return { deliveryNote: note, waUrl: waShareUrl(phone, message.body) };
+  return { ...base, waUrl: waShareUrl(phone, message.body) };
 }
 
 function toSummary(ticket: TicketDetail): TicketSummary {

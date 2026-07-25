@@ -7,6 +7,10 @@ import {
   AdminError,
   createInternalUser,
   createSite,
+  listDomains,
+  listProfessionalsForAdmin,
+  listSites,
+  listUsers,
   mergeProfessionals,
   renameDomain,
   setUserActive,
@@ -51,6 +55,22 @@ describe("הרשאה — הכול שמור למנהל המערכת", () => {
         password: "password1",
       }),
     ).rejects.toThrow(AdminError);
+  });
+
+  it("מנהל עבודה אינו יכול לקרוא את רשימות הניהול — הבדיקה בשירות, לא רק ב-layout", async () => {
+    // ה-layout מגן על התצוגה, אבל אינו רץ מחדש בניווט צד-לקוח בין מסכי
+    // אדמין; ההגנה האמיתית על הנתונים היא ב-assertAdmin שבשירות עצמו.
+    await expect(listSites(manager)).rejects.toThrow(he.admin.forbidden);
+    await expect(listUsers(manager)).rejects.toThrow(he.admin.forbidden);
+    await expect(listProfessionalsForAdmin(manager)).rejects.toThrow(he.admin.forbidden);
+    await expect(listDomains(manager)).rejects.toThrow(he.admin.forbidden);
+  });
+
+  it("מנהל מערכת כן קורא את רשימות הניהול", async () => {
+    await expect(listSites(admin)).resolves.toBeDefined();
+    await expect(listUsers(admin)).resolves.toBeDefined();
+    await expect(listProfessionalsForAdmin(admin)).resolves.toBeDefined();
+    await expect(listDomains(admin)).resolves.toBeDefined();
   });
 });
 

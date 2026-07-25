@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listSites } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
@@ -12,7 +13,8 @@ export const metadata = { title: `${he.admin.sites} — ${he.app.name}` };
  * בהקמת המשתמש).
  */
 export default async function AdminSitesPage() {
-  const sites = await listSites();
+  const actor = await requireUser();
+  const sites = await listSites(actor);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">

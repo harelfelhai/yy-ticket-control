@@ -102,13 +102,15 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
 
   // מצב השליחה נטען במקביל לכל הנמענים: לכל אחד יש שאילתה משלו לקישור,
   // וסדרה טורית של חמש שאילתות מורגשת ברשת סלולרית באתר בנייה.
+  // הדגל האחרון (canEdit) קובע אם קישור הקסם ייכלל: הוא סוד גישה, וצופה
+  // שאינו רשאי לערוך נמענים אינו אמור לקבלו — גם לא בתוך ה-payload.
   const assignmentRows = await Promise.all(
     ticket.assignments.map(async (a) => ({
       id: a.id,
       name: recipientName(a),
       status: a.status,
       professionalId: a.professionalId,
-      ...(await describeDelivery(ticket, a)),
+      ...(await describeDelivery(ticket, a, canEdit)),
     })),
   );
 

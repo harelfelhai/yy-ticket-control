@@ -23,6 +23,10 @@ export interface AssignmentRow {
   deliveryNote: string;
   /** כתובת wa.me עם ההודעה מוכנה, או null כשאין טלפון */
   waUrl: string | null;
+  /** האם יש כתובת מייל שאפשר לשלוח אליה שוב */
+  canResendEmail: boolean;
+  /** מתי השתנה הסטטוס האישי לאחרונה, כטקסט מוכן */
+  statusChangedAt: string;
 }
 
 export interface AvailableRecipient {

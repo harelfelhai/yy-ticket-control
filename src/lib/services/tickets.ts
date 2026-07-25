@@ -249,7 +249,8 @@ export async function getTicketDetail(ticketId: string) {
         orderBy: { createdAt: "asc" },
         include: {
           professional: { select: { id: true, name: true, phone: true, email: true } },
-          user: { select: { id: true, name: true } },
+          // email נדרש כדי לדעת אם אפשר "לשלוח שוב במייל" גם לנמען פנימי.
+          user: { select: { id: true, name: true, email: true } },
         },
       },
       messages: {

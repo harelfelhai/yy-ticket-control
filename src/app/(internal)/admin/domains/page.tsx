@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listDomains } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
@@ -9,7 +10,8 @@ export const metadata = { title: `${he.admin.domains} — ${he.app.name}` };
 
 /** ניהול תחומים (מסך 14): הוספה ותיקון שם. הרשימה נלמדת גם דרך הפניות. */
 export default async function AdminDomainsPage() {
-  const domains = await listDomains();
+  const actor = await requireUser();
+  const domains = await listDomains(actor);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">

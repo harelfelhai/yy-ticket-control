@@ -45,8 +45,15 @@ export async function createSite(actor: SessionUser, rawName: string) {
   return db.site.create({ data: { name } });
 }
 
-/** אתרים עם מנהלי העבודה המשויכים להם, לרשימת הניהול */
-export async function listSites() {
+/**
+ * אתרים עם מנהלי העבודה המשויכים להם, לרשימת הניהול.
+ *
+ * מקבל actor ובודק הרשאה כמו כל מוטציה: ה-layout מגן על התצוגה, אבל הוא
+ * אינו רץ מחדש בניווט צד-לקוח בין מסכי אדמין, וקריאה ישירה ל-RSC של אחד
+ * המסכים עוקפת אותו. הבדיקה כאן היא ההגנה האמיתית על הנתונים.
+ */
+export async function listSites(actor: SessionUser) {
+  assertAdmin(actor);
   return db.site.findMany({
     orderBy: { name: "asc" },
     include: {
@@ -114,7 +121,8 @@ export async function createInternalUser(actor: SessionUser, input: CreateUserIn
   });
 }
 
-export async function listUsers() {
+export async function listUsers(actor: SessionUser) {
+  assertAdmin(actor);
   return db.user.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
     include: { site: { select: { name: true } } },
@@ -137,7 +145,8 @@ export async function setUserActive(actor: SessionUser, userId: string, active: 
 // ────────────────────────────── אנשי מקצוע ──────────────────────────────
 
 /** אנשי מקצוע עם מספר הפניות הפעילות של כל אחד — עוזר לזהות כפילויות */
-export async function listProfessionalsForAdmin() {
+export async function listProfessionalsForAdmin(actor: SessionUser) {
+  assertAdmin(actor);
   const professionals = await db.professional.findMany({
     orderBy: { name: "asc" },
     include: {
@@ -243,7 +252,8 @@ export async function createDomain(actor: SessionUser, rawName: string) {
   return db.domain.create({ data: { name } });
 }
 
-export async function listDomains() {
+export async function listDomains(actor: SessionUser) {
+  assertAdmin(actor);
   return db.domain.findMany({ orderBy: { name: "asc" } });
 }
 

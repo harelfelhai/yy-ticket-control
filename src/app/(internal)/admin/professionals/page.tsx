@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listProfessionalsForAdmin } from "@/lib/services/admin";
 import { ProfessionalsManager } from "./professionals-manager";
@@ -7,7 +8,8 @@ export const metadata = { title: `${he.admin.professionals} — ${he.app.name}` 
 
 /** ניהול אנשי מקצוע (מסך 13): עריכת פרטים ואיחוד כפילויות. */
 export default async function AdminProfessionalsPage() {
-  const professionals = await listProfessionalsForAdmin();
+  const actor = await requireUser();
+  const professionals = await listProfessionalsForAdmin(actor);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
