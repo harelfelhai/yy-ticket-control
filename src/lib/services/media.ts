@@ -97,6 +97,9 @@ export async function registerMedia(
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
       originalName: input.originalName ?? null,
+      // הבעלות נשמרת כדי שרק המעלה יוכל לאשר את ההעלאה (ראה confirmUpload).
+      uploaderUserId: viewer.kind === "user" ? viewer.id : null,
+      uploaderProfessionalId: viewer.kind === "professional" ? viewer.id : null,
       // ה-AI מתחיל לעבוד רק אחרי שהבתים באמת עלו. עד אז אין מה לתמלל.
       aiStatus: "PENDING",
     },
@@ -115,9 +118,20 @@ export async function registerMedia(
  * העיבוד נכנס לתור ואינו רץ כאן: תמלול לוקח שניות, והמשתמש באותו רגע
  * ממתין למסך כדי להמשיך להקליד.
  */
-export async function confirmUpload(mediaId: string) {
+export async function confirmUpload(viewer: Viewer, mediaId: string) {
   const media = await db.mediaFile.findUnique({ where: { id: mediaId } });
   if (!media) throw new MediaError(he.media.notFound);
+
+  // רק המעלה מאשר את הקובץ שלו: בלי הבדיקה כל משתמש מחובר (או כל קבלן עם
+  // טוקן חי) יכול לסמן קובץ של אחר כ"הועלה" ולהפעיל עליו ג'ובי AI בתשלום.
+  // רשומה ששני המזהים בה null היא ישנה (מלפני שהבעלות נשמרה) — נדחית, כי
+  // אי אפשר לאמת בעלות עליה.
+  const ownedByViewer =
+    viewer.kind === "user"
+      ? media.uploaderUserId === viewer.id
+      : media.uploaderProfessionalId === viewer.id;
+  if (!ownedByViewer) throw new MediaError(he.common.notAllowed);
+
   if (media.uploaded) return media;
 
   return db.$transaction(async (tx) => {

@@ -147,6 +147,19 @@ describe("createTicket", () => {
     expect(stored.draftRecipients).toBeNull();
   });
 
+  it("דוחה בניין ששייך לאתר אחר — אין זיהום חוצה-אתרים", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
+    const foreignBuilding = await db.building.create({
+      data: { siteId: otherSite.id, name: "בניין זר" },
+    });
+
+    await expect(
+      createTicket(actor, { ...fullInput(), buildingId: foreignBuilding.id }),
+    ).rejects.toThrow(he.directory.locationMismatch);
+    // ולא נוצרה פנייה חלקית.
+    expect(await db.ticket.count()).toBe(0);
+  });
+
   it("שיוך לנמען פנימי עובד — זהו התזכורן", async () => {
     const { ticket } = await createTicket(
       actor,

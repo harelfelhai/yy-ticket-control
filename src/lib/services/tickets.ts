@@ -88,6 +88,15 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
   const missing = missingRequiredFields({ ...input, recipients });
   const isDraft = input.saveAsDraft === true || missing.length > 0;
 
+  // מזהי הבניין והדירה מגיעים מהלקוח; ההרשאה נבדקת על האתר, אבל לא שהם
+  // שייכים לו. בלי הבדיקה מנהל אתר שהשיג מזהה של אתר אחר יכול לשייך אליו
+  // פנייה. שדות null (טיוטה) מדולגים בתוך ה-helper.
+  await assertLocationInSite({
+    siteId: input.siteId,
+    buildingId: input.buildingId,
+    apartmentId: input.apartmentId,
+  });
+
   return db.$transaction(async (tx) => {
     const ticket = await tx.ticket.create({
       data: {

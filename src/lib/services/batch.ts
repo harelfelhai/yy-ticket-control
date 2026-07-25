@@ -4,6 +4,7 @@ import { he } from "@/lib/he";
 import { normalizeName, normalizeText } from "@/lib/normalize";
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
+import { assertLocationInSite } from "./directory";
 import { addTagMessage, findOrCreateTag } from "./tags";
 import { type RecipientRef, createTicket } from "./tickets";
 
@@ -70,6 +71,14 @@ export async function createTicketBatch(
   input: CreateBatchInput,
 ): Promise<BatchResult> {
   if (!input.buildingId || !input.apartmentId) throw new BatchError(he.batch.needLocation);
+
+  // אימות מוקדם, פעם אחת לפני הלולאה: הבניין והדירה משותפים לכל השורות,
+  // וכשל כאן עדיף על יצירת חלק מהפניות ואז נפילה על מזהה חוצה-אתרים.
+  await assertLocationInSite({
+    siteId: input.siteId,
+    buildingId: input.buildingId,
+    apartmentId: input.apartmentId,
+  });
 
   const tagName = normalizeName(input.tagName);
   if (!tagName) throw new BatchError(he.batch.needTag);

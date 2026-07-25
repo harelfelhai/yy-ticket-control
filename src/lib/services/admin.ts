@@ -219,6 +219,13 @@ export async function mergeProfessionals(actor: SessionUser, keepId: string, dro
       data: { authorProfessionalId: keepId },
     });
 
+    // בעלות על קבצים שהקבלן העלה מוסבת ל-keep, אחרת confirmUpload עתידי
+    // עליהם היה נכשל אחרי שהזהות של drop נמחקה.
+    await tx.mediaFile.updateMany({
+      where: { uploaderProfessionalId: dropId },
+      data: { uploaderProfessionalId: keepId },
+    });
+
     // גישות תגית: מה שאין ל-keep מועבר אליו; השאר יימחק עם הרשומה.
     const keepTagIds = new Set(
       (await tx.tagAccess.findMany({ where: { professionalId: keepId }, select: { tagId: true } })).map(

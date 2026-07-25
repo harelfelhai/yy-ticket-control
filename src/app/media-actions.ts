@@ -2,9 +2,24 @@
 
 import { z } from "zod";
 import { type ActionResult, guard } from "@/lib/action-result";
+import { he } from "@/lib/he";
 import type { RegisteredMediaView } from "@/lib/media-view";
-import { confirmUpload, registerMedia } from "@/lib/services/media";
+import type { Viewer } from "@/lib/permissions";
+import { MediaError, confirmUpload, registerMedia } from "@/lib/services/media";
+import { allowPortalAction } from "@/lib/services/portal";
 import { resolveViewer } from "@/lib/services/viewer";
+
+/**
+ * הגבלת קצב לפעולות כתיבה של קבלן, גם על מדיה.
+ *
+ * בלי זה קבלן משויך יכול לרשום קבצים ולקבל כתובות העלאה ללא הגבלה, ולעקוף
+ * את מכסת 30/דקה שחלה על שאר פעולות הפורטל. משתמש פנימי אינו מוגבל.
+ */
+async function throttlePortal(viewer: Viewer): Promise<void> {
+  if (viewer.kind === "professional" && !(await allowPortalAction(viewer.id))) {
+    throw new MediaError(he.portal.tooManyActions);
+  }
+}
 
 /**
  * הפעולות שמאחורי צירוף קובץ, משותפות למסך הפנייה ולפורטל הקבלן.
@@ -33,6 +48,7 @@ export async function registerMediaAction(
   return guard(async () => {
     const parsed = registerSchema.parse(input);
     const viewer = await resolveViewer(parsed.token);
+    await throttlePortal(viewer);
 
     return registerMedia(viewer, {
       ticketId: parsed.ticketId,
@@ -59,7 +75,8 @@ export async function confirmUploadAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     const parsed = confirmSchema.parse(input);
-    await resolveViewer(parsed.token);
-    await confirmUpload(parsed.mediaId);
+    const viewer = await resolveViewer(parsed.token);
+    await throttlePortal(viewer);
+    await confirmUpload(viewer, parsed.mediaId);
   });
 }

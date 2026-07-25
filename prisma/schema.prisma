@@ -104,6 +104,7 @@ model User {
   assignments     Assignment[] // כנמען פנימי, כולל תזכורן לעצמו
   messages        Message[]
   createdTags     Tag[]
+  uploadedMedia   MediaFile[] // קבצים שהמשתמש רשם
 
   @@index([siteId, active])
 }
@@ -174,6 +175,7 @@ model Professional {
   assignments Assignment[]
   messages    Message[]
   tagAccess   TagAccess[]
+  uploadedMedia MediaFile[] // קבצים שהקבלן רשם דרך הפורטל
 }
 
 /// "קישור קסם" — טוקן נושא (bearer) לאיש מקצוע, לא לפנייה בודדת.
@@ -340,6 +342,14 @@ model MediaFile {
   /// לאחסון, ורק אז הלקוח מדווח שהיא הצליחה. רשומה שנשארת false היא
   /// העלאה שנקטעה, ואין להציג אותה בשרשור.
   uploaded Boolean @default(false)
+
+  /// מי רשם את הקובץ — משתמש פנימי או נמען חיצוני. נשמר כדי שאישור ההעלאה
+  /// (confirmUpload) יוכל לוודא שהמאשר הוא המעלה, ולא כל מי שמנחש מזהה.
+  /// SetNull: מחיקת המשתמש/הקבלן אינה מוחקת את הקובץ מההיסטוריה.
+  uploaderUserId         String?
+  uploaderUser           User?         @relation(fields: [uploaderUserId], references: [id], onDelete: SetNull)
+  uploaderProfessionalId String?
+  uploaderProfessional   Professional? @relation(fields: [uploaderProfessionalId], references: [id], onDelete: SetNull)
 
   /// תמלול אודיו בעברית
   transcription String?

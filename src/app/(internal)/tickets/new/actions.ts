@@ -11,6 +11,7 @@ import { ROOMS } from "@/lib/rooms";
 import { toViewer } from "@/lib/session";
 import {
   DirectoryError,
+  assertLocationInSite,
   findOrCreateApartment,
   findOrCreateBuilding,
   findOrCreateDomain,
@@ -61,6 +62,9 @@ export async function createApartmentAction(
 ): Promise<ActionResult<SelectOption>> {
   return guard(async () => {
     await requireSiteAccess(siteId);
+    // הבניין מגיע מהלקוח: לוודא שהוא באתר שההרשאה ניתנה עליו, אחרת מנהל
+    // אתר יכול ליצור דירות תחת בניין של אתר אחר.
+    await assertLocationInSite({ siteId, buildingId });
     const apartment = await findOrCreateApartment(buildingId, number);
     return { id: apartment.id, label: apartment.number };
   });

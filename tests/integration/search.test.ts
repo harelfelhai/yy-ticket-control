@@ -87,7 +87,7 @@ async function attachProcessedMedia(
     mimeType,
     sizeBytes: 100,
   });
-  await confirmUpload(mediaId);
+  await confirmUpload(adminViewer, mediaId);
   await addMessage(adminViewer, ticketId, "", [mediaId]);
   await db.mediaFile.update({
     where: { id: mediaId },
@@ -176,6 +176,13 @@ describe("הרשאות", () => {
 
     expect((await searchTickets(manager, { query: "נזילה" })).cards).toHaveLength(1);
     expect((await searchTickets(admin, { query: "נזילה" })).cards).toHaveLength(2);
+  });
+
+  it("מנהל עבודה ללא אתר — fail-closed: תוצאה ריקה ולא כל האתרים", async () => {
+    await makeTicket("נזילה באתר א");
+    const noSite: SessionUser = { id: "x", name: "תקול", role: "SITE_MANAGER", siteId: null };
+    const result = await searchTickets(noSite, { query: "נזילה" });
+    expect(result.cards).toEqual([]);
   });
 });
 

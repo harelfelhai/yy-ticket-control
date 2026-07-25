@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import type { BoardCard } from "@/lib/board-view";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/session";
@@ -41,6 +42,18 @@ export interface BoardData {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/** לוח ריק לחלוטין — לתרחיש ה-fail-closed של מנהל עבודה ללא אתר */
+function emptyBoard(): BoardData {
+  return {
+    sections: { ACTION_REQUIRED: [], WITH_RECIPIENTS: [], ARCHIVE: [] },
+    sites: [],
+    buildings: [],
+    domains: [],
+    recipients: [],
+    tags: [],
+  };
+}
+
 function firstLine(text: string): string {
   const line = text.split("\n")[0]?.trim() ?? "";
   return line.length > 120 ? `${line.slice(0, 119)}…` : line;
@@ -51,35 +64,40 @@ export async function getBoard(
   filters: BoardFilters,
   now: Date,
 ): Promise<BoardData> {
-  // מנהל עבודה מוגבל לאתר שלו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז).
-  const siteScope = user.role === "SITE_MANAGER" && user.siteId ? { siteId: user.siteId } : {};
+  // ‏fail-closed: מנהל עבודה חייב אתר (נאכף ביצירה). אם איכשהו הגיע לכאן
+  // בלי אתר — מצב לא-תקין — עדיף מסך ריק על חשיפת כל האתרים בשקט.
+  if (user.role === "SITE_MANAGER" && !user.siteId) return emptyBoard();
 
-  // סינון אתר מפורש חל רק על מי שאינו מקובע לאתר — בעלים ומנהל מערכת.
-  // למנהל עבודה הוא חסר משמעות, וכך גם אינו יכול לעקוף את ה-siteScope שלו.
-  const siteFilter = !user.siteId && filters.siteId ? { siteId: filters.siteId } : {};
+  // כל תנאי הוא איבר עצמאי ב-AND, ולא spread לתוך אובייקט אחד: כששניים
+  // מהם נשענים על `assignments` (למשל "קיבלתי" יחד עם סינון נמען), spread
+  // היה גורם למפתח השני לדרוס את הראשון ולאבד תנאי בשקט.
+  const conditions: Prisma.TicketWhereInput[] = [];
+
+  // מנהל עבודה מוגבל לאתר שלו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז).
+  if (user.role === "SITE_MANAGER" && user.siteId) conditions.push({ siteId: user.siteId });
+  // סינון אתר מפורש חל רק על מי שאינו מקובע לאתר — כך אינו עוקף את המידור.
+  if (!user.siteId && filters.siteId) conditions.push({ siteId: filters.siteId });
+
+  if (filters.direction === "opened") conditions.push({ createdById: user.id });
+  if (filters.direction === "received") {
+    conditions.push({ assignments: { some: { userId: user.id, status: { not: "REMOVED" } } } });
+  }
+  if (filters.buildingId) conditions.push({ buildingId: filters.buildingId });
+  if (filters.domainId) conditions.push({ domainId: filters.domainId });
+  if (filters.recipientId) {
+    conditions.push({
+      assignments: {
+        some: {
+          status: { not: "REMOVED" },
+          OR: [{ professionalId: filters.recipientId }, { userId: filters.recipientId }],
+        },
+      },
+    });
+  }
+  if (filters.tagId) conditions.push({ tags: { some: { tagId: filters.tagId } } });
 
   const tickets = await db.ticket.findMany({
-    where: {
-      ...siteScope,
-      ...siteFilter,
-      ...(filters.direction === "opened" ? { createdById: user.id } : {}),
-      ...(filters.direction === "received"
-        ? { assignments: { some: { userId: user.id, status: { not: "REMOVED" } } } }
-        : {}),
-      ...(filters.buildingId ? { buildingId: filters.buildingId } : {}),
-      ...(filters.domainId ? { domainId: filters.domainId } : {}),
-      ...(filters.recipientId
-        ? {
-            assignments: {
-              some: {
-                status: { not: "REMOVED" },
-                OR: [{ professionalId: filters.recipientId }, { userId: filters.recipientId }],
-              },
-            },
-          }
-        : {}),
-      ...(filters.tagId ? { tags: { some: { tagId: filters.tagId } } } : {}),
-    },
+    where: { AND: conditions },
     orderBy: { lastActivityAt: "desc" },
     include: {
       building: { select: { name: true } },

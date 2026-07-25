@@ -27,9 +27,13 @@ export interface SearchFilters {
   /** הטקסט החופשי. ריק = כל הפניות שעונות למסננים */
   query?: string;
   direction?: "opened" | "received";
+  /** סינון אתר — רלוונטי רק למי שרואה יותר מאחד (בעלים, מנהל מערכת) */
+  siteId?: string;
   buildingId?: string;
+  apartmentId?: string;
   domainId?: string;
   recipientId?: string;
+  tagId?: string;
   status?: DerivedTicketStatus;
   /** טווח תאריכי פתיחה, כולל */
   from?: Date;
@@ -60,11 +64,14 @@ export async function searchTickets(
   filters: SearchFilters,
   now: Date = new Date(),
 ): Promise<SearchResult> {
+  // fail-closed: מנהל עבודה חייב אתר. בלי אתר — תוצאה ריקה, לא כל האתרים.
+  if (user.role === "SITE_MANAGER" && !user.siteId) return { cards: [], truncated: false };
+
   const query = normalizeName(filters.query ?? "");
 
   const tickets = await db.ticket.findMany({
     where: {
-      AND: [scope(user, filters), ...(query ? [textMatch(query)] : [])],
+      AND: [...scope(user, filters), ...(query ? [textMatch(query)] : [])],
     },
     orderBy: { lastActivityAt: "desc" },
     take: CANDIDATE_LIMIT,
@@ -120,38 +127,50 @@ export async function searchTickets(
   };
 }
 
-/** הרשאה ומסננים מבניים — כל מה שאפשר לבטא ב-SQL */
-function scope(user: SessionUser, filters: SearchFilters): Prisma.TicketWhereInput {
-  return {
-    // מנהל עבודה מוגבל לאתר שלו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז).
-    ...(user.role === "SITE_MANAGER" && user.siteId ? { siteId: user.siteId } : {}),
-    ...(filters.direction === "opened" ? { createdById: user.id } : {}),
-    ...(filters.direction === "received"
-      ? { assignments: { some: { userId: user.id, status: { not: "REMOVED" } } } }
-      : {}),
-    ...(filters.buildingId ? { buildingId: filters.buildingId } : {}),
-    ...(filters.domainId ? { domainId: filters.domainId } : {}),
-    ...(filters.recipientId
-      ? {
-          assignments: {
-            some: {
-              status: { not: "REMOVED" },
-              OR: [{ professionalId: filters.recipientId }, { userId: filters.recipientId }],
-            },
-          },
-        }
-      : {}),
-    ...(filters.from || filters.to
-      ? {
-          createdAt: {
-            ...(filters.from ? { gte: filters.from } : {}),
-            // עד סוף היום שנבחר: משתמש שבוחר "עד 22.7" מתכוון לכלול את
-            // כל אותו יום, ולא רק את חצות שלו.
-            ...(filters.to ? { lte: endOfDay(filters.to) } : {}),
-          },
-        }
-      : {}),
-  };
+/**
+ * הרשאה ומסננים מבניים — כל מה שאפשר לבטא ב-SQL, כמערך תנאים ל-AND.
+ *
+ * מערך ולא spread לתוך אובייקט אחד: כששני תנאים נשענים על `assignments`
+ * (למשל "קיבלתי" יחד עם סינון נמען), spread היה גורם לשני לדרוס את הראשון
+ * ולאבד תנאי בשקט — בדיוק כמו בלוח.
+ */
+function scope(user: SessionUser, filters: SearchFilters): Prisma.TicketWhereInput[] {
+  const conditions: Prisma.TicketWhereInput[] = [];
+
+  // מנהל עבודה מוגבל לאתר שלו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז).
+  if (user.role === "SITE_MANAGER" && user.siteId) conditions.push({ siteId: user.siteId });
+  // סינון אתר מפורש חל רק על מי שאינו מקובע לאתר.
+  if (!user.siteId && filters.siteId) conditions.push({ siteId: filters.siteId });
+
+  if (filters.direction === "opened") conditions.push({ createdById: user.id });
+  if (filters.direction === "received") {
+    conditions.push({ assignments: { some: { userId: user.id, status: { not: "REMOVED" } } } });
+  }
+  if (filters.buildingId) conditions.push({ buildingId: filters.buildingId });
+  if (filters.apartmentId) conditions.push({ apartmentId: filters.apartmentId });
+  if (filters.domainId) conditions.push({ domainId: filters.domainId });
+  if (filters.tagId) conditions.push({ tags: { some: { tagId: filters.tagId } } });
+  if (filters.recipientId) {
+    conditions.push({
+      assignments: {
+        some: {
+          status: { not: "REMOVED" },
+          OR: [{ professionalId: filters.recipientId }, { userId: filters.recipientId }],
+        },
+      },
+    });
+  }
+  if (filters.from || filters.to) {
+    conditions.push({
+      createdAt: {
+        ...(filters.from ? { gte: filters.from } : {}),
+        // עד סוף היום שנבחר: "עד 22.7" מתכוון לכלול את כל אותו יום.
+        ...(filters.to ? { lte: endOfDay(filters.to) } : {}),
+      },
+    });
+  }
+
+  return conditions;
 }
 
 /**

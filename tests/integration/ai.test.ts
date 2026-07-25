@@ -95,7 +95,7 @@ async function uploadFile(ticketId: string, mimeType: string, body = "בתים")
 
   const media = await db.mediaFile.findUniqueOrThrow({ where: { id: mediaId } });
   await writeLocalObject(media.storageKey, Buffer.from(body, "utf8"));
-  await confirmUpload(mediaId);
+  await confirmUpload(viewer, mediaId);
 
   return mediaId;
 }
@@ -130,7 +130,7 @@ describe("אישור העלאה מכניס את העיבוד הנכון לתור
     // לקוח שמדווח פעמיים אינו נדיר, ותמלול כפול עולה כסף אמיתי.
     const ticket = await makeTicket();
     const mediaId = await uploadFile(ticket.id, "audio/webm");
-    await confirmUpload(mediaId);
+    await confirmUpload(viewer, mediaId);
 
     expect(await db.job.count({ where: { type: JOB_TYPES.transcribe } })).toBe(1);
   });

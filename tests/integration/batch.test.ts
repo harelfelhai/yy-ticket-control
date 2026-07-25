@@ -70,6 +70,25 @@ describe("createTicketBatch", () => {
     expect(tickets.every((t) => t.buildingId === buildingId)).toBe(true);
   });
 
+  it("דוחה בניין ששייך לאתר אחר, לפני שנוצרת ולו פנייה אחת", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
+    const foreignBuilding = await db.building.create({
+      data: { siteId: otherSite.id, name: "בניין זר" },
+    });
+
+    await expect(
+      createTicketBatch(actor, {
+        siteId,
+        buildingId: foreignBuilding.id,
+        apartmentId,
+        tagName: "בדק בית",
+        rows: [row()],
+        dispatch: true,
+      }),
+    ).rejects.toThrow(he.directory.locationMismatch);
+    expect(await db.ticket.count()).toBe(0);
+  });
+
   it("שורה בלי נמען נשמרת כטיוטה — פנייה לא הולכת לאיבוד", async () => {
     const result = await createTicketBatch(
       actor,

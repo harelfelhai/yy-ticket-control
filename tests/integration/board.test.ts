@@ -232,6 +232,33 @@ describe("getBoard — מסננים", () => {
     // ואין לו בורר אתרים — הרשימה ריקה.
     expect(board.sites).toEqual([]);
   });
+
+  it("'קיבלתי' ומסנן נמען מצטברים ולא דורסים זה את זה", async () => {
+    // הפנייה שויכה לחשמלאי, והמנהל הוא הפותח — לא נמען בה.
+    await makeTicket(manager);
+    // 'קיבלתי' = פניות שהמנהל נמען בהן. הוא אינו נמען, ולכן ריק — גם אם
+    // מסנן הנמען לבדו (חשמלאי) היה מתאים. לפני התיקון, spread היה גורם
+    // למסנן הנמען לדרוס את 'קיבלתי' ולהחזיר את הפנייה בטעות.
+    const board = await getBoard(
+      asUser(manager),
+      { direction: "received", recipientId: electrician },
+      NOW,
+    );
+    const all = [...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS];
+    expect(all).toHaveLength(0);
+  });
+
+  it("מנהל עבודה ללא אתר — fail-closed: מסך ריק ולא כל האתרים", async () => {
+    await makeTicket(manager); // קיימת פנייה באתר א
+    // מצב לא-תקין (נחסם ביצירה) — אבל אם יגיע לכאן, עדיף ריק על חשיפה.
+    const noSite: SessionUser = { id: "x", name: "תקול", role: "SITE_MANAGER", siteId: null };
+    const board = await getBoard(noSite, {}, NOW);
+
+    expect(board.sections.ACTION_REQUIRED).toEqual([]);
+    expect(board.sections.WITH_RECIPIENTS).toEqual([]);
+    expect(board.sections.ARCHIVE).toEqual([]);
+    expect(board.sites).toEqual([]);
+  });
 });
 
 describe("getBoard — תוכן הכרטיס", () => {

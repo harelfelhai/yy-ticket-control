@@ -230,6 +230,24 @@ describe("mergeProfessionals — איחוד כפילויות", () => {
     const p = await db.professional.create({ data: { name: "יוסי", phone: "0501111111" } });
     await expect(mergeProfessionals(admin, p.id, p.id)).rejects.toThrow(he.admin.mergeSame);
   });
+
+  it("מעביר בעלות על קבצים שהכפילות העלתה — אחרת אישור עתידי היה נכשל", async () => {
+    const keep = await db.professional.create({ data: { name: "יוסי", phone: "0501111111" } });
+    const drop = await db.professional.create({ data: { name: "יוסי כ.", phone: "0502222222" } });
+    const media = await db.mediaFile.create({
+      data: {
+        storageKey: "media/2026/07/x.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 10,
+        uploaderProfessionalId: drop.id,
+      },
+    });
+
+    await mergeProfessionals(admin, keep.id, drop.id);
+
+    const moved = await db.mediaFile.findUniqueOrThrow({ where: { id: media.id } });
+    expect(moved.uploaderProfessionalId).toBe(keep.id);
+  });
 });
 
 describe("renameDomain", () => {
