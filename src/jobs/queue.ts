@@ -73,6 +73,31 @@ export async function completeJob(jobId: string): Promise<void> {
 }
 
 /**
+ * משחזר עבודות שנתקעו ב-RUNNING — נקרא פעם אחת בעליית השרת.
+ *
+ * עבודה עוברת ל-RUNNING בזמן שהיא רצה. אם התהליך נקטע באמצע (redeploy,
+ * קריסה), היא נשארת RUNNING לנצח: לעולם לא תיתפס שוב ולעולם לא תסומן
+ * FAILED — כלומר נופלת בשקט מבעד להבטחת "כשל נשאר גלוי". תחת הנחת ה-instance
+ * היחיד, כל עבודה ב-RUNNING בזמן עליית השרת היא בהכרח יתומה (אין עובד אחר
+ * שמריץ אותה כרגע).
+ *
+ * מי שעוד נותרו לו ניסיונות חוזר ל-PENDING (עם runAt בעבר → נלקח מיד); מי
+ * שמיצה אותם מסומן FAILED וגלוי, כמו כל כשל סופי.
+ */
+export async function reclaimOrphanedJobs(): Promise<{ requeued: number; failed: number }> {
+  const requeued = await db.job.updateMany({
+    where: { status: "RUNNING", attempts: { lt: MAX_ATTEMPTS } },
+    data: { status: "PENDING" },
+  });
+  const failed = await db.job.updateMany({
+    where: { status: "RUNNING", attempts: { gte: MAX_ATTEMPTS } },
+    data: { status: "FAILED", lastError: "הריצה נקטעה באמצע (השרת הופסק)" },
+  });
+
+  return { requeued: requeued.count, failed: failed.count };
+}
+
+/**
  * מסמן כישלון: מחזיר לתור עם השהיה, או נועל כ-FAILED אחרי המכסה.
  *
  * עבודה שנכשלה סופית **נשארת בטבלה** ואינה נמחקת. היא הראיה היחידה לכך

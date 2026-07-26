@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { JOB_TYPES } from "@/jobs/types";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import type { Viewer } from "@/lib/permissions";
@@ -10,6 +11,7 @@ import {
   deleteTicket,
   removeAssignment,
   reopenTicket,
+  resendAssignmentNotification,
   setAssignmentStatus,
   setHandler,
   updateResidentName,
@@ -615,5 +617,49 @@ describe("updateResidentName", () => {
     await expect(
       updateResidentName({ kind: "professional", id: electrician }, ticket.id, "דייר"),
     ).rejects.toThrow(he.common.notAllowed);
+  });
+});
+
+describe("resendAssignmentNotification — שלח שוב במייל", () => {
+  it("מכניס ג'וב שליחה חדש לנמען המבוקש", async () => {
+    const ticket = await makeTicket();
+    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
+    // ג'וב השיוך המקורי כבר קיים; מנקים כדי לבודד את השליחה החוזרת.
+    await db.job.deleteMany({});
+
+    await resendAssignmentNotification(asUser(opener), ticket.id, assignment.id);
+
+    const jobs = await db.job.findMany({ where: { type: JOB_TYPES.notify } });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.payload).toMatchObject({ event: "ASSIGNED", assignmentId: assignment.id });
+  });
+
+  it("נדחה לבעלים שאינו הפותח", async () => {
+    const ticket = await makeTicket();
+    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
+    const owner: Viewer = { kind: "user", id: "owner-x", role: "OWNER", siteId: null };
+
+    await expect(
+      resendAssignmentNotification(owner, ticket.id, assignment.id),
+    ).rejects.toThrow(he.common.notAllowed);
+  });
+
+  it("חסום בפנייה סגורה", async () => {
+    const ticket = await makeTicket();
+    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
+    await closeTicket(asUser(opener), ticket.id);
+
+    await expect(
+      resendAssignmentNotification(asUser(opener), ticket.id, assignment.id),
+    ).rejects.toThrow(he.notices.closedTicketBlocked);
+  });
+
+  it("חסום בטיוטה — לא נשלחה לאיש", async () => {
+    const { ticket } = await createTicket(opener, { siteId, description: "טיוטה" });
+    expect(ticket.isDraft).toBe(true);
+
+    await expect(
+      resendAssignmentNotification(asUser(opener), ticket.id, "any-id"),
+    ).rejects.toThrow(he.ticket.draftNoRecipientEdit);
   });
 });

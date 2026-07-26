@@ -697,6 +697,36 @@ export async function removeAssignment(viewer: Viewer, assignmentId: string) {
 }
 
 /**
+ * שולח שוב את ההתראה לנמען שנבחר (אפיון מסך 2, פעולה "שלח שוב את הקישור").
+ *
+ * מכניס לתור ג'וב שליחה זהה לזה של השיוך הראשוני — `sendNotification`
+ * מרכיב את אותה הודעה עם הקישור היציב ומעדכן `notifiedAt` בהצלחה. הקישור
+ * עצמו אינו מתחלף (זו "צור קישור חדש", פעולה נפרדת); כאן רק יוצא מייל חוזר.
+ *
+ * חסום בפנייה סגורה (אין למי לצאת לעבודה) ובטיוטה (לא נשלחה לאיש כלל).
+ */
+export async function resendAssignmentNotification(
+  viewer: Viewer,
+  ticketId: string,
+  assignmentId: string,
+) {
+  const ticket = await loadForAction(ticketId);
+  denyUnless(canEditAssignments(viewer, ticket));
+  if (ticket.isDraft) throw new TicketError(he.ticket.draftNoRecipientEdit);
+  if (ticket.closedAt) throw new TicketError(he.notices.closedTicketBlocked);
+
+  const assignment = ticket.assignments.find(
+    (a) => a.id === assignmentId && a.status !== "REMOVED",
+  );
+  if (!assignment) throw new TicketError(he.ticket.assignmentNotFound);
+
+  await enqueue(db, JOB_TYPES.notify, {
+    event: "ASSIGNED",
+    assignmentId,
+  } as unknown as Prisma.InputJsonValue);
+}
+
+/**
  * מוחק פנייה לצמיתות — למנהל המערכת בלבד, לכפילות ולרשומה שגויה (אפיון §5.ז).
  *
  * זו הדלת האחורית היחידה של הכלל "פנייה לא נעלמת": אין מחיקה אוטומטית

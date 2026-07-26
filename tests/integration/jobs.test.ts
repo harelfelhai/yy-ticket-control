@@ -1,7 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { MAX_ATTEMPTS, claimNextJob, completeJob, enqueue, failJob } from "@/jobs/queue";
+import {
+  MAX_ATTEMPTS,
+  claimNextJob,
+  completeJob,
+  enqueue,
+  failJob,
+  reclaimOrphanedJobs,
+} from "@/jobs/queue";
 import { JOB_TYPES } from "@/jobs/types";
-import { drainJobs, processNextJob } from "@/jobs/worker";
+import { drainJobs, ensureDailyRescheduled, processNextJob } from "@/jobs/worker";
 import { db } from "@/lib/db";
 import type { EmailMessage, EmailTransport } from "@/lib/notifier/types";
 import { resetDb } from "../helpers/reset-db";
@@ -174,5 +181,56 @@ describe("drainJobs", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]?.status).toBe("failed");
+  });
+});
+
+describe("reclaimOrphanedJobs — עבודות יתומות שנתקעו ב-RUNNING", () => {
+  it("מחזיר ל-PENDING עבודה שנותרו לה ניסיונות — תילקח שוב מיד", async () => {
+    const job = await db.job.create({
+      data: { type: JOB_TYPES.notify, payload: {}, status: "RUNNING", attempts: 1 },
+    });
+
+    expect(await reclaimOrphanedJobs()).toEqual({ requeued: 1, failed: 0 });
+    expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("PENDING");
+  });
+
+  it("מסמן FAILED עבודה שמיצתה ניסיונות — נשארת גלויה ולא נלקחת שוב", async () => {
+    const job = await db.job.create({
+      data: { type: JOB_TYPES.notify, payload: {}, status: "RUNNING", attempts: MAX_ATTEMPTS },
+    });
+
+    expect(await reclaimOrphanedJobs()).toEqual({ requeued: 0, failed: 1 });
+    const stored = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(stored.status).toBe("FAILED");
+    expect(stored.lastError).toContain("נקטעה");
+  });
+
+  it("אינו נוגע בעבודות PENDING או DONE", async () => {
+    await db.job.create({ data: { type: JOB_TYPES.notify, payload: {}, status: "PENDING" } });
+    await db.job.create({ data: { type: JOB_TYPES.notify, payload: {}, status: "DONE" } });
+
+    expect(await reclaimOrphanedJobs()).toEqual({ requeued: 0, failed: 0 });
+  });
+});
+
+describe("ensureDailyRescheduled — שרשרת יומית שורדת כשל סופי", () => {
+  it("יוצר ג'וב יומי למחר כשאין ממתין (אחרי כשל סופי)", async () => {
+    await ensureDailyRescheduled(JOB_TYPES.escalate, new Date("2026-03-15T12:00:00Z"));
+
+    expect(
+      await db.job.count({ where: { type: JOB_TYPES.escalate, status: "PENDING" } }),
+    ).toBe(1);
+  });
+
+  it("אינו יוצר כפיל כשכבר קיים ממתין (חלון ה-retry)", async () => {
+    await db.job.create({ data: { type: JOB_TYPES.backup, payload: {}, status: "PENDING" } });
+    await ensureDailyRescheduled(JOB_TYPES.backup, new Date());
+
+    expect(await db.job.count({ where: { type: JOB_TYPES.backup } })).toBe(1);
+  });
+
+  it("no-op לסוג עבודה שאינו יומי", async () => {
+    await ensureDailyRescheduled(JOB_TYPES.notify, new Date());
+    expect(await db.job.count()).toBe(0);
   });
 });

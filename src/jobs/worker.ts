@@ -24,7 +24,7 @@ import {
   runDailyEscalation,
 } from "./handlers/escalation";
 import { cleanupRateLimits } from "@/lib/rate-limit";
-import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob } from "./queue";
+import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob, reclaimOrphanedJobs } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
 
 /**
@@ -86,12 +86,31 @@ export async function processNextJob(
     return { job, status: "done", outcome };
   } catch (error) {
     await failJob(job.id, job.attempts, error, now);
+    // ג'וב יומי מתזמן את המחר רק כשהוא **מצליח** (ב-runJob). אם נכשל סופית,
+    // בלי זה השרשרת היומית נעצרת עד ל-restart. הקריאה אידמפוטנטית: בחלון
+    // ה-retry עדיין קיים PENDING ולא נוצר כפול; אחרי FAILED סופי נוצר המחר.
+    // עטוף כדי שכשל בתזמון לא יסתיר את תוצאת הכשל המקורית.
+    try {
+      await ensureDailyRescheduled(job.type, now);
+    } catch (rescheduleError) {
+      console.error("[jobs] תזמון-מחדש של ג'וב יומי לאחר כשל נכשל", rescheduleError);
+    }
     return {
       job,
       status: "failed",
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * מוודא שג'וב יומי (הסלמה/גיבוי) מתוזמן למחר, בלי קשר להצלחת הריצה הנוכחית.
+ * לכל סוג אחר — no-op. מיוצא לבדיקה: זהו החיווט שמונע שרשרת יומית שנעצרת
+ * אחרי כשל סופי.
+ */
+export async function ensureDailyRescheduled(jobType: string, now: Date): Promise<void> {
+  if (jobType === JOB_TYPES.escalate) await ensureDailyEscalationScheduled(now);
+  else if (jobType === JOB_TYPES.backup) await ensureDailyBackupScheduled(now);
 }
 
 /**
@@ -195,13 +214,18 @@ export function startWorker(): void {
   if (running) return;
   running = true;
 
-  // מוודא שהג'ובים היומיים מתוזמנים כבר בעלייה, בלי לחכות לסבב הראשון. אם
-  // התזמון אבד (השרת היה למטה בשעת היעד), הג'וב הממתין מתוזמן כעת ונלקח מיד.
-  void ensureDailyEscalationScheduled(new Date()).catch((error) => {
-    console.error("[jobs] תזמון ההסלמה היומית נכשל", error);
-  });
-  void ensureDailyBackupScheduled(new Date()).catch((error) => {
-    console.error("[jobs] תזמון הגיבוי היומי נכשל", error);
+  // אתחול התור בעלייה, **בסדר הזה**:
+  // 1. שחזור עבודות יתומות שנתקעו ב-RUNNING מריצה קודמת שנקטעה.
+  // 2. תזמון הג'ובים היומיים — אחרי השחזור, כי ג'וב יומי ששוחזר ל-PENDING
+  //    כבר קיים, וה-ensure לא ייצור לו כפיל; אם נכשל סופית, ה-ensure יוצר
+  //    את המחר. סדר הפוך היה עלול לייצר שני ג'ובים יומיים.
+  void (async () => {
+    await reclaimOrphanedJobs();
+    const now = new Date();
+    await ensureDailyEscalationScheduled(now);
+    await ensureDailyBackupScheduled(now);
+  })().catch((error) => {
+    console.error("[jobs] אתחול התור בעלייה נכשל", error);
   });
 
   const tick = async () => {

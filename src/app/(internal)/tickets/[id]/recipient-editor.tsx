@@ -10,6 +10,7 @@ import {
   addRecipientsAction,
   getLinkAction,
   removeRecipientAction,
+  resendEmailAction,
   rotateLinkAction,
 } from "./actions";
 
@@ -61,6 +62,7 @@ export function RecipientEditor({
   canEdit,
 }: RecipientEditorProps) {
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [link, setLink] = useState<{ forId: string; url: string; rotated: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
@@ -111,6 +113,16 @@ export function RecipientEditor({
     });
   }
 
+  function resend(assignmentId: string, name: string) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      const result = await resendEmailAction(ticketId, assignmentId);
+      if (result.ok) setNotice(he.ticket.linkResent(name));
+      else setError(result.error);
+    });
+  }
+
   return (
     <section className="rounded-2xl border border-border bg-surface p-4">
       <h2 className="mb-2 text-sm font-semibold">{he.ticket.recipients}</h2>
@@ -142,7 +154,24 @@ export function RecipientEditor({
                 </span>
               </div>
 
-              <p className="text-xs text-muted">{assignment.deliveryNote}</p>
+              <p className="text-xs text-muted">
+                {assignment.deliveryNote}
+                {/* מתי השתנה הסטטוס האישי לאחרונה — לצד החיווי */}
+                <span className="mr-2 opacity-70">· {assignment.statusChangedAt}</span>
+              </p>
+
+              {/* "שלח שוב במייל" — לכל נמען עם כתובת מייל (חיצוני או פנימי),
+                  בשונה מכפתורי הקישור שרלוונטיים רק לקבלן חיצוני. */}
+              {canEdit && assignment.canResendEmail ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => resend(assignment.id, assignment.name)}
+                  className="min-h-11 self-start rounded-lg border border-border px-3 text-sm font-medium disabled:opacity-60"
+                >
+                  {he.ticket.resendEmail}
+                </button>
+              ) : null}
 
               {canEdit && assignment.professionalId ? (
                 <div className="flex flex-wrap gap-2">
@@ -226,6 +255,12 @@ export function RecipientEditor({
             disabled={busy}
           />
         </div>
+      ) : null}
+
+      {notice ? (
+        <p role="status" className="mt-2 text-sm font-medium text-success">
+          {notice}
+        </p>
       ) : null}
 
       {error ? (

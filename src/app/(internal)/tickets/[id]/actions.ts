@@ -21,6 +21,7 @@ import {
   deleteTicket,
   removeAssignment,
   reopenTicket,
+  resendAssignmentNotification,
   setHandler,
   submitDraft,
   updateResidentName,
@@ -257,5 +258,23 @@ export async function rotateLinkAction(
   return guard(async () => {
     await requireLinkPermission(ticketId, professionalId);
     return rotatePortalLink(professionalId);
+  });
+}
+
+/**
+ * שולח שוב את ההתראה במייל לנמען שנבחר (אפיון מסך 2, פעולה 4).
+ * בשונה מ-getLink/rotateLink, כאן באמת יוצא מייל חוזר — הקישור עצמו יציב.
+ */
+export async function resendEmailAction(
+  ticketId: string,
+  assignmentId: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await resendAssignmentNotification(
+      await viewer(),
+      ticketId,
+      z.string().min(1).parse(assignmentId),
+    );
+    refresh(ticketId);
   });
 }
