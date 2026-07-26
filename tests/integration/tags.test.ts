@@ -16,6 +16,7 @@ import {
   listTagOverviews,
   listTicketTags,
   removeTagFromTicket,
+  renameTag,
   revokeTagAccess,
 } from "@/lib/services/tags";
 import { ensureAccessToken } from "@/lib/services/portal";
@@ -346,5 +347,24 @@ describe("הפורטל של הקבלן — צ׳אט בלבד, לעולם לא פ
     const tag = await findOrCreateTag("בדק בית", adminId);
     await grantTagAccess(adminViewer, tag.id, [electricianId]);
     expect(await getPortalTagChat(plumberId, tag.id)).toBeNull();
+  });
+});
+
+describe("renameTag — שינוי שם, למנהל המערכת בלבד", () => {
+  it("מנהל מערכת משנה שם תגית", async () => {
+    const tag = await findOrCreateTag("שם ישן", adminId);
+    await renameTag(adminUser, tag.id, "  שם חדש  ");
+    expect((await db.tag.findUniqueOrThrow({ where: { id: tag.id } })).name).toBe("שם חדש");
+  });
+
+  it("דוחה שם שכבר קיים — איחוד תגיות אינו בתחולה", async () => {
+    const first = await findOrCreateTag("תגית א", adminId);
+    await findOrCreateTag("תגית ב", adminId);
+    await expect(renameTag(adminUser, first.id, "תגית ב")).rejects.toThrow(he.tag.tagExists);
+  });
+
+  it("מנהל עבודה אינו רשאי לשנות שם תגית", async () => {
+    const tag = await findOrCreateTag("תגית", adminId);
+    await expect(renameTag(managerAUser, tag.id, "אחר")).rejects.toThrow(he.common.notAllowed);
   });
 });

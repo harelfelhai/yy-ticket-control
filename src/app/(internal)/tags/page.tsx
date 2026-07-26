@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listTagOverviews } from "@/lib/services/tags";
+import { TagRename } from "./tag-rename";
 
 export const metadata = { title: `${he.tag.listTitle} — ${he.app.name}` };
 
@@ -15,6 +16,8 @@ export const metadata = { title: `${he.tag.listTitle} — ${he.app.name}` };
 export default async function TagsPage() {
   const user = await requireUser();
   const tags = await listTagOverviews(user);
+  // שינוי שם תגית שמור למנהל המערכת, כמו שאר ניהול הרשומות.
+  const canManage = user.role === "ADMIN";
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
@@ -25,21 +28,22 @@ export default async function TagsPage() {
       ) : (
         <ul className="flex flex-col gap-2">
           {tags.map((tag) => (
-            <li key={tag.id}>
-              <Link
-                href={`/tags/${tag.id}`}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4"
-              >
-                <div className="flex flex-col gap-0.5">
+            <li
+              key={tag.id}
+              className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <Link href={`/tags/${tag.id}`} className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="font-semibold">{tag.name}</span>
                   <span className="text-sm text-muted">
                     {he.tag.ticketCount(tag.openCount, tag.closedCount)}
                   </span>
-                </div>
+                </Link>
                 <span className="shrink-0 text-xs text-muted">
                   {he.tag.grantedCount(tag.grantedCount)}
                 </span>
-              </Link>
+              </div>
+              {canManage ? <TagRename id={tag.id} name={tag.name} /> : null}
             </li>
           ))}
         </ul>

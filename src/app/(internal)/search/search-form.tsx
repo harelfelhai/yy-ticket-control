@@ -10,9 +10,12 @@ interface Option {
 }
 
 interface SearchFormProps {
+  sites: Option[];
   buildings: Option[];
+  apartments: Option[];
   domains: Option[];
   recipients: Option[];
+  tags: Option[];
   statuses: Option[];
 }
 
@@ -24,7 +27,15 @@ interface SearchFormProps {
  * זה מייצר תור של בקשות שהמסך מתקשה להדביק. המסננים, לעומת זאת, פועלים
  * מיד — בחירה מרשימה היא פעולה מכוונת ובודדת.
  */
-export function SearchForm({ buildings, domains, recipients, statuses }: SearchFormProps) {
+export function SearchForm({
+  sites,
+  buildings,
+  apartments,
+  domains,
+  recipients,
+  tags,
+  statuses,
+}: SearchFormProps) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -84,15 +95,52 @@ export function SearchForm({ buildings, domains, recipients, statuses }: SearchF
           <option value="received">{he.board.received}</option>
         </select>
 
+        {/* בורר אתר — רק למי שרואה יותר מאחד (מנהל מערכת/בעלים) */}
+        {sites.length > 0 ? (
+          <select
+            key={`site-${syncKey}`}
+            aria-label={he.ticket.site}
+            defaultValue={params.get("site") ?? ""}
+            onChange={(event) => update({ site: event.target.value })}
+            className={selectClass}
+          >
+            <option value="">{he.board.allSites}</option>
+            {sites.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
+
         <select
           key={`building-${syncKey}`}
           aria-label={he.directory.building}
           defaultValue={params.get("building") ?? ""}
-          onChange={(event) => update({ building: event.target.value })}
+          // שינוי בניין מנקה את הדירה: דירה שייכת לבניין, ובחירה ישנה תחת
+          // בניין חדש היא סינון חסר-משמעות.
+          onChange={(event) => update({ building: event.target.value, apartment: "" })}
           className={selectClass}
         >
           <option value="">{he.board.allBuildings}</option>
           {buildings.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+
+        {/* דירה — פעילה רק אחרי בחירת בניין (הרשימה תלוית-בניין) */}
+        <select
+          key={`apartment-${syncKey}`}
+          aria-label={he.directory.apartment}
+          defaultValue={params.get("apartment") ?? ""}
+          disabled={apartments.length === 0}
+          onChange={(event) => update({ apartment: event.target.value })}
+          className={`${selectClass} disabled:opacity-50`}
+        >
+          <option value="">{he.search.allApartments}</option>
+          {apartments.map((option) => (
             <option key={option.id} value={option.id}>
               {option.name}
             </option>
@@ -123,6 +171,21 @@ export function SearchForm({ buildings, domains, recipients, statuses }: SearchF
         >
           <option value="">{he.board.allRecipients}</option>
           {recipients.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          key={`tag-${syncKey}`}
+          aria-label={he.tag.label}
+          defaultValue={params.get("tag") ?? ""}
+          onChange={(event) => update({ tag: event.target.value })}
+          className={selectClass}
+        >
+          <option value="">{he.board.allTags}</option>
+          {tags.map((option) => (
             <option key={option.id} value={option.id}>
               {option.name}
             </option>

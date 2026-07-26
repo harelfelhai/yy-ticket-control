@@ -86,6 +86,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
         ticketId={ticket.id}
         status={assignment.status}
         isClosed={ticket.closedAt !== null}
+        openerName={ticket.createdBy.name}
       />
     </div>
   );

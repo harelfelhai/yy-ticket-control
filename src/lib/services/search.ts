@@ -117,6 +117,7 @@ export async function searchTickets(
       reason: reasonText(view, assignmentViews, now),
       ageDays: Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY),
       reopened: ticket.reopenCount > 0,
+      escalated: ticket.escalated,
       createdAt: ticket.createdAt,
     });
   }

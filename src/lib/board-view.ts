@@ -25,6 +25,8 @@ export interface BoardCard {
   reason: string;
   ageDays: number;
   reopened: boolean;
+  /** סומן על ידי הג'וב היומי כללא-תנועה — לצלילה ממוקדת מתצוגת הבעלים */
+  escalated: boolean;
   createdAt: Date;
 }
 

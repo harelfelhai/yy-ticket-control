@@ -44,12 +44,14 @@ export default async function OverviewPage() {
                   label={he.overview.awaitingManager}
                   value={site.awaitingManager}
                   tone={site.awaitingManager > 0 ? "warning" : "muted"}
+                  focus="awaiting"
                 />
                 <Metric
                   siteId={site.siteId}
                   label={he.overview.stale}
                   value={site.stale}
                   tone={site.stale > 0 ? "danger" : "muted"}
+                  focus="stale"
                 />
               </div>
             </li>
@@ -60,24 +62,28 @@ export default async function OverviewPage() {
   );
 }
 
-/** מספר יחיד שצוללים ממנו ללוח המסונן לאתר */
+/** מספר יחיד שצוללים ממנו ללוח המסונן לאתר, ולמדד הספציפי (focus) */
 function Metric({
   siteId,
   label,
   value,
   tone = "muted",
+  focus,
 }: {
   siteId: string;
   label: string;
   value: number;
   tone?: "muted" | "warning" | "danger";
+  /** מדד ספציפי: הלוח יציג רק אותו. חסר = כל הפניות הפתוחות של האתר. */
+  focus?: "awaiting" | "stale";
 }) {
   const toneClass =
     tone === "danger" ? "text-danger" : tone === "warning" ? "text-warning" : "text-fg";
+  const href = `/board?site=${siteId}${focus ? `&focus=${focus}` : ""}`;
 
   return (
     <Link
-      href={`/board?site=${siteId}`}
+      href={href}
       className="flex flex-col items-center gap-1 rounded-xl bg-bg p-3 text-center"
     >
       <span className={`text-2xl font-bold ${toneClass}`}>{value}</span>

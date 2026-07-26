@@ -36,6 +36,8 @@ export default async function SearchPage(props: PageProps<"/search">) {
   const single = (value: string | string[] | undefined) =>
     typeof value === "string" && value ? value : undefined;
 
+  const selectedBuilding = single(params.building);
+
   const filters: SearchFilters = {
     query: single(params.q),
     direction:
@@ -44,9 +46,13 @@ export default async function SearchPage(props: PageProps<"/search">) {
         : single(params.direction) === "received"
           ? "received"
           : undefined,
-    buildingId: single(params.building),
+    // סינון אתר מכובד רק למי שאינו מקובע לאתר (מנהל מערכת/בעלים).
+    siteId: user.siteId ? undefined : single(params.site),
+    buildingId: selectedBuilding,
+    apartmentId: single(params.apartment),
     domainId: single(params.domain),
     recipientId: single(params.recipient),
+    tagId: single(params.tag),
     status: STATUS_OPTIONS.find((option) => option === single(params.status)),
     from: parseDate(single(params.from)),
     to: parseDate(single(params.to)),
@@ -54,15 +60,28 @@ export default async function SearchPage(props: PageProps<"/search">) {
 
   const hasCriteria = Object.values(filters).some(Boolean);
 
-  const [result, buildings, domains, recipients] = await Promise.all([
+  const [result, sites, buildings, apartments, domains, recipients, tags] = await Promise.all([
     hasCriteria ? searchTickets(user, filters) : null,
+    // בורר האתרים ריק למנהל עבודה (מקובע לאתרו), מלא למנהל מערכת/בעלים.
+    user.siteId
+      ? Promise.resolve([] as { id: string; name: string }[])
+      : db.site.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.building.findMany({
       where: user.siteId ? { siteId: user.siteId } : {},
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    // דירות רק לבניין שנבחר — אחרת הרשימה חוצה בניינים וחסרת משמעות.
+    selectedBuilding
+      ? db.apartment.findMany({
+          where: { buildingId: selectedBuilding },
+          orderBy: { number: "asc" },
+          select: { id: true, number: true },
+        })
+      : Promise.resolve([] as { id: string; number: string }[]),
     db.domain.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.professional.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.tag.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
   return (
@@ -71,9 +90,12 @@ export default async function SearchPage(props: PageProps<"/search">) {
 
       <Suspense>
         <SearchForm
+          sites={sites}
           buildings={buildings}
+          apartments={apartments.map((a) => ({ id: a.id, name: a.number }))}
           domains={domains}
           recipients={recipients}
+          tags={tags}
           statuses={STATUS_OPTIONS.map((id) => ({ id, name: he.ticketStatus[id] }))}
         />
       </Suspense>

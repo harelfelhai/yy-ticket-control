@@ -43,6 +43,23 @@ export default async function BoardPage(props: PageProps<"/board">) {
   const board = await getBoard(user, filters, new Date());
   const tour = single(params.tour) === "1";
 
+  // צלילה ממוקדת-מדד מתצוגת הבעלים (אפיון מסך 10): "ממתינות למנהל" מציג רק
+  // את "דורש ממך", ו"ללא תנועה" רק את המוסלמות. מתעלמים מ-focus במצב סיור.
+  const focusParam = single(params.focus);
+  const focus =
+    !tour && focusParam === "awaiting"
+      ? "awaiting"
+      : !tour && focusParam === "stale"
+        ? "stale"
+        : null;
+  const focusCards =
+    focus === "awaiting"
+      ? board.sections.ACTION_REQUIRED
+      : focus === "stale"
+        ? board.sections.ACTION_REQUIRED.filter((card) => card.escalated)
+        : null;
+  const clearFocusHref = filters.siteId ? `/board?site=${filters.siteId}` : "/board";
+
   const total =
     board.sections.ACTION_REQUIRED.length +
     board.sections.WITH_RECIPIENTS.length +
@@ -60,7 +77,23 @@ export default async function BoardPage(props: PageProps<"/board">) {
         />
       </Suspense>
 
-      {total === 0 ? (
+      {focus && focusCards ? (
+        <>
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2 text-sm">
+            <span className="font-medium">
+              {focus === "awaiting" ? he.board.focusAwaiting : he.board.focusStale}
+            </span>
+            <Link href={clearFocusHref} className="font-medium text-brand">
+              {he.board.showAll}
+            </Link>
+          </div>
+          {focusCards.length === 0 ? (
+            <p className="py-12 text-center text-muted">{he.board.empty}</p>
+          ) : (
+            focusCards.map((card) => <TicketCard key={card.id} card={card} />)
+          )}
+        </>
+      ) : total === 0 ? (
         <p className="py-12 text-center text-muted">{he.board.empty}</p>
       ) : tour ? (
         <TourView cards={[...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS]} />

@@ -244,6 +244,8 @@ export async function getPortalTicket(professionalId: string, ticketId: string) 
       building: { select: { name: true } },
       apartment: { select: { number: true } },
       domain: { select: { name: true } },
+      // שם הפותח — כדי שההודעות לקבלן יאמרו למי הפנייה הועברה (אפיון מסך 8).
+      createdBy: { select: { name: true } },
       messages: {
         orderBy: { createdAt: "asc" },
         include: {

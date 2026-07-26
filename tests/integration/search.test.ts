@@ -252,3 +252,40 @@ describe("חיתוך תוצאות", () => {
     expect(result.truncated).toBe(true);
   });
 });
+
+describe("מסננים חדשים — אתר, תגית, דירה (§3.6)", () => {
+  it("מנהל מערכת מסנן לאתר", async () => {
+    await makeTicket("תקלה באתר א");
+    await createTicket(admin, {
+      siteId: siteB,
+      description: "תקלה באתר ב",
+      recipients: [{ kind: "professional", id: contractor }],
+    });
+
+    const result = await searchTickets(admin, { siteId: siteB });
+    expect(result.cards).toHaveLength(1);
+    expect(result.cards[0]?.descriptionLine).toBe("תקלה באתר ב");
+  });
+
+  it("מסנן לפי תגית", async () => {
+    const tagged = await makeTicket("פנייה עם תגית");
+    await makeTicket("פנייה בלי תגית");
+    const tag = await addTagToTicket(adminViewer, tagged.id, "בדק בית");
+
+    const result = await searchTickets(admin, { tagId: tag.id });
+    expect(result.cards).toHaveLength(1);
+    expect(result.cards[0]?.descriptionLine).toBe("פנייה עם תגית");
+  });
+
+  it("מסנן לפי דירה", async () => {
+    await makeTicket("בדירה הראשונה");
+    const otherApt = await db.apartment.create({
+      data: { buildingId: base.buildingId, number: "9" },
+    });
+    await makeTicket("בדירה התשיעית", { apartmentId: otherApt.id });
+
+    const result = await searchTickets(admin, { apartmentId: otherApt.id });
+    expect(result.cards).toHaveLength(1);
+    expect(result.cards[0]?.descriptionLine).toBe("בדירה התשיעית");
+  });
+});

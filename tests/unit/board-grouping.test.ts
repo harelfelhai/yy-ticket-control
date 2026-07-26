@@ -16,6 +16,7 @@ function card(overrides: Partial<BoardCard> = {}): BoardCard {
     reason: "נשלח, טרם נצפה",
     ageDays: 0,
     reopened: false,
+    escalated: false,
     createdAt: new Date("2026-03-01T00:00:00Z"),
     ...overrides,
   };

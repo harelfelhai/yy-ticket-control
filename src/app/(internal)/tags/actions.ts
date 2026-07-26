@@ -9,6 +9,7 @@ import {
   addTagMessage,
   getTagContractorLink,
   grantTagAccess,
+  renameTag,
   revokeTagAccess,
 } from "@/lib/services/tags";
 
@@ -73,6 +74,14 @@ export async function revokeTagAccessAction(
       z.string().min(1).parse(professionalId),
     );
     revalidatePath(`/tags/${tagId}`);
+  });
+}
+
+/** משנה שם תגית — מנהל מערכת בלבד (הבדיקה בשירות) */
+export async function renameTagAction(id: string, name: string): Promise<ActionResult> {
+  return guard(async () => {
+    await renameTag(await requireUser(), z.string().min(1).parse(id), z.string().parse(name));
+    revalidatePath("/tags");
   });
 }
 

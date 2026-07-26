@@ -5,6 +5,7 @@ import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
 import {
   type Viewer,
+  canManageAdmin,
   canManageTagAccess,
   canPostTagChat,
   canTagTicket,
@@ -52,6 +53,24 @@ export async function findOrCreateTag(rawName: string, createdById: string) {
     update: {},
     create: { name, createdById },
   });
+}
+
+/**
+ * משנה שם תגית — לתיקון שגיאת הקלדה שיצרה תגית כמעט-כפולה (אפיון מסכים 11–15).
+ *
+ * שמור למנהל המערכת, כמו שאר ניהול הרשומות: שינוי שם תגית משפיע על כל
+ * הפניות המקובצות תחתיה. אם השם החדש כבר קיים הפעולה נדחית — איחוד תגיות
+ * אינו בתחולה, והמנהל צריך לתייג מחדש את הפניות במקום.
+ */
+export async function renameTag(actor: SessionUser, id: string, rawName: string) {
+  denyUnless(canManageAdmin(toViewer(actor)));
+  const name = normalizeName(rawName);
+  if (!name) throw new TagError(he.tag.nameRequired);
+
+  const clash = await db.tag.findUnique({ where: { name } });
+  if (clash && clash.id !== id) throw new TagError(he.tag.tagExists);
+
+  return db.tag.update({ where: { id }, data: { name } });
 }
 
 /** פרטי הפנייה המינימליים לבדיקת הרשאת תיוג */

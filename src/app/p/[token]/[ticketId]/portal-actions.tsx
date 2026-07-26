@@ -13,6 +13,8 @@ interface PortalActionsProps {
   ticketId: string;
   status: AssignmentStatus;
   isClosed: boolean;
+  /** שם הפותח — מוצג בהודעות "הועברה לאישור X" (אפיון מסך 8) */
+  openerName: string;
 }
 
 /**
@@ -25,7 +27,13 @@ interface PortalActionsProps {
  * "יש לי שאלה" דורש טקסט: שאלה בלי תוכן היא רק דגל אדום שמנהל העבודה לא
  * יודע מה לעשות איתו.
  */
-export function PortalActions({ token, ticketId, status, isClosed }: PortalActionsProps) {
+export function PortalActions({
+  token,
+  ticketId,
+  status,
+  isClosed,
+  openerName,
+}: PortalActionsProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -63,12 +71,12 @@ export function PortalActions({ token, ticketId, status, isClosed }: PortalActio
     <div className="flex flex-col gap-3">
       {status === "DONE" ? (
         <p className="rounded-xl bg-success/10 p-3 text-sm font-medium text-success">
-          {he.portal.doneNotice}
+          {he.portal.doneNotice(openerName)}
         </p>
       ) : null}
       {status === "QUESTION" ? (
         <p className="rounded-xl bg-warning/10 p-3 text-sm font-medium text-warning">
-          {he.portal.questionNotice}
+          {he.portal.questionNotice(openerName)}
         </p>
       ) : null}
 
