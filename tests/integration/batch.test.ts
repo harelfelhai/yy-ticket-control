@@ -89,6 +89,24 @@ describe("createTicketBatch", () => {
     expect(await db.ticket.count()).toBe(0);
   });
 
+  it("כשל בשורה באמצע משאיר את הפניות שנוצרו לפניה — שיגור שורה-שורה", async () => {
+    // ההזנה המרוכזת אינה טרנזאקציית-על: כל שורה נוצרת בנפרד, וכשל באמצע
+    // (כאן — תחום שאינו קיים) עוצר, אך משאיר את מה שכבר נוצר.
+    await expect(
+      createTicketBatch(
+        actor,
+        baseInput([
+          row({ description: "ראשונה, תקינה" }),
+          row({ description: "כושלת", domainId: "domain-לא-קיים" }),
+          row({ description: "שלישית — לא תיווצר" }),
+        ]),
+      ),
+    ).rejects.toThrow();
+
+    // רק הראשונה נוצרה; הכשל עצר לפני השלישית.
+    expect(await db.ticket.count()).toBe(1);
+  });
+
   it("שורה בלי נמען נשמרת כטיוטה — פנייה לא הולכת לאיבוד", async () => {
     const result = await createTicketBatch(
       actor,

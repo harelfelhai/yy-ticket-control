@@ -111,6 +111,8 @@ test.describe("פעולות על פנייה", () => {
     await expect(strip.getByRole("listitem")).toHaveCount(1);
 
     await page.getByRole("button", { name: /^הוסף נמען/ }).click();
+    // הוספת נמען מציגה אישור (אפיון מסך 3): הנמען יראה את כל ההיסטוריה.
+    page.once("dialog", (d) => d.accept());
     await page.getByRole("option").first().click();
 
     await expect(strip.getByRole("listitem")).toHaveCount(2);
@@ -123,6 +125,8 @@ test.describe("פעולות על פנייה", () => {
     const strip = page.getByRole("list", { name: "נמענים", exact: true });
     await expect(strip.getByRole("listitem")).toHaveCount(1);
 
+    // הסרת נמען מציגה אישור (אפיון מסך 3): הפנייה תיעלם מרשימתו.
+    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: /^הסר / }).first().click();
 
     // ההיסטוריה נשמרת: "שלחתי לו והוא לא הגיב" הוא מידע שאסור לאבד.

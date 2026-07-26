@@ -96,14 +96,14 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
 
   await page.getByRole("link").filter({ hasText: description }).click();
   await page.getByRole("button", { name: "סיימתי — טופל" }).click();
-  await expect(page.getByText("סימנת שטופל. מנהל העבודה יאשר ויסגור.")).toBeVisible();
+  await expect(page.getByText("תודה. הפנייה הועברה לאישור מנהל ראשי.")).toBeVisible();
 
   // ── 3. הקבלן השני שואל שאלה ───────────────────────────────────────
   await page.goto(plumberLink);
   await page.getByRole("link").filter({ hasText: description }).click();
   await page.getByLabel("תגובה").fill("איפה הכניסה לדירה?");
   await page.getByRole("button", { name: "יש לי שאלה" }).click();
-  await expect(page.getByText("השאלה נשלחה למנהל העבודה.")).toBeVisible();
+  await expect(page.getByText("השאלה נשלחה למנהל ראשי.")).toBeVisible();
 
   // ── 4. אצל המנהל: הפנייה ב"דורש ממך", והסיבה היא השאלה ───────────
   await loginAsManager(page);
@@ -124,7 +124,7 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   await page.getByRole("link").filter({ hasText: description }).click();
   await expect(page.getByText("הכניסה מהחניון, קוד 1234")).toBeVisible();
   await page.getByRole("button", { name: "סיימתי — טופל" }).click();
-  await expect(page.getByText("סימנת שטופל. מנהל העבודה יאשר ויסגור.")).toBeVisible();
+  await expect(page.getByText("תודה. הפנייה הועברה לאישור מנהל ראשי.")).toBeVisible();
 
   // ── 6. כולם סיימו — הפנייה ממתינה לאישור ─────────────────────────
   await loginAsManager(page);
@@ -294,4 +294,35 @@ test("קבלן שהוסר מאבד את הפנייה מיידית, ואת הקי
 
   await page.goto(link);
   await expect(page.getByText("הקישור אינו בתוקף")).toBeVisible();
+});
+
+test("פתיחת הקישור מסמנת 'נצפה' אצל המנהל", async ({ page }) => {
+  const stamp = Date.now();
+  const description = `בדיקת נצפה ${stamp}`;
+  const contractor = `קבלן נצפה ${stamp}`;
+
+  await loginAsManager(page);
+  await page.goto("/tickets/new");
+  await pick(page, "בניין", "בניין א");
+  await pick(page, "דירה", "1");
+  await pick(page, "תחום", "חשמל");
+  await page.getByLabel("תיאור").fill(description);
+  await addProfessional(page, contractor, `054-${String(stamp).slice(-7)}`);
+  await page.getByRole("button", { name: "שלח לנמענים" }).click();
+  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+
+  const ticketUrl = new URL(page.url()).pathname;
+  const link = await showLink(page, contractor);
+
+  // הקבלן פותח את הפנייה עצמה — הפתיחה היא שמסמנת "נצפה" (בלי פעולה נוספת).
+  await page.goto(link);
+  await page.getByRole("link").filter({ hasText: description }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("דירה 1");
+
+  // המנהל רואה עכשיו "נצפה" ברצועת הנמענים — כך הוא יודע שהקישור הגיע ליעדו.
+  await loginAsManager(page);
+  await page.goto(ticketUrl);
+  await expect(
+    page.getByRole("list", { name: "נמענים", exact: true }).getByText("נצפה", { exact: true }),
+  ).toBeVisible();
 });
