@@ -31,6 +31,8 @@ export interface OfflineDraft {
   description: string;
   recipientIds: { kind: "professional" | "user"; id: string }[];
   mediaIds: string[];
+  /** תגיות שנבחרו. אופציונלי לשחזור סובלני של טיוטות מלפני שהשדה קיים. */
+  tagIds?: string[];
   /** מתי נשמרה — כדי שנוכל להתעלם מטיוטה עתיקה */
   savedAt: number;
   /** האם היא ממתינה לשיגור חוזר, להבדיל מהקלדה שוטפת */

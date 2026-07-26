@@ -28,6 +28,11 @@ interface MediaPickerProps {
   files: AttachedFile[];
   onChange: (files: AttachedFile[]) => void;
   disabled?: boolean;
+  /**
+   * `prominent` — צילום והקלטה ככפתורים גדולים בראש (מסך היצירה, אפיון
+   * מסך 4: "המדיה היא הפעולה הראשונה"). ברירת המחדל קומפקטית, לתיבת התגובה.
+   */
+  variant?: "default" | "prominent";
 }
 
 /**
@@ -48,6 +53,7 @@ export function MediaPicker({
   files,
   onChange,
   disabled,
+  variant = "default",
 }: MediaPickerProps) {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(0);
@@ -178,34 +184,71 @@ export function MediaPicker({
           className="hidden"
         />
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => fileInput.current?.click()}
-          className="min-h-11 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
-        >
-          {he.media.attach}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => cameraInput.current?.click()}
-          className="min-h-11 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
-        >
-          {he.media.camera}
-        </button>
+        {variant === "prominent" ? (
+          // צילום והקלטה גדולים ובראש (אפיון מסך 4); "צרף קובץ" משני מתחת.
+          <div className="flex w-full flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => cameraInput.current?.click()}
+                className="min-h-16 rounded-xl border border-brand bg-brand/10 px-3 text-base font-semibold text-brand disabled:opacity-60"
+              >
+                {he.media.camera}
+              </button>
+              <AudioRecorder
+                disabled={busy}
+                onRecorded={(file) => void addFiles(toFileList(file))}
+                onError={setError}
+                className="min-h-16 w-full text-base"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+              className="min-h-11 self-start px-1 text-sm font-medium text-brand disabled:opacity-60"
+            >
+              {he.media.attach}
+            </button>
+            {uploading > 0 ? (
+              <span role="status" className="text-sm text-muted">
+                {he.media.uploading}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+              className="min-h-11 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
+            >
+              {he.media.attach}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => cameraInput.current?.click()}
+              className="min-h-11 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
+            >
+              {he.media.camera}
+            </button>
 
-        <AudioRecorder
-          disabled={busy}
-          onRecorded={(file) => void addFiles(toFileList(file))}
-          onError={setError}
-        />
+            <AudioRecorder
+              disabled={busy}
+              onRecorded={(file) => void addFiles(toFileList(file))}
+              onError={setError}
+            />
 
-        {uploading > 0 ? (
-          <span role="status" className="text-sm text-muted">
-            {he.media.uploading}
-          </span>
-        ) : null}
+            {uploading > 0 ? (
+              <span role="status" className="text-sm text-muted">
+                {he.media.uploading}
+              </span>
+            ) : null}
+          </>
+        )}
       </div>
 
       {error ? (

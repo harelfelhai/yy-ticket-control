@@ -17,6 +17,7 @@ import {
   findOrCreateDomain,
   findOrCreateProfessional,
 } from "@/lib/services/directory";
+import { findOrCreateTag } from "@/lib/services/tags";
 import { createTicket } from "@/lib/services/tickets";
 
 /**
@@ -107,6 +108,18 @@ const recipientSchema = z.object({
   id: idSchema,
 });
 
+/**
+ * יוצר תגית בשם, או מחזיר קיימת. תגיות אינן ממודרות לפי אתר (הן עשויות
+ * לחצות אתרים), ולכן די באימות משתמש מחובר.
+ */
+export async function createTagAction(name: string): Promise<ActionResult<SelectOption>> {
+  return guard(async () => {
+    const user = await requireUser();
+    const tag = await findOrCreateTag(z.string().parse(name), user.id);
+    return { id: tag.id, label: tag.name };
+  });
+}
+
 const createTicketSchema = z.object({
   siteId: idSchema,
   buildingId: idSchema.nullable(),
@@ -116,6 +129,7 @@ const createTicketSchema = z.object({
   description: z.string(),
   recipients: z.array(recipientSchema),
   mediaIds: z.array(idSchema).max(20).optional(),
+  tagIds: z.array(idSchema).max(10).optional(),
   saveAsDraft: z.boolean(),
 });
 

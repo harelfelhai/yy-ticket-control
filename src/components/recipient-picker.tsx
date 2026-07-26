@@ -4,6 +4,7 @@ import { useState } from "react";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { LearnedSelect, type LearnedOption } from "./learned-select";
+import { ProfessionalCreateForm } from "./professional-create-form";
 
 export interface RecipientOption extends LearnedOption {
   kind: "professional" | "user";
@@ -37,13 +38,8 @@ export function RecipientPicker({
   onCreateProfessional,
 }: RecipientPickerProps) {
   const [showCreate, setShowCreate] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const hydrated = useHydrated();
-  const busy = saving || !hydrated;
+  const busy = !hydrated;
 
   const selectedIds = new Set(value.map((r) => `${r.kind}:${r.id}`));
   const available = options.filter((o) => !selectedIds.has(`${o.kind}:${o.id}`));
@@ -55,23 +51,6 @@ export function RecipientPicker({
 
   function remove(recipient: RecipientOption) {
     onChange(value.filter((r) => !(r.id === recipient.id && r.kind === recipient.kind)));
-  }
-
-  async function submitNewProfessional() {
-    setSaving(true);
-    setError(null);
-    try {
-      const created = await onCreateProfessional({ name, phone, email });
-      onChange([...value, created]);
-      setName("");
-      setPhone("");
-      setEmail("");
-      setShowCreate(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : he.common.genericError);
-    } finally {
-      setSaving(false);
-    }
   }
 
   return (
@@ -105,66 +84,14 @@ export function RecipientPicker({
       />
 
       {showCreate ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3">
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {he.directory.professionalName}
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="min-h-11 rounded-lg border border-border px-3 text-base font-normal"
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-sm font-medium">
-              {he.directory.phone}
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                dir="ltr"
-                inputMode="tel"
-                className="min-h-11 rounded-lg border border-border px-3 text-base font-normal"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium">
-              {he.directory.email}
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                dir="ltr"
-                inputMode="email"
-                className="min-h-11 rounded-lg border border-border px-3 text-base font-normal"
-              />
-            </label>
-          </div>
-
-          {/* הכלל מוצג מראש ולא רק ככשל, כי בלי אחד מהשניים אי אפשר לשגר כלל */}
-          <p className="text-xs text-muted">{he.directory.contactRequiredHint}</p>
-
-          {error ? (
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={submitNewProfessional}
-              disabled={busy}
-              className="min-h-11 flex-1 rounded-xl bg-brand px-4 font-medium text-brand-fg disabled:opacity-60"
-            >
-              {he.directory.saveProfessional}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCreate(false)}
-              className="min-h-11 rounded-xl border border-border px-4"
-            >
-              {he.common.cancel}
-            </button>
-          </div>
-        </div>
+        <ProfessionalCreateForm
+          onCreate={async (input) => {
+            const created = await onCreateProfessional(input);
+            onChange([...value, created]);
+            setShowCreate(false);
+          }}
+          onCancel={() => setShowCreate(false)}
+        />
       ) : (
         <button
           type="button"

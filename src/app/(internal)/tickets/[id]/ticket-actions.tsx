@@ -39,6 +39,7 @@ export function TicketActions({
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
   const busy = pending || !hydrated;
@@ -48,6 +49,7 @@ export function TicketActions({
 
   function run(action: () => Promise<ActionResult>, onSuccess?: () => void) {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       const result = await action();
       if (result.ok) onSuccess?.();
@@ -116,9 +118,13 @@ export function TicketActions({
             type="button"
             disabled={busy}
             onClick={() => {
-              const question = isClosed ? he.ticket.confirmReopen : he.ticket.confirmClose;
+              const closing = !isClosed;
+              const question = closing ? he.ticket.confirmClose : he.ticket.confirmReopen;
               if (!window.confirm(question)) return;
-              run(() => (isClosed ? reopenTicketAction(ticketId) : closeTicketAction(ticketId)));
+              run(
+                () => (closing ? closeTicketAction(ticketId) : reopenTicketAction(ticketId)),
+                () => setNotice(closing ? he.ticket.closedNotice : he.ticket.reopenedNotice),
+              );
             }}
             className="min-h-12 rounded-xl border border-border bg-surface px-4 font-medium disabled:opacity-60"
           >
@@ -126,6 +132,12 @@ export function TicketActions({
           </button>
         ) : null}
       </div>
+
+      {notice ? (
+        <p role="status" className="text-sm font-medium text-success">
+          {notice}
+        </p>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-sm font-medium text-danger">

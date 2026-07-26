@@ -7,6 +7,8 @@ interface AudioRecorderProps {
   onRecorded: (file: File) => void;
   onError: (message: string) => void;
   disabled?: boolean;
+  /** גודל/סגנון הכפתור. ברירת המחדל קומפקטית; מסך היצירה מבקש כפתור בולט. */
+  className?: string;
 }
 
 /**
@@ -20,7 +22,7 @@ interface AudioRecorderProps {
  * ‏MediaRecorder ולא ספרייה חיצונית: הוא נתמך בכל דפדפן רלוונטי היום,
  * ותוסף להקלטה היה מוסיף מאות קילובייטים לטובת פונקציה אחת.
  */
-export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderProps) {
+export function AudioRecorder({ onRecorded, onError, disabled, className }: AudioRecorderProps) {
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -80,9 +82,9 @@ export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderPr
       disabled={disabled}
       onClick={() => (recording ? stop() : void start())}
       aria-pressed={recording}
-      className={`min-h-11 rounded-xl px-3 text-sm font-medium disabled:opacity-60 ${
+      className={`rounded-xl px-3 font-medium disabled:opacity-60 ${
         recording ? "bg-danger text-white" : "border border-border"
-      }`}
+      } ${className ?? "min-h-11 text-sm"}`}
     >
       {recording ? he.media.stopRecording : he.media.record}
     </button>

@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import { listSiteDirectory } from "@/lib/services/directory";
+import { listTags } from "@/lib/services/tags";
 import { CreateTicketForm } from "./create-ticket-form";
 
 export const metadata = { title: `${he.ticket.createTitle} — ${he.app.name}` };
@@ -55,13 +56,14 @@ export default async function NewTicketPage(props: PageProps<"/tickets/new">) {
     );
   }
 
-  const [directory, internalUsers] = await Promise.all([
+  const [directory, internalUsers, tags] = await Promise.all([
     listSiteDirectory(site.id),
     db.user.findMany({
       where: { active: true, OR: [{ siteId: site.id }, { siteId: null }] },
       orderBy: { name: "asc" },
       select: { id: true, name: true, role: true },
     }),
+    listTags(),
   ]);
 
   return (
@@ -89,6 +91,7 @@ export default async function NewTicketPage(props: PageProps<"/tickets/new">) {
           kind: "user" as const,
         })),
       ]}
+      tags={tags.map((t) => ({ id: t.id, label: t.name }))}
     />
   );
 }

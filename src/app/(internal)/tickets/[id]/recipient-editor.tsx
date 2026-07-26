@@ -3,9 +3,11 @@
 import { useState, useTransition } from "react";
 import { AssignmentStatusChip } from "@/components/status-chip";
 import { LearnedSelect } from "@/components/learned-select";
+import { ProfessionalCreateForm } from "@/components/professional-create-form";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
+import { createProfessionalAction } from "../new/actions";
 import {
   addRecipientsAction,
   getLinkAction,
@@ -39,6 +41,8 @@ export interface AvailableRecipient {
 
 interface RecipientEditorProps {
   ticketId: string;
+  /** אתר הפנייה — נדרש ליצירת איש מקצוע חדש מתוך העורך */
+  siteId: string;
   assignments: AssignmentRow[];
   available: AvailableRecipient[];
   canEdit: boolean;
@@ -57,12 +61,14 @@ interface RecipientEditorProps {
  */
 export function RecipientEditor({
   ticketId,
+  siteId,
   assignments,
   available,
   canEdit,
 }: RecipientEditorProps) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const [link, setLink] = useState<{ forId: string; url: string; rotated: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
@@ -98,6 +104,8 @@ export function RecipientEditor({
   function add(id: string | null) {
     const option = available.find((o) => o.id === id);
     if (!option) return;
+    // האזהרה מהאפיון (מסך 3): נמען שנוסף רואה את כל ההיסטוריה שקדמה לו.
+    if (!window.confirm(he.ticket.confirmAddRecipient)) return;
     setError(null);
     startTransition(async () => {
       const result = await addRecipientsAction(ticketId, [{ kind: option.kind, id: option.id }]);
@@ -105,7 +113,9 @@ export function RecipientEditor({
     });
   }
 
-  function remove(assignmentId: string) {
+  function remove(assignmentId: string, name: string) {
+    // האזהרה מהאפיון (מסך 3): הפנייה תיעלם מהרשימה שלו, אך תגובותיו יישארו.
+    if (!window.confirm(he.ticket.confirmRemoveRecipient(name))) return;
     setError(null);
     startTransition(async () => {
       const result = await removeRecipientAction(ticketId, assignmentId);
@@ -121,6 +131,23 @@ export function RecipientEditor({
       if (result.ok) setNotice(he.ticket.linkResent(name));
       else setError(result.error);
     });
+  }
+
+  /**
+   * יוצר איש מקצוע חדש ומשייך אותו מיד לפנייה.
+   *
+   * בלי דיאלוג ה-confirmAddRecipient בכוונה: יצירת איש מקצוע בתוך העורך של
+   * הפנייה הזו היא כבר פעולה מכוונת ומפורשת — האזהרה נחוצה כשמוסיפים נמען
+   * קיים מהרשימה, שם טעות-בחירה אפשרית. זורק כדי שהטופס יציג את השגיאה.
+   */
+  async function createAndAdd(input: { name: string; phone: string; email: string }) {
+    const created = await createProfessionalAction(siteId, input);
+    if (!created.ok) throw new Error(created.error);
+    const added = await addRecipientsAction(ticketId, [
+      { kind: "professional", id: created.data.id },
+    ]);
+    if (!added.ok) throw new Error(added.error);
+    setShowCreate(false);
   }
 
   return (
@@ -144,7 +171,7 @@ export function RecipientEditor({
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => remove(assignment.id)}
+                      onClick={() => remove(assignment.id, assignment.name)}
                       aria-label={`${he.ticket.removeRecipient} ${assignment.name}`}
                       className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-danger disabled:opacity-60"
                     >
@@ -246,7 +273,7 @@ export function RecipientEditor({
       ) : null}
 
       {canEdit ? (
-        <div className="mt-3">
+        <div className="mt-3 flex flex-col gap-2">
           <LearnedSelect
             label={he.ticket.addRecipient}
             options={available}
@@ -254,6 +281,18 @@ export function RecipientEditor({
             onChange={add}
             disabled={busy}
           />
+          {showCreate ? (
+            <ProfessionalCreateForm onCreate={createAndAdd} onCancel={() => setShowCreate(false)} />
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setShowCreate(true)}
+              className="min-h-11 self-start px-1 text-start font-medium text-brand disabled:opacity-60"
+            >
+              {he.directory.newProfessional}
+            </button>
+          )}
         </div>
       ) : null}
 

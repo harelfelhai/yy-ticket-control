@@ -23,6 +23,7 @@ import {
   createBuildingAction,
   createDomainAction,
   createProfessionalAction,
+  createTagAction,
   createTicketAction,
 } from "./actions";
 
@@ -48,6 +49,7 @@ interface CreateTicketFormProps {
   buildings: BuildingWithApartments[];
   domains: LearnedOption[];
   recipients: RecipientOption[];
+  tags: LearnedOption[];
 }
 
 /**
@@ -65,10 +67,12 @@ export function CreateTicketForm({
   buildings: initialBuildings,
   domains: initialDomains,
   recipients: recipientOptions,
+  tags: initialTags,
 }: CreateTicketFormProps) {
   const [buildings, setBuildings] = useState(initialBuildings);
   const [domains, setDomains] = useState(initialDomains);
   const [availableRecipients, setAvailableRecipients] = useState(recipientOptions);
+  const [availableTags, setAvailableTags] = useState(initialTags);
 
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [apartmentId, setApartmentId] = useState<string | null>(null);
@@ -76,6 +80,7 @@ export function CreateTicketForm({
   const [room, setRoom] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [recipients, setRecipients] = useState<RecipientOption[]>([]);
+  const [tags, setTags] = useState<LearnedOption[]>([]);
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   /** האם המסך עדיין קורא טיוטה שמורה — עד אז אין לכתוב עליה */
@@ -116,10 +121,11 @@ export function CreateTicketForm({
       description,
       recipientIds: recipients.map((r) => ({ kind: r.kind, id: r.id })),
       mediaIds: files.map((f) => f.mediaId),
+      tagIds: tags.map((t) => t.id),
       savedAt: Date.now(),
       pending: pendingRetry,
     }),
-    [siteId, buildingId, apartmentId, domainId, room, description, recipients, files],
+    [siteId, buildingId, apartmentId, domainId, room, description, recipients, tags, files],
   );
 
   /**
@@ -165,6 +171,11 @@ export function CreateTicketForm({
           )
           .filter((option): option is RecipientOption => option !== undefined),
       );
+      setTags(
+        (draft.tagIds ?? [])
+          .map((id) => initialTags.find((t) => t.id === id))
+          .filter((option): option is LearnedOption => option !== undefined),
+      );
       setRestored(draft.pending ? "pending" : "restored");
       setRestoring(false);
     });
@@ -173,7 +184,7 @@ export function CreateTicketForm({
       cancelled = true;
     };
     // פעם אחת בטעינת המסך בלבד: שחזור חוזר היה דורס מה שהמשתמש מקליד עכשיו.
-  }, [siteId, recipientOptions]);
+  }, [siteId, recipientOptions, initialTags]);
 
   /**
    * שיגור. כשל תקשורת אינו מאבד את מה שהוקלד.
@@ -199,6 +210,7 @@ export function CreateTicketForm({
           description,
           recipients: recipients.map((r) => ({ kind: r.kind, id: r.id })),
           mediaIds: files.map((f) => f.mediaId),
+          tagIds: tags.map((t) => t.id),
           saveAsDraft,
         });
 
@@ -241,6 +253,7 @@ export function CreateTicketForm({
       room,
       description,
       recipients,
+      tags,
       files,
       snapshot,
     ],
@@ -272,6 +285,10 @@ export function CreateTicketForm({
           {he.ticket.site}: {siteName}
         </p>
       </div>
+
+      {/* המדיה היא הפעולה הראשונה (אפיון מסך 4): בשטח מצלמים לפני שמקלידים.
+          בלי ticketId — הפנייה עדיין אינה קיימת; הקלטה ממלאת את התיאור אם ריק. */}
+      <MediaPicker variant="prominent" files={files} onChange={setFiles} disabled={busy} />
 
       <LearnedSelect
         label={he.directory.building}
@@ -346,11 +363,6 @@ export function CreateTicketForm({
         />
       </label>
 
-      {/* בלי ticketId: הפנייה עדיין אינה קיימת, וזה בדיוק המסלול שבו
-          מצלמים — מנהל עומד מול הדירה, מצלם או מקליט, ורק אז ממלא שדות.
-          הקלטה כאן ממלאת את התיאור מעצמה אחרי התמלול, אם הוא נשאר ריק. */}
-      <MediaPicker files={files} onChange={setFiles} disabled={busy} />
-
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">{he.ticket.recipients}</span>
         <RecipientPicker
@@ -362,6 +374,47 @@ export function CreateTicketForm({
             const option: RecipientOption = { ...created, kind: "professional" };
             setAvailableRecipients((prev) => [...prev, option]);
             return option;
+          }}
+        />
+      </div>
+
+      {/* תגיות — אופציונלי (אפיון מסך 4). קיבוץ פניות תחת נושא משותף. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">
+          {he.tag.label} ({he.common.optional})
+        </span>
+        {tags.length > 0 ? (
+          <ul aria-label={he.tag.label} className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <li key={tag.id}>
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand px-3 py-1.5 text-sm text-brand-fg">
+                  {tag.label}
+                  <button
+                    type="button"
+                    onClick={() => setTags((prev) => prev.filter((t) => t.id !== tag.id))}
+                    aria-label={`${he.tag.remove} ${tag.label}`}
+                    className="px-1 text-base leading-none"
+                  >
+                    ×
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <LearnedSelect
+          label={he.tag.add}
+          options={availableTags.filter((t) => !tags.some((s) => s.id === t.id))}
+          value={null}
+          onChange={(id) => {
+            const option = availableTags.find((t) => t.id === id);
+            if (option) setTags((prev) => (prev.some((t) => t.id === id) ? prev : [...prev, option]));
+          }}
+          onCreate={async (name) => {
+            const created = unwrap(await createTagAction(name));
+            setAvailableTags((prev) => [...prev, created]);
+            setTags((prev) => (prev.some((t) => t.id === created.id) ? prev : [...prev, created]));
+            return created;
           }}
         />
       </div>

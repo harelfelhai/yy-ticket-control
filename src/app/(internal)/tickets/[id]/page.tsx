@@ -23,6 +23,7 @@ import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
 import { RecipientEditor } from "./recipient-editor";
+import { ResidentName } from "./resident-name";
 import { TicketActions } from "./ticket-actions";
 import { TicketTags } from "./ticket-tags";
 import { ThreadEvent } from "./thread-event";
@@ -48,10 +49,11 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
     recipientName: recipientName(a),
   }));
   const status = deriveTicketStatus(ticket, assignmentViews);
+  const now = new Date();
   const reason = reasonText(
     { ...ticket, handlerName: ticket.handler?.name ?? null },
     assignmentViews,
-    new Date(),
+    now,
   );
 
   const canEdit = canEditAssignments(viewer, ticket);
@@ -128,6 +130,9 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
     .filter(Boolean)
     .join(" · ");
 
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const ageDays = Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY);
+
   return (
     <div className="flex flex-col gap-4 p-4">
       <header className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
@@ -138,6 +143,16 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
               {ticket.domain?.name ?? he.ticket.noDomain}
               {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
             </p>
+            {/* שם הדייר — מקושר לדירה. מוצג רק כשיש דירה לשייך אליה. */}
+            {ticket.apartmentId ? (
+              <p className="text-sm text-muted">
+                <ResidentName
+                  ticketId={ticket.id}
+                  initial={ticket.apartment?.residentName ?? null}
+                  canEdit={canEdit}
+                />
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-col items-end gap-1">
             <TicketStatusChip status={status} />
@@ -156,6 +171,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
             {he.ticket.openedBy}: {ticket.createdBy.name}
           </span>
           <span>· {he.channel[ticket.channel]}</span>
+          <span>· {he.board.ageDays(ageDays)}</span>
           {ticket.handler ? <span>· {he.ticket.handledBy(ticket.handler.name)}</span> : null}
           {/* "נפתחה מחדש" אינו סטטוס אלא תג — הפנייה מתנהגת לפי הכללים הרגילים */}
           {ticket.reopenCount > 0 ? (
@@ -201,6 +217,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       ) : (
         <RecipientEditor
           ticketId={ticket.id}
+          siteId={ticket.siteId}
           assignments={assignmentRows}
           available={available}
           canEdit={canEdit}
