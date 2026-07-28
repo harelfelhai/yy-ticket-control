@@ -185,6 +185,9 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       {ticket.isDraft ? (
         canEdit && draftDirectory ? (
           <DraftCompletion
+            // key יציב: מונע re-mount של הרכיב (ואיפוס המצב המקומי — למשל
+            // נמען שנוצר תוך כדי השלמה) כשהעמוד מתרנדר מחדש אחרי Server Action.
+            key={ticket.id}
             ticketId={ticket.id}
             siteId={ticket.siteId}
             buildings={draftDirectory.buildings.map((b) => ({
