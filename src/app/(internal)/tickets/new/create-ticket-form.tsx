@@ -278,7 +278,9 @@ export function CreateTicketForm({
   }, [restored, submit]);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    // pb-28: רצועת הפעולות דביקה בתחתית (sticky), והריפוד נותן לתוכן — למשל
+    // טופס יצירת איש מקצוע כשהוא פתוח — מקום להיגלל מעליה במקום להיחסם מאחוריה.
+    <div className="flex flex-col gap-4 p-4 pb-28">
       <div>
         <h1 className="text-xl font-bold">{he.ticket.createTitle}</h1>
         <p className="text-sm text-muted">

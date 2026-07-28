@@ -148,7 +148,9 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "פתח מחדש" }).click();
 
-  await expect(page.getByText("נפתחה מחדש")).toBeVisible();
+  // exact: התג "נפתחה מחדש" והודעת הסטטוס "הפנייה נפתחה מחדש..." שניהם מכילים
+  // את הביטוי; ה-exact מכוון לתג עצמו.
+  await expect(page.getByText("נפתחה מחדש", { exact: true })).toBeVisible();
   await expect(page.getByText("חדש", { exact: true })).toBeVisible();
   // שני השיוכים חזרו ל"נשלח" — העבודה לא הושלמה, וזה חייב להיות גלוי.
   await expect(
@@ -267,6 +269,8 @@ test("קבלן שהוסר מאבד את הפנייה מיידית, ואת הקי
   async function removeFrom(description: string) {
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).click();
+    // הסרת נמען מציגה אישור (אפיון מסך 3): הפנייה תיעלם מרשימתו.
+    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: `הסר ${contractor}` }).click();
     await expect(page.getByRole("list", { name: "נמענים שהוסרו" })).toContainText(contractor);
   }

@@ -47,7 +47,10 @@ export function ProfessionalCreateForm({ onCreate, onCancel }: ProfessionalCreat
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3">
+    // scroll-mb-32: כשהטופס נפתח בתוך מסך עם רצועת פעולות דביקה בתחתית
+    // (מסך היצירה), הריפוד-לגלילה מוודא שכפתור השמירה נגלל מעל הרצועה
+    // ולא נחסם מאחוריה.
+    <div className="flex scroll-mb-32 flex-col gap-2 rounded-xl border border-border bg-surface p-3">
       <label className="flex flex-col gap-1 text-sm font-medium">
         {he.directory.professionalName}
         <input
@@ -94,7 +97,9 @@ export function ProfessionalCreateForm({ onCreate, onCancel }: ProfessionalCreat
           type="button"
           onClick={submit}
           disabled={busy}
-          className="min-h-11 flex-1 rounded-xl bg-brand px-4 font-medium text-brand-fg disabled:opacity-60"
+          // scroll-mb-32: הכפתור הוא זה שנגלל לתצוגה; הריפוד מוודא שהוא עוצר
+          // מעל רצועת הפעולות הדביקה שבתחתית מסך היצירה ולא נחסם מאחוריה.
+          className="min-h-11 flex-1 scroll-mb-32 rounded-xl bg-brand px-4 font-medium text-brand-fg disabled:opacity-60"
         >
           {he.directory.saveProfessional}
         </button>

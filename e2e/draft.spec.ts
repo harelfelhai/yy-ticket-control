@@ -10,6 +10,19 @@ import { E2E_ADMIN } from "./global-setup";
  * זהו הפער המהותי שהביקורת מצאה: submitDraft היה קוד מת בלי מסלול ממשק.
  */
 
+test.beforeEach(async ({ page }) => {
+  // סביבת ה-E2E חולקת בסיס נתונים אחד, וטיוטות מקומיות (IndexedDB) עלולות
+  // לשרוד בין בדיקות ולגרום לטופס היצירה לשחזר טיוטה זרה. addInitScript רץ
+  // לפני קוד האפליקציה בכל ניווט, ולכן הניקוי קודם ל-loadDraft.
+  await page.addInitScript(() => {
+    try {
+      indexedDB.deleteDatabase("yy-ticket-control");
+    } catch {
+      // דפדפן ללא IndexedDB — אין מה לנקות.
+    }
+  });
+});
+
 async function loginAsManager(page: Page) {
   await page.goto("/board");
   if (new URL(page.url()).pathname === "/login") {
@@ -55,10 +68,11 @@ test("שמירה כטיוטה: באנר אדום, בלי כפתור סגירה, 
   await expect(page.getByRole("button", { name: "שגר", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "מחק טיוטה" })).toBeVisible();
 
-  // בלוח: הטיוטה ב"דורש ממך".
+  // בלוח: הטיוטה ב"דורש ממך". first() כי הבסיס משותף לכל בדיקות ה-E2E,
+  // וטיוטות מבדיקות אחרות עשויות להופיע גם הן באותה קבוצה.
   await page.goto("/board");
   const actionRequired = page.locator("section", { hasText: "דורש ממך" }).first();
-  await expect(actionRequired.getByText("טיוטה — חסרים פרטים")).toBeVisible();
+  await expect(actionRequired.getByText("טיוטה — חסרים פרטים").first()).toBeVisible();
 });
 
 test("השלמת טיוטה ושיגורה: ממלאים את החסר, משגרים, והנמען מקבל אותה", async ({ page }) => {

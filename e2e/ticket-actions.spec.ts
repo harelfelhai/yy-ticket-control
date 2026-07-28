@@ -99,7 +99,7 @@ test.describe("פעולות על פנייה", () => {
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "פתח מחדש" }).click();
 
-    await expect(page.getByText("נפתחה מחדש")).toBeVisible();
+    await expect(page.getByText("נפתחה מחדש", { exact: true })).toBeVisible();
     await expect(page.getByText("חדש", { exact: true })).toBeVisible();
   });
 
