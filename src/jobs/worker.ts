@@ -25,6 +25,7 @@ import {
 } from "./handlers/escalation";
 import { cleanupRateLimits } from "@/lib/rate-limit";
 import { captureError } from "@/lib/observability/log";
+import { HEARTBEAT, setHeartbeat } from "@/watchdog/heartbeat";
 import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob, reclaimOrphanedJobs } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
 
@@ -252,6 +253,11 @@ export function startWorker(): void {
     const now = new Date();
     await ensureDailyEscalationScheduled(now);
     await ensureDailyBackupScheduled(now);
+    // זריעת פעימות-לב בעלייה: בהפעלה ראשונה (או אחרי restart) הג'וב היומי
+    // עדיין לא רץ, וה-watchdog היה מתריע על "פעימה חסרה" על שווא. מרגע זה
+    // ואילך פעימה ישנה פירושה באמת שהג'וב היומי הפסיק לרוץ.
+    await setHeartbeat(HEARTBEAT.escalation, now);
+    await setHeartbeat(HEARTBEAT.backup, now);
   })().catch((error) => {
     // אתחול שנכשל פירושו שהגיבוי וההסלמה היומיים אולי לא תוזמנו כלל —
     // כשל שקט של כל מנגנון ההתראות. קריטי, ולכן ל-Sentry.

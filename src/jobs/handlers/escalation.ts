@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
+import { captureError, logInfo } from "@/lib/observability/log";
 import { STALE_DAYS_THRESHOLD } from "@/lib/ticket-status";
+import { HEARTBEAT, setHeartbeat } from "@/watchdog/heartbeat";
 import { enqueue } from "../queue";
 import { nextEscalationRun } from "../schedule";
 import { JOB_TYPES } from "../types";
@@ -43,6 +45,15 @@ export async function runDailyEscalation(now: Date = new Date()): Promise<number
     },
     data: { escalated: true },
   });
+
+  // פעימת-לב אחרי הצלחה — כך ה-watchdog יודע שההסלמה רצה היום. עטוף כדי
+  // שכשל בכתיבת הפעימה לא יפיל ריצה שהצליחה; לכל היותר תיראה כפעימה ישנה.
+  try {
+    await setHeartbeat(HEARTBEAT.escalation, now);
+  } catch (error) {
+    captureError(error, { fingerprint: ["heartbeat-write", "escalation"] });
+  }
+  logInfo("escalation.done", { escalated: count });
 
   return count;
 }
