@@ -1,5 +1,5 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { MediaStorage } from "./types";
 
@@ -65,6 +65,20 @@ export function r2Storage(config: R2Config): MediaStorage {
 
     async remove(key) {
       await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+    },
+
+    async exists(key) {
+      try {
+        await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
+        return true;
+      } catch (error) {
+        // 404/NotFound = הקובץ לא הועלה. כל שגיאה אחרת (הרשאה, רשת) אינה
+        // "חסר" אלא תקלה אמיתית — נזרקת כדי שתיתפס ולא תתחפש ל"לא קיים".
+        const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata
+          ?.httpStatusCode;
+        if (status === 404 || (error as { name?: string }).name === "NotFound") return false;
+        throw error;
+      }
     },
   };
 }

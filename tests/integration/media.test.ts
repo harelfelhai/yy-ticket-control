@@ -58,6 +58,21 @@ async function makeTicket() {
 
 const photo = { mimeType: "image/jpeg", sizeBytes: 1024, originalName: "IMG_0001.jpg" };
 
+/** כותב בייטים לאחסון במפתח של הרשומה — מדמה את ה-PUT מהדפדפן */
+async function putBytes(mediaId: string): Promise<void> {
+  const { storageKey } = await db.mediaFile.findUniqueOrThrow({
+    where: { id: mediaId },
+    select: { storageKey: true },
+  });
+  await writeLocalObject(storageKey, Buffer.from("bytes"));
+}
+
+/** רישום → כתיבת בייטים → אישור, כמו במסלול האמיתי (confirmUpload מאמת קיום) */
+async function confirmWithBytes(viewer: Viewer, mediaId: string) {
+  await putBytes(mediaId);
+  return confirmUpload(viewer, mediaId);
+}
+
 describe("registerMedia", () => {
   it("יוצר רשומה לא-מאושרת ומחזיר יעד העלאה", async () => {
     const ticket = await makeTicket();
@@ -117,8 +132,8 @@ describe("confirmUpload", () => {
     const ticket = await makeTicket();
     const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
 
-    expect((await confirmUpload(managerViewer, mediaId)).uploaded).toBe(true);
-    expect((await confirmUpload(managerViewer, mediaId)).uploaded).toBe(true);
+    expect((await confirmWithBytes(managerViewer, mediaId)).uploaded).toBe(true);
+    expect((await confirmWithBytes(managerViewer, mediaId)).uploaded).toBe(true);
   });
 
   it("אישור של קובץ שהעלה אחר נדחה — רק המעלה מאשר", async () => {
@@ -130,14 +145,25 @@ describe("confirmUpload", () => {
       { ticketId: ticket.id, ...photo },
     );
 
-    await expect(confirmUpload(managerViewer, mediaId)).rejects.toThrow(MediaError);
+    await expect(confirmWithBytes(managerViewer, mediaId)).rejects.toThrow(MediaError);
     // הקובץ נשאר לא-מאושר.
     expect((await db.mediaFile.findUniqueOrThrow({ where: { id: mediaId } })).uploaded).toBe(false);
 
     // המעלה עצמו כן מאשר.
     expect(
-      (await confirmUpload({ kind: "professional", id: contractor }, mediaId)).uploaded,
+      (await confirmWithBytes({ kind: "professional", id: contractor }, mediaId)).uploaded,
     ).toBe(true);
+  });
+
+  it("אישור בלי שהבתים נחתו נדחה — הצהרת הלקוח אינה מספיקה", async () => {
+    // הבאג: השרת סימן uploaded=true על סמך הלקוח בלבד. אפליקציה שנסגרה
+    // באמצע ה-PUT הייתה משאירה רשומה שמצביעה על כלום. עכשיו מאמתים קיום.
+    const ticket = await makeTicket();
+    const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
+
+    // בלי putBytes — אין קובץ באחסון.
+    await expect(confirmUpload(managerViewer, mediaId)).rejects.toThrow(MediaError);
+    expect((await db.mediaFile.findUniqueOrThrow({ where: { id: mediaId } })).uploaded).toBe(false);
   });
 });
 
@@ -145,7 +171,7 @@ describe("צירוף להודעה", () => {
   it("קובץ מאושר נכנס לשרשור", async () => {
     const ticket = await makeTicket();
     const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
-    await confirmUpload(managerViewer, mediaId);
+    await confirmWithBytes(managerViewer, mediaId);
 
     const message = await addMessage(managerViewer, ticket.id, "הנה התמונה", [mediaId]);
 
@@ -158,7 +184,7 @@ describe("צירוף להודעה", () => {
     // ולעיתים ההודעה המדויקת ביותר: קבלן מצלם את מה שתיקן.
     const ticket = await makeTicket();
     const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
-    await confirmUpload(managerViewer, mediaId);
+    await confirmWithBytes(managerViewer, mediaId);
 
     const message = await addMessage(managerViewer, ticket.id, "", [mediaId]);
     expect(message.text).toBeNull();
@@ -185,7 +211,7 @@ describe("צירוף להודעה", () => {
     const first = await makeTicket();
     const second = await makeTicket();
     const { mediaId } = await registerMedia(managerViewer, { ticketId: first.id, ...photo });
-    await confirmUpload(managerViewer, mediaId);
+    await confirmWithBytes(managerViewer, mediaId);
 
     const original = await addMessage(managerViewer, first.id, "ראשונה", [mediaId]);
     await addMessage(managerViewer, second.id, "שנייה", [mediaId]);
@@ -200,7 +226,7 @@ describe("getViewableMedia", () => {
   async function attachedMedia() {
     const ticket = await makeTicket();
     const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
-    await confirmUpload(managerViewer, mediaId);
+    await confirmWithBytes(managerViewer, mediaId);
     await addMessage(managerViewer, ticket.id, "תמונה", [mediaId]);
     return { ticket, mediaId };
   }
@@ -229,7 +255,7 @@ describe("getViewableMedia", () => {
   it("אינו מחזיר קובץ שטרם צורף להודעה", async () => {
     const ticket = await makeTicket();
     const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
-    await confirmUpload(managerViewer, mediaId);
+    await confirmWithBytes(managerViewer, mediaId);
 
     expect(await getViewableMedia(managerViewer, mediaId)).toBeNull();
   });
@@ -251,7 +277,7 @@ describe("מדיה במסך היצירה — לפני שהפנייה קיימת"
 
   it("הקבצים נכנסים לשרשור של הפנייה שנוצרת", async () => {
     const { mediaId } = await registerMedia(managerViewer, photo);
-    await confirmUpload(managerViewer, mediaId);
+    await confirmWithBytes(managerViewer, mediaId);
 
     const { ticket } = await createTicket(manager, {
       siteId,
@@ -274,7 +300,7 @@ describe("מדיה במסך היצירה — לפני שהפנייה קיימת"
     const ids: string[] = [];
     for (let i = 0; i < 3; i += 1) {
       const { mediaId } = await registerMedia(managerViewer, photo);
-      await confirmUpload(managerViewer, mediaId);
+      await confirmWithBytes(managerViewer, mediaId);
       ids.push(mediaId);
     }
 
@@ -298,7 +324,7 @@ describe("מדיה במסך היצירה — לפני שהפנייה קיימת"
     // הצילום נעשה לפני שהשדות מולאו, והוא המידע שהכי קשה לשחזר — אי אפשר
     // לחזור לדירה ולצלם שוב אחרי שהקבלן תיקן.
     const { mediaId } = await registerMedia(managerViewer, photo);
-    await confirmUpload(managerViewer, mediaId);
+    await confirmWithBytes(managerViewer, mediaId);
 
     const { ticket, isDraft } = await createTicket(manager, {
       siteId,

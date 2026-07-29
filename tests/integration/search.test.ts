@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import type { Viewer } from "@/lib/permissions";
 import { confirmUpload, registerMedia } from "@/lib/services/media";
+import { writeLocalObject } from "@/lib/storage/local";
 import { RESULT_LIMIT, searchTickets } from "@/lib/services/search";
 import { addTagMessage, addTagToTicket, findOrCreateTag } from "@/lib/services/tags";
 import { addMessage, closeTicket, createTicket } from "@/lib/services/tickets";
@@ -87,6 +88,12 @@ async function attachProcessedMedia(
     mimeType,
     sizeBytes: 100,
   });
+  // confirmUpload מאמת שהבתים נחתו — כותבים אותם כמו ב-PUT מהדפדפן.
+  const stored = await db.mediaFile.findUniqueOrThrow({
+    where: { id: mediaId },
+    select: { storageKey: true },
+  });
+  await writeLocalObject(stored.storageKey, Buffer.from("bytes"));
   await confirmUpload(adminViewer, mediaId);
   await addMessage(adminViewer, ticketId, "", [mediaId]);
   await db.mediaFile.update({

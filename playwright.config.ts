@@ -82,6 +82,11 @@ export default defineConfig({
       APP_BASE_URL: BASE_URL,
       SESSION_SECRET: process.env.SESSION_SECRET ?? "",
       NODE_ENV: PRODUCTION ? "production" : "development",
+      // מנטרל את Sentry ל-E2E: הבדיקות (בעיקר ריצת ה-prod, שבה NODE_ENV=
+      // production) היו מדווחות אירועי-בדיקה ל-Sentry ומזהמות את תצוגת
+      // הפרודקשן. Next אינו דורס משתנה שכבר קיים ב-process.env, ולכן ריק
+      // כאן גובר על ה-DSN שב-.env.local.
+      NEXT_PUBLIC_SENTRY_DSN: "",
       // בבנייה של פרודקשן אין חשבון Cloudflare, והמערכת מסרבת לנחש. זהו
       // ויתור מפורש: זו בנייה ולא פריסה, והקבצים יושבים על הדיסק המקומי.
       MEDIA_STORAGE: "local",

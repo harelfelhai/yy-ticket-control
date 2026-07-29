@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useId, useRef, useState } from "react";
 import { confirmUploadAction, registerMediaAction } from "@/app/media-actions";
 import { he } from "@/lib/he";
@@ -84,9 +85,22 @@ export function MediaPicker({
       method: "PUT",
       headers: target.headers,
       body: file,
-    }).catch(() => null);
+    }).catch((error) => {
+      // כשל רשת (אין קליטה, timeout, CORS) — נזרק. בלי לכידה כשלי העלאה
+      // בשטח נעלמים לגמרי; עכשיו הם גלויים ב-Sentry. המשתמש עדיין רואה
+      // הודעה ידידותית. תחת Playwright (DSN ריק) זה no-op.
+      Sentry.captureException(error, { tags: { area: "media-upload-put" } });
+      return null;
+    });
 
     if (!response?.ok) {
+      // ‏response קיים אך לא-ok = תשובת HTTP שגויה (חתימה פגה, 403 מ-R2),
+      // להבדיל מכשל רשת שכבר נלכד למעלה.
+      if (response) {
+        Sentry.captureException(new Error(`media upload PUT failed: ${response.status}`), {
+          tags: { area: "media-upload-put", status: String(response.status) },
+        });
+      }
       setError(he.media.uploadFailed);
       return null;
     }

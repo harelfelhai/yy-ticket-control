@@ -1,5 +1,7 @@
 import { runBackup } from "@/lib/backup";
 import { db } from "@/lib/db";
+import { captureError, logInfo } from "@/lib/observability/log";
+import { HEARTBEAT, setHeartbeat } from "@/watchdog/heartbeat";
 import { enqueue } from "../queue";
 import { nextBackupRun } from "../schedule";
 import { JOB_TYPES } from "../types";
@@ -18,6 +20,16 @@ export interface BackupOutcome {
 
 export async function runDailyBackup(now: Date = new Date()): Promise<BackupOutcome> {
   const result = await runBackup(now);
+
+  // פעימת-לב אחרי גיבוי מוצלח — הסימן היחיד ש"הגיבוי הלילי רץ". עטוף כדי
+  // שכשל בכתיבת הפעימה לא יפיל גיבוי שהצליח.
+  try {
+    await setHeartbeat(HEARTBEAT.backup, now);
+  } catch (error) {
+    captureError(error, { fingerprint: ["heartbeat-write", "backup"] });
+  }
+  logInfo("backup.done", { key: result.key, bytes: result.bytes, pruned: result.pruned });
+
   return { kind: "backup", ...result };
 }
 

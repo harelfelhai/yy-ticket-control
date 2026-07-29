@@ -1,4 +1,7 @@
+import { unstable_rethrow } from "next/navigation";
 import { NextResponse } from "next/server";
+import { UserFacingError } from "@/lib/action-result";
+import { captureError } from "@/lib/observability/log";
 import { getViewableMedia } from "@/lib/services/media";
 import { resolveViewer } from "@/lib/services/viewer";
 import { selectStorage } from "@/lib/storage";
@@ -19,8 +22,20 @@ export async function GET(request: Request, context: RouteContext<"/api/media/[i
   const { id } = await context.params;
   const token = new URL(request.url).searchParams.get("t");
 
-  const viewer = await resolveViewer(token).catch(() => null);
-  if (!viewer) return notFound();
+  // הבחנה בין "טוקן לא תקף" (צפוי) ל"שגיאת שרת" (לא צפוי): הראשון הוא 404
+  // רגיל, השני היה מוסתר כ-404 ונעלם. עכשיו הוא עדיין 404 לקורא, אבל נלכד
+  // ל-Sentry — תקלת DB לא תיראה יותר כ"קובץ חסר".
+  let viewer: Awaited<ReturnType<typeof resolveViewer>>;
+  try {
+    viewer = await resolveViewer(token);
+  } catch (error) {
+    // חריגות בקרה של Next (redirect למסך התחברות למשתמש פנימי בלי טוקן)
+    // חייבות לעבור הלאה — אחרת המשתמש יקבל 404 במקום מסך ההתחברות.
+    unstable_rethrow(error);
+    if (error instanceof UserFacingError) return notFound();
+    captureError(error, { tags: { route: "media" }, fingerprint: ["media-resolve-viewer"] });
+    return notFound();
+  }
 
   const media = await getViewableMedia(viewer, id);
   if (!media) return notFound();

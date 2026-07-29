@@ -24,6 +24,9 @@ import {
   runDailyEscalation,
 } from "./handlers/escalation";
 import { cleanupRateLimits } from "@/lib/rate-limit";
+import { captureError } from "@/lib/observability/log";
+import { HEARTBEAT, setHeartbeat } from "@/watchdog/heartbeat";
+import { runWatchdog } from "@/watchdog/runner";
 import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob, reclaimOrphanedJobs } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
 
@@ -47,6 +50,18 @@ const MAX_JOBS_PER_TICK = 20;
 
 /** השהיה אחרי כשל לא צפוי בלולאה עצמה, כדי לא להציף את הלוג */
 const ERROR_BACKOFF_MS = 10_000;
+
+/**
+ * חלון throttle ללכידת כשל לולאה ל-Sentry. כשל בלולאה פירושו בדרך כלל
+ * ש-DB למטה, והלולאה חוזרת כל 10 שניות — לכידה בכל פעם הייתה שורפת את
+ * מכסת ה-5K שגיאות/חודש תוך שעה. Sentry ממזג ל-issue אחד, אבל נפח האירועים
+ * עדיין נספר, ולכן לוכדים לכל היותר פעם ב-10 דקות.
+ */
+const LOOP_ERROR_CAPTURE_INTERVAL_MS = 10 * 60_000;
+let lastLoopErrorCaptureAt = 0;
+
+/** כל כמה זמן ה-watchdog בודק את ה-invariants ומדווח check-in ל-Sentry */
+const WATCHDOG_INTERVAL_MS = 6 * 60 * 60_000;
 
 export type JobOutcome = DeliveryOutcome | AiOutcome | EscalationOutcome | BackupOutcome;
 
@@ -86,6 +101,19 @@ export async function processNextJob(
     return { job, status: "done", outcome };
   } catch (error) {
     await failJob(job.id, job.attempts, error, now);
+
+    // לכידה ל-Sentry **רק על כשל סופי**. `claimNextJob` כבר הגדיל את
+    // attempts, ולכן `>= MAX_ATTEMPTS` כאן זהה בדיוק ל-`exhausted` של
+    // failJob — אותה שורה שהופכת ל-FAILED. ניסיון זמני שיחזור בעוד דקה
+    // אינו אירוע שצריך להעיר מישהו; רק כשלא נותר ניסיון זו עובדה גלויה.
+    // fingerprint לפי סוג העבודה → issue אחד לכל סוג (מייל/AI/גיבוי/הסלמה).
+    if (job.attempts >= MAX_ATTEMPTS) {
+      captureError(error, {
+        tags: { jobType: job.type, jobId: job.id },
+        fingerprint: ["job-failed", job.type],
+      });
+    }
+
     // ג'וב יומי מתזמן את המחר רק כשהוא **מצליח** (ב-runJob). אם נכשל סופית,
     // בלי זה השרשרת היומית נעצרת עד ל-restart. הקריאה אידמפוטנטית: בחלון
     // ה-retry עדיין קיים PENDING ולא נוצר כפול; אחרי FAILED סופי נוצר המחר.
@@ -93,7 +121,12 @@ export async function processNextJob(
     try {
       await ensureDailyRescheduled(job.type, now);
     } catch (rescheduleError) {
-      console.error("[jobs] תזמון-מחדש של ג'וב יומי לאחר כשל נכשל", rescheduleError);
+      // תזמון-מחדש שנכשל פירושו ששרשרת יומית עלולה להיעצר — קריטי, ולכן
+      // ל-Sentry ולא ל-console בלבד.
+      captureError(rescheduleError, {
+        tags: { jobType: job.type, phase: "reschedule-after-failure" },
+        fingerprint: ["reschedule-failed", job.type],
+      });
     }
     return {
       job,
@@ -224,8 +257,18 @@ export function startWorker(): void {
     const now = new Date();
     await ensureDailyEscalationScheduled(now);
     await ensureDailyBackupScheduled(now);
+    // זריעת פעימות-לב בעלייה: בהפעלה ראשונה (או אחרי restart) הג'וב היומי
+    // עדיין לא רץ, וה-watchdog היה מתריע על "פעימה חסרה" על שווא. מרגע זה
+    // ואילך פעימה ישנה פירושה באמת שהג'וב היומי הפסיק לרוץ.
+    await setHeartbeat(HEARTBEAT.escalation, now);
+    await setHeartbeat(HEARTBEAT.backup, now);
   })().catch((error) => {
-    console.error("[jobs] אתחול התור בעלייה נכשל", error);
+    // אתחול שנכשל פירושו שהגיבוי וההסלמה היומיים אולי לא תוזמנו כלל —
+    // כשל שקט של כל מנגנון ההתראות. קריטי, ולכן ל-Sentry.
+    captureError(error, {
+      tags: { phase: "worker-startup" },
+      fingerprint: ["worker-startup-failed"],
+    });
   });
 
   const tick = async () => {
@@ -235,6 +278,16 @@ export function startWorker(): void {
       // כשל כאן פירושו שהתור עצמו לא נגיש (בסיס נתונים למטה). ממשיכים
       // לנסות: העבודות ממתינות בטבלה ואינן הולכות לאיבוד.
       console.error("[jobs] הלולאה נכשלה", error);
+      // לכידה ל-Sentry עם throttle: DB שלמטה שעה היה מייצר 360 אירועים
+      // ושורף את המכסה. לוכדים פעם ב-10 דקות — מספיק כדי לדעת, לא כדי להציף.
+      const nowMs = Date.now();
+      if (nowMs - lastLoopErrorCaptureAt >= LOOP_ERROR_CAPTURE_INTERVAL_MS) {
+        lastLoopErrorCaptureAt = nowMs;
+        captureError(error, {
+          tags: { phase: "poll-loop" },
+          fingerprint: ["poll-loop-db-down"],
+        });
+      }
       await new Promise((resolve) => setTimeout(resolve, ERROR_BACKOFF_MS));
     } finally {
       setTimeout(tick, POLL_INTERVAL_MS).unref?.();
@@ -242,4 +295,22 @@ export function startWorker(): void {
   };
 
   setTimeout(tick, POLL_INTERVAL_MS).unref?.();
+
+  // ה-watchdog רץ בטיימר **נפרד** כל 6 שעות, מחוץ ללולאת העבודות (2ש') כדי
+  // לא לעכב אותה. הריצה הראשונה אחרי 6 שעות — הזריעה בעלייה שומרת על
+  // הפעימות טריות עד אז. `.unref` כמו בלולאה, אחרת התהליך לא נסגר ב-Ctrl-C.
+  const watchdogTick = async () => {
+    try {
+      await runWatchdog();
+    } catch (error) {
+      captureError(error, {
+        tags: { phase: "watchdog-runner" },
+        fingerprint: ["watchdog-runner-crash"],
+      });
+    } finally {
+      setTimeout(watchdogTick, WATCHDOG_INTERVAL_MS).unref?.();
+    }
+  };
+
+  setTimeout(watchdogTick, WATCHDOG_INTERVAL_MS).unref?.();
 }
