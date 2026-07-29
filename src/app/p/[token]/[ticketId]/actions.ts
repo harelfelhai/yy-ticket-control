@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { type ActionResult, guard } from "@/lib/action-result";
 import { he } from "@/lib/he";
+import { logInfo } from "@/lib/observability/log";
 import { allowPortalAction, resolveToken } from "@/lib/services/portal";
 import { TicketError, addMessage, setAssignmentStatus } from "@/lib/services/tickets";
 import { db } from "@/lib/db";
@@ -46,8 +47,13 @@ export async function markDoneAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     const parsed = inputSchema.parse({ token, ticketId });
-    const { assignment } = await requireActiveAssignment(parsed.token, parsed.ticketId);
+    const { identity, assignment } = await requireActiveAssignment(parsed.token, parsed.ticketId);
     await setAssignmentStatus(assignment.id, "DONE");
+    logInfo("portal.action", {
+      action: "done",
+      ticketId: parsed.ticketId,
+      professionalId: identity.professionalId,
+    });
     revalidatePath(`/p/${parsed.token}/${parsed.ticketId}`);
     revalidatePath(`/p/${parsed.token}`);
   });
@@ -78,6 +84,11 @@ export async function askQuestionAction(
     // שאומר רק "יש שאלה" מאלץ אותו להיכנס למערכת כדי לדעת על מה מדובר.
     await setAssignmentStatus(assignment.id, "QUESTION", text);
 
+    logInfo("portal.action", {
+      action: "question",
+      ticketId: parsed.ticketId,
+      professionalId: identity.professionalId,
+    });
     revalidatePath(`/p/${parsed.token}/${parsed.ticketId}`);
     revalidatePath(`/p/${parsed.token}`);
   });
@@ -100,6 +111,11 @@ export async function replyAction(
       text,
       files,
     );
+    logInfo("portal.action", {
+      action: "reply",
+      ticketId: parsed.ticketId,
+      professionalId: identity.professionalId,
+    });
     revalidatePath(`/p/${parsed.token}/${parsed.ticketId}`);
   });
 }

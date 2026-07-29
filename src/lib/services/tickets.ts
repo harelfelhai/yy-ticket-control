@@ -6,6 +6,7 @@ import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import { normalizeText } from "@/lib/normalize";
+import { logInfo } from "@/lib/observability/log";
 import {
   type Viewer,
   canCloseTicket,
@@ -143,6 +144,12 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
       );
     }
 
+    logInfo("ticket.created", {
+      ticketId: ticket.id,
+      isDraft,
+      recipientCount: recipients.length,
+      siteId: input.siteId,
+    });
     return { ticket, isDraft, missing };
   });
 }
@@ -321,6 +328,10 @@ async function applyNewAssignments(
 
   for (const assignmentId of assignmentIds) {
     await enqueueNotification(tx, { event: "ASSIGNED", assignmentId });
+  }
+
+  if (assignmentIds.length > 0) {
+    logInfo("assignments.applied", { ticketId, count: assignmentIds.length });
   }
 }
 
