@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { captureError, logInfo, logWarn } from "@/lib/observability/log";
 import { ensurePortalLink } from "@/lib/services/portal";
 import { composeNotification, renderEmailHtml } from "./compose";
 import type { EmailTransport, NotificationEvent, TicketSummary } from "./types";
@@ -66,11 +67,15 @@ export async function sendNotification(
     },
   });
 
-  if (!assignment) return { status: "skipped", reason: "missing" };
+  if (!assignment) {
+    logInfo("notify.skipped", { reason: "missing", assignmentId: input.assignmentId });
+    return { status: "skipped", reason: "missing" };
+  }
 
   // בין הרגע שהג'וב נוצר לרגע שהוא רץ המנהל עשוי היה להסיר את הנמען.
   // שליחה עכשיו הייתה מזמינה לעבודה מישהו שכבר אינו משויך.
   if (assignment.status === "REMOVED") {
+    logInfo("notify.skipped", { reason: "assignment-removed", assignmentId: assignment.id });
     return { status: "skipped", reason: "assignment-removed" };
   }
 
@@ -101,8 +106,15 @@ export async function sendNotification(
   });
 
   // אין כתובת — לא כישלון. קבלן בלי מייל מקבל את הפנייה בוואטסאפ, וזו
-  // הסיבה שהכפתור קיים בממשק. הקישור כבר הונפק לו למעלה.
-  if (!address) return { status: "skipped", reason: "no-address" };
+  // הסיבה שהכפתור קיים בממשק. הקישור כבר הונפק לו למעלה. אבל זו כן נקודה
+  // שראוי לדעת עליה: מישהו שהמנהל התכוון להתריע לו לא יקבל מייל.
+  if (!address) {
+    logWarn("notify.no-address", {
+      assignmentId: assignment.id,
+      ticketId: assignment.ticketId,
+    });
+    return { status: "skipped", reason: "no-address" };
+  }
 
   await transport.send({
     to: address,
@@ -112,12 +124,29 @@ export async function sendNotification(
   });
 
   if (target === "recipient") {
-    await db.assignment.update({
-      where: { id: assignment.id },
-      data: { notifiedAt: new Date() },
-    });
+    // המייל כבר יצא. אם עדכון notifiedAt נכשל — **אסור לזרוק**: אחרת הג'וב
+    // ייכשל, יחזור לתור, וישלח את המייל שוב, ואחרי 3 ניסיונות יסומן FAILED
+    // למרות שמיילים יצאו. לוכדים ל-Sentry וממשיכים כ"נשלח". המחיר: notifiedAt
+    // עלול להיוותר ריק (הממשק יראה "בהמתנה") — עדיף על שליחה כפולה.
+    try {
+      await db.assignment.update({
+        where: { id: assignment.id },
+        data: { notifiedAt: new Date() },
+      });
+    } catch (error) {
+      captureError(error, {
+        tags: { assignmentId: assignment.id, phase: "notify-mark-sent" },
+        fingerprint: ["notify-mark-sent-failed"],
+      });
+    }
   }
 
+  logInfo("notify.sent", {
+    assignmentId: assignment.id,
+    ticketId: assignment.ticketId,
+    via: transport.name,
+    event: input.event,
+  });
   return { status: "sent", to: address, via: transport.name };
 }
 

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { JOB_TYPES } from "@/jobs/types";
 import { drainJobs } from "@/jobs/worker";
 import { db } from "@/lib/db";
@@ -229,6 +229,27 @@ describe("sendNotification", () => {
       fakeTransport().transport,
     );
     expect(outcome).toEqual({ status: "skipped", reason: "missing" });
+  });
+
+  it("כשל בעדכון notifiedAt אחרי שליחה מוצלחת אינו גורם לשליחה כפולה", async () => {
+    // הבאג: send מצליח, ואז assignment.update זורק → הפונקציה זרקה → הג'וב
+    // חזר ושלח שוב, ואחרי 3 ניסיונות סומן FAILED למרות שמיילים יצאו.
+    // התיקון: העדכון אינו זורק — המייל יצא פעם אחת והתוצאה "נשלח".
+    const ticket = await makeTicket([electrician]);
+    const assignment = await assignmentOf(ticket.id, electrician);
+    const { transport, sent } = fakeTransport();
+
+    const spy = vi
+      .spyOn(db.assignment, "update")
+      .mockRejectedValueOnce(new Error("עדכון notifiedAt נכשל"));
+    const outcome = await sendNotification(
+      { event: "ASSIGNED", assignmentId: assignment.id },
+      transport,
+    );
+    spy.mockRestore();
+
+    expect(sent).toHaveLength(1);
+    expect(outcome).toMatchObject({ status: "sent" });
   });
 });
 
