@@ -26,6 +26,7 @@ import {
 import { cleanupRateLimits } from "@/lib/rate-limit";
 import { captureError } from "@/lib/observability/log";
 import { HEARTBEAT, setHeartbeat } from "@/watchdog/heartbeat";
+import { runWatchdog } from "@/watchdog/runner";
 import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob, reclaimOrphanedJobs } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
 
@@ -58,6 +59,9 @@ const ERROR_BACKOFF_MS = 10_000;
  */
 const LOOP_ERROR_CAPTURE_INTERVAL_MS = 10 * 60_000;
 let lastLoopErrorCaptureAt = 0;
+
+/** כל כמה זמן ה-watchdog בודק את ה-invariants ומדווח check-in ל-Sentry */
+const WATCHDOG_INTERVAL_MS = 6 * 60 * 60_000;
 
 export type JobOutcome = DeliveryOutcome | AiOutcome | EscalationOutcome | BackupOutcome;
 
@@ -291,4 +295,22 @@ export function startWorker(): void {
   };
 
   setTimeout(tick, POLL_INTERVAL_MS).unref?.();
+
+  // ה-watchdog רץ בטיימר **נפרד** כל 6 שעות, מחוץ ללולאת העבודות (2ש') כדי
+  // לא לעכב אותה. הריצה הראשונה אחרי 6 שעות — הזריעה בעלייה שומרת על
+  // הפעימות טריות עד אז. `.unref` כמו בלולאה, אחרת התהליך לא נסגר ב-Ctrl-C.
+  const watchdogTick = async () => {
+    try {
+      await runWatchdog();
+    } catch (error) {
+      captureError(error, {
+        tags: { phase: "watchdog-runner" },
+        fingerprint: ["watchdog-runner-crash"],
+      });
+    } finally {
+      setTimeout(watchdogTick, WATCHDOG_INTERVAL_MS).unref?.();
+    }
+  };
+
+  setTimeout(watchdogTick, WATCHDOG_INTERVAL_MS).unref?.();
 }
