@@ -134,6 +134,12 @@ export async function confirmUpload(viewer: Viewer, mediaId: string) {
 
   if (media.uploaded) return media;
 
+  // הלקוח הצהיר שההעלאה הושלמה — מוודאים שהבתים באמת נחתו באחסון לפני
+  // שמסמנים uploaded ומפעילים ג'ובי AI בתשלום. אפליקציה שנסגרה באמצע
+  // ההעלאה, או PUT שנדחה, הייתה משאירה רשומת מדיה שמצביעה על כלום.
+  const present = await selectStorage().exists(media.storageKey);
+  if (!present) throw new MediaError(he.media.uploadFailed);
+
   return db.$transaction(async (tx) => {
     const updated = await tx.mediaFile.update({
       where: { id: mediaId },

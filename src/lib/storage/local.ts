@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { MediaStorage, UploadTarget } from "./types";
 
@@ -39,6 +39,17 @@ export function localStorage(baseUrl: string): MediaStorage {
 
     async remove(key) {
       await rm(resolveKey(key), { force: true });
+    },
+
+    async exists(key) {
+      try {
+        await stat(resolveKey(key));
+        return true;
+      } catch (error) {
+        // הקובץ לא נכתב (העלאה שנקטעה) → false. תקלה אחרת נזרקת.
+        if ((error as { code?: string }).code === "ENOENT") return false;
+        throw error;
+      }
     },
   };
 }
