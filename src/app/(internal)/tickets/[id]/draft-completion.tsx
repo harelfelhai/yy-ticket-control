@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { ActionResult } from "@/lib/action-result";
+import {
+  type DraftCompletionSnapshot,
+  clearCompletion,
+  isEmptyCompletion,
+  loadCompletion,
+  saveCompletion,
+} from "@/lib/draft-completion-store";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -23,6 +30,10 @@ import { deleteDraftAction, submitDraftAction, updateTicketFieldsAction } from "
  * שכבר קיים. השיגור הוא שני שלבים: קודם שומרים את השדות שמולאו
  * (`updateTicketFieldsAction`), ואז משגרים (`submitDraftAction`) — כך אם
  * חסר עדיין משהו, מה שהוקלד לא הולך לאיבוד.
+ *
+ * מה שהוקלד ועדיין לא שוגר נשמר ל-IndexedDB (`draft-completion-store`)
+ * ומשוחזר בעלייה — כך שרענון דף, קריסה או ניווט בטעות אינם מאבדים את
+ * ההשלמה שבאמצע, בדיוק כמו טופס היצירה (`offline-draft`).
  */
 
 export interface BuildingWithApartments extends LearnedOption {
@@ -58,6 +69,19 @@ function unwrap(result: ActionResult<SelectOption>): SelectOption {
   return result.data;
 }
 
+/**
+ * ממיר מזהי נמענים שמורים לאובייקטי האפשרות המלאים, מול הרשימה הזמינה עכשיו.
+ * נמען שנוצר תוך כדי כבר בשרת ולכן חוזר ב-`options`; מי שכבר שויך או הוסר נושר.
+ */
+function toRecipients(
+  ids: DraftCompletionSnapshot["recipientIds"],
+  options: RecipientOption[],
+): RecipientOption[] {
+  return ids
+    .map((ref) => options.find((o) => o.id === ref.id && o.kind === ref.kind))
+    .filter((o): o is RecipientOption => o !== undefined);
+}
+
 export function DraftCompletion({
   ticketId,
   siteId,
@@ -78,9 +102,81 @@ export function DraftCompletion({
   const [recipients, setRecipients] = useState<RecipientOption[]>(initial.recipients);
 
   const [error, setError] = useState<string | null>(null);
+  /** האם עדיין קוראים snapshot שמור מ-IndexedDB — עד אז אין לכתוב עליו */
+  const [restoring, setRestoring] = useState(true);
+  /**
+   * שוגר או נמחק — עוצר את השמירה השוטפת. ‏ref ולא state: השמירה מושהית,
+   * והשיגור עשוי לחזור בתוך חלון ההשהיה; עדכון state אסינכרוני היה מאפשר
+   * לטיימר ממתין לירות **אחרי** הניקוי ולכתוב את ה-snapshot בחזרה.
+   */
+  const submittedRef = useRef(false);
   const [pending, startTransition] = useTransition();
   const hydrated = useHydrated();
   const busy = pending || !hydrated;
+
+  /** צילום המצב הנוכחי, בצורה שנשמרת בדפדפן */
+  const snapshot = useCallback(
+    (): DraftCompletionSnapshot => ({
+      ticketId,
+      buildingId,
+      apartmentId,
+      domainId,
+      description,
+      recipientIds: recipients.map((r) => ({ kind: r.kind, id: r.id })),
+      savedAt: Date.now(),
+    }),
+    [ticketId, buildingId, apartmentId, domainId, description, recipients],
+  );
+
+  /**
+   * משחזר מצב שהוקלד קודם ולא שוגר (רענון/קריסה/ניווט). פעם אחת בעלייה:
+   * שחזור חוזר תוך כדי render היה דורס את מה שהמשתמש מקליד עכשיו.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadCompletion(ticketId).then((saved) => {
+      if (cancelled || !saved) {
+        setRestoring(false);
+        return;
+      }
+
+      // ‏`?? initial`: ה-snapshot נכתב מהמצב שאותחל מ-initial, ולכן הוא עדכני
+      // לפחות כמותו. השיגור ממילא כותב רק שדות שעדיין חסרים, כך ששחזור ערך
+      // לשדה שכבר קיים בשרת אינו יכול לדרוס אותו.
+      setBuildingId(saved.buildingId ?? initial.buildingId);
+      setApartmentId(saved.apartmentId ?? initial.apartmentId);
+      setDomainId(saved.domainId ?? initial.domainId);
+      setDescription(saved.description);
+      const restored = toRecipients(saved.recipientIds, recipientOptions);
+      if (restored.length > 0) setRecipients(restored);
+
+      setRestoring(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- פעם אחת בעלייה בלבד; ראה ההערה מעל
+  }, [ticketId]);
+
+  /**
+   * שמירה מקומית שוטפת, מושהית ב-400ms. לא כותבים לפני שסיימנו לשחזר, לא
+   * אחרי שיגור/מחיקה, ולא מצב ריק שאין בו מה לשמור.
+   */
+  useEffect(() => {
+    if (restoring || submittedRef.current) return;
+
+    const snap = snapshot();
+    if (isEmptyCompletion(snap)) return;
+
+    const timer = setTimeout(() => {
+      if (submittedRef.current) return;
+      void saveCompletion(snap);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [snapshot, restoring]);
 
   const selectedBuilding = buildings.find((b) => b.id === buildingId) ?? null;
   // אם צריך לבחור בניין, ממילא צריך גם דירה תחתיו — הן זוג.
@@ -89,6 +185,9 @@ export function DraftCompletion({
 
   function submit() {
     setError(null);
+    // עוצר את השמירה השוטפת מרגע הלחיצה: מכאן והלאה הטיימר לא יכתוב snapshot
+    // ישן בחזרה אחרי שהטיוטה כבר שוגרה.
+    submittedRef.current = true;
     startTransition(async () => {
       // שלב 1: שמירת השדות שמולאו. רק שדות שהמסך הציג ושבאמת נבחרו.
       const fields: {
@@ -105,6 +204,8 @@ export function DraftCompletion({
       if (Object.keys(fields).length > 0) {
         const saved = await updateTicketFieldsAction(ticketId, fields);
         if (!saved.ok) {
+          // שגיאה עסקית — המשתמש יתקן וינסה שוב; השמירה השוטפת חוזרת לפעול.
+          submittedRef.current = false;
           setError(saved.error);
           return;
         }
@@ -115,17 +216,30 @@ export function DraftCompletion({
         ticketId,
         recipients.map((r) => ({ kind: r.kind, id: r.id })),
       );
-      if (!sent.ok) setError(sent.error);
+      if (!sent.ok) {
+        submittedRef.current = false;
+        setError(sent.error);
+        return;
+      }
+
+      // שוגר בהצלחה — הטיוטה הפכה לפנייה אמיתית, אין עוד מה לשחזר.
+      void clearCompletion(ticketId);
     });
   }
 
   function remove() {
     if (!window.confirm(he.ticket.confirmDeleteDraft)) return;
     setError(null);
+    submittedRef.current = true;
+    // הטיוטה נמחקת — נקה גם את ה-snapshot המקומי כדי שלא יישאר יתום.
+    void clearCompletion(ticketId);
     startTransition(async () => {
       // מצליח → deleteDraftAction מנווט ללוח; חוזר רק במקרה שגיאה.
       const result = await deleteDraftAction(ticketId);
-      if (result?.error) setError(result.error);
+      if (result?.error) {
+        submittedRef.current = false;
+        setError(result.error);
+      }
     });
   }
 
