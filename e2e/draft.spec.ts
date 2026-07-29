@@ -1,5 +1,5 @@
-import { type Page, expect, test } from "@playwright/test";
-import { E2E_ADMIN } from "./global-setup";
+import { expect, test } from "@playwright/test";
+import { addProfessional, loginAsManager, makeMinimalDraft, pick } from "./helpers";
 
 /**
  * מחזור חיי הטיוטה מקצה לקצה (אפיון §2.5, מסך 7):
@@ -22,39 +22,6 @@ test.beforeEach(async ({ page }) => {
     }
   });
 });
-
-async function loginAsManager(page: Page) {
-  await page.goto("/board");
-  if (new URL(page.url()).pathname === "/login") {
-    await page.getByLabel("טלפון או מייל").fill(E2E_ADMIN.phone);
-    await page.getByLabel("סיסמה").fill(E2E_ADMIN.password);
-    await page.getByRole("button", { name: "כניסה" }).click();
-  }
-  await expect(page).toHaveURL(/\/board$/);
-}
-
-async function pick(page: Page, label: string, option: string) {
-  await page.getByRole("button", { name: new RegExp(`^${label}`) }).first().click();
-  await page.getByRole("option", { name: option, exact: true }).click();
-}
-
-async function addProfessional(page: Page, name: string, phone: string) {
-  await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
-  await page.getByLabel("שם").fill(name);
-  await page.getByLabel("טלפון").fill(phone);
-  await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
-  await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(name);
-}
-
-/** יוצר טיוטה עם בניין ודירה בלבד, ומחזיר את כתובת מסך הפנייה */
-async function makeMinimalDraft(page: Page): Promise<string> {
-  await page.goto("/tickets/new");
-  await pick(page, "בניין", "בניין א");
-  await pick(page, "דירה", "1");
-  await page.getByRole("button", { name: "שמור כטיוטה" }).click();
-  await expect(page).toHaveURL(/\/tickets\/[a-z0-9]+$/);
-  return new URL(page.url()).pathname;
-}
 
 test("שמירה כטיוטה: באנר אדום, בלי כפתור סגירה, ובלי עורך הנמענים הרגיל", async ({
   page,
