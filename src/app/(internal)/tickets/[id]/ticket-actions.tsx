@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { ActionResult } from "@/lib/action-result";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import {
@@ -78,8 +79,7 @@ export function TicketActions({
             disabled={busy}
           />
 
-          <button
-            type="button"
+          <Button
             disabled={busy || !canSend}
             onClick={() =>
               run(
@@ -90,10 +90,9 @@ export function TicketActions({
                 },
               )
             }
-            className="min-h-12 rounded-xl bg-brand px-4 font-semibold text-brand-fg disabled:opacity-60"
           >
             {he.ticket.send}
-          </button>
+          </Button>
         </div>
       ) : (
         <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-muted">
@@ -103,19 +102,18 @@ export function TicketActions({
 
       <div className="flex flex-wrap gap-2">
         {canSetHandler && !hasHandler && !isClosed ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             disabled={busy}
             onClick={() => run(() => setHandlerAction(ticketId))}
-            className="min-h-12 rounded-xl border border-border bg-surface px-4 font-medium disabled:opacity-60"
           >
             {he.ticket.setHandler}
-          </button>
+          </Button>
         ) : null}
 
         {canClose ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             disabled={busy}
             onClick={() => {
               const closing = !isClosed;
@@ -126,10 +124,9 @@ export function TicketActions({
                 () => setNotice(closing ? he.ticket.closedNotice : he.ticket.reopenedNotice),
               );
             }}
-            className="min-h-12 rounded-xl border border-border bg-surface px-4 font-medium disabled:opacity-60"
           >
             {isClosed ? he.ticket.reopen : he.ticket.close}
-          </button>
+          </Button>
         ) : null}
       </div>
 

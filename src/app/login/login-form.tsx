@@ -2,20 +2,16 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { type LoginState, loginAction } from "./actions";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      // ‏min-h-12: אזור מגע נדיב, כי המשתמש העיקרי מקליד בשטח ולעיתים בכפפות.
-      className="min-h-12 w-full rounded-xl bg-brand px-4 text-base font-semibold text-brand-fg transition-opacity disabled:opacity-60"
-    >
+    <Button type="submit" disabled={pending} className="w-full transition-opacity">
       {pending ? he.login.submitting : he.login.submit}
-    </button>
+    </Button>
   );
 }
 

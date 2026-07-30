@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { LearnedSelect } from "@/components/learned-select";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import {
@@ -95,15 +96,15 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
                     ×
                   </button>
                 </span>
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="compact"
                   disabled={running}
                   onClick={() => showLink(contractor.id)}
                   aria-label={`${he.ticket.showLink} ${contractor.label}`}
-                  className="min-h-9 px-2 text-sm font-medium text-brand disabled:opacity-50"
                 >
                   {he.ticket.showLink}
-                </button>
+                </Button>
               </div>
               {links[contractor.id] ? (
                 <input
@@ -156,14 +157,9 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
         ) : null}
 
         {pending.length > 0 ? (
-          <button
-            type="button"
-            disabled={running}
-            onClick={grant}
-            className="min-h-11 self-start rounded-xl bg-brand px-6 font-medium text-brand-fg disabled:opacity-60"
-          >
+          <Button disabled={running} onClick={grant} className="self-start">
             {he.tag.grant}
-          </button>
+          </Button>
         ) : null}
 
         {notice ? (

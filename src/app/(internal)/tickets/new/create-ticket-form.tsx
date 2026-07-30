@@ -5,6 +5,7 @@ import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { ROOMS } from "@/lib/rooms";
 import {
@@ -440,14 +441,9 @@ export function CreateTicketForm({
       ) : null}
 
       <div className="sticky bottom-0 flex gap-2 border-t border-border bg-bg py-3">
-        <button
-          type="button"
-          onClick={() => run(false)}
-          disabled={busy}
-          className="min-h-12 flex-1 rounded-xl bg-brand px-4 text-base font-semibold text-brand-fg disabled:opacity-60"
-        >
+        <Button onClick={() => run(false)} disabled={busy} className="flex-1">
           {he.ticket.submit}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => run(true)}

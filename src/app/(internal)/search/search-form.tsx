@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 
 interface Option {
@@ -72,12 +73,9 @@ export function SearchForm({
           placeholder={he.search.placeholder}
           className="min-h-12 flex-1 rounded-xl border border-border bg-surface px-3 text-base"
         />
-        <button
-          type="submit"
-          className="min-h-12 rounded-xl bg-brand px-4 font-semibold text-brand-fg"
-        >
+        <Button type="submit">
           {he.search.submit}
-        </button>
+        </Button>
       </form>
 
       <p className="text-xs text-muted">{he.search.scopeHint}</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 
@@ -93,23 +94,19 @@ export function ProfessionalCreateForm({ onCreate, onCancel }: ProfessionalCreat
       ) : null}
 
       <div className="flex gap-2">
-        <button
-          type="button"
+        <Button
           onClick={submit}
           disabled={busy}
+          size="compact"
           // scroll-mb-32: הכפתור הוא זה שנגלל לתצוגה; הריפוד מוודא שהוא עוצר
           // מעל רצועת הפעולות הדביקה שבתחתית מסך היצירה ולא נחסם מאחוריה.
-          className="min-h-11 flex-1 scroll-mb-32 rounded-xl bg-brand px-4 font-medium text-brand-fg disabled:opacity-60"
+          className="flex-1 scroll-mb-32"
         >
           {he.directory.saveProfessional}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="min-h-11 rounded-xl border border-border px-4"
-        >
+        </Button>
+        <Button variant="secondary" size="compact" onClick={onCancel}>
           {he.common.cancel}
-        </button>
+        </Button>
       </div>
     </div>
   );

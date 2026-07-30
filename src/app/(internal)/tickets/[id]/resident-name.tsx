@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { updateResidentNameAction } from "./actions";
@@ -67,14 +68,11 @@ export function ResidentName({ ticketId, initial, canEdit }: ResidentNameProps) 
         aria-label={he.ticket.residentLabel}
         className="min-h-9 rounded-lg border border-border bg-surface px-2 text-sm text-fg"
       />
-      <button
-        type="button"
-        onClick={save}
-        disabled={busy}
-        className="min-h-9 rounded-lg bg-brand px-2 font-medium text-brand-fg disabled:opacity-60"
-      >
+      {/* היה `min-h-9` (36px) — מתחת לסף המגע המינימלי של 44px. הפרימיטיב
+          מעלה אותו ל-`compact`, שהוא הסף הנמוך ביותר שהתקן מתיר. */}
+      <Button size="compact" onClick={save} disabled={busy}>
         {he.common.save}
-      </button>
+      </Button>
       <button
         type="button"
         onClick={() => {

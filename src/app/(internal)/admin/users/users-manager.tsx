@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Role } from "@/generated/prisma/enums";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createUserAction, setUserActiveAction } from "../actions";
@@ -152,14 +153,9 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
           />
         </label>
 
-        <button
-          type="button"
-          onClick={add}
-          disabled={busy}
-          className="min-h-11 self-start rounded-xl bg-brand px-6 font-medium text-brand-fg disabled:opacity-60"
-        >
+        <Button onClick={add} disabled={busy} className="self-start">
           {he.admin.addUser}
-        </button>
+        </Button>
 
         {error ? (
           <p role="alert" className="text-sm font-medium text-danger">
@@ -188,14 +184,15 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
                 {user.siteName ? ` · ${user.siteName}` : ` · ${he.admin.noSite}`}
               </span>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="compact"
               onClick={() => toggleActive(user.id, !user.active)}
               disabled={busy}
-              className="min-h-10 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-50"
+              className="shrink-0"
             >
               {user.active ? he.admin.deactivate : he.admin.activate}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

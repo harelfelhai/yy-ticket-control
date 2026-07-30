@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { portalTagMessageAction } from "./actions";
@@ -39,14 +40,13 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
         />
       </label>
 
-      <button
-        type="button"
+      <Button
         disabled={busy || text.trim().length === 0}
         onClick={send}
-        className="min-h-12 self-start rounded-xl bg-brand px-6 font-semibold text-brand-fg disabled:opacity-60"
+        className="self-start"
       >
         {he.ticket.send}
-      </button>
+      </Button>
 
       {error ? (
         <p role="alert" className="text-sm font-medium text-danger">

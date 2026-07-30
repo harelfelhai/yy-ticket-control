@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
@@ -95,14 +96,9 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
           </label>
         </div>
 
-        <button
-          type="button"
-          onClick={merge}
-          disabled={busy || !keepId || !dropId}
-          className="min-h-11 self-start rounded-xl bg-brand px-6 font-medium text-brand-fg disabled:opacity-60"
-        >
+        <Button onClick={merge} disabled={busy || !keepId || !dropId} className="self-start">
           {he.admin.mergeButton}
-        </button>
+        </Button>
 
         {notice ? (
           <p className="rounded-xl bg-success/10 p-3 text-sm font-medium text-success">{notice}</p>
@@ -160,14 +156,15 @@ function ProfessionalItem({
             {he.admin.activeTickets(professional.activeAssignments)}
           </span>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="compact"
           onClick={() => setEditing(true)}
           disabled={disabled}
-          className="min-h-10 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-50"
+          className="shrink-0"
         >
           {he.admin.editProfessional}
-        </button>
+        </Button>
       </li>
     );
   }
@@ -185,21 +182,12 @@ function ProfessionalItem({
         </p>
       ) : null}
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending}
-          className="min-h-11 flex-1 rounded-xl bg-brand px-4 font-medium text-brand-fg disabled:opacity-60"
-        >
+        <Button onClick={save} disabled={pending} className="flex-1">
           {he.admin.saveProfessional}
-        </button>
-        <button
-          type="button"
-          onClick={() => setEditing(false)}
-          className="min-h-11 rounded-xl border border-border px-4"
-        >
+        </Button>
+        <Button variant="secondary" size="compact" onClick={() => setEditing(false)}>
           {he.common.cancel}
-        </button>
+        </Button>
       </div>
     </li>
   );

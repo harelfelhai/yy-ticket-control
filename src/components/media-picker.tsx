@@ -3,6 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { useId, useRef, useState } from "react";
 import { confirmUploadAction, registerMediaAction } from "@/app/media-actions";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { mediaKind } from "@/lib/media-view";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -164,14 +165,15 @@ export function MediaPicker({
               ) : (
                 <span className="max-w-40 truncate text-sm">{file.name}</span>
               )}
-              <button
-                type="button"
+              <Button
+                variant="dangerQuiet"
+                size="compact"
                 onClick={() => remove(file.mediaId)}
                 aria-label={`${he.media.remove}: ${file.name}`}
-                className="min-h-11 shrink-0 px-2 text-sm font-medium text-danger"
+                className="shrink-0 px-2"
               >
                 ×
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

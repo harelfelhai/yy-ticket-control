@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/lib/action-result";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { ROOMS } from "@/lib/rooms";
@@ -231,15 +231,17 @@ export function BatchForm({
                 <span className="text-xs font-medium text-muted">
                   {he.batch.rowNumber(index + 1)}
                 </span>
+                {/* היה `min-h-8` (32px) — הרחק מתחת לסף המגע של 44px. */}
                 {rows.length > 1 ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="dangerQuiet"
+                    size="compact"
                     onClick={() => removeRow(row.key)}
                     aria-label={`${he.batch.removeRow} ${index + 1}`}
-                    className="min-h-8 px-2 text-sm text-danger"
+                    className="px-2"
                   >
                     {he.batch.removeRow}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
 
@@ -311,14 +313,9 @@ export function BatchForm({
           ) : null}
 
           <div className="sticky bottom-0 flex gap-2 border-t border-border bg-bg py-3">
-            <button
-              type="button"
-              onClick={() => submit(true)}
-              disabled={busy}
-              className="min-h-12 flex-1 rounded-xl bg-brand px-4 text-base font-semibold text-brand-fg disabled:opacity-60"
-            >
+            <Button onClick={() => submit(true)} disabled={busy} className="flex-1">
               {he.batch.dispatch}
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => submit(false)}
@@ -355,12 +352,9 @@ function Summary({ summary, onReset }: { summary: BatchResult; onReset: () => vo
         ))}
       </div>
       <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/tags/${summary.tagId}`}
-          className="min-h-12 rounded-xl bg-brand px-6 text-base font-semibold leading-[3rem] text-brand-fg"
-        >
-          {he.batch.goToTag}
-        </Link>
+        {/* היה `leading-[3rem]` כדי למרכז אנכית — הפרימיטיב עושה זאת ב-flex,
+            בלי לקשור את גובה השורה לגובה הכפתור. */}
+        <ButtonLink href={`/tags/${summary.tagId}`}>{he.batch.goToTag}</ButtonLink>
         <button
           type="button"
           onClick={onReset}
