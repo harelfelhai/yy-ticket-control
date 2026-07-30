@@ -19,6 +19,46 @@ export async function loginAsManager(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/board$/);
 }
 
+/**
+ * פותח את רצועת המסננים אם היא מקופלת.
+ *
+ * מתחת ל-`md` הרצועה מוסתרת מאחורי מתג, ומעליו היא גלויה ואין מתג. התנאי
+ * כאן הוא **נראות המתג** ולא שם הפרויקט — כך הבדיקה מתארת את ההתנהגות
+ * האמיתית של המסך, ולא את הגדרות ההרצה.
+ *
+ * ‏`/^מסננים/` ולא `"מסננים"`: התאמת מחרוזת ב-Playwright היא הכלה, ולכן
+ * "נקה מסננים" נתפס גם הוא — והלוקטור מפר את מצב ה-strict.
+ */
+export async function openFilters(page: Page): Promise<void> {
+  const toggle = page.getByRole("button", { name: /^מסננים/ });
+
+  /**
+   * ההמתנה כאן אינה קוסמטית, ושתי דרכים מתבקשות אליה שגויות.
+   *
+   * רצועת המסננים יושבת בתוך גבול `Suspense`, ולכן היא מגיעה בזרימה שנייה
+   * אחרי אירוע ה-load שעליו `goto` ממתין. ל-`isVisible` אין המתנה מובנית,
+   * ולכן לבדו הוא החזיר "לא נראה" על אלמנט שטרם הגיע — הפונקציה חזרה בלי
+   * לפתוח, והבדיקה נכשלה על בורר מוסתר.
+   *
+   * ‏`waitFor` על המתג לבדו שגוי בכיוון ההפוך: במסך רחב הוא `display:none`
+   * ולכן **אינו בעץ הנגישות כלל**, ו-`getByRole` לא ימצא אותו לעולם —
+   * ההמתנה נתקעת עד ל-timeout במקום לדלג.
+   *
+   * לכן ההמתנה היא ל**רצועה**, דרך שני הביטויים שלה: המתג בנייד, או מסנן
+   * הכיוון במסך רחב. `or` נפתר ברגע שאחד מהם נראה, ונכשל בקול אם אף אחד
+   * מהם לא הגיע — בניגוד ל-timeout שנבלע.
+   */
+  const directionFilter = page.getByLabel("הפניתי");
+  await toggle.or(directionFilter).first().waitFor();
+  if (!(await toggle.isVisible())) return;
+
+  // ‏toHaveAttribute חוזר על עצמו עד שהוא מצליח, ולכן הוא גם ההמתנה
+  // להידרציה — לחיצה לפניה לא הייתה מפעילה כלום.
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
 /** בוחר אפשרות קיימת מתוך LearnedSelect לפי תווית השדה ושם האפשרות */
 export async function pick(page: Page, label: string, option: string): Promise<void> {
   await page

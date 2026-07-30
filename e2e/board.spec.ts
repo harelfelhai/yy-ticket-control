@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openFilters } from "./helpers";
 
 /**
  * הלוח הראשי — המסך שמנהל העבודה פותח בבוקר.
@@ -103,13 +104,42 @@ test.describe("הלוח הראשי", () => {
 
   test("מצב הסינון נשמר בכתובת, כך שחזרה למסך משמרת אותו", async ({ page }) => {
     await page.goto("/board");
+    await openFilters(page);
     await page.getByLabel("הפניתי").selectOption("opened");
 
     await expect(page).toHaveURL(/direction=opened/);
 
-    // חזרה מהפנייה למסך אינה מאבדת את הסינון.
+    // חזרה מהפנייה למסך אינה מאבדת את הסינון. הרצועה נפתחת מאליה, כי
+    // הכתובת מסוננת — ולכן אין צורך לפתוח אותה שוב.
     await page.reload();
     await expect(page.getByLabel("הפניתי")).toHaveValue("opened");
+  });
+
+  test("בנייד הרצועה מקופלת, ובמסך רחב היא גלויה", async ({ page }, testInfo) => {
+    await page.goto("/board");
+
+    const toggle = page.getByRole("button", { name: /^מסננים/ });
+    const filter = page.getByLabel("הפניתי");
+
+    if (testInfo.project.name === "mobile") {
+      // שישה בוררים גלויים תפסו כשליש מהמסך הראשון של הלוח.
+      await expect(toggle).toBeVisible();
+      await expect(filter).toBeHidden();
+      await expect(page.getByRole("checkbox", { name: "מצב סיור" })).toBeVisible();
+    } else {
+      await expect(toggle).toBeHidden();
+      await expect(filter).toBeVisible();
+    }
+  });
+
+  test("כתובת מסוננת פותחת את הרצועה מאליה", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "הקיפול קיים רק מתחת ל-md");
+
+    // בלי זה, לוח שהתרוקן בגלל מסנן שהגיע בקישור נקרא כאובדן נתונים.
+    await page.goto("/board?direction=opened");
+
+    await expect(page.getByLabel("הפניתי")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^מסננים/ })).toContainText("1");
   });
 
   test("כפתור פנייה חדשה מוביל למסך היצירה", async ({ page }) => {
