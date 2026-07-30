@@ -160,11 +160,15 @@ export function RecipientEditor({
         <ul aria-label={he.ticket.recipients} className="flex flex-col gap-3">
           {active.map((assignment) => (
             <li key={assignment.id} className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
                 {/* min-w-0 + truncate: שם ארוך מקצר את עצמו במקום למעוך את
                     הכפתור שלצדו. בלי זה הכפתור נמעך ל-16 פיקסלים על מסך
-                    טלפון — יעד מגע בלתי אפשרי, ובפועל לחיצות מתפספסות. */}
-                <span className="min-w-0 flex-1 truncate">{assignment.name}</span>
+                    טלפון — יעד מגע בלתי אפשרי, ובפועל לחיצות מתפספסות.
+
+                    בלי `flex-1`: הוא מתח את השם על כל הרוחב ודחף את התג ואת
+                    "הסר" לקצה הנגדי, כך שברוחב דסקטופ הם נותקו מהשם שהם
+                    מתייחסים אליו. `min-w-0` לבדו מספיק לכיווץ. */}
+                <span className="min-w-0 truncate">{assignment.name}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   <AssignmentStatusChip status={assignment.status} />
                   {canEdit ? (
@@ -262,8 +266,8 @@ export function RecipientEditor({
       {removed.length > 0 ? (
         <ul aria-label={he.ticket.removedRecipients} className="mt-3 flex flex-col gap-1">
           {removed.map((assignment) => (
-            <li key={assignment.id} className="flex items-center justify-between gap-2 text-muted">
-              <span className="min-w-0 flex-1 truncate line-through">{assignment.name}</span>
+            <li key={assignment.id} className="flex items-center gap-2 text-muted">
+              <span className="min-w-0 truncate line-through">{assignment.name}</span>
               <span className="shrink-0">
                 <AssignmentStatusChip status={assignment.status} />
               </span>

@@ -37,19 +37,19 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
       </Link>
 
       <header className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-bold">
+        {/* אותה שורת כותרת כמו במסך הפנייה הפנימי: תג הסטטוס צמוד לכותרת ולא
+            נדחף לקצה. קבלן שרואה ממשק אחר מזה של המנהל חושד בו. */}
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h1 className="text-2xl font-bold">
               {ticket.building?.name} · {he.directory.apartment} {ticket.apartment?.number}
             </h1>
-            <p className="text-sm text-muted">
-              {ticket.domain?.name}
-              {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
-            </p>
-          </div>
-          <span className="shrink-0">
             <AssignmentStatusChip status={assignment.status} />
-          </span>
+          </div>
+          <p className="text-sm text-muted">
+            {ticket.domain?.name}
+            {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
+          </p>
         </div>
         {ticket.description ? <p className="whitespace-pre-wrap">{ticket.description}</p> : null}
       </header>

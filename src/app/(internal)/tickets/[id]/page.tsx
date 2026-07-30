@@ -20,6 +20,7 @@ import { listTags, listTicketTags } from "@/lib/services/tags";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { canTagTicket } from "@/lib/permissions";
 import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
+import { CONTENT_WIDTH } from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
 import { RecipientEditor } from "./recipient-editor";
@@ -134,32 +135,35 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   const ageDays = Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <header className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-bold">{location || he.ticket.noLocation}</h1>
-            <p className="text-sm text-muted">
-              {ticket.domain?.name ?? he.ticket.noDomain}
-              {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
-            </p>
-            {/* שם הדייר — מקושר לדירה. מוצג רק כשיש דירה לשייך אליה. */}
-            {ticket.apartmentId ? (
-              <p className="text-sm text-muted">
-                <ResidentName
-                  ticketId={ticket.id}
-                  initial={ticket.apartment?.residentName ?? null}
-                  canEdit={canEdit}
-                />
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-col items-end gap-1">
+        {/*
+          הסטטוס ומספר הפנייה בשורת הכותרת ולא בעמודה בקצה הנגדי.
+          ‏`justify-between` הרחיק אותם מאות פיקסלים מהכותרת ברוחב דסקטופ, והם
+          נקראו כאלמנטים תלושים. ראו `docs/DESIGN.md` § Layout.
+        */}
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h1 className="text-2xl font-bold">{location || he.ticket.noLocation}</h1>
             <TicketStatusChip status={status} />
             <span className="text-xs text-muted" dir="ltr">
               #{ticket.seq}
             </span>
           </div>
+          <p className="text-sm text-muted">
+            {ticket.domain?.name ?? he.ticket.noDomain}
+            {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
+          </p>
+          {/* שם הדייר — מקושר לדירה. מוצג רק כשיש דירה לשייך אליה. */}
+          {ticket.apartmentId ? (
+            <p className="text-sm text-muted">
+              <ResidentName
+                ticketId={ticket.id}
+                initial={ticket.apartment?.residentName ?? null}
+                canEdit={canEdit}
+              />
+            </p>
+          ) : null}
         </div>
 
         <p className="text-sm text-muted">{reason}</p>

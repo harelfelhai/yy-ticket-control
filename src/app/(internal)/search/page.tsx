@@ -3,6 +3,7 @@ import { TicketCard } from "@/components/ticket-card";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
+import { CONTENT_WIDTH } from "@/lib/ui";
 import { type SearchFilters, searchTickets } from "@/lib/services/search";
 import type { DerivedTicketStatus } from "@/lib/ticket-status";
 import { SearchForm } from "./search-form";
@@ -85,7 +86,7 @@ export default async function SearchPage(props: PageProps<"/search">) {
   ]);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <h1 className="text-xl font-bold">{he.search.title}</h1>
 
       <Suspense>
