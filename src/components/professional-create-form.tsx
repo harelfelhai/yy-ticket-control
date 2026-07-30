@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 
@@ -52,40 +53,30 @@ export function ProfessionalCreateForm({ onCreate, onCancel }: ProfessionalCreat
     // (מסך היצירה), הריפוד-לגלילה מוודא שכפתור השמירה נגלל מעל הרצועה
     // ולא נחסם מאחוריה.
     <div className="flex scroll-mb-32 flex-col gap-2 rounded-xl border border-border bg-surface p-3">
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        {he.directory.professionalName}
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="min-h-11 rounded-lg border border-border px-3 text-base font-normal"
-        />
-      </label>
+      <Field label={he.directory.professionalName}>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
 
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {he.directory.phone}
-          <input
+        <Field label={he.directory.phone}>
+          <Input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             dir="ltr"
             inputMode="tel"
-            className="min-h-11 rounded-lg border border-border px-3 text-base font-normal"
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {he.directory.email}
-          <input
+        </Field>
+        {/* הכלל מוצג מראש ולא רק ככשל, כי בלי אחד מהשניים אי אפשר לשגר כלל.
+            הוא נתלה בשדה המייל — האחרון מבין השניים — כדי שייקרא אחריהם. */}
+        <Field label={he.directory.email} hint={he.directory.contactRequiredHint}>
+          <Input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             dir="ltr"
             inputMode="email"
-            className="min-h-11 rounded-lg border border-border px-3 text-base font-normal"
           />
-        </label>
+        </Field>
       </div>
-
-      {/* הכלל מוצג מראש ולא רק ככשל, כי בלי אחד מהשניים אי אפשר לשגר כלל */}
-      <p className="text-xs text-muted">{he.directory.contactRequiredHint}</p>
 
       {error ? (
         <p role="alert" className="text-sm text-danger">

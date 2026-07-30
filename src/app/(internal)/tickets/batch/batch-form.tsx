@@ -7,6 +7,7 @@ import { RecipientPicker, type RecipientOption } from "@/components/recipient-pi
 import type { Room } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/lib/action-result";
 import { Button, ButtonLink } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { ROOMS } from "@/lib/rooms";
@@ -189,11 +190,11 @@ export function BatchForm({
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium">{he.batch.sharedTag}</span>
-              <input
+              <Input
                 value={tagName}
                 onChange={(e) => setTagName(e.target.value)}
                 placeholder={he.batch.sharedTagPlaceholder}
-                className="min-h-11 rounded-xl border border-border bg-surface px-3 text-base"
+                size="compact"
               />
             </label>
           </section>
@@ -247,10 +248,10 @@ export function BatchForm({
 
               <label className="flex flex-col gap-1 text-sm font-medium">
                 {he.batch.rowDescription}
-                <input
+                <Input
                   value={row.description}
                   onChange={(e) => updateRow(row.key, { description: e.target.value })}
-                  className="min-h-11 rounded-lg border border-border px-3 text-base font-normal"
+                  size="compact"
                 />
               </label>
 
@@ -271,10 +272,9 @@ export function BatchForm({
                   <span className="text-sm font-medium">
                     {he.batch.rowRoom} ({he.common.optional})
                   </span>
-                  <select
+                  <Select
                     value={row.room ?? ""}
                     onChange={(e) => updateRow(row.key, { room: e.target.value || null })}
-                    className="min-h-12 rounded-xl border border-border bg-surface px-3 text-base"
                   >
                     <option value="">{he.common.choose}</option>
                     {ROOMS.map((value) => (
@@ -282,7 +282,7 @@ export function BatchForm({
                         {he.room[value]}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               </div>
 

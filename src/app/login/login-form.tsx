@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { type LoginState, loginAction } from "./actions";
 
@@ -20,11 +21,11 @@ export function LoginForm({ next }: { next?: string }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      {next ? <input type="hidden" name="next" value={next} /> : null}
+      {next ? <Input type="hidden" name="next" value={next} /> : null}
 
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">{he.login.identifierLabel}</span>
-        <input
+        <Input
           name="identifier"
           type="text"
           autoComplete="username"
@@ -32,19 +33,17 @@ export function LoginForm({ next }: { next?: string }) {
           // גם בממשק עברי, ובלי זה הסימנים בקצוות קופצים למקום הלא נכון.
           dir="ltr"
           required
-          className="min-h-12 rounded-xl border border-border bg-surface px-3 text-base"
         />
       </label>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">{he.login.passwordLabel}</span>
-        <input
+        <Input
           name="password"
           type="password"
           autoComplete="current-password"
           dir="ltr"
           required
-          className="min-h-12 rounded-xl border border-border bg-surface px-3 text-base"
         />
       </label>
 

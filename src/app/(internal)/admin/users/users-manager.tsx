@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { Role } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
+import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createUserAction, setUserActiveAction } from "../actions";
@@ -72,86 +73,67 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
     });
   }
 
-  const inputClass = "min-h-11 rounded-lg border border-border px-3 text-base";
-
   return (
     <div className="flex flex-col gap-4">
       <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">{he.admin.newUser}</h2>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {he.admin.userName}
-          <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
-        </label>
+        <Field label={he.admin.userName}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {he.admin.userPhone}
-            <input
+          <Field label={he.admin.userPhone}>
+            <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               dir="ltr"
               inputMode="tel"
-              className={inputClass}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {he.admin.userEmail}
-            <input
+          </Field>
+          <Field label={he.admin.userEmail}>
+            <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               dir="ltr"
               inputMode="email"
-              className={inputClass}
             />
-          </label>
+          </Field>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {he.admin.userRole}
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
-              className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base"
-            >
+          <Field label={he.admin.userRole}>
+            <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
                   {he.role[r]}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
 
           {role === "SITE_MANAGER" ? (
-            <label className="flex flex-col gap-1 text-sm font-medium">
-              {he.admin.userSite}
-              <select
-                value={siteId}
-                onChange={(e) => setSiteId(e.target.value)}
-                className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base"
-              >
+            <Field label={he.admin.userSite}>
+              <Select value={siteId} onChange={(e) => setSiteId(e.target.value)}>
                 <option value="">{he.common.choose}</option>
                 {sites.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
           ) : null}
         </div>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {he.admin.userPassword}
-          <input
+        <Field label={he.admin.userPassword}>
+          <Input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
             dir="ltr"
-            className={inputClass}
           />
-        </label>
+        </Field>
 
         <Button onClick={add} disabled={busy} className="self-start">
           {he.admin.addUser}

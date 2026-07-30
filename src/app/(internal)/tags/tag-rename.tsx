@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { renameTagAction } from "./actions";
@@ -44,11 +45,12 @@ export function TagRename({ id, name }: { id: string; name: string }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <input
+        <Input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           aria-label={name}
-          className="min-h-11 flex-1 rounded-lg border border-border px-3 text-base"
+          size="compact"
+          className="flex-1"
         />
         <Button size="compact" onClick={save} disabled={pending || !hydrated || !dirty}>
           {he.common.save}

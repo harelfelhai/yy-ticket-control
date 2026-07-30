@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
@@ -61,29 +62,19 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
         <p className="text-xs text-muted">{he.admin.mergeHint}</p>
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {he.admin.mergeKeep}
-            <select
-              value={keepId}
-              onChange={(e) => setKeepId(e.target.value)}
-              className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base"
-            >
+          <Field label={he.admin.mergeKeep}>
+            <Select value={keepId} onChange={(e) => setKeepId(e.target.value)}>
               <option value="">{he.common.choose}</option>
               {professionals.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
 
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {he.admin.mergeDrop}
-            <select
-              value={dropId}
-              onChange={(e) => setDropId(e.target.value)}
-              className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base"
-            >
+          <Field label={he.admin.mergeDrop}>
+            <Select value={dropId} onChange={(e) => setDropId(e.target.value)}>
               <option value="">{he.common.choose}</option>
               {professionals
                 .filter((p) => p.id !== keepId)
@@ -92,8 +83,8 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
                     {p.name}
                   </option>
                 ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
         </div>
 
         <Button onClick={merge} disabled={busy || !keepId || !dropId} className="self-start">
@@ -142,8 +133,6 @@ function ProfessionalItem({
     });
   }
 
-  const inputClass = "min-h-11 rounded-lg border border-border px-3 text-base";
-
   if (!editing) {
     return (
       <li className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
@@ -171,10 +160,10 @@ function ProfessionalItem({
 
   return (
     <li className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-      <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+      <Input value={name} onChange={(e) => setName(e.target.value)} />
       <div className="grid grid-cols-2 gap-2">
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" inputMode="tel" className={inputClass} />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" inputMode="email" className={inputClass} />
+        <Input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" inputMode="tel" />
+        <Input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" inputMode="email" />
       </div>
       {error ? (
         <p role="alert" className="text-sm text-danger">
