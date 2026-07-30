@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openFilters } from "./helpers";
 
 /**
  * תגיות וצ׳אט קבוצתי (מסך 6), מקצה לקצה ודרך הממשק בלבד.
@@ -128,6 +129,7 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
 
   // ── 8. מסנן התגית בלוח מציג את הפנייה ─────────────────────────────
   await page.goto("/board");
+  await openFilters(page);
   await page.getByLabel("תגיות", { exact: true }).selectOption({ label: tagName });
   await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
 });

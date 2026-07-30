@@ -117,6 +117,12 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await expect(page.getByText("אין חשמל בממ״ד, הפאזה קופצת").first()).toBeVisible();
   await shot(page, device, "03-board");
 
+  // הלוח המסונן — המצב היחיד שבו רצועת המסננים פרושה בנייד. בלי הצילום הזה
+  // הפריסה של הרצועה הפתוחה אינה נראית לאיש עד שמשתמש נתקל בה.
+  await page.goto("/board?direction=opened");
+  await expect(page.getByLabel("הפניתי")).toBeVisible();
+  await shot(page, device, "03b-board-filtered");
+
   await page.goto(lastTicketPath);
   await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
   await shot(page, device, "04-ticket-detail");
