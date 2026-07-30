@@ -52,7 +52,11 @@ test("השלמת טיוטה ושיגורה: ממלאים את החסר, משגר
   // השדות החסרים בלבד מוצגים: תחום, תיאור ונמענים. בניין ודירה כבר קיימים.
   await pick(page, "תחום", "חשמל");
   await page.getByLabel("תיאור").fill(`אין חשמל בסלון ${stamp}`);
-  await addProfessional(page, electrician, "0501234567");
+  // טלפון נגזר מהחותמת ולא קבוע: `findOrCreateProfessional` מתאים לפי טלפון
+  // ומחזיר את הרשומה הקיימת (התנהגות מכוונת — השם משתנה, הטלפון יציב). שני
+  // ה-projects חולקים בסיס נתונים אחד ו-globalSetup רץ פעם אחת, ולכן טלפון
+  // קבוע גרם לריצת desktop לקבל את איש המקצוע עם השם מריצת mobile.
+  await addProfessional(page, electrician, `050-${String(stamp).slice(-7)}`);
 
   await page.getByRole("button", { name: "שגר", exact: true }).click();
 
@@ -75,7 +79,8 @@ test("נמעני הטיוטה נשמרים: טיוטה עם נמען וחסרו�
   await pick(page, "בניין", "בניין א");
   await pick(page, "דירה", "1");
   await page.getByLabel("תיאור").fill(`נזילה ${stamp}`);
-  await addProfessional(page, plumber, "0527654321");
+  // טלפון נגזר מהחותמת — ראו הנימוק בבדיקה הקודמת.
+  await addProfessional(page, plumber, `052-${String(stamp).slice(-7)}`);
   // חסר רק תחום — נשמר כטיוטה עם הנמען שמור ב-draftRecipients.
   await page.getByRole("button", { name: "שמור כטיוטה" }).click();
   await expect(page).toHaveURL(/\/tickets\/[a-z0-9]+$/);
