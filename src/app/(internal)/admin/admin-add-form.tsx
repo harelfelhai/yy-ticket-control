@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import type { ActionResult } from "@/lib/action-result";
 import { useHydrated } from "@/lib/use-hydrated";
 
@@ -44,14 +45,13 @@ export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminA
           className="min-h-11 rounded-xl border border-border px-3 text-base"
         />
       </label>
-      <button
-        type="button"
+      <Button
         onClick={submit}
         disabled={pending || !hydrated || value.trim().length === 0}
-        className="min-h-11 self-start rounded-xl bg-brand px-6 font-medium text-brand-fg disabled:opacity-60"
+        className="self-start"
       >
         {buttonLabel}
-      </button>
+      </Button>
       {error ? (
         <p role="alert" className="text-sm font-medium text-danger">
           {error}

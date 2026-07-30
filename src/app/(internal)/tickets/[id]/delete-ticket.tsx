@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { deleteTicketAction } from "./actions";
@@ -30,13 +31,14 @@ export function DeleteTicket({ ticketId }: { ticketId: string }) {
   if (!confirming) {
     return (
       <div className="flex flex-col gap-1 border-t border-border pt-4">
-        <button
-          type="button"
+        <Button
+          variant="dangerQuiet"
+          size="compact"
           onClick={() => setConfirming(true)}
-          className="min-h-10 self-start text-sm font-medium text-danger"
+          className="self-start px-0"
         >
           {he.ticket.delete}
-        </button>
+        </Button>
         <p className="text-xs text-muted">{he.ticket.deleteWarning}</p>
       </div>
     );
@@ -46,22 +48,17 @@ export function DeleteTicket({ ticketId }: { ticketId: string }) {
     <div className="flex flex-col gap-2 rounded-2xl border border-danger/40 bg-danger/5 p-4">
       <p className="text-sm font-medium text-danger">{he.ticket.confirmDelete}</p>
       <div className="flex gap-2">
-        <button
-          type="button"
+        <Button
+          variant="danger"
+          size="compact"
           onClick={remove}
           disabled={pending || !hydrated}
-          className="min-h-11 rounded-xl bg-danger px-4 font-semibold text-brand-fg disabled:opacity-60"
         >
           {he.ticket.confirmDeleteButton}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          disabled={pending}
-          className="min-h-11 rounded-xl border border-border px-4 font-medium"
-        >
+        </Button>
+        <Button variant="secondary" size="compact" onClick={() => setConfirming(false)} disabled={pending}>
           {he.common.cancel}
-        </button>
+        </Button>
       </div>
       {error ? (
         <p role="alert" className="text-sm font-medium text-danger">

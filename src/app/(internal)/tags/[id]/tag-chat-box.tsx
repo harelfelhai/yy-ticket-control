@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { addTagMessageAction } from "../actions";
@@ -50,14 +51,9 @@ export function TagChatBox({ tagId }: { tagId: string }) {
 
       <MediaPicker files={files} onChange={setFiles} disabled={busy} />
 
-      <button
-        type="button"
-        disabled={busy || !canSend}
-        onClick={send}
-        className="min-h-12 self-start rounded-xl bg-brand px-6 font-semibold text-brand-fg disabled:opacity-60"
-      >
+      <Button disabled={busy || !canSend} onClick={send} className="self-start">
         {he.ticket.send}
-      </button>
+      </Button>
 
       {error ? (
         <p role="alert" className="text-sm font-medium text-danger">

@@ -11,6 +11,7 @@ import {
   loadCompletion,
   saveCompletion,
 } from "@/lib/draft-completion-store";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -344,22 +345,12 @@ export function DraftCompletion({
       ) : null}
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy}
-          className="min-h-12 flex-1 rounded-xl bg-brand px-4 text-base font-semibold text-brand-fg disabled:opacity-60"
-        >
+        <Button onClick={submit} disabled={busy} className="flex-1">
           {he.ticket.submitDraftButton}
-        </button>
-        <button
-          type="button"
-          onClick={remove}
-          disabled={busy}
-          className="min-h-12 rounded-xl border border-danger px-4 text-base font-medium text-danger disabled:opacity-60"
-        >
+        </Button>
+        <Button variant="dangerOutline" onClick={remove} disabled={busy}>
           {he.ticket.deleteDraft}
-        </button>
+        </Button>
       </div>
     </section>
   );

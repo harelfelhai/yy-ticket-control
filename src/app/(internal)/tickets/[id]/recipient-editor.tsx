@@ -5,6 +5,7 @@ import { AssignmentStatusChip } from "@/components/status-chip";
 import { LearnedSelect } from "@/components/learned-select";
 import { ProfessionalCreateForm } from "@/components/professional-create-form";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createProfessionalAction } from "../new/actions";
@@ -172,15 +173,16 @@ export function RecipientEditor({
                 <span className="flex shrink-0 items-center gap-2">
                   <AssignmentStatusChip status={assignment.status} />
                   {canEdit ? (
-                    <button
-                      type="button"
+                    <Button
+                      variant="dangerQuiet"
+                      size="compact"
                       disabled={busy}
                       onClick={() => remove(assignment.id, assignment.name)}
                       aria-label={`${he.ticket.removeRecipient} ${assignment.name}`}
-                      className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-danger disabled:opacity-60"
+                      className="shrink-0 px-3"
                     >
                       {he.ticket.removeRecipient}
-                    </button>
+                    </Button>
                   ) : null}
                 </span>
               </div>
@@ -215,7 +217,7 @@ export function RecipientEditor({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={`${he.ticket.sendWhatsApp} ${assignment.name}`}
-                      className="flex min-h-11 items-center rounded-lg bg-brand px-3 text-sm font-medium text-brand-fg"
+                      className={buttonClasses("primary", "compact", "px-3")}
                     >
                       {he.ticket.sendWhatsApp}
                     </a>
@@ -248,14 +250,15 @@ export function RecipientEditor({
                     onFocus={(e) => e.currentTarget.select()}
                     className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="dangerQuiet"
+                    size="compact"
                     disabled={busy}
                     onClick={() => rotate(assignment.professionalId as string)}
-                    className="min-h-11 self-start px-1 text-sm font-medium text-danger disabled:opacity-60"
+                    className="self-start px-1"
                   >
                     {he.ticket.rotateLink}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </li>

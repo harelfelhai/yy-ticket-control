@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { renameTagAction } from "./actions";
@@ -49,14 +50,9 @@ export function TagRename({ id, name }: { id: string; name: string }) {
           aria-label={name}
           className="min-h-11 flex-1 rounded-lg border border-border px-3 text-base"
         />
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending || !hydrated || !dirty}
-          className="min-h-11 rounded-xl bg-brand px-4 text-sm font-medium text-brand-fg disabled:opacity-40"
-        >
+        <Button size="compact" onClick={save} disabled={pending || !hydrated || !dirty}>
           {he.common.save}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => {
