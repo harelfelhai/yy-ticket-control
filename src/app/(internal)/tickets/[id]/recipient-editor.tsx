@@ -6,6 +6,7 @@ import { LearnedSelect } from "@/components/learned-select";
 import { ProfessionalCreateForm } from "@/components/professional-create-form";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { Button, buttonClasses } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createProfessionalAction } from "../new/actions";
@@ -242,13 +243,13 @@ export function RecipientEditor({
                   </p>
                   {/* readOnly ולא טקסט רגיל: בחירה והעתקה ידנית עובדות בכל
                       מכשיר, גם כשה-clipboard API חסום או שאינו נתמך. */}
-                  <input
+                  <Input
                     readOnly
                     dir="ltr"
                     value={link.url}
                     aria-label={he.ticket.showLink}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
+                    size="compact"
                   />
                   <Button
                     variant="dangerQuiet"

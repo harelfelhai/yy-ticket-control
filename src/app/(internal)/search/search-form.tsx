@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 
 interface Option {
@@ -54,7 +55,6 @@ export function SearchForm({
   // ‏key שנגזר מהכתובת מסנכרן את הפקדים אחרי ניווט, בלי להפוך אותם למבוקרים
   // — פקד מבוקר היה נשאר במצב הישן עד שהשרת מחזיר תשובה.
   const syncKey = params.toString();
-  const selectClass = "min-h-11 rounded-xl border border-border bg-surface px-3 text-sm";
 
   return (
     <div className="flex flex-col gap-3">
@@ -65,13 +65,13 @@ export function SearchForm({
         }}
         className="flex gap-2"
       >
-        <input
+        <Input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           aria-label={he.search.title}
           placeholder={he.search.placeholder}
-          className="min-h-12 flex-1 rounded-xl border border-border bg-surface px-3 text-base"
+          className="flex-1"
         />
         <Button type="submit">
           {he.search.submit}
@@ -81,26 +81,26 @@ export function SearchForm({
       <p className="text-xs text-muted">{he.search.scopeHint}</p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select
+        <Select
           key={`direction-${syncKey}`}
           aria-label={he.board.opened}
           defaultValue={params.get("direction") ?? ""}
           onChange={(event) => update({ direction: event.target.value })}
-          className={selectClass}
+          size="compact"
         >
           <option value="">{he.board.allDirections}</option>
           <option value="opened">{he.board.opened}</option>
           <option value="received">{he.board.received}</option>
-        </select>
+        </Select>
 
         {/* בורר אתר — רק למי שרואה יותר מאחד (מנהל מערכת/בעלים) */}
         {sites.length > 0 ? (
-          <select
+          <Select
             key={`site-${syncKey}`}
             aria-label={he.ticket.site}
             defaultValue={params.get("site") ?? ""}
             onChange={(event) => update({ site: event.target.value })}
-            className={selectClass}
+          size="compact"
           >
             <option value="">{he.board.allSites}</option>
             {sites.map((option) => (
@@ -108,17 +108,17 @@ export function SearchForm({
                 {option.name}
               </option>
             ))}
-          </select>
+          </Select>
         ) : null}
 
-        <select
+        <Select
           key={`building-${syncKey}`}
           aria-label={he.directory.building}
           defaultValue={params.get("building") ?? ""}
           // שינוי בניין מנקה את הדירה: דירה שייכת לבניין, ובחירה ישנה תחת
           // בניין חדש היא סינון חסר-משמעות.
           onChange={(event) => update({ building: event.target.value, apartment: "" })}
-          className={selectClass}
+          size="compact"
         >
           <option value="">{he.board.allBuildings}</option>
           {buildings.map((option) => (
@@ -126,16 +126,16 @@ export function SearchForm({
               {option.name}
             </option>
           ))}
-        </select>
+        </Select>
 
         {/* דירה — פעילה רק אחרי בחירת בניין (הרשימה תלוית-בניין) */}
-        <select
+        <Select
           key={`apartment-${syncKey}`}
           aria-label={he.directory.apartment}
           defaultValue={params.get("apartment") ?? ""}
           disabled={apartments.length === 0}
           onChange={(event) => update({ apartment: event.target.value })}
-          className={`${selectClass} disabled:opacity-50`}
+          size="compact"
         >
           <option value="">{he.search.allApartments}</option>
           {apartments.map((option) => (
@@ -143,14 +143,14 @@ export function SearchForm({
               {option.name}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <select
+        <Select
           key={`domain-${syncKey}`}
           aria-label={he.directory.domain}
           defaultValue={params.get("domain") ?? ""}
           onChange={(event) => update({ domain: event.target.value })}
-          className={selectClass}
+          size="compact"
         >
           <option value="">{he.board.allDomains}</option>
           {domains.map((option) => (
@@ -158,14 +158,14 @@ export function SearchForm({
               {option.name}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <select
+        <Select
           key={`recipient-${syncKey}`}
           aria-label={he.directory.professional}
           defaultValue={params.get("recipient") ?? ""}
           onChange={(event) => update({ recipient: event.target.value })}
-          className={selectClass}
+          size="compact"
         >
           <option value="">{he.board.allRecipients}</option>
           {recipients.map((option) => (
@@ -173,14 +173,14 @@ export function SearchForm({
               {option.name}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <select
+        <Select
           key={`tag-${syncKey}`}
           aria-label={he.tag.label}
           defaultValue={params.get("tag") ?? ""}
           onChange={(event) => update({ tag: event.target.value })}
-          className={selectClass}
+          size="compact"
         >
           <option value="">{he.board.allTags}</option>
           {tags.map((option) => (
@@ -188,14 +188,14 @@ export function SearchForm({
               {option.name}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <select
+        <Select
           key={`status-${syncKey}`}
           aria-label={he.search.allStatuses}
           defaultValue={params.get("status") ?? ""}
           onChange={(event) => update({ status: event.target.value })}
-          className={selectClass}
+          size="compact"
         >
           <option value="">{he.search.allStatuses}</option>
           {statuses.map((option) => (
@@ -203,27 +203,27 @@ export function SearchForm({
               {option.name}
             </option>
           ))}
-        </select>
+        </Select>
 
         <label className="flex items-center gap-1 text-sm">
           {he.search.from}
-          <input
+          <Input
             key={`from-${syncKey}`}
             type="date"
             defaultValue={params.get("from") ?? ""}
             onChange={(event) => update({ from: event.target.value })}
-            className={selectClass}
+          size="compact"
           />
         </label>
 
         <label className="flex items-center gap-1 text-sm">
           {he.search.to}
-          <input
+          <Input
             key={`to-${syncKey}`}
             type="date"
             defaultValue={params.get("to") ?? ""}
             onChange={(event) => update({ to: event.target.value })}
-            className={selectClass}
+          size="compact"
           />
         </label>
 

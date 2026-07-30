@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { LearnedSelect } from "@/components/learned-select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import {
@@ -107,13 +108,13 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
                 </Button>
               </div>
               {links[contractor.id] ? (
-                <input
+                <Input
                   readOnly
                   dir="ltr"
                   value={links[contractor.id]}
                   aria-label={he.tag.chatLinkFor(contractor.label)}
                   onFocus={(e) => e.currentTarget.select()}
-                  className="min-h-10 rounded-lg border border-border bg-bg px-3 text-xs"
+                  size="compact"
                 />
               ) : null}
             </li>

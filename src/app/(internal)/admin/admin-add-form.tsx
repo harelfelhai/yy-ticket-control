@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 import type { ActionResult } from "@/lib/action-result";
 import { useHydrated } from "@/lib/use-hydrated";
 
@@ -38,11 +39,11 @@ export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminA
     <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">{label}</span>
-        <input
+        <Input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
-          className="min-h-11 rounded-xl border border-border px-3 text-base"
+          size="compact"
         />
       </label>
       <Button

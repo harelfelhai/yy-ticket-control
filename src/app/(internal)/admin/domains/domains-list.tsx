@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { renameDomainAction } from "../actions";
@@ -45,11 +46,12 @@ function DomainItem({ domain }: { domain: DomainRow }) {
   return (
     <li className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-3">
       <div className="flex items-center gap-2">
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           aria-label={domain.name}
-          className="min-h-11 flex-1 rounded-lg border border-border px-3 text-base"
+          size="compact"
+          className="flex-1"
         />
         <button
           type="button"

@@ -6,6 +6,7 @@ import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { ROOMS } from "@/lib/rooms";
 import {
@@ -358,11 +359,10 @@ export function CreateTicketForm({
 
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">{he.ticket.description}</span>
-        <textarea
+        <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
-          className="rounded-xl border border-border bg-surface p-3 text-base"
         />
       </label>
 

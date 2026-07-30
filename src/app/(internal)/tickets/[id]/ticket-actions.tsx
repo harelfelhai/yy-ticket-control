@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { ActionResult } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import {
@@ -64,11 +65,10 @@ export function TicketActions({
         <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold">{he.ticket.reply}</span>
-            <textarea
+            <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={3}
-              className="rounded-xl border border-border p-3 text-base"
             />
           </label>
 

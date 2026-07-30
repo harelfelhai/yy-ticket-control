@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { updateResidentNameAction } from "./actions";
@@ -49,10 +50,13 @@ export function ResidentName({ ticketId, initial, canEdit }: ResidentNameProps) 
     return (
       <span className="inline-flex items-center gap-1">
         <span>{name ? `${he.ticket.residentLabel}: ${name}` : he.ticket.residentLabel}</span>
+        {/* "ערוך" הוא קישור-בשורה בתוך משפט ולא כפתור עצמאי: `Button` היה
+            מקבל 44px ושובר את שורת הכותרת שהוא יושב בתוכה. אזור הלחיצה
+            מורחב בריפוד אנכי במקום בגובה מינימלי. */}
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="rounded px-1 font-medium text-brand"
+          className="rounded px-1 py-2 font-medium text-brand"
         >
           {he.common.edit}
         </button>
@@ -62,11 +66,11 @@ export function ResidentName({ ticketId, initial, canEdit }: ResidentNameProps) 
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      <input
+      <Input
         value={name}
         onChange={(e) => setName(e.target.value)}
         aria-label={he.ticket.residentLabel}
-        className="min-h-9 rounded-lg border border-border bg-surface px-2 text-sm text-fg"
+        size="compact"
       />
       {/* היה `min-h-9` (36px) — מתחת לסף המגע המינימלי של 44px. הפרימיטיב
           מעלה אותו ל-`compact`, שהוא הסף הנמוך ביותר שהתקן מתיר. */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
+import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
 import type { SelectOption } from "@/lib/options";
@@ -116,14 +117,15 @@ export function LearnedSelect({
 
       {open ? (
         <div className="rounded-xl border border-border bg-surface p-2">
-          <input
+          <Input
             ref={searchRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={he.common.search}
             aria-label={`${he.common.search} ${label}`}
-            className="mb-2 min-h-11 w-full rounded-lg border border-border px-3 text-base"
+            size="compact"
+            className="mb-2"
           />
 
           <ul id={listId} role="listbox" aria-label={label} className="max-h-64 overflow-y-auto">
