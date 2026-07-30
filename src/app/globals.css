@@ -9,6 +9,13 @@
 @theme {
   --font-sans: var(--font-heebo), system-ui, sans-serif;
 
+  /*
+   * גובה שורה נדיב לטקסט הגוף. עברית צפופה יותר מלטינית — אין לה אותיות
+   * גדולות ורוב האותיות באותו גובה — ולכן 1.5 של Tailwind נקרא דחוס.
+   * שאר רמות הסקאלה נשארות בברירת המחדל; ראו docs/DESIGN.md § Typography.
+   */
+  --text-base--line-height: 1.6;
+
   --color-bg: #f3f5f8;
   --color-surface: #ffffff;
   --color-border: #d6dae1;
@@ -31,4 +38,20 @@ body {
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
+}
+
+/*
+ * טבעת מיקוד אחת לכל המערכת.
+ *
+ * מוגדרת כאן ולא כמחלקת utility בכל רכיב: זהו בדיוק סוג הכלל שנשכח במקום
+ * השמונה-עשר. ברירת המחדל של הדפדפן היא טבעת כחולה דקה שנבלעת על רקע בהיר
+ * בשמש — כאן היא מתקבעת לצבע המותג, בעובי 2px ובריווח 2px כדי שתיקרא גם
+ * כשהאלמנט עצמו כהה.
+ *
+ * `:focus-visible` ולא `:focus` — לחיצת עכבר לא משאירה טבעת; ניווט מקלדת כן.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: inherit;
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
+import { CONTENT_WIDTH } from "@/lib/ui";
 import { getOwnerOverview } from "@/lib/services/overview";
 
 export const metadata = { title: `${he.overview.title} — ${he.app.name}` };
@@ -21,7 +22,7 @@ export default async function OverviewPage() {
   const sites = await getOwnerOverview();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <div>
         <h1 className="text-xl font-bold">{he.overview.title}</h1>
         <p className="text-sm text-muted">{he.overview.subtitle}</p>

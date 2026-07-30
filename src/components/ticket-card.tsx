@@ -31,16 +31,20 @@ export function TicketCard({ card }: { card: BoardCard }) {
         isDraft ? "border-danger" : "border-border"
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 flex-1 font-semibold">
+      {/*
+        התג צמוד לכותרת ולא נדחף לקצה הנגדי.
+        עם `justify-between` הוא נצמד לשוליים, וברוחב דסקטופ נותר מאות פיקסלים
+        מהכותרת שהוא מתאר — העין אינה קושרת ביניהם. `flex-wrap` שומר עליו צמוד
+        בכל רוחב, ומעביר אותו לשורה משלו רק כשהכותרת באמת ארוכה מדי.
+      */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="font-semibold">
           {location || he.ticket.noLocation}
           {card.domainName ? (
             <span className="font-normal text-muted"> · {card.domainName}</span>
           ) : null}
         </span>
-        <span className="shrink-0">
-          <TicketStatusChip status={card.status} />
-        </span>
+        <TicketStatusChip status={card.status} />
       </div>
 
       {card.descriptionLine ? (

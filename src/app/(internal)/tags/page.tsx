@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
+import { CONTENT_WIDTH } from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
 import { TagRename } from "./tag-rename";
 
@@ -20,7 +21,7 @@ export default async function TagsPage() {
   const canManage = user.role === "ADMIN";
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <h1 className="text-xl font-bold">{he.tag.listTitle}</h1>
 
       {tags.length === 0 ? (

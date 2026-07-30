@@ -21,8 +21,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## מוסכמות הפרויקט
 
 - **מקור אמת פונקציונלי:** `docs/specs/ticket-control-pre-plan.md`. אין להמציא התנהגות שלא כתובה שם.
+- **מקור אמת עיצובי:** `docs/DESIGN.md`. **לפני כתיבת קוד שנוגע ב-UI — לקרוא אותו.**
+  ערך שאינו מופיע שם אינו מומצא בקוד: מוסיפים אותו למסמך קודם.
 - **כל מחרוזת שמוצגת למשתמש עוברת דרך `src/lib/he.ts`.** אין עברית מפוזרת בקומפוננטות.
 - הממשק RTL בלבד (`<html lang="he" dir="rtl">`), פונט Heebo, ערכת צבע בהירה בלבד.
+  **חובה מחלקות לוגיות ולא פיזיות** — `ms/me`, `ps/pe`, `text-start/end`, `border-s/e`,
+  `start-*/end-*`. `ml-`, `pr-`, `text-left`, `border-l` ודומיהן שבורות ב-RTL. פירוט
+  והחריגים ב-`docs/DESIGN.md` § Layout.
 - שרת פיתוח על פורט **3100** (פורט 3000 תפוס במכונה על ידי פרויקט אחר).
 - סודות רק ב-`.env.local` וב-Railway Variables. לעולם לא בקוד ולא בגיט.
 - אין להשתמש בתו `&` בשמות נתיבים בפרויקט — הוא שובר את ה-shims של npm ב-Windows.

@@ -6,6 +6,7 @@ import { type BoardCard, groupForTour } from "@/lib/board-view";
 import { he } from "@/lib/he";
 import { type BoardFilters as Filters, getBoard } from "@/lib/services/board";
 import type { BoardSection } from "@/lib/ticket-status";
+import { CONTENT_WIDTH } from "@/lib/ui";
 import { BoardFilters } from "./board-filters";
 
 export const metadata = { title: `${he.board.title} — ${he.app.name}` };
@@ -66,7 +67,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
     board.sections.ARCHIVE.length;
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
+    <div className={`flex flex-col gap-4 p-4 pb-24 ${CONTENT_WIDTH}`}>
       <Suspense>
         <BoardFilters
           sites={board.sites}
@@ -117,12 +118,31 @@ export default async function BoardPage(props: PageProps<"/board">) {
   );
 }
 
+/**
+ * כותרת קיבוץ בלוח.
+ *
+ * `text-xl` (20px) ולא `text-sm` (14px). הכותרת הייתה **קטנה מכותרות
+ * הכרטיסים שהיא מקבצת** — היררכיה הפוכה שגורמת למבנה הלוח להיקרא כרשימה
+ * שטוחה. הסקאלה ב-`docs/DESIGN.md` מגדירה 20px כרמת כותרת סקציה.
+ *
+ * המונה ב-`text-muted`: הוא מידע משני, ובמשקל מלא הוא התחרה בשם הקבוצה.
+ */
+function SectionHeading({ label, count }: { label: string; count: number }) {
+  return (
+    <>
+      {label} <span className="font-normal text-muted">· {count}</span>
+    </>
+  );
+}
+
+const SECTION_HEADING = "text-xl font-semibold";
+
 function Section({ id, cards }: { id: Exclude<BoardSection, "ARCHIVE">; cards: BoardCard[] }) {
   return (
     <section className="flex flex-col gap-2">
       {/* כותרת דביקה: בגלילה ארוכה המשתמש תמיד יודע באיזו קבוצה הוא נמצא. */}
-      <h2 className="sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 text-sm font-bold">
-        {he.boardSection[id]} · {cards.length}
+      <h2 className={`sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 ${SECTION_HEADING}`}>
+        <SectionHeading label={he.boardSection[id]} count={cards.length} />
       </h2>
       {cards.length === 0 ? (
         <p className="px-1 text-sm text-muted">{he.board.emptySection}</p>
@@ -138,8 +158,8 @@ function ArchiveSection({ cards }: { cards: BoardCard[] }) {
 
   return (
     <details className="flex flex-col gap-2">
-      <summary className="cursor-pointer py-2 text-sm font-bold">
-        {he.boardSection.ARCHIVE} · {cards.length}
+      <summary className={`cursor-pointer py-2 ${SECTION_HEADING}`}>
+        <SectionHeading label={he.boardSection.ARCHIVE} count={cards.length} />
       </summary>
       <div className="mt-2 flex flex-col gap-2">
         {cards.map((card) => (
@@ -157,8 +177,8 @@ function TourView({ cards }: { cards: BoardCard[] }) {
     <div className="flex flex-col gap-4">
       {drafts.length > 0 ? (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-bold">
-            {he.board.tourDrafts} · {drafts.length}
+          <h2 className={SECTION_HEADING}>
+            <SectionHeading label={he.board.tourDrafts} count={drafts.length} />
           </h2>
           {drafts.map((card) => (
             <TicketCard key={card.id} card={card} />
@@ -168,8 +188,8 @@ function TourView({ cards }: { cards: BoardCard[] }) {
 
       {groups.map((group) => (
         <section key={group.key} className="flex flex-col gap-2">
-          <h2 className="sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 text-sm font-bold">
-            {group.label} · {group.cards.length}
+          <h2 className={`sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 ${SECTION_HEADING}`}>
+            <SectionHeading label={group.label} count={group.cards.length} />
           </h2>
           {group.cards.map((card) => (
             <TicketCard key={card.id} card={card} />

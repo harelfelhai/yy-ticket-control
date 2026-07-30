@@ -15,6 +15,9 @@ test-results/
 playwright-report/
 .playwright/
 
+# צילומי מסך לבדיקת עיצוב (`npm run visual`) — נוצרים מחדש בכל הרצה
+.visual/
+
 # Environment & secrets
 .env
 .env.*
