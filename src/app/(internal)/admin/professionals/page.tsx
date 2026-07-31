@@ -4,6 +4,7 @@ import { he } from "@/lib/he";
 import { listProfessionalsForAdmin } from "@/lib/services/admin";
 import { ProfessionalsManager } from "./professionals-manager";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: `${he.admin.professionals} — ${he.app.name}` };
 
@@ -22,7 +23,7 @@ export default async function AdminProfessionalsPage() {
       </div>
 
       {professionals.length === 0 ? (
-        <p className="py-8 text-center text-muted">{he.common.noResults}</p>
+        <EmptyState>{he.common.noResults}</EmptyState>
       ) : (
         <ProfessionalsManager professionals={professionals} />
       )}

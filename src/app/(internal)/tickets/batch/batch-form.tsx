@@ -21,6 +21,7 @@ import {
 } from "../new/actions";
 import { createBatchAction } from "./actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
 
 interface BuildingWithApartments extends LearnedOption {
   apartments: LearnedOption[];
@@ -145,7 +146,7 @@ export function BatchForm({
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* אזור המקור וההקשר המשותף — נשאר גלוי בגלילה בדסקטופ */}
         <aside className="flex flex-col gap-4 lg:sticky lg:top-16 lg:self-start">
-          <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+          <section className={cardClasses("flex flex-col gap-3")}>
             <h2 className={TITLE_DESCRIPTIVE}>{he.batch.contextHeading}</h2>
 
             <LearnedSelect
@@ -200,7 +201,7 @@ export function BatchForm({
             </label>
           </section>
 
-          <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+          <section className={cardClasses("flex flex-col gap-2")}>
             <h2 className={TITLE_DESCRIPTIVE}>{he.batch.sourceHeading}</h2>
             <p className="text-xs text-muted">{he.batch.sourceHint}</p>
             <MediaPicker files={files} onChange={setFiles} disabled={busy} />
@@ -224,7 +225,7 @@ export function BatchForm({
               key={row.key}
               role="group"
               aria-label={he.batch.rowNumber(index + 1)}
-              className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-3"
+              className={cardClasses("flex flex-col gap-2", { padding: "compact" })}
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted">
@@ -336,7 +337,7 @@ function Summary({ summary, onReset }: { summary: BatchResult; onReset: () => vo
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4 p-6">
       <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
-      <div className="flex flex-col gap-2 rounded-2xl border border-success/40 bg-success/10 p-4">
+      <div className={cardClasses("flex flex-col gap-2", { tone: "success" })}>
         {lines.map((line) => (
           <p key={line} className="font-medium text-success">
             {line}

@@ -23,6 +23,7 @@ import {
   createProfessionalAction,
 } from "../new/actions";
 import { deleteDraftAction, submitDraftAction, updateTicketFieldsAction } from "./actions";
+import { cardClasses } from "@/components/ui/card";
 
 /**
  * השלמת טיוטה ושיגורה (מסך 7 באפיון).
@@ -246,7 +247,7 @@ export function DraftCompletion({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-danger bg-danger/5 p-4">
+    <section className={cardClasses("flex flex-col gap-3", { tone: "danger" })}>
       <p className="text-sm font-semibold text-danger">{he.notices.draftBanner}</p>
 
       {showBuilding ? (

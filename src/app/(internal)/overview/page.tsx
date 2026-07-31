@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { getOwnerOverview } from "@/lib/services/overview";
+import { cardClasses } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: `${he.overview.title} — ${he.app.name}` };
 
@@ -29,13 +31,13 @@ export default async function OverviewPage() {
       </div>
 
       {sites.length === 0 ? (
-        <p className="py-8 text-center text-muted">{he.overview.empty}</p>
+        <EmptyState>{he.overview.empty}</EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
           {sites.map((site) => (
             <li
               key={site.siteId}
-              className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4"
+              className={cardClasses("flex flex-col gap-3")}
             >
               <h2 className={TITLE_DESCRIPTIVE}>{site.siteName}</h2>
               <div className="grid grid-cols-3 gap-2">

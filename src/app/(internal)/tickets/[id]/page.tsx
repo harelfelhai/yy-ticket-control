@@ -28,6 +28,8 @@ import { ResidentName } from "./resident-name";
 import { TicketActions } from "./ticket-actions";
 import { TicketTags } from "./ticket-tags";
 import { ThreadEvent } from "./thread-event";
+import { cardClasses } from "@/components/ui/card";
+import { chipClasses } from "@/components/ui/chip";
 
 /**
  * מסך הפנייה והשרשור (מסך 2 באפיון) — ליבת המערכת.
@@ -136,7 +138,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
 
   return (
     <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
-      <header className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+      <header className={cardClasses("flex flex-col gap-2")}>
         {/*
           הסטטוס ומספר הפנייה בשורת הכותרת ולא בעמודה בקצה הנגדי.
           ‏`justify-between` הרחיק אותם מאות פיקסלים מהכותרת ברוחב דסקטופ, והם
@@ -179,7 +181,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           {ticket.handler ? <span>· {he.ticket.handledBy(ticket.handler.name)}</span> : null}
           {/* "נפתחה מחדש" אינו סטטוס אלא תג — הפנייה מתנהגת לפי הכללים הרגילים */}
           {ticket.reopenCount > 0 ? (
-            <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-warning">
+            <span className={chipClasses("warning")}>
               {he.ticket.reopenedBadge}
             </span>
           ) : null}
@@ -217,7 +219,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           />
         ) : (
           // בעלים שאינו הפותח רואה טיוטה אך אינו רשאי להשלים אותה.
-          <p className="rounded-2xl border border-danger bg-danger/5 p-4 text-sm font-semibold text-danger">
+          <p className={cardClasses("text-sm font-semibold text-danger", { tone: "danger" })}>
             {he.notices.draftBanner}
           </p>
         )
@@ -238,7 +240,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         canEdit={canTag}
       />
 
-      <section className="rounded-2xl border border-border bg-surface p-4">
+      <section className={cardClasses()}>
         <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.thread}</h2>
         {ticket.messages.length === 0 ? (
           <p className="text-sm text-muted">{he.ticket.threadEmpty}</p>

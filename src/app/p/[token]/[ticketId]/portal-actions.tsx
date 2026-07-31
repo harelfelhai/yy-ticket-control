@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { askQuestionAction, markDoneAction, replyAction } from "./actions";
+import { cardClasses } from "@/components/ui/card";
 
 interface PortalActionsProps {
   token: string;
@@ -62,7 +63,7 @@ export function PortalActions({
 
   if (isClosed) {
     return (
-      <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-muted">
+      <p className={cardClasses("text-sm text-muted")}>
         {he.notices.closedTicketBlocked}
       </p>
     );

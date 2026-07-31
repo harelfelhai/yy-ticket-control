@@ -6,6 +6,7 @@ import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { LearnedSelect, type LearnedOption } from "./learned-select";
 import { ProfessionalCreateForm } from "./professional-create-form";
+import { chipClasses } from "@/components/ui/chip";
 
 export interface RecipientOption extends LearnedOption {
   kind: "professional" | "user";
@@ -60,7 +61,7 @@ export function RecipientPicker({
         <ul aria-label={he.ticket.recipients} className="flex flex-wrap gap-2">
           {value.map((recipient) => (
             <li key={`${recipient.kind}:${recipient.id}`}>
-              <span className="inline-flex items-center gap-1 rounded-full bg-brand px-3 py-1.5 text-sm text-brand-fg">
+              <span className={chipClasses("brand", "solid", "large")}>
                 {recipient.label}
                 <button
                   type="button"

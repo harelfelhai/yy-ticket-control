@@ -8,6 +8,8 @@ import { getTagDetail } from "@/lib/services/tags";
 import { TagAccessControl } from "./tag-access-control";
 import { TagChatBox } from "./tag-chat-box";
 import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
+import { chipClasses } from "@/components/ui/chip";
 
 /**
  * מסך התגית (מסך 6): צ׳אט קבוצתי לצד רשימת הפניות שבתגית ומונה פתוחות/סגורות.
@@ -44,7 +46,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         </p>
       </header>
 
-      <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+      <section className={cardClasses("flex flex-col gap-2")}>
         <div className="flex items-center justify-between">
           <h2 className={TITLE_DESCRIPTIVE}>{he.tag.ticketsHeading}</h2>
           <span className="text-xs text-muted">{he.tag.ticketsManagersOnly}</span>
@@ -82,7 +84,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
           candidates={candidates}
         />
       ) : (
-        <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+        <section className={cardClasses("flex flex-col gap-2")}>
           <h2 className={TITLE_DESCRIPTIVE}>{he.tag.accessHeading}</h2>
           {detail.granted.length === 0 ? (
             <p className="text-sm text-muted">{he.tag.accessNobody}</p>
@@ -91,7 +93,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
               {detail.granted.map((g) => (
                 <li
                   key={g.id}
-                  className="rounded-full bg-brand/10 px-3 py-1.5 text-sm text-brand"
+                  className={chipClasses("brand", "soft", "large")}
                 >
                   {g.name}
                 </li>
@@ -101,7 +103,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         </section>
       )}
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+      <section className={cardClasses("flex flex-col gap-3")}>
         <div>
           <h2 className={TITLE_DESCRIPTIVE}>{he.tag.chatHeading}</h2>
           <p className="text-xs text-muted">{he.tag.chatHint}</p>

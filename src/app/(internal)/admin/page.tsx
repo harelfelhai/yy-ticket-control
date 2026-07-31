@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cardClasses } from "@/components/ui/card";
 import { he } from "@/lib/he";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
@@ -25,7 +26,7 @@ export default function AdminHubPage() {
           <li key={card.href}>
             <Link
               href={card.href}
-              className="flex min-h-16 items-center rounded-2xl border border-border bg-surface px-4 font-semibold"
+              className={cardClasses("flex min-h-16 items-center px-4 font-semibold")}
             >
               {card.label}
             </Link>

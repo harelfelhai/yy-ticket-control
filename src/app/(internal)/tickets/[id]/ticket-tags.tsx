@@ -6,6 +6,8 @@ import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { addTicketTagAction, removeTicketTagAction } from "./actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
+import { chipClasses } from "@/components/ui/chip";
 
 interface TicketTagsProps {
   ticketId: string;
@@ -64,14 +66,14 @@ export function TicketTags({ ticketId, initial, all, canEdit }: TicketTagsProps)
   if (!canEdit && tags.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+    <section className={cardClasses("flex flex-col gap-2")}>
       <h2 className={TITLE_DESCRIPTIVE}>{he.tag.label}</h2>
 
       {tags.length > 0 ? (
         <ul aria-label={he.tag.label} className="flex flex-wrap gap-2">
           {tags.map((tag) => (
             <li key={tag.id}>
-              <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-3 py-1.5 text-sm text-brand">
+              <span className={chipClasses("brand", "soft", "large")}>
                 {tag.label}
                 {canEdit ? (
                   <button

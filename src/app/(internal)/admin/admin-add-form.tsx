@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import type { ActionResult } from "@/lib/action-result";
 import { useHydrated } from "@/lib/use-hydrated";
+import { cardClasses } from "@/components/ui/card";
 
 interface AdminAddFormProps {
   label: string;
@@ -36,7 +37,7 @@ export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminA
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+    <div className={cardClasses("flex flex-col gap-2")}>
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">{label}</span>
         <Input

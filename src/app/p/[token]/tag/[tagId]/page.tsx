@@ -6,6 +6,7 @@ import { getPortalTagChat } from "@/lib/services/tags";
 import { ExpiredLink } from "../../expired-link";
 import { PortalTagChatBox } from "./portal-tag-chat-box";
 import { TITLE_IDENTIFYING } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
 
 /**
  * צ׳אט קבוצתי בפורטל הקבלן.
@@ -36,7 +37,7 @@ export default async function PortalTagPage(props: PageProps<"/p/[token]/tag/[ta
         <p className="text-sm text-muted">{he.portal.groupChatsTitle}</p>
       </header>
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+      <section className={cardClasses("flex flex-col gap-3")}>
         <TagChatMessages messages={chat.messages} token={token} />
         <PortalTagChatBox token={token} tagId={tagId} />
       </section>

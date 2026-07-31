@@ -7,6 +7,7 @@ import { getPortalTicket, markViewed, resolveToken } from "@/lib/services/portal
 import { ExpiredLink } from "../expired-link";
 import { PortalActions } from "./portal-actions";
 import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
 
 /**
  * מסך הפנייה בפורטל הנמען.
@@ -37,7 +38,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
         ← {he.portal.back}
       </Link>
 
-      <header className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+      <header className={cardClasses("flex flex-col gap-2")}>
         {/* אותה שורת כותרת כמו במסך הפנייה הפנימי: תג הסטטוס צמוד לכותרת ולא
             נדחף לקצה. קבלן שרואה ממשק אחר מזה של המנהל חושד בו. */}
         <div className="flex flex-col gap-1">
@@ -55,7 +56,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
         {ticket.description ? <p className="whitespace-pre-wrap">{ticket.description}</p> : null}
       </header>
 
-      <section className="rounded-2xl border border-border bg-surface p-4">
+      <section className={cardClasses()}>
         <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.thread}</h2>
         {ticket.messages.filter((m) => m.kind !== "EVENT").length === 0 ? (
           <p className="text-sm text-muted">{he.ticket.threadEmpty}</p>

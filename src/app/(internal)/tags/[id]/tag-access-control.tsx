@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
+import { chipClasses } from "@/components/ui/chip";
 import {
   getTagContractorLinkAction,
   grantTagAccessAction,
@@ -76,7 +78,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+    <section className={cardClasses("flex flex-col gap-3")}>
       <h2 className={TITLE_DESCRIPTIVE}>{he.tag.accessHeading}</h2>
 
       {granted.length === 0 ? (
@@ -86,7 +88,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
           {granted.map((contractor) => (
             <li key={contractor.id} className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-3 py-1.5 text-sm text-brand">
+                <span className={chipClasses("brand", "soft", "large")}>
                   {contractor.label}
                   <button
                     type="button"
@@ -130,7 +132,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
           <ul aria-label={he.tag.openToContractors} className="flex flex-wrap gap-2">
             {pending.map((contractor) => (
               <li key={contractor.id}>
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand px-3 py-1.5 text-sm text-brand-fg">
+                <span className={chipClasses("brand", "solid", "large")}>
                   {contractor.label}
                   <button
                     type="button"

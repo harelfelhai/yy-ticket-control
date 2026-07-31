@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
+import { cardClasses } from "@/components/ui/card";
 import {
   closeTicketAction,
   reopenTicketAction,
@@ -62,7 +63,7 @@ export function TicketActions({
   return (
     <div className="flex flex-col gap-3">
       {canComment ? (
-        <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+        <div className={cardClasses("flex flex-col gap-2")}>
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">{he.ticket.reply}</span>
             <Textarea
@@ -95,7 +96,7 @@ export function TicketActions({
           </Button>
         </div>
       ) : (
-        <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-muted">
+        <p className={cardClasses("text-sm text-muted")}>
           {he.notices.closedTicketBlocked}
         </p>
       )}

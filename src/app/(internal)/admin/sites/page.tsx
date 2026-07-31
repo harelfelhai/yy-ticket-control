@@ -5,6 +5,7 @@ import { listSites } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
 import { createSiteAction } from "../actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
 
 export const metadata = { title: `${he.admin.sites} — ${he.app.name}` };
 
@@ -32,7 +33,7 @@ export default async function AdminSitesPage() {
         {sites.map((site) => (
           <li
             key={site.id}
-            className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-4"
+            className={cardClasses("flex flex-col gap-1")}
           >
             <span className="font-semibold">{site.name}</span>
             <span className="text-sm text-muted">

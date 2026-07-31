@@ -8,6 +8,8 @@ import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createUserAction, setUserActiveAction } from "../actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
+import { chipClasses } from "@/components/ui/chip";
 
 interface SiteOption {
   id: string;
@@ -76,7 +78,7 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+      <section className={cardClasses("flex flex-col gap-2")}>
         <h2 className={TITLE_DESCRIPTIVE}>{he.admin.newUser}</h2>
 
         <Field label={he.admin.userName}>
@@ -151,13 +153,13 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
         {users.map((user) => (
           <li
             key={user.id}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4"
+            className={cardClasses("flex items-center justify-between gap-3")}
           >
             <div className="flex flex-col gap-0.5">
               <span className="font-medium">
                 {user.name}
                 {!user.active ? (
-                  <span className="mr-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
+                  <span className={chipClasses("danger", "soft", "default", "ms-2")}>
                     {he.admin.inactiveBadge}
                   </span>
                 ) : null}

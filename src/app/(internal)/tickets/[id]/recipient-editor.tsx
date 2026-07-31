@@ -11,6 +11,7 @@ import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createProfessionalAction } from "../new/actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
 import {
   addRecipientsAction,
   getLinkAction,
@@ -154,7 +155,7 @@ export function RecipientEditor({
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-4">
+    <section className={cardClasses()}>
       <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.recipients}</h2>
 
       {active.length === 0 ? (
