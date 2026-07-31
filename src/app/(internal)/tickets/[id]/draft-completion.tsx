@@ -12,7 +12,7 @@ import {
   saveCompletion,
 } from "@/lib/draft-completion-store";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -312,14 +312,13 @@ export function DraftCompletion({
       ) : null}
 
       {missing.description ? (
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">{he.ticket.description}</span>
+        <Field label={he.ticket.description}>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
           />
-        </label>
+        </Field>
       ) : null}
 
       {missing.recipients ? (

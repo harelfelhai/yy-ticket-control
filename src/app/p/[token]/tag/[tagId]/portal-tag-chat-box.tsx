@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { portalTagMessageAction } from "./actions";
@@ -31,14 +31,13 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{he.ticket.reply}</span>
+      <Field label={he.ticket.reply}>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={2}
         />
-      </label>
+      </Field>
 
       <Button
         disabled={busy || text.trim().length === 0}

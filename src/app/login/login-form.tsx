@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { type LoginState, loginAction } from "./actions";
 
@@ -23,8 +23,7 @@ export function LoginForm({ next }: { next?: string }) {
     <form action={formAction} className="flex flex-col gap-4">
       {next ? <Input type="hidden" name="next" value={next} /> : null}
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{he.login.identifierLabel}</span>
+      <Field label={he.login.identifierLabel}>
         <Input
           name="identifier"
           type="text"
@@ -34,10 +33,9 @@ export function LoginForm({ next }: { next?: string }) {
           dir="ltr"
           required
         />
-      </label>
+      </Field>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{he.login.passwordLabel}</span>
+      <Field label={he.login.passwordLabel}>
         <Input
           name="password"
           type="password"
@@ -45,7 +43,7 @@ export function LoginForm({ next }: { next?: string }) {
           dir="ltr"
           required
         />
-      </label>
+      </Field>
 
       {state.error ? (
         <p role="alert" className="text-sm font-medium text-danger">

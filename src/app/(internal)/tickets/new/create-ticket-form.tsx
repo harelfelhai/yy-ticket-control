@@ -6,7 +6,7 @@ import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { ROOMS } from "@/lib/rooms";
 import {
@@ -359,14 +359,13 @@ export function CreateTicketForm({
         onChange={setRoom}
       />
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{he.ticket.description}</span>
+      <Field label={he.ticket.description}>
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
         />
-      </label>
+      </Field>
 
       <div className="flex flex-col gap-1">
         <RecipientPicker
@@ -382,8 +381,10 @@ export function CreateTicketForm({
         />
       </div>
 
-      {/* תגיות — אופציונלי (אפיון מסך 4). קיבוץ פניות תחת נושא משותף. */}
-      <div className="flex flex-col gap-1.5">
+      {/* תגיות — אופציונלי (אפיון מסך 4). קיבוץ פניות תחת נושא משותף.
+          לא `Field`: אין כאן פקד יחיד לעטוף, ו-`<label>` סביב רשימת צ׳יפים
+          אינו קישור אמיתי. `gap-1` הוא בכוונה אותו מרווח כותרת→תוכן. */}
+      <div className="flex flex-col gap-1">
         <span className="text-sm font-medium">
           {he.tag.label} ({he.common.optional})
         </span>

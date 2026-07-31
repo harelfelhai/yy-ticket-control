@@ -86,7 +86,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
       ) : (
         <ul className="flex flex-col gap-2">
           {granted.map((contractor) => (
-            <li key={contractor.id} className="flex flex-col gap-1.5">
+            <li key={contractor.id} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={chipClasses("brand", "soft", "large")}>
                   {contractor.label}

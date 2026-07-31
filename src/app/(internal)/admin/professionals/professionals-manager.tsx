@@ -138,7 +138,7 @@ function ProfessionalItem({
   if (!editing) {
     return (
       <li className={cardClasses("flex items-center justify-between gap-3")}>
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-1">
           <span className="font-medium">{professional.name}</span>
           <span className="text-sm text-muted" dir="ltr">
             {professional.phone ?? professional.email ?? ""}
