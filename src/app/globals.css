@@ -55,3 +55,30 @@ body {
   outline-offset: 2px;
   border-radius: inherit;
 }
+
+/*
+ * חץ אחד לכל בורר במערכת.
+ *
+ * הבעיה שהוא פותר: בשורת ההזנה המרוכזת יושב `<select>` נייטיב לצד
+ * `LearnedSelect` (בורר מותאם עם חיפוש ו"צור חדש"). החץ של הראשון מצויר
+ * בידי הדפדפן ונראה אחרת בכל מנוע; של השני היה תו `▾` דק. שני פקדים שנראים
+ * כמעט זהים ונבדלים רק בפרט מקרי נקראים כרשלנות, לא כהבחנה — המשתמש אינו
+ * לומד ש"חץ דק = אפשר לחפש".
+ *
+ * מוגדר כ-CSS ולא כרכיב, כי ל-`<select>` אין ילדים: אי אפשר לרנדר לתוכו
+ * אלמנט, ולכן החץ חייב להיות תמונת רקע. הכפתור של `LearnedSelect` משתמש
+ * באותה מחלקה בדיוק, וזו הדרך היחידה להבטיח שהם זהים.
+ *
+ * **הצבע כאן משוכפל מ-`--color-muted`** ואינו יכול להיגזר ממנו: משתנה CSS
+ * אינו ניתן להשתלה בתוך `data:` URI. אם הטוקן משתנה — יש לעדכן גם כאן.
+ * ‏`tests/unit/field.test.tsx` מוודא שהמחלקה עצמה משותפת לשני הפקדים.
+ */
+.control-chevron {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' stroke='%235a6472' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  /* המערכת היא RTL בלבד (ראו AGENTS.md), ולכן הקצה הוא שמאל. */
+  background-position: left 0.75rem center;
+  /* מקום לחץ, כדי שטקסט ארוך לא ייכנס תחתיו */
+  padding-left: 2rem;
+}

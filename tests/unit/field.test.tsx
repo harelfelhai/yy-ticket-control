@@ -64,6 +64,17 @@ describe("פקדי קלט", () => {
     expect(onChange).toHaveBeenCalled();
   });
 
+  it("‏Select נושא את חץ המערכת ולא את חץ הדפדפן", () => {
+    // `control-chevron` (ב-globals.css) עושה `appearance-none` ומצייר חץ
+    // אחד. בלעדיו החץ מגיע מהדפדפן ונראה אחרת בכל מנוע.
+    render(
+      <Select aria-label="תחום">
+        <option>חשמל</option>
+      </Select>,
+    );
+    expect(screen.getByLabelText("תחום").className).toContain("control-chevron");
+  });
+
   it("controlClasses נותן את אותן מחלקות לאלמנט חיצוני", () => {
     expect(controlClasses("compact")).toContain("min-h-11");
     expect(controlClasses("default", true)).toContain("border-danger");

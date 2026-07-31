@@ -67,8 +67,17 @@ export function Input({ size = "default", invalid, className, ...rest }: InputPr
 
 export type SelectProps = ControlExtras & Omit<ComponentProps<"select">, "size">;
 
+/**
+ * ‏`control-chevron` (ב-`globals.css`) מחליף את חץ הדפדפן בחץ אחד של המערכת.
+ *
+ * הוא מוגדר ב-CSS ולא כאן, כי ל-`<select>` אין ילדים — אי אפשר לרנדר לתוכו
+ * אלמנט. אותה מחלקה בדיוק יושבת על הכפתור של `LearnedSelect`, וזו הדרך
+ * היחידה להבטיח ששני הבוררים נראים זהים בכל מנוע דפדפן.
+ */
 export function Select({ size = "default", invalid, className, ...rest }: SelectProps) {
-  return <select className={controlClasses(size, invalid, className)} {...rest} />;
+  return (
+    <select className={controlClasses(size, invalid, twMerge("control-chevron", className))} {...rest} />
+  );
 }
 
 export type TextareaProps = ControlExtras & ComponentProps<"textarea">;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui/field";
+import { Input, controlClasses } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
 import type { SelectOption } from "@/lib/options";
@@ -85,7 +85,7 @@ export function LearnedSelect({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       <span id={labelId} className="text-sm font-medium">
         {label}
       </span>
@@ -105,13 +105,17 @@ export function LearnedSelect({
           // מיקוד מושהה: הפאנל עדיין לא ב-DOM ברגע הלחיצה.
           setTimeout(() => searchRef.current?.focus(), 0);
         }}
-        className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 text-start text-base disabled:opacity-50"
+        /*
+         * `controlClasses` ולא מחלקות ידניות: הכפתור הזה נראה כמו `<select>`
+         * ולכן הוא חייב **להיות** אחד. לפני האיחוד הוא הרכיב את עצמו מחדש —
+         * ועם `disabled:opacity-50` במקום 60, בפקד השכיח ביותר במערכת.
+         *
+         * `control-chevron` הוא אותו חץ בדיוק שעל ה-`<select>` הנייטיב.
+         */
+        className={controlClasses("default", false, "control-chevron flex items-center text-start")}
       >
         <span id={valueId} className={selected ? "" : "text-muted"}>
           {selected?.label ?? placeholder ?? he.common.choose}
-        </span>
-        <span aria-hidden className="text-muted">
-          ▾
         </span>
       </button>
 

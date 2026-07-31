@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
+import { controlClasses } from "@/components/ui/field";
 import { he } from "@/lib/he";
 
 const OPTIONS: LearnedOption[] = [
@@ -137,5 +138,22 @@ describe("LearnedSelect — יצירה כפעולה מכוונת", () => {
 
     expect(screen.queryByRole("button", { name: /צור חדש/ })).not.toBeInTheDocument();
     expect(screen.getByText(he.common.noResults)).toBeVisible();
+  });
+
+  /**
+   * הבורר הזה יושב בשורת ההזנה המרוכזת **צמוד** ל-`<select>` נייטיב. שני
+   * פקדים שנראים כמעט זהים ונבדלים בפרט מקרי נקראים כרשלנות ולא כהבחנה —
+   * המשתמש אינו לומד ש"חץ דק = אפשר לחפש".
+   */
+  it("הכפתור נבנה מאותו פרימיטיב כמו `<select>`, ולא ממחלקות משלו", () => {
+    setup();
+    const trigger = screen.getByRole("button", { name: /בחר/ });
+    const expected = controlClasses("default", false, "control-chevron");
+
+    // אותו חץ, אותו גובה, ואותה שקיפות במצב מושבת — לפני האיחוד הוא היה
+    // `disabled:opacity-50` מול 60 בכל שאר הפקדים.
+    for (const cls of expected.split(" ")) {
+      expect(trigger.className.split(" ")).toContain(cls);
+    }
   });
 });
