@@ -7,6 +7,7 @@ import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { type SearchFilters, searchTickets } from "@/lib/services/search";
 import type { DerivedTicketStatus } from "@/lib/ticket-status";
 import { SearchForm } from "./search-form";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: `${he.search.title} — ${he.app.name}` };
 
@@ -104,7 +105,7 @@ export default async function SearchPage(props: PageProps<"/search">) {
       {!result ? (
         <p className="py-12 text-center text-muted">{he.search.startTyping}</p>
       ) : result.cards.length === 0 ? (
-        <p className="py-12 text-center text-muted">{he.search.empty}</p>
+        <EmptyState>{he.search.empty}</EmptyState>
       ) : (
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted">{he.search.results(result.cards.length)}</p>

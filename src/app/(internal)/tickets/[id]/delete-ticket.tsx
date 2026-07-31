@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { deleteTicketAction } from "./actions";
+import { cardClasses } from "@/components/ui/card";
 
 /**
  * מחיקת פנייה — מנהל מערכת בלבד, מאחורי **אישור כפול** (אפיון §5.ז).
@@ -45,7 +46,7 @@ export function DeleteTicket({ ticketId }: { ticketId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-danger/40 bg-danger/5 p-4">
+    <div className={cardClasses("flex flex-col gap-2", { tone: "dangerQuiet" })}>
       <p className="text-sm font-medium text-danger">{he.ticket.confirmDelete}</p>
       <div className="flex gap-2">
         <Button

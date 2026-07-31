@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { TicketStatusChip } from "@/components/status-chip";
 import type { BoardCard } from "@/lib/board-view";
+import { cardClasses } from "@/components/ui/card";
 import { he } from "@/lib/he";
+import { chipClasses } from "@/components/ui/chip";
 
 /**
  * כרטיס פנייה ברשימת הלוח.
@@ -27,9 +29,9 @@ export function TicketCard({ card }: { card: BoardCard }) {
   return (
     <Link
       href={`/tickets/${card.id}`}
-      className={`flex flex-col gap-1.5 rounded-2xl border bg-surface p-4 ${
-        isDraft ? "border-danger" : "border-border"
-      }`}
+      // טיוטה מקבלת מסגרת אדומה מלאה: היא חוסמת שיגור, וזה הסימן היחיד
+      // שמבדיל אותה בסריקה מהירה של הלוח.
+      className={cardClasses("flex flex-col gap-1.5", { tone: isDraft ? "dangerOutline" : "default" })}
     >
       {/*
         התג צמוד לכותרת ולא נדחף לקצה הנגדי.
@@ -60,7 +62,7 @@ export function TicketCard({ card }: { card: BoardCard }) {
         <span>· {he.board.ageDays(card.ageDays)}</span>
         <span>· {he.channel[card.channel]}</span>
         {card.reopened ? (
-          <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-warning">
+          <span className={chipClasses("warning")}>
             {he.ticket.reopenedBadge}
           </span>
         ) : null}

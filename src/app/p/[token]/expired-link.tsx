@@ -1,5 +1,6 @@
 import { he } from "@/lib/he";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
 
 /**
  * מסך "הקישור אינו בתוקף".
@@ -14,7 +15,7 @@ import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 export function ExpiredLink() {
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 text-center">
+      <div className={cardClasses("w-full max-w-sm text-center", { padding: "roomy" })}>
         <h1 className={TITLE_DESCRIPTIVE}>{he.portal.expired}</h1>
         <p className="mt-2 text-muted">{he.portal.expiredHelp}</p>
       </div>

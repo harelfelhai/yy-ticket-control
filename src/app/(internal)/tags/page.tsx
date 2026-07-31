@@ -4,6 +4,7 @@ import { he } from "@/lib/he";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
 import { TagRename } from "./tag-rename";
+import { cardClasses } from "@/components/ui/card";
 
 export const metadata = { title: `${he.tag.listTitle} — ${he.app.name}` };
 
@@ -31,7 +32,7 @@ export default async function TagsPage() {
           {tags.map((tag) => (
             <li
               key={tag.id}
-              className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4"
+              className={cardClasses("flex flex-col gap-2")}
             >
               <div className="flex items-center justify-between gap-3">
                 <Link href={`/tags/${tag.id}`} className="flex min-w-0 flex-1 flex-col gap-0.5">

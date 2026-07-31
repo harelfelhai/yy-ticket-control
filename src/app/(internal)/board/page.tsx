@@ -8,6 +8,7 @@ import { type BoardFilters as Filters, getBoard } from "@/lib/services/board";
 import type { BoardSection } from "@/lib/ticket-status";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { BoardFilters } from "./board-filters";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: `${he.board.title} — ${he.app.name}` };
 
@@ -89,13 +90,13 @@ export default async function BoardPage(props: PageProps<"/board">) {
             </Link>
           </div>
           {focusCards.length === 0 ? (
-            <p className="py-12 text-center text-muted">{he.board.empty}</p>
+            <EmptyState>{he.board.empty}</EmptyState>
           ) : (
             focusCards.map((card) => <TicketCard key={card.id} card={card} />)
           )}
         </>
       ) : total === 0 ? (
-        <p className="py-12 text-center text-muted">{he.board.empty}</p>
+        <EmptyState>{he.board.empty}</EmptyState>
       ) : tour ? (
         <TourView cards={[...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS]} />
       ) : (

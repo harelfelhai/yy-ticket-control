@@ -21,6 +21,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import type { ActionResult } from "@/lib/action-result";
 import type { SelectOption } from "@/lib/options";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { chipClasses } from "@/components/ui/chip";
 import {
   createApartmentAction,
   createBuildingAction,
@@ -390,7 +391,7 @@ export function CreateTicketForm({
           <ul aria-label={he.tag.label} className="flex flex-wrap gap-2">
             {tags.map((tag) => (
               <li key={tag.id}>
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand px-3 py-1.5 text-sm text-brand-fg">
+                <span className={chipClasses("brand", "solid", "large")}>
                   {tag.label}
                   <button
                     type="button"

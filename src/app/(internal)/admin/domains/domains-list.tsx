@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { renameDomainAction } from "../actions";
+import { cardClasses } from "@/components/ui/card";
 
 interface DomainRow {
   id: string;
@@ -45,7 +46,7 @@ function DomainItem({ domain }: { domain: DomainRow }) {
   }
 
   return (
-    <li className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-3">
+    <li className={cardClasses("flex flex-col gap-1", { padding: "compact" })}>
       <div className="flex items-center gap-2">
         <Input
           value={name}

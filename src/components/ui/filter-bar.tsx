@@ -2,6 +2,7 @@
 
 import { type ReactNode, useId, useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { chipClasses } from "@/components/ui/chip";
 import { Select, type SelectProps } from "@/components/ui/field";
 import { he } from "@/lib/he";
 
@@ -57,10 +58,9 @@ export function FilterBar({ activeCount, trailing, children }: FilterBarProps) {
           <>
             {/* המספר לבדו קריא בעין אך חסר-משמעות באוזן, ולכן הוא מוסתר
                 מהקורא והמשפט המלא נמסר לו בנפרד. */}
-            <span
-              aria-hidden
-              className="inline-flex min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-medium text-brand-fg"
-            >
+            {/* ‏`min-w-5` + `px-1` הופכים את הצ׳יפ לעיגול מונה: ספרה בודדת
+                אינה אמורה להימתח לרוחב של מילה. */}
+            <span aria-hidden className={chipClasses("brand", "solid", "default", "min-w-5 justify-center px-1")}>
               {activeCount}
             </span>
             {/* ‏`{" "}` מפורש: `gap-2` מפריד את הפקדים בעין, אבל השם הנגיש

@@ -4,6 +4,8 @@ import { getPortalBoard, resolveToken } from "@/lib/services/portal";
 import { listPortalTagChats } from "@/lib/services/tags";
 import { ExpiredLink } from "./expired-link";
 import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: `${he.portal.activeTitle} — ${he.app.name}` };
 
@@ -34,14 +36,14 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
       </header>
 
       {active.length === 0 ? (
-        <p className="py-8 text-center text-muted">{he.portal.empty}</p>
+        <EmptyState>{he.portal.empty}</EmptyState>
       ) : (
         <ul className="flex flex-col gap-2">
           {active.map(({ ticket, ...assignment }) => (
             <li key={assignment.id}>
               <Link
                 href={`/p/${token}/${ticket.id}`}
-                className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-4"
+                className={cardClasses("flex flex-col gap-1")}
               >
                 <span className="font-semibold">
                   {ticket.building?.name} · {he.directory.apartment} {ticket.apartment?.number}
@@ -67,7 +69,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
               <li key={tag.id}>
                 <Link
                   href={`/p/${token}/tag/${tag.id}`}
-                  className="flex items-center gap-2 rounded-2xl border border-border bg-surface p-4 font-medium"
+                  className={cardClasses("flex items-center gap-2 font-medium")}
                 >
                   <span aria-hidden>💬</span>
                   {tag.name}
@@ -88,7 +90,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
               <li key={assignment.id}>
                 <Link
                   href={`/p/${token}/${ticket.id}`}
-                  className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-4 text-muted"
+                  className={cardClasses("flex flex-col gap-1 text-muted")}
                 >
                   <span className="font-medium">
                     {ticket.building?.name} · {he.directory.apartment}{" "}

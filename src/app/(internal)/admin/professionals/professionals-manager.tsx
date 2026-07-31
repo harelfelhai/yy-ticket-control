@@ -7,6 +7,7 @@ import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { cardClasses } from "@/components/ui/card";
 
 interface ProfessionalRow {
   id: string;
@@ -58,7 +59,7 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
   return (
     <div className="flex flex-col gap-4">
       {/* איחוד כפילויות */}
-      <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+      <section className={cardClasses("flex flex-col gap-2")}>
         <h2 className={TITLE_DESCRIPTIVE}>{he.admin.mergeHeading}</h2>
         <p className="text-xs text-muted">{he.admin.mergeHint}</p>
 
@@ -136,7 +137,7 @@ function ProfessionalItem({
 
   if (!editing) {
     return (
-      <li className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
+      <li className={cardClasses("flex items-center justify-between gap-3")}>
         <div className="flex flex-col gap-0.5">
           <span className="font-medium">{professional.name}</span>
           <span className="text-sm text-muted" dir="ltr">
@@ -160,7 +161,7 @@ function ProfessionalItem({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+    <li className={cardClasses("flex flex-col gap-2")}>
       <Input value={name} onChange={(e) => setName(e.target.value)} />
       <div className="grid grid-cols-2 gap-2">
         <Input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" inputMode="tel" />

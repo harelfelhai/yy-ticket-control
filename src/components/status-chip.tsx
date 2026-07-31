@@ -1,3 +1,4 @@
+import { Chip, type ChipTone } from "@/components/ui/chip";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { he } from "@/lib/he";
 import type { DerivedTicketStatus } from "@/lib/ticket-status";
@@ -5,37 +6,48 @@ import type { DerivedTicketStatus } from "@/lib/ticket-status";
 /**
  * תגי סטטוס.
  *
+ * הקובץ מחזיק **מיפוי בלבד** — סטטוס לגוון סמנטי. המראה יושב
+ * ב-`@/components/ui/chip`, כי אותה צורה משמשת גם תגיות וגם תגי התראה;
+ * לפני האיחוד היו כאן `px-2.5 py-0.5` ובתגיות `px-3 py-1.5`, בלי שההבדל
+ * ייצג החלטה.
+ *
  * הצבע נגזר ממשמעות ולא מאסתטיקה: אדום שמור למצב שבו נמען חסום ועבודה
  * בשטח עצורה ("שאלה"), ירוק לסיום, וכתום למה שממתין להכרעה. מנהל עבודה
  * סורק את הלוח בשמש ובמהירות, והצבע הוא מה שהוא קולט לפני הטקסט.
  */
 
-const ASSIGNMENT_STYLES: Record<AssignmentStatus, string> = {
-  SENT: "bg-surface text-muted border-border",
-  VIEWED: "bg-surface text-fg border-border",
-  DONE: "bg-success/10 text-success border-success/30",
-  QUESTION: "bg-danger/10 text-danger border-danger/30",
-  REMOVED: "bg-surface text-muted border-border line-through",
+const ASSIGNMENT_TONES: Record<AssignmentStatus, ChipTone> = {
+  SENT: "neutral",
+  // לא `neutral`: "נצפה" אומר שהקבלן באמת פתח, וזה שונה מ"שלחתי".
+  VIEWED: "neutralStrong",
+  DONE: "success",
+  QUESTION: "danger",
+  REMOVED: "neutral",
 };
 
-const TICKET_STYLES: Record<DerivedTicketStatus, string> = {
-  CLOSED: "bg-surface text-muted border-border",
-  DRAFT: "bg-warning/10 text-warning border-warning/30",
-  AWAITING_OPENER_QUESTION: "bg-danger/10 text-danger border-danger/30",
-  AWAITING_OPENER_APPROVAL: "bg-success/10 text-success border-success/30",
-  PARTIAL: "bg-warning/10 text-warning border-warning/30",
-  VIEWED: "bg-surface text-fg border-border",
-  NEW: "bg-brand/10 text-brand border-brand/30",
+const TICKET_TONES: Record<DerivedTicketStatus, ChipTone> = {
+  CLOSED: "neutral",
+  DRAFT: "warning",
+  AWAITING_OPENER_QUESTION: "danger",
+  AWAITING_OPENER_APPROVAL: "success",
+  PARTIAL: "warning",
+  VIEWED: "neutralStrong",
+  NEW: "brand",
 };
-
-const BASE = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium";
 
 export function AssignmentStatusChip({ status }: { status: AssignmentStatus }) {
   return (
-    <span className={`${BASE} ${ASSIGNMENT_STYLES[status]}`}>{he.assignmentStatus[status]}</span>
+    <Chip
+      tone={ASSIGNMENT_TONES[status]}
+      // שיוך שהוסר נשאר מוצג: המידע ההיסטורי חשוב ("שלחתי לו והוא לא הגיב"),
+      // והקו החוצה אומר שהוא כבר לא בתמונה בלי למחוק אותו.
+      className={status === "REMOVED" ? "line-through" : undefined}
+    >
+      {he.assignmentStatus[status]}
+    </Chip>
   );
 }
 
 export function TicketStatusChip({ status }: { status: DerivedTicketStatus }) {
-  return <span className={`${BASE} ${TICKET_STYLES[status]}`}>{he.ticketStatus[status]}</span>;
+  return <Chip tone={TICKET_TONES[status]}>{he.ticketStatus[status]}</Chip>;
 }
