@@ -20,7 +20,7 @@ import { listTags, listTicketTags } from "@/lib/services/tags";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { canTagTicket } from "@/lib/permissions";
 import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
-import { CONTENT_WIDTH } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
 import { RecipientEditor } from "./recipient-editor";
@@ -144,7 +144,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         */}
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h1 className="text-2xl font-bold">{location || he.ticket.noLocation}</h1>
+            <h1 className={TITLE_IDENTIFYING}>{location || he.ticket.noLocation}</h1>
             <TicketStatusChip status={status} />
             <span className="text-xs text-muted" dir="ltr">
               #{ticket.seq}
@@ -239,7 +239,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       />
 
       <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="mb-2 text-sm font-semibold">{he.ticket.thread}</h2>
+        <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.thread}</h2>
         {ticket.messages.length === 0 ? (
           <p className="text-sm text-muted">{he.ticket.threadEmpty}</p>
         ) : (

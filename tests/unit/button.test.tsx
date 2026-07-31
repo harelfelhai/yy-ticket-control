@@ -36,9 +36,20 @@ describe("Button", () => {
     ["danger", "bg-danger"],
     ["dangerOutline", "border-danger"],
     ["dangerQuiet", "text-danger"],
+    ["quiet", "text-brand"],
   ] as const)("הווריאנט %s מקבל את הצבע שלו", (variant, expected) => {
     render(<Button variant={variant}>פעולה</Button>);
     expect(screen.getByRole("button").className).toContain(expected);
+  });
+
+  it("`quiet` הוא טקסט בלבד — בלי מסגרת ובלי רקע", () => {
+    // אילו היה מקבל מסגרת, הוא היה מתחרה בכפתור המשני שלצדו במקום להיות
+    // הפעולה המשנית ממנו. זהו כל ההבדל בין `quiet` ל-`secondary`.
+    render(<Button variant="quiet">נקה מסננים</Button>);
+    const className = screen.getByRole("button").className;
+
+    expect(className).not.toContain("border");
+    expect(className).not.toContain("bg-");
   });
 
   it("`compact` נשאר מעל סף המגע המינימלי (44px)", () => {

@@ -64,7 +64,7 @@ export function TicketActions({
       {canComment ? (
         <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold">{he.ticket.reply}</span>
+            <span className="text-sm font-medium">{he.ticket.reply}</span>
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import {
   getTagContractorLinkAction,
   grantTagAccessAction,
@@ -76,7 +77,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
-      <h2 className="text-sm font-semibold">{he.tag.accessHeading}</h2>
+      <h2 className={TITLE_DESCRIPTIVE}>{he.tag.accessHeading}</h2>
 
       {granted.length === 0 ? (
         <p className="text-sm text-muted">{he.tag.accessNobody}</p>
@@ -153,7 +154,6 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
             options={available}
             value={null}
             onChange={stage}
-            placeholder={he.tag.openToContractors}
           />
         ) : null}
 

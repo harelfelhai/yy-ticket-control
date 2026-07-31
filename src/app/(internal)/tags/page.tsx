@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { CONTENT_WIDTH } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
 import { TagRename } from "./tag-rename";
 
@@ -22,7 +22,7 @@ export default async function TagsPage() {
 
   return (
     <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
-      <h1 className="text-xl font-bold">{he.tag.listTitle}</h1>
+      <h1 className={TITLE_DESCRIPTIVE}>{he.tag.listTitle}</h1>
 
       {tags.length === 0 ? (
         <p className="py-8 text-center text-muted">{he.tag.listEmpty}</p>

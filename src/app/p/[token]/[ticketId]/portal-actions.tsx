@@ -82,7 +82,7 @@ export function PortalActions({
       ) : null}
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold">{he.ticket.reply}</span>
+        <span className="text-sm font-medium">{he.ticket.reply}</span>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

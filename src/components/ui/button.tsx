@@ -24,11 +24,23 @@ import { twMerge } from "tailwind-merge";
  *   "שגר"). היא חייבת להיקרא כהרסנית, אך לא להתחרות בפעולה החיובית שלצדה.
  * `dangerQuiet` — פעולה הרסנית בתוך שורה או כרטיס ("הסר נמען"), שאסור לה
  *   למשוך את העין יותר מהתוכן שהיא פועלת עליו.
+ * `quiet` — התאום החיובי של `dangerQuiet`: פעולה משנית בתוך שורה או כרטיס
+ *   ("נקה מסננים", "+ הוסף קובץ"), בצבע המותג ובלי מסגרת.
  *
- * חמישה ואף לא אחד מעבר: כל אחד מהם ממופה לשימוש קיים בפועל. וריאנט שנוסף
+ * שישה ואף לא אחד מעבר: כל אחד מהם ממופה לשימוש קיים בפועל. וריאנט שנוסף
  * "ליתר ביטחון" הוא הזמנה לסחיפה חדשה.
+ *
+ * `quiet` נוסף בדיעבד, ומסיבה שכדאי לזכור: הוא **היה** במוצר — חמישה מקומות
+ * כתבו אותו ביד — ורק הפרימיטיב לא הכיר אותו. וריאנט חסר אינו מונע שימוש,
+ * הוא רק מוציא אותו מהשליטה של מקור האמת.
  */
-export type ButtonVariant = "primary" | "secondary" | "danger" | "dangerOutline" | "dangerQuiet";
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "danger"
+  | "dangerOutline"
+  | "dangerQuiet"
+  | "quiet";
 
 /**
  * `default` — 48px. פעולה ראשית או פעולה שקשה לבטל.
@@ -45,6 +57,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   danger: "bg-danger text-brand-fg font-semibold",
   dangerOutline: "border border-danger bg-surface text-danger font-medium",
   dangerQuiet: "text-danger font-medium",
+  quiet: "text-brand font-medium",
 };
 
 const SIZES: Record<ButtonSize, string> = {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { he } from "@/lib/he";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.title} — ${he.app.name}` };
 
@@ -18,7 +19,7 @@ export default function AdminHubPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
-      <h1 className="text-xl font-bold">{he.admin.title}</h1>
+      <h1 className={TITLE_DESCRIPTIVE}>{he.admin.title}</h1>
       <ul className="grid gap-3 sm:grid-cols-2">
         {cards.map((card) => (
           <li key={card.href}>

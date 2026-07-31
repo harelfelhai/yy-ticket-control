@@ -322,8 +322,7 @@ export function DraftCompletion({
       ) : null}
 
       {missing.recipients ? (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">{he.ticket.recipients}</span>
+        <div className="flex flex-col gap-1">
           <RecipientPicker
             options={availableRecipients}
             value={recipients}

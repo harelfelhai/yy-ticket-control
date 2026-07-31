@@ -7,6 +7,7 @@ import { he } from "@/lib/he";
 import { getTagDetail } from "@/lib/services/tags";
 import { TagAccessControl } from "./tag-access-control";
 import { TagChatBox } from "./tag-chat-box";
+import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
 
 /**
  * מסך התגית (מסך 6): צ׳אט קבוצתי לצד רשימת הפניות שבתגית ומונה פתוחות/סגורות.
@@ -37,7 +38,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         <Link href="/tags" className="text-sm text-brand">
           ← {he.tag.listTitle}
         </Link>
-        <h1 className="text-xl font-bold">{detail.tag.name}</h1>
+        <h1 className={TITLE_IDENTIFYING}>{detail.tag.name}</h1>
         <p className="text-sm text-muted">
           {he.tag.ticketCount(detail.openCount, detail.closedCount)}
         </p>
@@ -45,7 +46,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
 
       <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{he.tag.ticketsHeading}</h2>
+          <h2 className={TITLE_DESCRIPTIVE}>{he.tag.ticketsHeading}</h2>
           <span className="text-xs text-muted">{he.tag.ticketsManagersOnly}</span>
         </div>
         {detail.tickets.length === 0 ? (
@@ -82,7 +83,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         />
       ) : (
         <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold">{he.tag.accessHeading}</h2>
+          <h2 className={TITLE_DESCRIPTIVE}>{he.tag.accessHeading}</h2>
           {detail.granted.length === 0 ? (
             <p className="text-sm text-muted">{he.tag.accessNobody}</p>
           ) : (
@@ -102,7 +103,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
 
       <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
         <div>
-          <h2 className="text-sm font-semibold">{he.tag.chatHeading}</h2>
+          <h2 className={TITLE_DESCRIPTIVE}>{he.tag.chatHeading}</h2>
           <p className="text-xs text-muted">{he.tag.chatHint}</p>
         </div>
         <TagChatMessages messages={detail.messages} />

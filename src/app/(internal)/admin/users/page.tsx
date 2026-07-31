@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listSites, listUsers } from "@/lib/services/admin";
 import { UsersManager } from "./users-manager";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.users} — ${he.app.name}` };
 
@@ -19,7 +20,7 @@ export default async function AdminUsersPage() {
         <Link href="/admin" className="text-sm text-brand">
           ← {he.admin.title}
         </Link>
-        <h1 className="text-xl font-bold">{he.admin.users}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.admin.users}</h1>
       </div>
 
       <UsersManager

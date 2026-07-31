@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { FilterBar, FilterSelect } from "@/components/ui/filter-bar";
 import { he } from "@/lib/he";
 
@@ -70,13 +71,9 @@ export function BoardFilters({ sites, buildings, domains, recipients, tags }: Bo
           </label>
 
           {activeCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => router.replace(pathname)}
-              className="min-h-11 px-3 text-sm font-medium text-brand"
-            >
+            <Button variant="quiet" size="compact" onClick={() => router.replace(pathname)}>
               {he.board.clearFilters}
-            </button>
+            </Button>
           ) : null}
         </>
       }

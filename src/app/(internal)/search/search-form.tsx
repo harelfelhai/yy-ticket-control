@@ -105,16 +105,16 @@ export function SearchForm({
           // התנאי הוא `syncKey` ולא `activeCount`: הכפתור מנקה גם את מונח
           // החיפוש, ולכן הוא נחוץ גם כשמסונן רק לפי `q`.
           syncKey ? (
-            <button
-              type="button"
+            <Button
+              variant="quiet"
+              size="compact"
               onClick={() => {
                 setQuery("");
                 router.replace(pathname);
               }}
-              className="min-h-11 px-3 text-sm font-medium text-brand"
             >
               {he.board.clearFilters}
-            </button>
+            </Button>
           ) : null
         }
       >

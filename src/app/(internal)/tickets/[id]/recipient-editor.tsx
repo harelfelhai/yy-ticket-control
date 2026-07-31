@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createProfessionalAction } from "../new/actions";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import {
   addRecipientsAction,
   getLinkAction,
@@ -154,7 +155,7 @@ export function RecipientEditor({
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="mb-2 text-sm font-semibold">{he.ticket.recipients}</h2>
+      <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.recipients}</h2>
 
       {active.length === 0 ? (
         <p className="text-sm text-muted">{he.reason.noRecipients}</p>
@@ -197,14 +198,15 @@ export function RecipientEditor({
               {/* "שלח שוב במייל" — לכל נמען עם כתובת מייל (חיצוני או פנימי),
                   בשונה מכפתורי הקישור שרלוונטיים רק לקבלן חיצוני. */}
               {canEdit && assignment.canResendEmail ? (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="compact"
                   disabled={busy}
                   onClick={() => resend(assignment.id, assignment.name)}
-                  className="min-h-11 self-start rounded-lg border border-border px-3 text-sm font-medium disabled:opacity-60"
+                  className="self-start"
                 >
                   {he.ticket.resendEmail}
-                </button>
+                </Button>
               ) : null}
 
               {canEdit && assignment.professionalId ? (
@@ -223,15 +225,15 @@ export function RecipientEditor({
                       {he.ticket.sendWhatsApp}
                     </a>
                   ) : null}
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="compact"
                     disabled={busy}
                     onClick={() => showLink(assignment.professionalId as string)}
                     aria-label={`${he.ticket.showLink} ${assignment.name}`}
-                    className="min-h-11 rounded-lg border border-border px-3 text-sm font-medium disabled:opacity-60"
                   >
                     {he.ticket.showLink}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
 
@@ -292,14 +294,15 @@ export function RecipientEditor({
           {showCreate ? (
             <ProfessionalCreateForm onCreate={createAndAdd} onCancel={() => setShowCreate(false)} />
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="quiet"
+              size="compact"
               disabled={busy}
               onClick={() => setShowCreate(true)}
-              className="min-h-11 self-start px-1 text-start font-medium text-brand disabled:opacity-60"
+              className="self-start px-1 text-start"
             >
               {he.directory.newProfessional}
-            </button>
+            </Button>
           )}
         </div>
       ) : null}

@@ -6,6 +6,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 interface ProfessionalRow {
   id: string;
@@ -58,7 +59,7 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
     <div className="flex flex-col gap-4">
       {/* איחוד כפילויות */}
       <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold">{he.admin.mergeHeading}</h2>
+        <h2 className={TITLE_DESCRIPTIVE}>{he.admin.mergeHeading}</h2>
         <p className="text-xs text-muted">{he.admin.mergeHint}</p>
 
         <div className="grid grid-cols-2 gap-2">

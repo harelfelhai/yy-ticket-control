@@ -5,6 +5,7 @@ import { he } from "@/lib/he";
 import { listSiteDirectory } from "@/lib/services/directory";
 import { listTags } from "@/lib/services/tags";
 import { CreateTicketForm } from "./create-ticket-form";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.ticket.createTitle} — ${he.app.name}` };
 
@@ -38,7 +39,7 @@ export default async function NewTicketPage(props: PageProps<"/tickets/new">) {
   if (!site) {
     return (
       <div className="flex flex-col gap-3 p-6">
-        <h1 className="text-xl font-bold">{he.ticket.createTitle}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.ticket.createTitle}</h1>
         <p className="text-muted">{he.ticket.chooseSite}</p>
         <ul className="flex flex-col gap-2">
           {sites.map((option) => (

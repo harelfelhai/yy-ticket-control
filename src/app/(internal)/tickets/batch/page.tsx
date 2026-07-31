@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import { listSiteDirectory } from "@/lib/services/directory";
 import { BatchForm } from "./batch-form";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.batch.title} — ${he.app.name}` };
 
@@ -30,7 +31,7 @@ export default async function BatchPage(props: PageProps<"/tickets/batch">) {
   if (!site) {
     return (
       <div className="flex flex-col gap-3 p-6">
-        <h1 className="text-xl font-bold">{he.batch.title}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
         <p className="text-muted">{he.ticket.chooseSite}</p>
         <ul className="flex flex-col gap-2">
           {sites.map((option) => (

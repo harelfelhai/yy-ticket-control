@@ -428,8 +428,19 @@ export const he = {
     saveDraft: "שמור הכל כטיוטה",
 
     // סיכומים — הנוסחים מהאפיון מסך 5
-    created: (tickets: number, professionals: number) =>
-      `נוצרו ${tickets} פניות ושויכו ל-${professionals} אנשי מקצוע.`,
+    /**
+     * "נוצרו 1 פניות ושויכו ל-1 אנשי מקצוע" הופיע בפועל על המסך. הודעת
+     * הטיוטות שמתחתיה כבר טיפלה ביחיד — כאן זה נשכח.
+     *
+     * הפועל מסכים עם **הפניות**, שהן הנושא: "נוצרה… ושויכה" מול
+     * "נוצרו… ושויכו". מספר אנשי המקצוע קובע רק את צורת המושא.
+     */
+    created: (tickets: number, professionals: number) => {
+      const subject = tickets === 1 ? "נוצרה פנייה אחת ושויכה" : `נוצרו ${tickets} פניות ושויכו`;
+      const target =
+        professionals === 1 ? "לאיש מקצוע אחד" : `ל-${professionals} אנשי מקצוע`;
+      return `${subject} ${target}.`;
+    },
     draftsMissingRecipient: (rows: number) =>
       rows === 1
         ? "שורה אחת חסרה נמען. היא נשמרה כטיוטה."
