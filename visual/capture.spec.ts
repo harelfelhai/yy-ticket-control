@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { type Page, expect, test } from "@playwright/test";
+import { type Locator, type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "../e2e/global-setup";
 
 /**
@@ -34,6 +34,15 @@ async function login(page: Page) {
 async function pick(page: Page, label: string, option: string) {
   await page.getByRole("button", { name: new RegExp(`^${label}`) }).first().click();
   await page.getByRole("option", { name: option, exact: true }).click();
+}
+
+/** בוחר מ-LearnedSelect בתוך אזור נתון — בהזנה מרוכזת יש בורר לכל שורה */
+async function pickIn(scope: Locator, label: string, option: string) {
+  await scope
+    .getByRole("button", { name: new RegExp(`^${label}`) })
+    .first()
+    .click();
+  await scope.page().getByRole("option", { name: option, exact: true }).click();
 }
 
 /**
@@ -133,9 +142,61 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await page.goto("/search");
   await shot(page, device, "07-search");
 
-  await page.goto("/tags");
-  await shot(page, device, "08-tags");
-
   await page.goto("/admin");
   await shot(page, device, "09-admin");
+
+  await captureBatchAndTag(page, device);
 });
+
+/**
+ * הזנה מרוכזת ומסך התגית.
+ *
+ * שני המסכים הצפופים ביותר במערכת, ושניהם היו מחוץ ללכידה עד כה: ההזנה
+ * המרוכזת היא רשת של פקדים קטנים (שורה לכל ליקוי, בורר לכל שורה), ומסך
+ * התגית מחזיק את שדות הקישור לצ׳אט. שניהם עברו הגירה לפרימיטיבים בלי
+ * שאיש הסתכל על התוצאה.
+ *
+ * הרצף גם מייצר תגית אמיתית — בלעדיה `/tags` מצולם ריק ואינו מלמד דבר.
+ */
+async function captureBatchAndTag(page: Page, device: string): Promise<void> {
+  await page.goto("/tickets/batch");
+  await shot(page, device, "10-batch-empty");
+
+  const aside = page.getByRole("complementary");
+  await pickIn(aside, "בניין", "בניין א");
+  await pickIn(aside, "דירה", "1");
+  await aside.getByLabel("תגית משותפת").fill("בדק בית · בניין א דירה 1");
+
+  const row = (n: number) => page.getByRole("group", { name: `שורה ${n}`, exact: true });
+
+  await row(1).getByLabel("תיאור הליקוי").fill("אין חשמל בסלון, המפסק קופץ");
+  await pickIn(row(1), "תחום", "חשמל");
+  await row(1).getByRole("button", { name: "+ איש מקצוע חדש" }).click();
+  await row(1).getByLabel("שם", { exact: true }).fill("חשמלאי הבניין");
+  await row(1).getByLabel("טלפון").fill("050-2000001");
+  await row(1).getByRole("button", { name: "שמור איש מקצוע" }).click();
+  await expect(row(1).getByRole("list", { name: "נמענים", exact: true })).toContainText(
+    "חשמלאי הבניין",
+  );
+
+  await row(2).getByLabel("תיאור הליקוי").fill("שקע שרוף במטבח");
+  await pickIn(row(2), "תחום", "חשמל");
+
+  // שורה בלי נמען — היא נשמרת כטיוטה, וזה המצב שכדאי לראות בצילום לצד
+  // שורה מלאה: שתי השורות נבדלות רק בפרט אחד.
+  await row(3).getByLabel("תיאור הליקוי").fill("נזילה מתחת לכיור");
+
+  await shot(page, device, "11-batch-filled");
+
+  await page.getByRole("button", { name: "שגר הכל" }).click();
+  await page.getByRole("link", { name: "פתח את התגית" }).click();
+  // ‏waitForURL ולא התאמת כותרת: הכותרת "הזנה מרוכזת מדוח בדק בית" מכילה את
+  // שם התגית, ולכן `getByRole("heading", {name: /בדק בית/})` נפתר מיד על
+  // העמוד הישן — והצילום יצא לפני הניווט.
+  await page.waitForURL(/\/tags\/[a-z0-9]+$/);
+  await shot(page, device, "12-tag-detail");
+
+  // אחרי שנוצרה תגית — הרשימה מציגה תוכן ולא מצב ריק.
+  await page.goto("/tags");
+  await shot(page, device, "08-tags");
+}
