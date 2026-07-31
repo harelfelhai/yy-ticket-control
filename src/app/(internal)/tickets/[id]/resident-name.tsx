@@ -77,16 +77,18 @@ export function ResidentName({ ticketId, initial, canEdit }: ResidentNameProps) 
       <Button size="compact" onClick={save} disabled={busy}>
         {he.common.save}
       </Button>
-      <button
-        type="button"
+      {/* היה `min-h-9` (36px) — ובאותה הגירה שהעלתה את "שמור" שלידו ל-44px
+          הוא נשאר מאחור, כך ששני כפתורים צמודים קיבלו גבהים שונים. */}
+      <Button
+        variant="secondary"
+        size="compact"
         onClick={() => {
           setName(initial ?? "");
           setEditing(false);
         }}
-        className="min-h-9 rounded-lg border border-border px-2"
       >
         {he.common.cancel}
-      </button>
+      </Button>
       {error ? (
         <span role="alert" className="text-danger">
           {error}

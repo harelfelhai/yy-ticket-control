@@ -6,6 +6,7 @@ import { toMediaView } from "@/lib/media-view";
 import { getPortalTicket, markViewed, resolveToken } from "@/lib/services/portal";
 import { ExpiredLink } from "../expired-link";
 import { PortalActions } from "./portal-actions";
+import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
 
 /**
  * מסך הפנייה בפורטל הנמען.
@@ -41,7 +42,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
             נדחף לקצה. קבלן שרואה ממשק אחר מזה של המנהל חושד בו. */}
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h1 className="text-2xl font-bold">
+            <h1 className={TITLE_IDENTIFYING}>
               {ticket.building?.name} · {he.directory.apartment} {ticket.apartment?.number}
             </h1>
             <AssignmentStatusChip status={assignment.status} />
@@ -55,7 +56,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
       </header>
 
       <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="mb-2 text-sm font-semibold">{he.ticket.thread}</h2>
+        <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.thread}</h2>
         {ticket.messages.filter((m) => m.kind !== "EVENT").length === 0 ? (
           <p className="text-sm text-muted">{he.ticket.threadEmpty}</p>
         ) : (

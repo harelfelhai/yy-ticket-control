@@ -4,6 +4,7 @@ import { he } from "@/lib/he";
 import { listSites } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
 import { createSiteAction } from "../actions";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.sites} — ${he.app.name}` };
 
@@ -22,7 +23,7 @@ export default async function AdminSitesPage() {
         <Link href="/admin" className="text-sm text-brand">
           ← {he.admin.title}
         </Link>
-        <h1 className="text-xl font-bold">{he.admin.sites}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.admin.sites}</h1>
       </div>
 
       <AdminAddForm label={he.admin.siteName} buttonLabel={he.admin.addSite} action={createSiteAction} />

@@ -5,6 +5,7 @@ import { LearnedSelect } from "@/components/learned-select";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { addTicketTagAction, removeTicketTagAction } from "./actions";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 interface TicketTagsProps {
   ticketId: string;
@@ -64,7 +65,7 @@ export function TicketTags({ ticketId, initial, all, canEdit }: TicketTagsProps)
 
   return (
     <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-      <h2 className="text-sm font-semibold">{he.tag.label}</h2>
+      <h2 className={TITLE_DESCRIPTIVE}>{he.tag.label}</h2>
 
       {tags.length > 0 ? (
         <ul aria-label={he.tag.label} className="flex flex-wrap gap-2">
@@ -97,7 +98,6 @@ export function TicketTags({ ticketId, initial, all, canEdit }: TicketTagsProps)
           value={null}
           onChange={selectExisting}
           onCreate={attach}
-          placeholder={he.tag.add}
         />
       ) : null}
 

@@ -55,16 +55,16 @@ export function TagRename({ id, name }: { id: string; name: string }) {
         <Button size="compact" onClick={save} disabled={pending || !hydrated || !dirty}>
           {he.common.save}
         </Button>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="compact"
           onClick={() => {
             setValue(name);
             setEditing(false);
           }}
-          className="min-h-11 rounded-xl border border-border px-4 text-sm"
         >
           {he.common.cancel}
-        </button>
+        </Button>
       </div>
       {error ? (
         <p role="alert" className="text-sm text-danger">

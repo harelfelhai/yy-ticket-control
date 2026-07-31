@@ -219,14 +219,15 @@ export function MediaPicker({
                 className="min-h-16 w-full text-base"
               />
             </div>
-            <button
-              type="button"
+            <Button
+              variant="quiet"
+              size="compact"
               disabled={busy}
               onClick={() => fileInput.current?.click()}
-              className="min-h-11 self-start px-1 text-sm font-medium text-brand disabled:opacity-60"
+              className="self-start px-1"
             >
               {he.media.attach}
-            </button>
+            </Button>
             {uploading > 0 ? (
               <span role="status" className="text-sm text-muted">
                 {he.media.uploading}
@@ -235,22 +236,22 @@ export function MediaPicker({
           </div>
         ) : (
           <>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="compact"
               disabled={busy}
               onClick={() => fileInput.current?.click()}
-              className="min-h-11 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
             >
               {he.media.attach}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              size="compact"
               disabled={busy}
               onClick={() => cameraInput.current?.click()}
-              className="min-h-11 rounded-xl border border-border px-3 text-sm font-medium disabled:opacity-60"
             >
               {he.media.camera}
-            </button>
+            </Button>
 
             <AudioRecorder
               disabled={busy}

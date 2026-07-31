@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listProfessionalsForAdmin } from "@/lib/services/admin";
 import { ProfessionalsManager } from "./professionals-manager";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.professionals} — ${he.app.name}` };
 
@@ -17,7 +18,7 @@ export default async function AdminProfessionalsPage() {
         <Link href="/admin" className="text-sm text-brand">
           ← {he.admin.title}
         </Link>
-        <h1 className="text-xl font-bold">{he.admin.professionals}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.admin.professionals}</h1>
       </div>
 
       {professionals.length === 0 ? (

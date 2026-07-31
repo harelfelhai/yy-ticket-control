@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { LearnedSelect, type LearnedOption } from "./learned-select";
@@ -93,14 +94,15 @@ export function RecipientPicker({
           onCancel={() => setShowCreate(false)}
         />
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="quiet"
+          size="compact"
           disabled={busy}
           onClick={() => setShowCreate(true)}
-          className="min-h-11 self-start px-1 text-start font-medium text-brand disabled:opacity-60"
+          className="self-start px-1 text-start"
         >
           {he.directory.newProfessional}
-        </button>
+        </Button>
       )}
     </div>
   );

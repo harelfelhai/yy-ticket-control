@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { CONTENT_WIDTH } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { getOwnerOverview } from "@/lib/services/overview";
 
 export const metadata = { title: `${he.overview.title} — ${he.app.name}` };
@@ -24,7 +24,7 @@ export default async function OverviewPage() {
   return (
     <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <div>
-        <h1 className="text-xl font-bold">{he.overview.title}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.overview.title}</h1>
         <p className="text-sm text-muted">{he.overview.subtitle}</p>
       </div>
 
@@ -37,7 +37,7 @@ export default async function OverviewPage() {
               key={site.siteId}
               className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4"
             >
-              <h2 className="font-semibold">{site.siteName}</h2>
+              <h2 className={TITLE_DESCRIPTIVE}>{site.siteName}</h2>
               <div className="grid grid-cols-3 gap-2">
                 <Metric siteId={site.siteId} label={he.overview.open} value={site.open} />
                 <Metric

@@ -7,6 +7,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createUserAction, setUserActiveAction } from "../actions";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 interface SiteOption {
   id: string;
@@ -76,7 +77,7 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
   return (
     <div className="flex flex-col gap-4">
       <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold">{he.admin.newUser}</h2>
+        <h2 className={TITLE_DESCRIPTIVE}>{he.admin.newUser}</h2>
 
         <Field label={he.admin.userName}>
           <Input value={name} onChange={(e) => setName(e.target.value)} />

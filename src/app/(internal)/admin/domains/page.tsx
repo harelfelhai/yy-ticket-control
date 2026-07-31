@@ -5,6 +5,7 @@ import { listDomains } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
 import { createDomainAction } from "../actions";
 import { DomainsList } from "./domains-list";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.domains} — ${he.app.name}` };
 
@@ -19,7 +20,7 @@ export default async function AdminDomainsPage() {
         <Link href="/admin" className="text-sm text-brand">
           ← {he.admin.title}
         </Link>
-        <h1 className="text-xl font-bold">{he.admin.domains}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.admin.domains}</h1>
       </div>
 
       <AdminAddForm

@@ -20,6 +20,7 @@ import {
   createProfessionalAction,
 } from "../new/actions";
 import { createBatchAction } from "./actions";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 interface BuildingWithApartments extends LearnedOption {
   apartments: LearnedOption[];
@@ -135,7 +136,7 @@ export function BatchForm({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4">
       <div>
-        <h1 className="text-xl font-bold">{he.batch.title}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
         <p className="text-sm text-muted">
           {he.ticket.site}: {siteName} · {he.batch.desktopHint}
         </p>
@@ -145,7 +146,7 @@ export function BatchForm({
         {/* אזור המקור וההקשר המשותף — נשאר גלוי בגלילה בדסקטופ */}
         <aside className="flex flex-col gap-4 lg:sticky lg:top-16 lg:self-start">
           <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
-            <h2 className="text-sm font-semibold">{he.batch.contextHeading}</h2>
+            <h2 className={TITLE_DESCRIPTIVE}>{he.batch.contextHeading}</h2>
 
             <LearnedSelect
               label={he.directory.building}
@@ -200,7 +201,7 @@ export function BatchForm({
           </section>
 
           <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
-            <h2 className="text-sm font-semibold">{he.batch.sourceHeading}</h2>
+            <h2 className={TITLE_DESCRIPTIVE}>{he.batch.sourceHeading}</h2>
             <p className="text-xs text-muted">{he.batch.sourceHint}</p>
             <MediaPicker files={files} onChange={setFiles} disabled={busy} />
           </section>
@@ -209,16 +210,13 @@ export function BatchForm({
         {/* טור ההזנה — שורה לכל ליקוי */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">
+            <h2 className={TITLE_DESCRIPTIVE}>
               {he.batch.rowsHeading} · {rows.length}
             </h2>
-            <button
-              type="button"
-              onClick={addRow}
-              className="min-h-10 rounded-xl border border-border bg-surface px-4 text-sm font-medium"
-            >
+            {/* היה `min-h-10` (40px) — מתחת לסף המגע. */}
+            <Button variant="secondary" size="compact" onClick={addRow}>
               {he.batch.addRow}
-            </button>
+            </Button>
           </div>
 
           {rows.map((row, index) => (
@@ -286,8 +284,7 @@ export function BatchForm({
                 </label>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium">{he.batch.rowRecipient}</span>
+              <div className="flex flex-col gap-1">
                 <RecipientPicker
                   options={availableRecipients}
                   value={row.recipient ? [row.recipient] : []}
@@ -316,14 +313,9 @@ export function BatchForm({
             <Button onClick={() => submit(true)} disabled={busy} className="flex-1">
               {he.batch.dispatch}
             </Button>
-            <button
-              type="button"
-              onClick={() => submit(false)}
-              disabled={busy}
-              className="min-h-12 rounded-xl border border-border bg-surface px-4 text-base font-medium disabled:opacity-60"
-            >
+            <Button variant="secondary" onClick={() => submit(false)} disabled={busy}>
               {he.batch.saveDraft}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -343,7 +335,7 @@ function Summary({ summary, onReset }: { summary: BatchResult; onReset: () => vo
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4 p-6">
-      <h1 className="text-xl font-bold">{he.batch.title}</h1>
+      <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
       <div className="flex flex-col gap-2 rounded-2xl border border-success/40 bg-success/10 p-4">
         {lines.map((line) => (
           <p key={line} className="font-medium text-success">
@@ -355,13 +347,9 @@ function Summary({ summary, onReset }: { summary: BatchResult; onReset: () => vo
         {/* היה `leading-[3rem]` כדי למרכז אנכית — הפרימיטיב עושה זאת ב-flex,
             בלי לקשור את גובה השורה לגובה הכפתור. */}
         <ButtonLink href={`/tags/${summary.tagId}`}>{he.batch.goToTag}</ButtonLink>
-        <button
-          type="button"
-          onClick={onReset}
-          className="min-h-12 rounded-xl border border-border bg-surface px-6 font-medium"
-        >
+        <Button variant="secondary" onClick={onReset}>
           {he.batch.navLink}
-        </button>
+        </Button>
       </div>
     </div>
   );

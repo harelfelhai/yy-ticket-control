@@ -20,6 +20,7 @@ import {
 import { useHydrated } from "@/lib/use-hydrated";
 import type { ActionResult } from "@/lib/action-result";
 import type { SelectOption } from "@/lib/options";
+import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import {
   createApartmentAction,
   createBuildingAction,
@@ -284,7 +285,7 @@ export function CreateTicketForm({
     // טופס יצירת איש מקצוע כשהוא פתוח — מקום להיגלל מעליה במקום להיחסם מאחוריה.
     <div className="flex flex-col gap-4 p-4 pb-28">
       <div>
-        <h1 className="text-xl font-bold">{he.ticket.createTitle}</h1>
+        <h1 className={TITLE_DESCRIPTIVE}>{he.ticket.createTitle}</h1>
         <p className="text-sm text-muted">
           {he.ticket.site}: {siteName}
         </p>
@@ -366,8 +367,7 @@ export function CreateTicketForm({
         />
       </label>
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{he.ticket.recipients}</span>
+      <div className="flex flex-col gap-1">
         <RecipientPicker
           options={availableRecipients}
           value={recipients}
@@ -444,14 +444,9 @@ export function CreateTicketForm({
         <Button onClick={() => run(false)} disabled={busy} className="flex-1">
           {he.ticket.submit}
         </Button>
-        <button
-          type="button"
-          onClick={() => run(true)}
-          disabled={busy}
-          className="min-h-12 rounded-xl border border-border bg-surface px-4 text-base font-medium disabled:opacity-60"
-        >
+        <Button variant="secondary" onClick={() => run(true)} disabled={busy}>
           {he.ticket.saveDraft}
-        </button>
+        </Button>
       </div>
     </div>
   );

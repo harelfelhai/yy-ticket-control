@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { renameDomainAction } from "../actions";
@@ -53,14 +54,14 @@ function DomainItem({ domain }: { domain: DomainRow }) {
           size="compact"
           className="flex-1"
         />
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="compact"
           onClick={save}
           disabled={pending || !hydrated || !dirty}
-          className="min-h-11 rounded-xl border border-border bg-surface px-4 text-sm font-medium disabled:opacity-40"
         >
           {he.admin.renameDomain}
-        </button>
+        </Button>
       </div>
       {error ? (
         <p role="alert" className="text-sm text-danger">

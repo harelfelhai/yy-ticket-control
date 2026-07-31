@@ -3,6 +3,7 @@ import { he } from "@/lib/he";
 import { getPortalBoard, resolveToken } from "@/lib/services/portal";
 import { listPortalTagChats } from "@/lib/services/tags";
 import { ExpiredLink } from "./expired-link";
+import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
 
 export const metadata = { title: `${he.portal.activeTitle} — ${he.app.name}` };
 
@@ -28,7 +29,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
       <header>
-        <h1 className="text-xl font-bold">{he.portal.greeting(identity.name)}</h1>
+        <h1 className={TITLE_IDENTIFYING}>{he.portal.greeting(identity.name)}</h1>
         <p className="text-sm text-muted">{he.portal.activeTitle}</p>
       </header>
 
@@ -60,7 +61,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
 
       {tagChats.length > 0 ? (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-bold">{he.portal.groupChatsTitle}</h2>
+          <h2 className={TITLE_DESCRIPTIVE}>{he.portal.groupChatsTitle}</h2>
           <ul className="flex flex-col gap-2">
             {tagChats.map((tag) => (
               <li key={tag.id}>
