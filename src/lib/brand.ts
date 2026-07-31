@@ -7,8 +7,13 @@
  *
  * הערה: קובץ האייקון `src/app/icon.svg` הוא נכס סטטי ואינו יכול לייבא קבוע
  * זה. אם משנים כאן את הצבע — יש לעדכן גם אותו ולהריץ `npm run gen:icons`.
+ *
+ * **זהו עותק שני של `--color-brand` מ-`globals.css`, ולא ניתן לאחדו:**
+ * ‏`@theme` של Tailwind דורש ערך ליטרלי ב-CSS, ומטא-דאטה של Next דורשת
+ * מחרוזת ב-JS. מה שכן ניתן הוא למנוע סטייה — `tests/unit/palette.test.ts`
+ * קורא את שני הקבצים ואת ה-SVG, ונכשל אם הם אינם זהים.
  */
-export const BRAND_COLOR = "#1d4ed8";
+export const BRAND_COLOR = "#204ab4";
 
 /** רקע מסך הפתיחה כשהאפליקציה מותקנת — לבן, כרקע המסכים עצמם. */
 export const BRAND_BACKGROUND = "#ffffff";
