@@ -1,0 +1,124 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
+import { describe, expect, it } from "vitest";
+import { chipClasses } from "@/components/ui/chip";
+
+/**
+ * ריתמוס 4px — בדיקה על הקוד עצמו, כמו `typography.test.ts`.
+ *
+ * מה שנשמר כאן אינו אסתטי. ערך של 6px בין תווית לשדה נראה נכון בכל מסך
+ * בנפרד; מה שנשבר הוא שהמרווח **אינו זהה** בין מסך למסך, וזה בדיוק מה שהעין
+ * קוראת כ"לא מעוצב" בלי לדעת להצביע על הסיבה.
+ *
+ * הסטייה שהיא מונעת כבר קרתה: 16 מופעים של `gap-1.5`, ומהם 11 היו בכלל
+ * `Field` שנכתב מחדש ביד — אותה תבנית של `LearnedSelect`. כלומר המספר החורג
+ * היה **סימפטום**, לא המחלה. לכן יש כאן שתי בדיקות ולא אחת: אחת על הערך,
+ * ואחת על התבנית שייצרה אותו.
+ */
+
+const SRC = join(process.cwd(), "src");
+
+/** `gap-1.5`, `py-0.5`, `mt-2.5` — כל מה שאינו כפולה של 4px */
+const FRACTIONAL =
+  /\b(gap|gap-x|gap-y|p|px|py|pt|pb|ps|pe|pl|pr|m|mx|my|mt|mb|ms|me|ml|mr|space-x|space-y)-\d+\.\d+\b/;
+
+/** `p-[13px]` — ערך שרירותי עוקף את הסקאלה לגמרי */
+const ARBITRARY = /\b(gap|gap-x|gap-y|p|px|py|pt|pb|ps|pe|pl|pr|m|mx|my|mt|mb|ms|me|ml|mr)-\[/;
+
+/**
+ * החריג המאושר היחיד, ומתועד ב-DESIGN.md § Chip: ריפוד אנכי של 4px מנפח את
+ * הצ׳יפ עד שהוא שובר את שורת המטא-דאטה בכרטיס. **זו הסיבה שהצ׳יפ הוא רכיב** —
+ * החריג נעול בקובץ אחד במקום להתפזר.
+ */
+const EXEMPT = ["components/ui/chip.tsx"];
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) return sourceFiles(full);
+    return /\.tsx?$/.test(entry.name) ? [full] : [];
+  });
+}
+
+/**
+ * הערות מנוטרלות לפני הסריקה: `status-chip.tsx` **מתאר** את `px-2.5 py-0.5`
+ * בתיעוד שלו כדי להסביר מה אוחד. הנטרול מוגבל לבלוקים `/* *\/` ולשורות
+ * שמתחילות ב-`//` — כדי ש-`https://` בתוך מחרוזת לא יבלע את שארית השורה
+ * ויסתיר בה חריגה אמיתית.
+ *
+ * בלוק הערה מוחלף בשורות ריקות **באותו מספר** ולא נמחק: מחיקה מזיזה את כל
+ * מה שאחריו, והדיווח מצביע על שורה שגויה. זה נתפס בנטיעת הפרה — הדיווח אמר
+ * ‏231 והשורה הייתה 238.
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => "\n".repeat(block.split("\n").length - 1))
+    .split("\n")
+    .map((line) => (line.trimStart().startsWith("//") ? "" : line))
+    .join("\n");
+}
+
+function scan(pattern: RegExp): string[] {
+  return sourceFiles(SRC).flatMap((file) => {
+    const rel = relative(SRC, file).replaceAll("\\", "/");
+    if (EXEMPT.includes(rel)) return [];
+
+    return stripComments(readFileSync(file, "utf8"))
+      .split("\n")
+      .flatMap((text, index) =>
+        pattern.test(text) ? [`${rel}:${index + 1} — ${text.trim()}`] : [],
+      );
+  });
+}
+
+describe("ריתמוס 4px", () => {
+  it("אין מרווח שאינו כפולה של 4px", () => {
+    const offenders = scan(FRACTIONAL);
+    expect(
+      offenders,
+      `הסקאלה היא 1(4) 2(8) 3(12) 4(16) 6(24) 8(32) — ראו docs/DESIGN.md § Layout:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("אין ערך מרווח שרירותי", () => {
+    const offenders = scan(ARBITRARY);
+    expect(offenders, `ערך שרירותי עוקף את הסקאלה:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  it("החריג של הצ׳יפ עדיין קיים — אחרת ההחרגה מיותרת ויש למחוק אותה", () => {
+    // בלי הבדיקה הזו ההחרגה שורדת גם אחרי שהצורך בה נעלם, ואז היא חור
+    // פתוח בגדר במקום חריג מנומק.
+    expect(chipClasses()).toMatch(FRACTIONAL);
+  });
+});
+
+describe("תבנית ה-Field", () => {
+  /**
+   * תווית **מעל** פקד היא `Field`. ‏12 מקומות בנו אותה מחדש ביד, ואחד מהם
+   * (`batch-form`) שם `font-medium` על ה-`<label>` עצמו — ומכיוון ש-preflight
+   * של Tailwind מגדיר `font: inherit` על פקדי טופס, המשקל דלף לתוך ה-`<input>`
+   * ואותו שדה נכתב בבינוני בזמן שכל שאר השדות במערכת נכתבו רגיל.
+   *
+   * ‏`<label className="flex items-center">` אינו נתפס כאן בכוונה: תיבת סימון
+   * עם טקסט לצדה היא תבנית אחרת, ו-`Field` אינו מתאים לה.
+   */
+  it("אין `<label>` שמערים תווית מעל פקד — לזה יש `Field`", () => {
+    const offenders = sourceFiles(SRC).flatMap((file) => {
+      const rel = relative(SRC, file).replaceAll("\\", "/");
+      if (rel === "components/ui/field.tsx") return [];
+
+      return stripComments(readFileSync(file, "utf8"))
+        .split("\n")
+        .flatMap((text, index) =>
+          /<label[^>]*className="[^"]*\bflex-col\b/.test(text)
+            ? [`${rel}:${index + 1} — ${text.trim()}`]
+            : [],
+        );
+    });
+
+    expect(
+      offenders,
+      `יש להשתמש ב-<Field label={...}> מ-@/components/ui/field:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+});

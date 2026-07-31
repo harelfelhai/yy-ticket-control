@@ -31,7 +31,7 @@ export function TicketCard({ card }: { card: BoardCard }) {
       href={`/tickets/${card.id}`}
       // טיוטה מקבלת מסגרת אדומה מלאה: היא חוסמת שיגור, וזה הסימן היחיד
       // שמבדיל אותה בסריקה מהירה של הלוח.
-      className={cardClasses("flex flex-col gap-1.5", { tone: isDraft ? "dangerOutline" : "default" })}
+      className={cardClasses("flex flex-col gap-2", { tone: isDraft ? "dangerOutline" : "default" })}
     >
       {/*
         התג צמוד לכותרת ולא נדחף לקצה הנגדי.

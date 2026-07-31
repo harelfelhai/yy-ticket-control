@@ -35,7 +35,7 @@ export default async function TagsPage() {
               className={cardClasses("flex flex-col gap-2")}
             >
               <div className="flex items-center justify-between gap-3">
-                <Link href={`/tags/${tag.id}`} className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <Link href={`/tags/${tag.id}`} className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="font-semibold">{tag.name}</span>
                   <span className="text-sm text-muted">
                     {he.tag.ticketCount(tag.openCount, tag.closedCount)}

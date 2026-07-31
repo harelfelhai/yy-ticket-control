@@ -163,7 +163,7 @@ export function RecipientEditor({
       ) : (
         <ul aria-label={he.ticket.recipients} className="flex flex-col gap-3">
           {active.map((assignment) => (
-            <li key={assignment.id} className="flex flex-col gap-1.5">
+            <li key={assignment.id} className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 {/* min-w-0 + truncate: שם ארוך מקצר את עצמו במקום למעוך את
                     הכפתור שלצדו. בלי זה הכפתור נמעך ל-16 פיקסלים על מסך

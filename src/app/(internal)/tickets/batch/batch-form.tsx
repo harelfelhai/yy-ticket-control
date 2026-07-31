@@ -7,7 +7,7 @@ import { RecipientPicker, type RecipientOption } from "@/components/recipient-pi
 import type { Room } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/lib/action-result";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { ROOMS } from "@/lib/rooms";
@@ -190,15 +190,14 @@ export function BatchForm({
               }
             />
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium">{he.batch.sharedTag}</span>
+            <Field label={he.batch.sharedTag}>
               <Input
                 value={tagName}
                 onChange={(e) => setTagName(e.target.value)}
                 placeholder={he.batch.sharedTagPlaceholder}
                 size="compact"
               />
-            </label>
+            </Field>
           </section>
 
           <section className={cardClasses("flex flex-col gap-2")}>
@@ -245,14 +244,13 @@ export function BatchForm({
                 ) : null}
               </div>
 
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {he.batch.rowDescription}
+              <Field label={he.batch.rowDescription}>
                 <Input
                   value={row.description}
                   onChange={(e) => updateRow(row.key, { description: e.target.value })}
                   size="compact"
                 />
-              </label>
+              </Field>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <LearnedSelect
@@ -267,10 +265,7 @@ export function BatchForm({
                   }}
                 />
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium">
-                    {he.batch.rowRoom} ({he.common.optional})
-                  </span>
+                <Field label={`${he.batch.rowRoom} (${he.common.optional})`}>
                   <Select
                     value={row.room ?? ""}
                     onChange={(e) => updateRow(row.key, { room: e.target.value || null })}
@@ -282,7 +277,7 @@ export function BatchForm({
                       </option>
                     ))}
                   </Select>
-                </label>
+                </Field>
               </div>
 
               <div className="flex flex-col gap-1">

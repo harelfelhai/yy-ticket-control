@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
 import type { ActionResult } from "@/lib/action-result";
 import { useHydrated } from "@/lib/use-hydrated";
 import { cardClasses } from "@/components/ui/card";
@@ -38,15 +38,14 @@ export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminA
 
   return (
     <div className={cardClasses("flex flex-col gap-2")}>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{label}</span>
+      <Field label={label}>
         <Input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
           size="compact"
         />
-      </label>
+      </Field>
       <Button
         onClick={submit}
         disabled={pending || !hydrated || value.trim().length === 0}

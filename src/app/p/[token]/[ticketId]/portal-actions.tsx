@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/lib/action-result";
-import { Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { askQuestionAction, markDoneAction, replyAction } from "./actions";
@@ -82,14 +82,13 @@ export function PortalActions({
         </p>
       ) : null}
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{he.ticket.reply}</span>
+      <Field label={he.ticket.reply}>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
         />
-      </label>
+      </Field>
 
       <MediaPicker
         ticketId={ticketId}

@@ -54,7 +54,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         {detail.tickets.length === 0 ? (
           <p className="text-sm text-muted">{he.tag.ticketsEmpty}</p>
         ) : (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2">
             {detail.tickets.map((ticket) => (
               <li key={ticket.id}>
                 <Link

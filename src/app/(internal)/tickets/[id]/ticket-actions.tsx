@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { ActionResult } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { cardClasses } from "@/components/ui/card";
@@ -64,14 +64,13 @@ export function TicketActions({
     <div className="flex flex-col gap-3">
       {canComment ? (
         <div className={cardClasses("flex flex-col gap-2")}>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">{he.ticket.reply}</span>
+          <Field label={he.ticket.reply}>
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={3}
             />
-          </label>
+          </Field>
 
           <MediaPicker
             ticketId={ticketId}

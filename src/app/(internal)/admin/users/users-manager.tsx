@@ -155,7 +155,7 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
             key={user.id}
             className={cardClasses("flex items-center justify-between gap-3")}
           >
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-1">
               <span className="font-medium">
                 {user.name}
                 {!user.active ? (
