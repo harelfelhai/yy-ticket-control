@@ -111,7 +111,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
           להיות בהישג אגודל בלי גלילה. */}
       <Link
         href="/tickets/new"
-        className="fixed bottom-4 left-4 flex min-h-14 items-center rounded-full bg-brand px-6 text-base font-semibold text-brand-fg shadow-lg"
+        className="fixed bottom-4 end-4 flex min-h-14 items-center rounded-full bg-brand px-6 text-base font-semibold text-brand-fg shadow-lg"
       >
         {he.ticket.newTicket}
       </Link>

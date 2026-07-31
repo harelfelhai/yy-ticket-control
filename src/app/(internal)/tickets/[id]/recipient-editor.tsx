@@ -193,7 +193,7 @@ export function RecipientEditor({
               <p className="text-xs text-muted">
                 {assignment.deliveryNote}
                 {/* מתי השתנה הסטטוס האישי לאחרונה — לצד החיווי */}
-                <span className="mr-2 opacity-70">· {assignment.statusChangedAt}</span>
+                <span className="ms-2 opacity-70">· {assignment.statusChangedAt}</span>
               </p>
 
               {/* "שלח שוב במייל" — לכל נמען עם כתובת מייל (חיצוני או פנימי),
