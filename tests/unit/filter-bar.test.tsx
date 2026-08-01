@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { FilterBar, FilterSelect } from "@/components/ui/filter-bar";
+import { FilterBar, FilterDate, FilterSelect } from "@/components/ui/filter-bar";
 
 /**
  * מה שנשמר כאן הוא החיווט: מי מקופל, מי נשאר גלוי, ומה נמסר לקורא המסך.
@@ -123,5 +123,50 @@ describe("FilterSelect", () => {
       </FilterSelect>,
     );
     expect(screen.getByLabelText("תחום").className).toContain("w-full");
+  });
+});
+
+describe("FilterDate", () => {
+  it("הפקד נשאר נייטיב — בורר מותאם היה downgrade על טלפון בשטח", () => {
+    // ‏`type="date"` פותח את בורר מערכת ההפעלה. אם מישהו יחליף אותו בפקד
+    // מותאם, הבדיקה הזו היא מה שיעצור אותו.
+    render(<FilterDate label="מתאריך" />);
+    expect(screen.getByLabelText("מתאריך")).toHaveAttribute("type", "date");
+  });
+
+  it("התווית גלויה ומקשרת בלי `id`", () => {
+    // בשונה מהבוררים, שנושאים משמעות באפשרות ברירת המחדל: שדה תאריך ריק
+    // מציג מסכת פורמט בלבד, ואי אפשר לדעת ממנה מי "מתאריך" ומי "עד תאריך".
+    render(<FilterDate label="עד תאריך" />);
+
+    expect(screen.getByText("עד תאריך")).toBeVisible();
+    expect(screen.getByLabelText("עד תאריך")).toBeInTheDocument();
+  });
+
+  it("מבטל את `w-full` וחסום ברוחב, כמו הבוררים שלצדו", () => {
+    render(<FilterDate label="מתאריך" />);
+    const className = screen.getByLabelText("מתאריך").className;
+
+    expect(className).toContain("w-auto");
+    expect(className).toContain("max-w-44");
+    expect(className).not.toContain("w-full");
+  });
+
+  it("נשאר `compact` וב-16px — פקד קטן מ-16px מגדיל את העמוד ב-iOS", () => {
+    render(<FilterDate label="מתאריך" />);
+    const className = screen.getByLabelText("מתאריך").className;
+
+    expect(className).toContain("min-h-11");
+    expect(className).toContain("text-base");
+  });
+
+  it("‏className של הקורא גובר", () => {
+    render(<FilterDate label="מתאריך" className="w-full" />);
+    expect(screen.getByLabelText("מתאריך").className).toContain("w-full");
+  });
+
+  it("מעביר props הלאה", () => {
+    render(<FilterDate label="מתאריך" defaultValue="2026-08-02" />);
+    expect(screen.getByLabelText("מתאריך")).toHaveValue("2026-08-02");
   });
 });

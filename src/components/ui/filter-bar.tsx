@@ -3,7 +3,7 @@
 import { type ReactNode, useId, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { chipClasses } from "@/components/ui/chip";
-import { Select, type SelectProps } from "@/components/ui/field";
+import { Input, type InputProps, Select, type SelectProps } from "@/components/ui/field";
 import { he } from "@/lib/he";
 
 /**
@@ -100,4 +100,42 @@ export function FilterBar({ activeCount, trailing, children }: FilterBarProps) {
  */
 export function FilterSelect({ className, ...rest }: SelectProps) {
   return <Select size="compact" className={twMerge("w-auto max-w-44", className)} {...rest} />;
+}
+
+export type FilterDateProps = { label: ReactNode } & Omit<InputProps, "type" | "size">;
+
+/**
+ * שדה תאריך ברצועת המסננים.
+ *
+ * **הפקד הוא נייטיב, בהחלטה ולא בהיעדר החלטה.** `<input type="date">` פותח
+ * את בורר התאריך של מערכת ההפעלה, והמכשיר העיקרי כאן הוא טלפון בשטח —
+ * גלגלת מערכת עם אצבע בכפפה עדיפה על כל לוח שנה שנכתב ב-React, שגם היה
+ * מאות שורות של ניווט מקלדת ומיקוד לכוד עבור שני שדות במסך אחד.
+ *
+ * **אייקון הלוח של הדפדפן נשאר כפי שהוא, ואינו מיושר ל-`.control-chevron`.**
+ * זה נראה כמו סתירה לפער 17 — שם הנייטיב חוקה את המותאם — אבל ההבדל מכריע:
+ * אצל `<select>` הסתרת החץ עולה **במראה בלבד**, ואילו כאן
+ * `::-webkit-calendar-picker-indicator` הוא (א) webkit בלבד, ו-(ב) **היעד
+ * היחיד שפותח את הבורר בדסקטופ**. הסתרתו שוברת את הפקד. חריג בעל גבול,
+ * לא רשלנות.
+ *
+ * **התווית גלויה, בשונה מהבוררים שלצדו.** בורר נושא את משמעותו באפשרות
+ * ברירת המחדל ("כל הבניינים"), ולכן `aria-label` מספיק לו. שדה תאריך ריק
+ * מציג מסכת פורמט בלבד, ואי אפשר לדעת ממנה מי "מתאריך" ומי "עד תאריך".
+ *
+ * הרכיב קיים כדי שלחריג יהיה **בית אחד שאפשר לסרוק** — ראו
+ * `tests/unit/primitives.test.ts`. חריג שאין לו בית נעקף, לא נאכף.
+ */
+export function FilterDate({ label, className, ...rest }: FilterDateProps) {
+  return (
+    <label className="flex items-center gap-1 text-sm">
+      {label}
+      <Input
+        type="date"
+        size="compact"
+        className={twMerge("w-auto max-w-44", className)}
+        {...rest}
+      />
+    </label>
+  );
 }

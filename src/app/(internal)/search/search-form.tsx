@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
-import { FilterBar, FilterSelect } from "@/components/ui/filter-bar";
+import { FilterBar, FilterDate, FilterSelect } from "@/components/ui/filter-bar";
 import { he } from "@/lib/he";
 
 interface Option {
@@ -236,30 +236,19 @@ export function SearchForm({
           ))}
         </FilterSelect>
 
-        {/* ‏`w-auto` על שדות התאריך: כמו הבוררים, גם הם ברצועה ולא בטופס. */}
-        <label className="flex items-center gap-1 text-sm">
-          {he.search.from}
-          <Input
-            key={`from-${syncKey}`}
-            type="date"
-            defaultValue={params.get("from") ?? ""}
-            onChange={(event) => update({ from: event.target.value })}
-            size="compact"
-            className="w-auto"
-          />
-        </label>
+        <FilterDate
+          key={`from-${syncKey}`}
+          label={he.search.from}
+          defaultValue={params.get("from") ?? ""}
+          onChange={(event) => update({ from: event.target.value })}
+        />
 
-        <label className="flex items-center gap-1 text-sm">
-          {he.search.to}
-          <Input
-            key={`to-${syncKey}`}
-            type="date"
-            defaultValue={params.get("to") ?? ""}
-            onChange={(event) => update({ to: event.target.value })}
-            size="compact"
-            className="w-auto"
-          />
-        </label>
+        <FilterDate
+          key={`to-${syncKey}`}
+          label={he.search.to}
+          defaultValue={params.get("to") ?? ""}
+          onChange={(event) => update({ to: event.target.value })}
+        />
       </FilterBar>
     </div>
   );

@@ -1,6 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { SRC, scan, sourceFiles } from "./source-scan";
 
 /**
  * שמירה על פרימיטיב הכפתור.
@@ -13,8 +14,6 @@ import { describe, expect, it } from "vitest";
  * ההבדל בין הצהרה לאכיפה הוא הקובץ הזה: מרגע שהוא קיים, כפתור חדש שנכתב
  * ביד נכשל בבנייה במקום להתגלות בצילום כעבור חודשיים.
  */
-
-const SRC = join(process.cwd(), "src");
 
 /** מחלקות שמסגירות כפתור שמסוגנן ביד ולא דרך `Button` */
 const VARIANT_CLASS =
@@ -36,19 +35,16 @@ const EXEMPT: Record<string, string> = {
   "app/(internal)/tickets/[id]/resident-name.tsx": "קישור-בשורה בתוך משפט; 44px היה שובר את הכותרת",
 };
 
-function tsxFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) return tsxFiles(full);
-    return entry.name.endsWith(".tsx") ? [full] : [];
-  });
-}
-
-/** כל `<button>` שנושא מחלקת מראה, מחוץ לחריגים */
+/**
+ * כל `<button>` שנושא מחלקת מראה, מחוץ לחריגים.
+ *
+ * לא משתמש ב-`scan` המשותף כי הבדיקה כאן חוצה שורות: המחלקות יושבות לרוב
+ * על שורה נפרדת מהתגית. הפריסה על הקבצים כן מגיעה משם.
+ */
 function handRolledButtons(): string[] {
   const offenders: string[] = [];
 
-  for (const file of tsxFiles(SRC)) {
+  for (const file of sourceFiles(SRC)) {
     const rel = relative(SRC, file).replaceAll("\\", "/");
     if (rel in EXEMPT) continue;
 
@@ -78,5 +74,25 @@ describe("פרימיטיב הכפתור", () => {
     // גבול רך שנועד להיות מורגש: חריג שביעי דורש החלטה, לא הוספת שורה.
     expect(Object.keys(EXEMPT).length).toBeLessThanOrEqual(8);
     for (const reason of Object.values(EXEMPT)) expect(reason.length).toBeGreaterThan(15);
+  });
+});
+
+describe("פרימיטיב שדה התאריך", () => {
+  /**
+   * ‏`<input type="date">` הוא **חריג מכוון** — אייקון הלוח של הדפדפן אינו
+   * מיושר לשאר הפקדים, כי הסתרתו שוברת את היעד שפותח את הבורר בדסקטופ
+   * (ראו `FilterDate` ו-DESIGN.md § FilterBar).
+   *
+   * הבדיקה הזו אינה על שימוש חוזר — שני אתרי קריאה בלבד. היא על כך
+   * ש**לחריג יש בית אחד**: חריג שמפוזר אינו חריג אלא סטייה, ואי אפשר
+   * לסקור אותו. זה הלקח של `PANEL_WIDTH` — תקן שחסר לו תפקיד נעקף.
+   */
+  it("אין `type=\"date\"` מחוץ ל-`FilterDate`", () => {
+    const offenders = scan(/type="date"/, ["components/ui/filter-bar.tsx"]);
+
+    expect(
+      offenders,
+      `שדה תאריך עובר דרך FilterDate — שם מתועד חריג הנייטיב:\n${offenders.join("\n")}`,
+    ).toEqual([]);
   });
 });

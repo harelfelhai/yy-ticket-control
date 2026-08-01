@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openFilters } from "./helpers";
 
 /**
  * מסך החיפוש (מסך 9).
@@ -70,6 +71,42 @@ test("חיפוש מוצא פנייה לפי התיאור ולפי מה שנכת�
   await page.getByLabel("חיפוש", { exact: true }).fill(`אלומיניום ${stamp}`);
   await page.getByRole("button", { name: "חפש" }).click();
   await expect(page.getByText("לא נמצאו פניות")).toBeVisible();
+});
+
+/**
+ * מסנן התאריכים — **הבדיקה הראשונה אי-פעם על רצועת המסננים.**
+ *
+ * הרצועה נבנתה בפער 12 ומעולם לא נבדקה מקצה לקצה, וזו הסיבה שסבב הביקורת
+ * הראשון מצא בה סטיות שאיש לא ראה. הבדיקה מכסה את מה ששום בדיקת יחידה אינה
+ * יכולה: שהערך שנבחר בפקד הנייטיב באמת מגיע לכתובת, ומשם לשאילתה בשרת.
+ */
+test("מסנן התאריכים מסנן בפועל ונשמר בכתובת", async ({ page }) => {
+  const stamp = Date.now();
+  const description = `תריס תקוע ${stamp}`;
+
+  await login(page);
+  await page.goto("/tickets/new");
+  await pick(page, "בניין", "בניין א");
+  await pick(page, "דירה", "1");
+  await pick(page, "תחום", "חשמל");
+  await page.getByLabel("תיאור").fill(description);
+  await page.getByRole("button", { name: "שמור כטיוטה" }).click();
+  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+
+  await page.goto("/search");
+  await openFilters(page);
+
+  // ── טווח שמכיל את היום: הפנייה שנוצרה עכשיו חייבת להימצא ──────────
+  const today = new Date().toISOString().slice(0, 10);
+  await page.getByLabel("מתאריך").fill(today);
+  await expect(page).toHaveURL(/[?&]from=/);
+  await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
+
+  // ── טווח שנגמר אתמול: אותה פנייה חייבת להיעלם ─────────────────────
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  await page.getByLabel("עד תאריך").fill(yesterday);
+  await expect(page).toHaveURL(/[?&]to=/);
+  await expect(page.getByRole("link").filter({ hasText: description })).toHaveCount(0);
 });
 
 test("החיפוש נשמר בכתובת ושורד חזרה מפנייה", async ({ page }) => {
