@@ -27,7 +27,10 @@ const ASSIGNMENT_TONES: Record<AssignmentStatus, ChipTone> = {
 
 const TICKET_TONES: Record<DerivedTicketStatus, ChipTone> = {
   CLOSED: "neutral",
-  DRAFT: "warning",
+  // ‏`danger` ולא `warning` — התקן (§ Colors) מונה טיוטה תחת "עבודה בשטח
+  // עצורה", והכרטיס עצמו כבר נושא מסגרת `danger`. צ׳יפ כתום על כרטיס אדום
+  // שידר שני מצבים שונים על אותו אובייקט. נמצא בסבב הביקורת הראשון.
+  DRAFT: "danger",
   AWAITING_OPENER_QUESTION: "danger",
   AWAITING_OPENER_APPROVAL: "success",
   PARTIAL: "warning",

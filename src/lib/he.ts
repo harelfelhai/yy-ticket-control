@@ -213,7 +213,6 @@ export const he = {
   /** מסך החיפוש (מסך 9 באפיון) */
   search: {
     title: "חיפוש",
-    placeholder: "חפש בתיאור, בשרשור, בתמלול ובטקסט שזוהה",
     submit: "חפש",
     allStatuses: "כל הסטטוסים",
     allApartments: "כל הדירות",

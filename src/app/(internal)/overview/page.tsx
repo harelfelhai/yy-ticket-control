@@ -87,7 +87,7 @@ function Metric({
   return (
     <Link
       href={href}
-      className="flex flex-col items-center gap-1 rounded-xl bg-bg p-3 text-center"
+      className="flex flex-col items-center gap-1 rounded-lg bg-bg p-3 text-center"
     >
       <span className={`text-2xl font-bold ${toneClass}`}>{value}</span>
       <span className="text-xs text-muted">{label}</span>

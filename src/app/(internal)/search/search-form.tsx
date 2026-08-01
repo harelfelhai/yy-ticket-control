@@ -84,12 +84,14 @@ export function SearchForm({
         }}
         className="flex gap-2"
       >
+        {/* בלי placeholder, בכוונה: הוא שכפל את ה-hint הקבוע שמתחת — והעותק
+            שלו נעלם בהקלדה. התווית הגלויה היא כותרת המסך "חיפוש" שמעל השדה
+            (החריג מתועד ב-DESIGN.md § Field). */}
         <Input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           aria-label={he.search.title}
-          placeholder={he.search.placeholder}
           className="flex-1"
         />
         <Button type="submit">

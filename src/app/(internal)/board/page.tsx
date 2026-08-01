@@ -138,7 +138,7 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
 
 function Section({ id, cards }: { id: Exclude<BoardSection, "ARCHIVE">; cards: BoardCard[] }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section className="flex flex-col gap-3">
       {/* כותרת דביקה: בגלילה ארוכה המשתמש תמיד יודע באיזו קבוצה הוא נמצא. */}
       <h2 className={`sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 ${TITLE_DESCRIPTIVE}`}>
         <SectionHeading label={he.boardSection[id]} count={cards.length} />

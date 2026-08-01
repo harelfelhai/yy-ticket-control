@@ -1,7 +1,6 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { chipClasses } from "@/components/ui/chip";
+import { scan } from "./source-scan";
 
 /**
  * ריתמוס 4px — בדיקה על הקוד עצמו, כמו `typography.test.ts`.
@@ -15,8 +14,6 @@ import { chipClasses } from "@/components/ui/chip";
  * היה **סימפטום**, לא המחלה. לכן יש כאן שתי בדיקות ולא אחת: אחת על הערך,
  * ואחת על התבנית שייצרה אותו.
  */
-
-const SRC = join(process.cwd(), "src");
 
 /** `gap-1.5`, `py-0.5`, `mt-2.5` — כל מה שאינו כפולה של 4px */
 const FRACTIONAL =
@@ -35,48 +32,9 @@ const ARBITRARY = /\b(gap|gap-x|gap-y|p|px|py|pt|pb|ps|pe|pl|pr|m|mx|my|mt|mb|ms
  */
 const EXEMPT = ["components/ui/chip.tsx"];
 
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(full);
-    return /\.tsx?$/.test(entry.name) ? [full] : [];
-  });
-}
-
-/**
- * הערות מנוטרלות לפני הסריקה: `status-chip.tsx` **מתאר** את `px-2.5 py-0.5`
- * בתיעוד שלו כדי להסביר מה אוחד. הנטרול מוגבל לבלוקים `/* *\/` ולשורות
- * שמתחילות ב-`//` — כדי ש-`https://` בתוך מחרוזת לא יבלע את שארית השורה
- * ויסתיר בה חריגה אמיתית.
- *
- * בלוק הערה מוחלף בשורות ריקות **באותו מספר** ולא נמחק: מחיקה מזיזה את כל
- * מה שאחריו, והדיווח מצביע על שורה שגויה. זה נתפס בנטיעת הפרה — הדיווח אמר
- * ‏231 והשורה הייתה 238.
- */
-function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (block) => "\n".repeat(block.split("\n").length - 1))
-    .split("\n")
-    .map((line) => (line.trimStart().startsWith("//") ? "" : line))
-    .join("\n");
-}
-
-function scan(pattern: RegExp): string[] {
-  return sourceFiles(SRC).flatMap((file) => {
-    const rel = relative(SRC, file).replaceAll("\\", "/");
-    if (EXEMPT.includes(rel)) return [];
-
-    return stripComments(readFileSync(file, "utf8"))
-      .split("\n")
-      .flatMap((text, index) =>
-        pattern.test(text) ? [`${rel}:${index + 1} — ${text.trim()}`] : [],
-      );
-  });
-}
-
 describe("ריתמוס 4px", () => {
   it("אין מרווח שאינו כפולה של 4px", () => {
-    const offenders = scan(FRACTIONAL);
+    const offenders = scan(FRACTIONAL, EXEMPT);
     expect(
       offenders,
       `הסקאלה היא 1(4) 2(8) 3(12) 4(16) 6(24) 8(32) — ראו docs/DESIGN.md § Layout:\n${offenders.join("\n")}`,
@@ -84,7 +42,7 @@ describe("ריתמוס 4px", () => {
   });
 
   it("אין ערך מרווח שרירותי", () => {
-    const offenders = scan(ARBITRARY);
+    const offenders = scan(ARBITRARY, EXEMPT);
     expect(offenders, `ערך שרירותי עוקף את הסקאלה:\n${offenders.join("\n")}`).toEqual([]);
   });
 
@@ -109,7 +67,7 @@ describe("מאפיינים לוגיים", () => {
     /\b(m[lr]|p[lr]|left|right|inset-[lr]|border-[lr]|rounded-[lr])-[0-9[]|\btext-(left|right)\b/;
 
   it("אין מחלקה שמתארת כיוון פיזי במקום תפקיד", () => {
-    const offenders = scan(PHYSICAL);
+    const offenders = scan(PHYSICAL, EXEMPT);
     expect(
       offenders,
       `יש להשתמש ב-ms/me/ps/pe/start/end/text-start:\n${offenders.join("\n")}`,
@@ -128,18 +86,7 @@ describe("תבנית ה-Field", () => {
    * עם טקסט לצדה היא תבנית אחרת, ו-`Field` אינו מתאים לה.
    */
   it("אין `<label>` שמערים תווית מעל פקד — לזה יש `Field`", () => {
-    const offenders = sourceFiles(SRC).flatMap((file) => {
-      const rel = relative(SRC, file).replaceAll("\\", "/");
-      if (rel === "components/ui/field.tsx") return [];
-
-      return stripComments(readFileSync(file, "utf8"))
-        .split("\n")
-        .flatMap((text, index) =>
-          /<label[^>]*className="[^"]*\bflex-col\b/.test(text)
-            ? [`${rel}:${index + 1} — ${text.trim()}`]
-            : [],
-        );
-    });
+    const offenders = scan(/<label[^>]*className="[^"]*\bflex-col\b/, ["components/ui/field.tsx"]);
 
     expect(
       offenders,

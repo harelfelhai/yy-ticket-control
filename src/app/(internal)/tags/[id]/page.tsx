@@ -7,7 +7,7 @@ import { he } from "@/lib/he";
 import { getTagDetail } from "@/lib/services/tags";
 import { TagAccessControl } from "./tag-access-control";
 import { TagChatBox } from "./tag-chat-box";
-import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
 
@@ -35,7 +35,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
     : [];
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <header className="flex flex-col gap-1">
         <Link href="/tags" className="text-sm text-brand">
           ← {he.tag.listTitle}
@@ -47,7 +47,8 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
       </header>
 
       <section className={cardClasses("flex flex-col gap-2")}>
-        <div className="flex items-center justify-between">
+        {/* ההערה צמודה לכותרת שהיא מסייגת, לא בקצה הנגדי — DESIGN.md § Layout */}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <h2 className={TITLE_DESCRIPTIVE}>{he.tag.ticketsHeading}</h2>
           <span className="text-xs text-muted">{he.tag.ticketsManagersOnly}</span>
         </div>
@@ -59,7 +60,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
               <li key={ticket.id}>
                 <Link
                   href={`/tickets/${ticket.id}`}
-                  className="flex items-center justify-between gap-2 rounded-xl bg-bg p-3 text-sm"
+                  className="flex items-center justify-between gap-2 rounded-lg bg-bg p-3 text-sm"
                 >
                   <span>
                     {ticket.buildingName ?? he.ticket.noLocation}

@@ -5,7 +5,7 @@ import { listDomains } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
 import { createDomainAction } from "../actions";
 import { DomainsList } from "./domains-list";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.domains} — ${he.app.name}` };
 
@@ -15,7 +15,7 @@ export default async function AdminDomainsPage() {
   const domains = await listDomains(actor);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <div>
         <Link href="/admin" className="text-sm text-brand">
           ← {he.admin.title}

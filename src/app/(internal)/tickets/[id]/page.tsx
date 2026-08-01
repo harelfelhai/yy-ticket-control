@@ -168,7 +168,11 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           ) : null}
         </div>
 
-        <p className="text-sm text-muted">{reason}</p>
+        {/* אותו עיצוב כמו שורת הסיבה בכרטיס הלוח — זה אותו מידע בדיוק,
+            והצגתו כמטא-דאטה כאן וכהדגשה שם קראה כשני דברים שונים. */}
+        <p className={`text-sm font-medium ${status === "DRAFT" ? "text-danger" : "text-brand"}`}>
+          {reason}
+        </p>
 
         {ticket.description ? <p className="whitespace-pre-wrap">{ticket.description}</p> : null}
 
@@ -257,7 +261,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
 
               const author = message.authorUser?.name ?? message.authorProfessional?.name ?? "";
               return (
-                <li key={message.id} className="rounded-xl bg-bg p-3">
+                <li key={message.id} className="rounded-lg bg-bg p-3">
                   <p className="text-xs font-medium text-muted">{author}</p>
                   {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
                   <MediaAttachments media={message.media.map((file) => toMediaView(file))} />

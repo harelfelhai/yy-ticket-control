@@ -41,10 +41,12 @@ export function TagChatBox({ tagId }: { tagId: string }) {
   return (
     <div className="flex flex-col gap-2">
       <Field label={he.ticket.reply}>
+        {/* `rows={3}` כמו בשרשור הפנייה — אותה פעולה בדיוק, ושני גבהים
+            שונים נקראו כשני רכיבים שונים (סבב ביקורת 1, ממצא ב-2). */}
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={2}
+          rows={3}
         />
       </Field>
 

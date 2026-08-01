@@ -1,5 +1,5 @@
 import { he } from "@/lib/he";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { PANEL_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 /**
@@ -15,7 +15,7 @@ import { cardClasses } from "@/components/ui/card";
 export function ExpiredLink() {
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <div className={cardClasses("w-full max-w-sm text-center", { padding: "roomy" })}>
+      <div className={cardClasses(`text-center ${PANEL_WIDTH}`, { padding: "roomy" })}>
         <h1 className={TITLE_DESCRIPTIVE}>{he.portal.expired}</h1>
         <p className="mt-2 text-muted">{he.portal.expiredHelp}</p>
       </div>

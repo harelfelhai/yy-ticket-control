@@ -5,7 +5,7 @@ import { resolveToken } from "@/lib/services/portal";
 import { getPortalTagChat } from "@/lib/services/tags";
 import { ExpiredLink } from "../../expired-link";
 import { PortalTagChatBox } from "./portal-tag-chat-box";
-import { TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_IDENTIFYING } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 /**
@@ -27,7 +27,7 @@ export default async function PortalTagPage(props: PageProps<"/p/[token]/tag/[ta
   if (!chat) return <ExpiredLink />;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <Link href={`/p/${token}`} className="text-sm font-medium text-brand">
         ← {he.portal.back}
       </Link>
