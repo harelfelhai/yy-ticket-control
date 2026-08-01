@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, METRIC_VALUE, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { getOwnerOverview } from "@/lib/services/overview";
 import { cardClasses } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -89,7 +89,7 @@ function Metric({
       href={href}
       className="flex flex-col items-center gap-1 rounded-lg bg-bg p-3 text-center"
     >
-      <span className={`text-2xl font-bold ${toneClass}`}>{value}</span>
+      <span className={`${METRIC_VALUE} ${toneClass}`}>{value}</span>
       <span className="text-xs text-muted">{label}</span>
     </Link>
   );

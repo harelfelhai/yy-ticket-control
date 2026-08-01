@@ -25,6 +25,18 @@ export const TITLE_IDENTIFYING = "text-2xl font-bold";
 export const TITLE_DESCRIPTIVE = "text-xl font-semibold";
 
 /**
+ * ערך מספרי באריח מדד (מסך הסקירה).
+ *
+ * **אותה רמה של `TITLE_IDENTIFYING`, ובכוונה קבוע נפרד.** הסקאלה סגורה בשש
+ * רמות (DESIGN.md § חוקים), וזהו **תפקיד שני על רמה קיימת** — בדיוק כמו
+ * `body` ו-`bodyStrong` שחולקים 16px בטבלה.
+ *
+ * ייבוא של `TITLE_IDENTIFYING` במקומו היה קובע שמספר הוא "כותרת מזהה",
+ * ושינוי עתידי בגודל כותרת הדף היה מזיז את המדדים איתו — בשקט.
+ */
+export const METRIC_VALUE = "text-2xl font-bold";
+
+/**
  * רוחבי תוכן — מקור אמת אחד.
  *
  * **תקרה ורוחב תוכן הם שני דברים שונים.** `<main>` מגביל את הרוחב המרבי כדי
