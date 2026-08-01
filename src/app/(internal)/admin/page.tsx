@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cardClasses } from "@/components/ui/card";
 import { he } from "@/lib/he";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.title} — ${he.app.name}` };
 
@@ -19,7 +19,7 @@ export default function AdminHubPage() {
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <h1 className={TITLE_DESCRIPTIVE}>{he.admin.title}</h1>
       <ul className="grid gap-3 sm:grid-cols-2">
         {cards.map((card) => (

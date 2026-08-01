@@ -1,0 +1,56 @@
+import { describe, expect, it } from "vitest";
+import { CONTENT_WIDTH, WIDE_WIDTH } from "@/lib/ui";
+import { scan } from "./source-scan";
+
+/**
+ * שני אוכפים שנולדו מסבב הביקורת הראשון של סוכן design-review (1.8.2026).
+ *
+ * שני הפערים שהם שומרים — רוחבי תוכן (10) ואזורי מגע (14) — כבר סומנו ✅
+ * פעם אחת, בלי אוכף, **וזלגו**: 13 `max-w-*` ישירים הצטברו בעמודים (כולל
+ * ערכים שאינם קיימים בתקן), ו-`NAV_LINK` ישב על 40px מתחת לאף אחד. זו
+ * הסיבה שהבדיקות האלה קיימות: "תוקן" אינו "נסגר" כל עוד אין מי שאוכף.
+ */
+
+describe("רוחבי תוכן", () => {
+  /**
+   * ‏`max-w` בשמות גודל (`sm`…`7xl`) הוא רוחב תוכן, ומקורו היחיד הוא
+   * הקבועים ב-`src/lib/ui.ts` — "שני ערכים בלבד" (DESIGN.md § רוחבי תוכן).
+   * ‏`max-w` מספרי (כמו `max-w-44` על `FilterSelect`) הוא אילוץ פקד, לא
+   * רוחב תוכן, ולכן מותר — זה קו הגבול בין שני השימושים.
+   */
+  const NAMED_MAX_W = /\bmax-w-(xs|sm|md|lg|xl|[2-9]xl|prose|screen-\w+|\[)/;
+
+  it("אין `max-w-*` ישיר — רוחב תוכן מגיע מ-`src/lib/ui.ts`", () => {
+    const offenders = scan(NAMED_MAX_W, ["lib/ui.ts"]);
+    expect(
+      offenders,
+      `יש להשתמש ב-CONTENT_WIDTH / WIDE_WIDTH מ-@/lib/ui:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("הקבועים תואמים לתקן — 768px ו-1024px", () => {
+    // אם ערך כאן משתנה, DESIGN.md § רוחבי תוכן חייב להשתנות איתו.
+    expect(CONTENT_WIDTH).toContain("max-w-3xl");
+    expect(WIDE_WIDTH).toContain("max-w-5xl");
+  });
+});
+
+describe("אזורי מגע", () => {
+  /**
+   * ‏"44px — מינימום מוחלט לכל דבר לחיץ. אין יוצא מן הכלל" (DESIGN.md).
+   *
+   * הסריקה תופסת כל `min-h` מתחת ל-11 (44px), בלי לנסות להבחין אם האלמנט
+   * לחיץ: ההבחנה דורשת הבנת רינדור שסריקת טקסט לא תשיג, וברירת מחדל של
+   * גובה נמוך מזמינה את המקרה הלחיץ. אלמנט שאינו לחיץ ובאמת צריך גובה
+   * מזערי — פשוט לא זקוק ל-`min-h` נמוך: התוכן קובע.
+   */
+  const LOW_MIN_H = /\bmin-h-([0-9]|10)\b/;
+
+  it("אין `min-h` מתחת ל-44px", () => {
+    const offenders = scan(LOW_MIN_H);
+    expect(
+      offenders,
+      `הסף המוחלט הוא min-h-11 (44px) — DESIGN.md § אזורי מגע:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+});

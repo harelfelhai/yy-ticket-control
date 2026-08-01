@@ -20,7 +20,7 @@ import {
   createProfessionalAction,
 } from "../new/actions";
 import { createBatchAction } from "./actions";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { PANEL_WIDTH, TITLE_DESCRIPTIVE, WIDE_WIDTH } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 interface BuildingWithApartments extends LearnedOption {
@@ -135,7 +135,7 @@ export function BatchForm({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${WIDE_WIDTH}`}>
       <div>
         <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
         <p className="text-sm text-muted">
@@ -209,7 +209,8 @@ export function BatchForm({
 
         {/* טור ההזנה — שורה לכל ליקוי */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          {/* הפעולה צמודה לכותרת שהיא פועלת עליה — DESIGN.md § Layout */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className={TITLE_DESCRIPTIVE}>
               {he.batch.rowsHeading} · {rows.length}
             </h2>
@@ -226,7 +227,7 @@ export function BatchForm({
               aria-label={he.batch.rowNumber(index + 1)}
               className={cardClasses("flex flex-col gap-2", { padding: "compact" })}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="text-xs font-medium text-muted">
                   {he.batch.rowNumber(index + 1)}
                 </span>
@@ -330,7 +331,7 @@ function Summary({ summary, onReset }: { summary: BatchResult; onReset: () => vo
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-4 p-6">
+    <div className={`flex flex-col gap-4 p-6 ${PANEL_WIDTH}`}>
       <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
       <div className={cardClasses("flex flex-col gap-2", { tone: "success" })}>
         {lines.map((line) => (

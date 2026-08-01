@@ -20,7 +20,7 @@ import {
 import { useHydrated } from "@/lib/use-hydrated";
 import type { ActionResult } from "@/lib/action-result";
 import type { SelectOption } from "@/lib/options";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { chipClasses } from "@/components/ui/chip";
 import {
   createApartmentAction,
@@ -284,7 +284,7 @@ export function CreateTicketForm({
   return (
     // pb-28: רצועת הפעולות דביקה בתחתית (sticky), והריפוד נותן לתוכן — למשל
     // טופס יצירת איש מקצוע כשהוא פתוח — מקום להיגלל מעליה במקום להיחסם מאחוריה.
-    <div className="flex flex-col gap-4 p-4 pb-28">
+    <div className={`flex flex-col gap-4 p-4 pb-28 ${CONTENT_WIDTH}`}>
       <div>
         <h1 className={TITLE_DESCRIPTIVE}>{he.ticket.createTitle}</h1>
         <p className="text-sm text-muted">

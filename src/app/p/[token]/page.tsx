@@ -3,7 +3,7 @@ import { he } from "@/lib/he";
 import { getPortalBoard, resolveToken } from "@/lib/services/portal";
 import { listPortalTagChats } from "@/lib/services/tags";
 import { ExpiredLink } from "./expired-link";
-import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -29,7 +29,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <header>
         <h1 className={TITLE_IDENTIFYING}>{he.portal.greeting(identity.name)}</h1>
         <p className="text-sm text-muted">{he.portal.activeTitle}</p>

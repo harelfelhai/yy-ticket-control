@@ -79,7 +79,10 @@ export function TicketActions({
             disabled={busy}
           />
 
+          {/* `self-start` כמו בצ׳אט התגית — כפתור שנמתח לכל הרוחב נראה
+              כפעולה ראשית של המסך, וזו רק שליחת תגובה. */}
           <Button
+            className="self-start"
             disabled={busy || !canSend}
             onClick={() =>
               run(

@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listSites, listUsers } from "@/lib/services/admin";
 import { UsersManager } from "./users-manager";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.users} — ${he.app.name}` };
 
@@ -15,7 +15,7 @@ export default async function AdminUsersPage() {
   const [users, sites] = await Promise.all([listUsers(actor), listSites(actor)]);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <div>
         <Link href="/admin" className="text-sm text-brand">
           ← {he.admin.title}

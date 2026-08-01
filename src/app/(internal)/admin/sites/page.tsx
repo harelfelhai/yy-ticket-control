@@ -4,7 +4,7 @@ import { he } from "@/lib/he";
 import { listSites } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
 import { createSiteAction } from "../actions";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 export const metadata = { title: `${he.admin.sites} — ${he.app.name}` };
@@ -19,7 +19,7 @@ export default async function AdminSitesPage() {
   const sites = await listSites(actor);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <div>
         <Link href="/admin" className="text-sm text-brand">
           ← {he.admin.title}

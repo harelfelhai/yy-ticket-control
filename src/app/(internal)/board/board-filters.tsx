@@ -59,7 +59,7 @@ export function BoardFilters({ sites, buildings, domains, recipients, tags }: Bo
       activeCount={activeCount}
       trailing={
         <>
-          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm">
+          <label className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm">
             <input
               key={`tour-${syncKey}`}
               type="checkbox"

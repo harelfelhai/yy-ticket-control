@@ -35,7 +35,7 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={2}
+          rows={3}
         />
       </Field>
 

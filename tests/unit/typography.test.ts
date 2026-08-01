@@ -1,7 +1,6 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { scan } from "./source-scan";
 
 /**
  * שמירה על סקאלת הכותרות — בדיקה על הקוד עצמו ולא על רינדור.
@@ -20,43 +19,15 @@ import { TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
  * שנוגעת בכל המערכת — ולא לכתוב מחלקה בקובץ אחד.
  */
 
-const SRC = join(process.cwd(), "src");
-const SIZE_CLASS = /\btext-(xs|sm|base|lg|xl|[2-9]xl)\b/;
+/** שורה שיש בה גם `<h1>`/`<h2>` וגם מחלקת גודל — הכותרת קובעת את גודלה בעצמה */
+const SELF_SIZED_HEADING = /(?=.*<h[12]\b).*\btext-(xs|sm|base|lg|xl|[2-9]xl)\b/;
 
 /** כותרות בעמוד השגיאה הגלובלי מסוגננות ב-inline styles ואינן נשענות על Tailwind */
 const EXEMPT = ["app/global-error.tsx"];
 
-/** ‏readdir רקורסיבי ולא ספריית glob: זו התלות היחידה שהבדיקה הייתה מוסיפה. */
-function tsxFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) return tsxFiles(full);
-    return entry.name.endsWith(".tsx") ? [full] : [];
-  });
-}
-
-function headingLines(): { file: string; line: number; text: string }[] {
-  const files = tsxFiles(SRC);
-  const found: { file: string; line: number; text: string }[] = [];
-
-  for (const file of files) {
-    const rel = relative(SRC, file).replaceAll("\\", "/");
-    if (EXEMPT.includes(rel)) continue;
-
-    readFileSync(file, "utf8")
-      .split("\n")
-      .forEach((text, index) => {
-        if (/<h[12]\b/.test(text)) found.push({ file: rel, line: index + 1, text: text.trim() });
-      });
-  }
-  return found;
-}
-
 describe("סקאלת הכותרות", () => {
   it("אף `<h1>`/`<h2>` אינו קובע את גודלו בעצמו", () => {
-    const offenders = headingLines()
-      .filter((h) => SIZE_CLASS.test(h.text))
-      .map((h) => `${h.file}:${h.line} — ${h.text}`);
+    const offenders = scan(SELF_SIZED_HEADING, EXEMPT);
 
     expect(offenders, `יש להשתמש ב-TITLE_IDENTIFYING / TITLE_DESCRIPTIVE מ-@/lib/ui:\n${offenders.join("\n")}`)
       .toEqual([]);
