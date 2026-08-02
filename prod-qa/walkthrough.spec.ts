@@ -178,7 +178,10 @@ test("מסלול מלא: פנייה, מדיה ל-R2, פורטל, תגובה, ס�
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "סגור פנייה" }).click();
-  await expect(page.getByText("הפנייה נסגרה")).toBeVisible();
+  // ‏`role="status"` ולא הטקסט: אחרי הסגירה **שני** אלמנטים נושאים את
+  // המחרוזת — שורת הסיבה בכרטיס וההודעה החיובית — ו-strict mode פוסל
+  // לוקטור שמוצא שניים. ההודעה היא זו שמוכרזת לקורא מסך, וזו שנבדקת.
+  await expect(page.getByRole("status")).toContainText("הפנייה נסגרה");
   await shot(page, "17-ticket-closed", testInfo);
 });
 
