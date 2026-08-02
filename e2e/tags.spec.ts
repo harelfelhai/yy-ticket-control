@@ -115,6 +115,9 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
   await page.getByRole("link").filter({ hasText: tagName }).click();
 
   await expect(page.getByText(managerMessage)).toBeVisible();
+  // ציון הדרך `main` — ראו ההסבר ב-`lifecycle.spec.ts`: הוא נעדר משלושת
+  // מסכי הפורטל עד שסבב QA על הפרודקשן חשף זאת.
+  await expect(page.getByRole("main")).toBeVisible();
   // הכלל המרכזי: הקבלן אינו רואה את רשימת הפניות של התגית.
   await expect(page.getByText("פניות בתגית")).toHaveCount(0);
 

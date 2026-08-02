@@ -33,7 +33,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
   await markViewed(assignment.id);
 
   return (
-    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    <main className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <Link href={`/p/${token}`} className="text-sm font-medium text-brand">
         ← {he.portal.back}
       </Link>
@@ -90,6 +90,6 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
         isClosed={ticket.closedAt !== null}
         openerName={ticket.createdBy.name}
       />
-    </div>
+    </main>
   );
 }

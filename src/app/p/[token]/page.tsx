@@ -29,7 +29,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
   ]);
 
   return (
-    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    <main className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <header>
         <h1 className={TITLE_IDENTIFYING}>{he.portal.greeting(identity.name)}</h1>
         <p className="text-sm text-muted">{he.portal.activeTitle}</p>
@@ -103,6 +103,6 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
           </ul>
         </details>
       ) : null}
-    </div>
+    </main>
   );
 }

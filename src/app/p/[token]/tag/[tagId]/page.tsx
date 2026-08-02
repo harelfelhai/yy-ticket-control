@@ -27,7 +27,7 @@ export default async function PortalTagPage(props: PageProps<"/p/[token]/tag/[ta
   if (!chat) return <ExpiredLink />;
 
   return (
-    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    <main className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <Link href={`/p/${token}`} className="text-sm font-medium text-brand">
         ← {he.portal.back}
       </Link>
@@ -41,6 +41,6 @@ export default async function PortalTagPage(props: PageProps<"/p/[token]/tag/[ta
         <TagChatMessages messages={chat.messages} token={token} />
         <PortalTagChatBox token={token} tagId={tagId} />
       </section>
-    </div>
+    </main>
   );
 }

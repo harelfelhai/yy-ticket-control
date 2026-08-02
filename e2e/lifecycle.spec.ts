@@ -93,9 +93,25 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   // ── 2. הקבלן הראשון פותח את הקישור ומסמן שסיים ────────────────────
   await page.goto(electricianLink);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(electrician);
+  /**
+   * ציון הדרך `main` — נבדק כאן מפני ש**הוא לא היה קיים** בשלושת מסכי
+   * הפורטל עד שסבב QA על הפרודקשן חשף זאת. המסכים הפנימיים נשאו `<main>`
+   * מהיום הראשון, וגם מסך "הקישור פג" — כלומר מסך השגיאה היה נגיש יותר
+   * מהמסך העובד. קורא מסך בפורטל לא היה יכול לדלג לתוכן.
+   */
+  await expect(page.getByRole("main")).toBeVisible();
 
   await page.getByRole("link").filter({ hasText: description }).click();
-  await page.getByRole("button", { name: "סיימתי — טופל" }).click();
+  /**
+   * ההמתנה לכפתור **לפני** בדיקת ציון הדרך אינה קוסמטית: הניווט הוא
+   * צד-לקוח, וה-DOM הקודם — רשימת הפורטל, שגם לה יש `main` — נשאר על המסך
+   * עד שהמסך החדש מגיע. בלי העוגן הזה הבדיקה עברה גם כשהמסך הזה **איבד**
+   * את ה-`main` שלו, כלומר אימתה את המסך הקודם.
+   */
+  const done = page.getByRole("button", { name: "סיימתי — טופל" });
+  await expect(done).toBeVisible();
+  await expect(page.getByRole("main")).toBeVisible();
+  await done.click();
   await expect(page.getByText("תודה. הפנייה הועברה לאישור מנהל ראשי.")).toBeVisible();
 
   // ── 3. הקבלן השני שואל שאלה ───────────────────────────────────────

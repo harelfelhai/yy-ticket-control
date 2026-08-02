@@ -151,7 +151,9 @@ test("מסלול מלא: פנייה, מדיה ל-R2, פורטל, תגובה, ס�
    * להיטען אצל הקבלן — כלומר לצאת מ-R2 ולחזור דרך ה-route שבודק הרשאה.
    * ‏`naturalWidth > 0` ולא קיום התגית: תגית שבורה קיימת גם היא.
    */
-  const image = page.locator("main img").first();
+  // ‏`getByRole` ולא `main img`: **למסכי הפורטל אין `<main>`** (בשונה
+  // מהמסכים הפנימיים) — ראו ההערה בסוף הקובץ.
+  const image = page.getByRole("img", { name: "qa.png" });
   await expect(image).toBeVisible();
   await expect
     .poll(() => image.evaluate((el: HTMLImageElement) => el.naturalWidth), { timeout: 20_000 })
