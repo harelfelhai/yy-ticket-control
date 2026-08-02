@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { updateResidentNameAction } from "./actions";
 import { FormError } from "@/components/ui/message";
 
@@ -24,18 +24,13 @@ interface ResidentNameProps {
 export function ResidentName({ ticketId, initial, canEdit }: ResidentNameProps) {
   const [name, setName] = useState(initial ?? "");
   const [editing, setEditing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   function save() {
-    setError(null);
-    startTransition(async () => {
-      const result = await updateResidentNameAction(ticketId, name);
-      if (result.ok) setEditing(false);
-      else setError(result.error);
-    });
+    run(
+      () => updateResidentNameAction(ticketId, name),
+      () => setEditing(false),
+    );
   }
 
   // צופה בלבד: מוצג רק כשיש שם, ובלי אפשרות עריכה.

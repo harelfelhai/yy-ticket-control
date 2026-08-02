@@ -142,7 +142,7 @@ const createTicketSchema = z.object({
  */
 export async function createTicketAction(
   input: z.infer<typeof createTicketSchema>,
-): Promise<{ error: string } | undefined> {
+): Promise<ActionResult<string>> {
   const result = await guard(async () => {
     const parsed = createTicketSchema.parse(input);
     const user = await requireSiteAccess(parsed.siteId);
@@ -150,6 +150,6 @@ export async function createTicketAction(
     return ticket.id;
   });
 
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return result;
   redirect(`/tickets/${result.data}`);
 }

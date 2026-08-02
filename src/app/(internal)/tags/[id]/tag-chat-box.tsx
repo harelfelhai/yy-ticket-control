@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { addTagMessageAction } from "../actions";
 import { FormError } from "@/components/ui/message";
 import { ReplyField } from "@/components/reply-field";
@@ -19,24 +19,18 @@ import { ReplyField } from "@/components/reply-field";
 export function TagChatBox({ tagId }: { tagId: string }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   const canSend = text.trim().length > 0 || files.length > 0;
 
   function send() {
-    setError(null);
-    startTransition(async () => {
-      const result = await addTagMessageAction(tagId, text, files.map((f) => f.mediaId));
-      if (result.ok) {
+    run(
+      () => addTagMessageAction(tagId, text, files.map((f) => f.mediaId)),
+      () => {
         setText("");
         setFiles([]);
-      } else {
-        setError(result.error);
-      }
-    });
+      },
+    );
   }
 
   return (

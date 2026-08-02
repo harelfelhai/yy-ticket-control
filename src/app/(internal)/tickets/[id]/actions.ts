@@ -94,15 +94,18 @@ export async function setHandlerAction(ticketId: string): Promise<ActionResult> 
  *
  * ‏redirect בהצלחה ולא החזרת ערך: ה-`redirect` זורק חריגה מיוחדת ב-Next
  * ולכן הוא מחוץ ל-`guard`, אחרת היא הייתה נתפסת ומדווחת כשגיאה.
+ *
+ * הטיפוס נשאר `ActionResult` אף שהמסלול המוצלח אינו מחזיר דבר: **צורת
+ * התשובה של Server Action היא אחת** (`action-result.ts`), ו-`{ error }`
+ * שהיה כאן קודם היה צורה שנייה שנולדה מהניווט. `redirect` מוחזר כ-`never`,
+ * ולכן הטיפוס נכון גם בלי ערך.
  */
-export async function deleteTicketAction(
-  ticketId: string,
-): Promise<{ error: string } | undefined> {
+export async function deleteTicketAction(ticketId: string): Promise<ActionResult> {
   const result = await guard(async () => {
     await deleteTicket(await viewer(), z.string().min(1).parse(ticketId));
   });
 
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return result;
   revalidatePath("/board");
   redirect("/board");
 }
@@ -165,14 +168,12 @@ export async function submitDraftAction(
  * מוחק טיוטה ומעביר ללוח — מסך הפנייה כבר לא קיים.
  * ‏redirect מחוץ ל-guard, כמו ב-deleteTicketAction.
  */
-export async function deleteDraftAction(
-  ticketId: string,
-): Promise<{ error: string } | undefined> {
+export async function deleteDraftAction(ticketId: string): Promise<ActionResult> {
   const result = await guard(async () => {
     await deleteDraft(await viewer(), z.string().min(1).parse(ticketId));
   });
 
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return result;
   revalidatePath("/board");
   redirect("/board");
 }

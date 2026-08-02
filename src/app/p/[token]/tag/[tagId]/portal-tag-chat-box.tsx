@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { portalTagMessageAction } from "./actions";
 import { FormError } from "@/components/ui/message";
 import { ReplyField } from "@/components/reply-field";
@@ -16,18 +16,13 @@ import { ReplyField } from "@/components/reply-field";
  */
 export function PortalTagChatBox({ token, tagId }: { token: string; tagId: string }) {
   const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   function send() {
-    setError(null);
-    startTransition(async () => {
-      const result = await portalTagMessageAction(token, tagId, text);
-      if (result.ok) setText("");
-      else setError(result.error);
-    });
+    run(
+      () => portalTagMessageAction(token, tagId, text),
+      () => setText(""),
+    );
   }
 
   return (

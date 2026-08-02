@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { LearnedSelect } from "@/components/learned-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
+import { useAction } from "@/lib/use-action";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
@@ -33,8 +34,10 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
   const [pending, setPending] = useState<SelectOption[]>([]);
   const [links, setLinks] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [running, startTransition] = useTransition();
+  // ‏`busy` ולא `running`: המסך הזה **ויתר עד היום על בדיקת ה-hydration** —
+  // הוא נעל את הכפתורים על `pending` בלבד, כלומר לחיצה לפני חיבור המטפלים
+  // נבלעה בשקט. זו בדיוק הנפרדות ש-`useAction` נוצר כדי לסגור.
+  const { busy, error, run } = useAction();
 
   const pendingIds = new Set(pending.map((p) => p.id));
   const available = candidates.filter((c) => !pendingIds.has(c.id));
@@ -46,36 +49,27 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
 
   function grant() {
     if (pending.length === 0) return;
-    setError(null);
     setNotice(null);
     const ids = pending.map((p) => p.id);
-    startTransition(async () => {
-      const result = await grantTagAccessAction(tagId, ids);
-      if (result.ok) {
-        setNotice(he.tag.openedNotice(result.data));
+    run(
+      () => grantTagAccessAction(tagId, ids),
+      (opened) => {
+        setNotice(he.tag.openedNotice(opened));
         setPending([]);
-      } else {
-        setError(result.error);
-      }
-    });
+      },
+    );
   }
 
   function revoke(professionalId: string) {
-    setError(null);
     setNotice(null);
-    startTransition(async () => {
-      const result = await revokeTagAccessAction(tagId, professionalId);
-      if (!result.ok) setError(result.error);
-    });
+    run(() => revokeTagAccessAction(tagId, professionalId));
   }
 
   function showLink(professionalId: string) {
-    setError(null);
-    startTransition(async () => {
-      const result = await getTagContractorLinkAction(tagId, professionalId);
-      if (result.ok) setLinks((current) => ({ ...current, [professionalId]: result.data }));
-      else setError(result.error);
-    });
+    run(
+      () => getTagContractorLinkAction(tagId, professionalId),
+      (url) => setLinks((current) => ({ ...current, [professionalId]: url })),
+    );
   }
 
   return (
@@ -93,7 +87,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
                   {contractor.label}
                   <button
                     type="button"
-                    disabled={running}
+                    disabled={busy}
                     onClick={() => revoke(contractor.id)}
                     aria-label={`${he.tag.revoke} ${contractor.label}`}
                     className="px-1 text-base leading-none disabled:opacity-50"
@@ -104,7 +98,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
                 <Button
                   variant="secondary"
                   size="compact"
-                  disabled={running}
+                  disabled={busy}
                   onClick={() => showLink(contractor.id)}
                   aria-label={`${he.ticket.showLink} ${contractor.label}`}
                 >
@@ -161,7 +155,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
         ) : null}
 
         {pending.length > 0 ? (
-          <Button disabled={running} onClick={grant} className="self-start">
+          <Button disabled={busy} onClick={grant} className="self-start">
             {he.tag.grant}
           </Button>
         ) : null}

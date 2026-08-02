@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { AssignmentStatusChip } from "@/components/status-chip";
 import { LearnedSelect } from "@/components/learned-select";
 import { ProfessionalCreateForm } from "@/components/professional-create-form";
@@ -9,7 +9,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { unwrapOrThrow } from "@/lib/action-result";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { createProfessionalAction } from "../new/actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
@@ -72,39 +72,32 @@ export function RecipientEditor({
   available,
   canEdit,
 }: RecipientEditorProps) {
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [link, setLink] = useState<{ forId: string; url: string; rotated: boolean } | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   const active = assignments.filter((a) => a.status !== "REMOVED");
   const removed = assignments.filter((a) => a.status === "REMOVED");
 
   function showLink(professionalId: string) {
-    setError(null);
     // מנקים את הקישור הקודם **לפני** הבקשה: אחרת, בזמן הטעינה עבור הקבלן
     // השני התיבה עדיין מציגה את הקישור של הראשון, והמנהל עלול להעתיק
     // ולשלוח לאחד את הקישור האישי של האחר.
     setLink(null);
-    startTransition(async () => {
-      const result = await getLinkAction(ticketId, professionalId);
-      if (result.ok) setLink({ forId: professionalId, url: result.data, rotated: false });
-      else setError(result.error);
-    });
+    run(
+      () => getLinkAction(ticketId, professionalId),
+      (url) => setLink({ forId: professionalId, url, rotated: false }),
+    );
   }
 
   function rotate(professionalId: string) {
     if (!confirm(he.ticket.confirmRotateLink)) return;
-    setError(null);
     setLink(null);
-    startTransition(async () => {
-      const result = await rotateLinkAction(ticketId, professionalId);
-      if (result.ok) setLink({ forId: professionalId, url: result.data, rotated: true });
-      else setError(result.error);
-    });
+    run(
+      () => rotateLinkAction(ticketId, professionalId),
+      (url) => setLink({ forId: professionalId, url, rotated: true }),
+    );
   }
 
   function add(id: string | null) {
@@ -112,31 +105,21 @@ export function RecipientEditor({
     if (!option) return;
     // האזהרה מהאפיון (מסך 3): נמען שנוסף רואה את כל ההיסטוריה שקדמה לו.
     if (!window.confirm(he.ticket.confirmAddRecipient)) return;
-    setError(null);
-    startTransition(async () => {
-      const result = await addRecipientsAction(ticketId, [{ kind: option.kind, id: option.id }]);
-      if (!result.ok) setError(result.error);
-    });
+    run(() => addRecipientsAction(ticketId, [{ kind: option.kind, id: option.id }]));
   }
 
   function remove(assignmentId: string, name: string) {
     // האזהרה מהאפיון (מסך 3): הפנייה תיעלם מהרשימה שלו, אך תגובותיו יישארו.
     if (!window.confirm(he.ticket.confirmRemoveRecipient(name))) return;
-    setError(null);
-    startTransition(async () => {
-      const result = await removeRecipientAction(ticketId, assignmentId);
-      if (!result.ok) setError(result.error);
-    });
+    run(() => removeRecipientAction(ticketId, assignmentId));
   }
 
   function resend(assignmentId: string, name: string) {
-    setError(null);
     setNotice(null);
-    startTransition(async () => {
-      const result = await resendEmailAction(ticketId, assignmentId);
-      if (result.ok) setNotice(he.ticket.linkResent(name));
-      else setError(result.error);
-    });
+    run(
+      () => resendEmailAction(ticketId, assignmentId),
+      () => setNotice(he.ticket.linkResent(name)),
+    );
   }
 
   /**

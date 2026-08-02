@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { ActionResult } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { cardClasses } from "@/components/ui/card";
 import {
   closeTicketAction,
@@ -42,23 +42,22 @@ export function TicketActions({
 }: TicketActionsProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   // תמונה בלי כיתוב היא הודעה שלמה — ולעיתים המדויקת ביותר.
   const canSend = text.trim().length > 0 || files.length > 0;
 
-  function run(action: () => Promise<ActionResult>, onSuccess?: () => void) {
-    setError(null);
+  /**
+   * ‏`run` בתוספת ניקוי ההודעה החיובית.
+   *
+   * ‏`useAction` מנקה שגיאה בלבד, ובכוונה: `notice` הוא טקסט של המסך הזה —
+   * "הפנייה נסגרה" — ולא מצב של הפעולה. הוא מנוקה כאן מפני ש**כאן** ידוע
+   * שהודעה מלפני שתי לחיצות כבר אינה מתארת את מה שקורה עכשיו.
+   */
+  function act(action: () => Promise<ActionResult>, onSuccess?: () => void) {
     setNotice(null);
-    startTransition(async () => {
-      const result = await action();
-      if (result.ok) onSuccess?.();
-      else setError(result.error);
-    });
+    run(action, onSuccess);
   }
 
   return (
@@ -80,7 +79,7 @@ export function TicketActions({
             className="self-start"
             disabled={busy || !canSend}
             onClick={() =>
-              run(
+              act(
                 () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
                 () => {
                   setText("");
@@ -103,7 +102,7 @@ export function TicketActions({
           <Button
             variant="secondary"
             disabled={busy}
-            onClick={() => run(() => setHandlerAction(ticketId))}
+            onClick={() => act(() => setHandlerAction(ticketId))}
           >
             {he.ticket.setHandler}
           </Button>
@@ -117,7 +116,7 @@ export function TicketActions({
               const closing = !isClosed;
               const question = closing ? he.ticket.confirmClose : he.ticket.confirmReopen;
               if (!window.confirm(question)) return;
-              run(
+              act(
                 () => (closing ? closeTicketAction(ticketId) : reopenTicketAction(ticketId)),
                 () => setNotice(closing ? he.ticket.closedNotice : he.ticket.reopenedNotice),
               );

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import type { ActionResult } from "@/lib/action-result";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { cardClasses } from "@/components/ui/card";
 import { FormError } from "@/components/ui/message";
 
@@ -24,17 +24,13 @@ interface AdminAddFormProps {
  */
 export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminAddFormProps) {
   const [value, setValue] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
+  const { busy, error, run } = useAction();
 
   function submit() {
-    setError(null);
-    startTransition(async () => {
-      const result = await action(value);
-      if (result.ok) setValue("");
-      else setError(result.error);
-    });
+    run(
+      () => action(value),
+      () => setValue(""),
+    );
   }
 
   return (
@@ -49,7 +45,7 @@ export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminA
       </Field>
       <Button
         onClick={submit}
-        disabled={pending || !hydrated || value.trim().length === 0}
+        disabled={busy || value.trim().length === 0}
         className="self-start"
       >
         {buttonLabel}

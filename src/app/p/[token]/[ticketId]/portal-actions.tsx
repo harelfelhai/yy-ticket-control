@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
-import type { ActionResult } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { askQuestionAction, markDoneAction, replyAction } from "./actions";
 import { cardClasses } from "@/components/ui/card";
 import { Banner, FormError } from "@/components/ui/message";
@@ -40,10 +39,7 @@ export function PortalActions({
 }: PortalActionsProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   // תגובה יכולה להיות תמונה בלבד — וזה המקרה השכיח כאן: קבלן מצלם את מה
   // שתיקן במקום לתאר אותו במילים.
@@ -52,15 +48,6 @@ export function PortalActions({
   function clear() {
     setText("");
     setFiles([]);
-  }
-
-  function run(action: () => Promise<ActionResult>, onSuccess?: () => void) {
-    setError(null);
-    startTransition(async () => {
-      const result = await action();
-      if (result.ok) onSuccess?.();
-      else setError(result.error);
-    });
   }
 
   if (isClosed) {
