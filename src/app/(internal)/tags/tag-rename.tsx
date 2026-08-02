@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { renameTagAction } from "./actions";
+import { FormError } from "@/components/ui/message";
 
 /**
  * שינוי שם תגית בשורה (חלק ממסכי הניהול) — למנהל המערכת בלבד.
@@ -67,9 +68,9 @@ export function TagRename({ id, name }: { id: string; name: string }) {
         </Button>
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </div>
   );

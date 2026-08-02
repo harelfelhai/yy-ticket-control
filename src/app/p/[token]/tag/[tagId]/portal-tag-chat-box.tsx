@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { portalTagMessageAction } from "./actions";
+import { FormError } from "@/components/ui/message";
+import { ReplyField } from "@/components/reply-field";
 
 /**
  * תיבת הכתיבה של הקבלן בצ׳אט הקבוצתי — טקסט בלבד.
@@ -31,13 +32,7 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
 
   return (
     <div className="flex flex-col gap-2">
-      <Field label={he.ticket.reply}>
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={3}
-        />
-      </Field>
+      <ReplyField value={text} onChange={setText} />
 
       <Button
         disabled={busy || text.trim().length === 0}
@@ -48,9 +43,9 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
       </Button>
 
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </div>
   );

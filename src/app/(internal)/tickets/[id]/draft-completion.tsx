@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
-import type { ActionResult } from "@/lib/action-result";
+import { unwrapOrThrow } from "@/lib/action-result";
 import {
   type DraftCompletionSnapshot,
   clearCompletion,
@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
-import type { SelectOption } from "@/lib/options";
 import { useHydrated } from "@/lib/use-hydrated";
 import {
   createApartmentAction,
@@ -24,6 +23,7 @@ import {
 } from "../new/actions";
 import { deleteDraftAction, submitDraftAction, updateTicketFieldsAction } from "./actions";
 import { cardClasses } from "@/components/ui/card";
+import { FormError } from "@/components/ui/message";
 
 /**
  * השלמת טיוטה ושיגורה (מסך 7 באפיון).
@@ -67,10 +67,6 @@ interface DraftCompletionProps {
   missing: DraftMissing;
 }
 
-function unwrap(result: ActionResult<SelectOption>): SelectOption {
-  if (!result.ok) throw new Error(result.error);
-  return result.data;
-}
 
 /**
  * ממיר מזהי נמענים שמורים לאובייקטי האפשרות המלאים, מול הרשימה הזמינה עכשיו.
@@ -261,7 +257,7 @@ export function DraftCompletion({
           }}
           disabled={busy}
           onCreate={async (name) => {
-            const created = unwrap(await createBuildingAction(siteId, name));
+            const created = unwrapOrThrow(await createBuildingAction(siteId, name));
             setBuildings((prev) => [...prev, { ...created, apartments: [] }]);
             return created;
           }}
@@ -279,7 +275,7 @@ export function DraftCompletion({
           onCreate={
             selectedBuilding
               ? async (number) => {
-                  const created = unwrap(
+                  const created = unwrapOrThrow(
                     await createApartmentAction(siteId, selectedBuilding.id, number),
                   );
                   setBuildings((prev) =>
@@ -304,7 +300,7 @@ export function DraftCompletion({
           onChange={setDomainId}
           disabled={busy}
           onCreate={async (name) => {
-            const created = unwrap(await createDomainAction(siteId, name));
+            const created = unwrapOrThrow(await createDomainAction(siteId, name));
             setDomains((prev) => [...prev, created]);
             return created;
           }}
@@ -328,7 +324,7 @@ export function DraftCompletion({
             value={recipients}
             onChange={setRecipients}
             onCreateProfessional={async (input) => {
-              const created = unwrap(await createProfessionalAction(siteId, input));
+              const created = unwrapOrThrow(await createProfessionalAction(siteId, input));
               const option: RecipientOption = { ...created, kind: "professional" };
               setAvailableRecipients((prev) => [...prev, option]);
               return option;
@@ -338,9 +334,9 @@ export function DraftCompletion({
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
 
       <div className="flex gap-2">

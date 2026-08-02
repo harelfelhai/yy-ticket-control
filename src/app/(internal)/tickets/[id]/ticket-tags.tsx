@@ -8,6 +8,7 @@ import { addTicketTagAction, removeTicketTagAction } from "./actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
+import { FormError } from "@/components/ui/message";
 
 interface TicketTagsProps {
   ticketId: string;
@@ -104,9 +105,9 @@ export function TicketTags({ ticketId, initial, all, canEdit }: TicketTagsProps)
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </section>
   );

@@ -5,11 +5,10 @@ import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
-import type { ActionResult } from "@/lib/action-result";
+import { unwrapOrThrow } from "@/lib/action-result";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
-import type { SelectOption } from "@/lib/options";
 import { ROOMS } from "@/lib/rooms";
 import { useHydrated } from "@/lib/use-hydrated";
 import type { BatchResult } from "@/lib/services/batch";
@@ -22,6 +21,7 @@ import {
 import { createBatchAction } from "./actions";
 import { PANEL_WIDTH, TITLE_DESCRIPTIVE, WIDE_WIDTH } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
+import { FormError } from "@/components/ui/message";
 
 interface BuildingWithApartments extends LearnedOption {
   apartments: LearnedOption[];
@@ -43,10 +43,6 @@ interface RowState {
   recipient: RecipientOption | null;
 }
 
-function unwrap(result: ActionResult<SelectOption>): SelectOption {
-  if (!result.ok) throw new Error(result.error);
-  return result.data;
-}
 
 /**
  * מסך ההזנה המרוכזת (מסך 5).
@@ -158,7 +154,7 @@ export function BatchForm({
                 setApartmentId(null);
               }}
               onCreate={async (name) => {
-                const created = unwrap(await createBuildingAction(siteId, name));
+                const created = unwrapOrThrow(await createBuildingAction(siteId, name));
                 setBuildings((prev) => [...prev, { ...created, apartments: [] }]);
                 return created;
               }}
@@ -174,7 +170,7 @@ export function BatchForm({
               onCreate={
                 selectedBuilding
                   ? async (number) => {
-                      const created = unwrap(
+                      const created = unwrapOrThrow(
                         await createApartmentAction(siteId, selectedBuilding.id, number),
                       );
                       setBuildings((prev) =>
@@ -260,7 +256,7 @@ export function BatchForm({
                   value={row.domainId}
                   onChange={(id) => updateRow(row.key, { domainId: id })}
                   onCreate={async (name) => {
-                    const created = unwrap(await createDomainAction(siteId, name));
+                    const created = unwrapOrThrow(await createDomainAction(siteId, name));
                     setDomains((prev) => [...prev, created]);
                     return created;
                   }}
@@ -290,7 +286,7 @@ export function BatchForm({
                     updateRow(row.key, { recipient: list.length ? list[list.length - 1] : null })
                   }
                   onCreateProfessional={async (input) => {
-                    const created = unwrap(await createProfessionalAction(siteId, input));
+                    const created = unwrapOrThrow(await createProfessionalAction(siteId, input));
                     const option: RecipientOption = { ...created, kind: "professional" };
                     setAvailableRecipients((prev) => [...prev, option]);
                     return option;
@@ -301,9 +297,9 @@ export function BatchForm({
           ))}
 
           {error ? (
-            <p role="alert" className="text-sm font-medium text-danger">
+            <FormError>
               {error}
-            </p>
+            </FormError>
           ) : null}
 
           <div className="sticky bottom-0 flex gap-2 border-t border-border bg-bg py-3">

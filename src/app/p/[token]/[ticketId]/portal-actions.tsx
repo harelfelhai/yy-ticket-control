@@ -4,11 +4,13 @@ import { useState, useTransition } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/lib/action-result";
-import { Field, Textarea } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { askQuestionAction, markDoneAction, replyAction } from "./actions";
 import { cardClasses } from "@/components/ui/card";
+import { Banner, FormError } from "@/components/ui/message";
+import { ReplyField } from "@/components/reply-field";
 
 interface PortalActionsProps {
   token: string;
@@ -72,23 +74,13 @@ export function PortalActions({
   return (
     <div className="flex flex-col gap-3">
       {status === "DONE" ? (
-        <p className="rounded-xl bg-success/10 p-3 text-sm font-medium text-success">
-          {he.portal.doneNotice(openerName)}
-        </p>
+        <Banner tone="success">{he.portal.doneNotice(openerName)}</Banner>
       ) : null}
       {status === "QUESTION" ? (
-        <p className="rounded-xl bg-warning/10 p-3 text-sm font-medium text-warning">
-          {he.portal.questionNotice(openerName)}
-        </p>
+        <Banner tone="warning">{he.portal.questionNotice(openerName)}</Banner>
       ) : null}
 
-      <Field label={he.ticket.reply}>
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={3}
-        />
-      </Field>
+      <ReplyField value={text} onChange={setText} />
 
       <MediaPicker
         ticketId={ticketId}
@@ -99,8 +91,12 @@ export function PortalActions({
       />
 
       <div className="flex flex-col gap-2">
-        <button
-          type="button"
+        {/* `Button` ולא `<button>`: זהו `secondary` רגיל, והכתיבה-מהזיכרון
+            כאן כבר סטתה — `px-4` (הריפוד של `compact`) על גובה `default`.
+            ההחרגה של הקובץ נועדה לשני הכפתורים שמתחת, לא לו. */}
+        <Button
+          variant="secondary"
+          className="w-full"
           disabled={busy || !canReply}
           onClick={() =>
             run(
@@ -108,10 +104,9 @@ export function PortalActions({
               clear,
             )
           }
-          className="min-h-12 rounded-xl border border-border bg-surface px-4 font-medium disabled:opacity-60"
         >
           {he.ticket.send}
-        </button>
+        </Button>
 
         <button
           type="button"
@@ -140,9 +135,9 @@ export function PortalActions({
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </div>
   );
