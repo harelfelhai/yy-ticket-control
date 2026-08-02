@@ -96,16 +96,35 @@ test("מסנן התאריכים מסנן בפועל ונשמר בכתובת", as
   await page.goto("/search");
   await openFilters(page);
 
+  /**
+   * המילוי חוזר על עצמו עד שהכתובת מתעדכנת, וזה אינו קישוט.
+   *
+   * פקדי הרצועה מנווטים ב-`onChange` → `router.replace`, ולכן מילוי **לפני**
+   * ה-hydration נבלע בשקט — האירוע נורה כשאין לו עדיין מטפל. במובייל
+   * `openFilters` ממתין ל-`aria-expanded` וזה משמש גם כהמתנה ל-hydration;
+   * בדסקטופ אין מתג, הפונקציה חוזרת מיד, ואין שום מחסום. זה מה שהפך את
+   * הבדיקה ל-flaky בדסקטופ בלבד.
+   */
+  async function filterByDate(label: string, value: string, param: string) {
+    await expect
+      .poll(
+        async () => {
+          await page.getByLabel(label).fill(value);
+          return new URL(page.url()).search;
+        },
+        { timeout: 15_000 },
+      )
+      .toContain(`${param}=`);
+  }
+
   // ── טווח שמכיל את היום: הפנייה שנוצרה עכשיו חייבת להימצא ──────────
   const today = new Date().toISOString().slice(0, 10);
-  await page.getByLabel("מתאריך").fill(today);
-  await expect(page).toHaveURL(/[?&]from=/);
+  await filterByDate("מתאריך", today, "from");
   await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
 
   // ── טווח שנגמר אתמול: אותה פנייה חייבת להיעלם ─────────────────────
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  await page.getByLabel("עד תאריך").fill(yesterday);
-  await expect(page).toHaveURL(/[?&]to=/);
+  await filterByDate("עד תאריך", yesterday, "to");
   await expect(page.getByRole("link").filter({ hasText: description })).toHaveCount(0);
 });
 

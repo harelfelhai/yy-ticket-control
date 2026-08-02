@@ -125,14 +125,29 @@ export function MediaPicker({
   async function addFiles(selected: FileList | null) {
     if (!selected?.length) return;
     setError(null);
-    setUploading((n) => n + selected.length);
+
+    /**
+     * **הקבצים נלכדים כאן, לפני ה-`try`, ולא נקראים מ-`selected` בהמשך.**
+     *
+     * ‏`selected` הוא ה-`FileList` **החי** של השדה, ואיפוס `input.value`
+     * בסוף מרוקן את אותו אובייקט עצמו (‏`captured === input.files`, אומת
+     * בדפדפן). ‏`setUploading` מקבל פונקציית עדכון ש-React מריץ מאוחר יותר —
+     * ועד אז `selected.length` כבר 0, כלומר ההפחתה הייתה של אפס והמונה נתקע.
+     *
+     * התוצאה בפועל, שהתגלתה בסבב QA על הפרודקשן: "מעלה…" נשאר על המסך
+     * **לתמיד** אחרי כל צירוף קובץ. אף בדיקה לא נכשלה, כי כולן בדקו שהתמונה
+     * הופיעה ואף אחת לא בדקה שחיווי ההעלאה נעלם.
+     */
+    const chosen = Array.from(selected);
+
+    setUploading((n) => n + chosen.length);
 
     try {
-      const results = await Promise.all(Array.from(selected).map(upload));
+      const results = await Promise.all(chosen.map(upload));
       const added = results.filter((item): item is AttachedFile => item !== null);
       if (added.length > 0) onChange([...files, ...added]);
     } finally {
-      setUploading((n) => Math.max(0, n - selected.length));
+      setUploading((n) => Math.max(0, n - chosen.length));
       // איפוס הערך מאפשר לבחור שוב את אותו קובץ אחרי הסרה. בלעדיו הדפדפן
       // אינו מדווח על שינוי, והבחירה השנייה פשוט לא קורית.
       if (fileInput.current) fileInput.current.value = "";

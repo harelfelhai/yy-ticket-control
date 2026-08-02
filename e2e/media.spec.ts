@@ -93,6 +93,16 @@ test("מנהל מצרף תמונה לתגובה, והקבלן רואה אותה 
   const preview = page.getByRole("list", { name: "צרף קובץ" });
   await expect(preview.getByRole("img", { name: "תמונה מצורפת" })).toBeVisible();
 
+  /**
+   * **חיווי ההעלאה חייב להיעלם**, ולא רק התצוגה המקדימה להופיע.
+   *
+   * הבדיקה הזו נוספה אחרי שסבב QA על הפרודקשן מצא "מעלה…" שנשאר על המסך
+   * לתמיד: ה-`finally` הפחית `selected.length` מ-`FileList` חי שאיפוס
+   * ה-`input` כבר רוקן, כלומר הפחית אפס. כל הבדיקות עברו — כי כולן בדקו
+   * שהתמונה הופיעה, ואף אחת לא בדקה שהחיווי כבה.
+   */
+  await expect(page.getByText("מעלה…")).toHaveCount(0);
+
   await page.getByLabel("תגובה").fill("ככה זה נראה");
   await page.getByRole("button", { name: "שלח", exact: true }).click();
 
