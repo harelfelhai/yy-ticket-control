@@ -6,6 +6,7 @@ import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { deleteTicketAction } from "./actions";
 import { cardClasses } from "@/components/ui/card";
+import { FormError } from "@/components/ui/message";
 
 /**
  * מחיקת פנייה — מנהל מערכת בלבד, מאחורי **אישור כפול** (אפיון §5.ז).
@@ -62,9 +63,9 @@ export function DeleteTicket({ ticketId }: { ticketId: string }) {
         </Button>
       </div>
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </div>
   );

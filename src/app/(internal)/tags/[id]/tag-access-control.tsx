@@ -14,6 +14,7 @@ import {
   grantTagAccessAction,
   revokeTagAccessAction,
 } from "../actions";
+import { Banner, FormError } from "@/components/ui/message";
 
 interface TagAccessControlProps {
   tagId: string;
@@ -166,12 +167,12 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
         ) : null}
 
         {notice ? (
-          <p className="rounded-xl bg-success/10 p-3 text-sm font-medium text-success">{notice}</p>
+          <Banner tone="success">{notice}</Banner>
         ) : null}
         {error ? (
-          <p role="alert" className="text-sm font-medium text-danger">
+          <FormError>
             {error}
-          </p>
+          </FormError>
         ) : null}
       </div>
     </section>

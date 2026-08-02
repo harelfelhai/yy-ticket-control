@@ -7,6 +7,7 @@ import { ProfessionalCreateForm } from "@/components/professional-create-form";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { unwrapOrThrow } from "@/lib/action-result";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { createProfessionalAction } from "../new/actions";
@@ -19,6 +20,7 @@ import {
   resendEmailAction,
   rotateLinkAction,
 } from "./actions";
+import { FormError, FormNotice } from "@/components/ui/message";
 
 export interface AssignmentRow {
   id: string;
@@ -145,12 +147,10 @@ export function RecipientEditor({
    * קיים מהרשימה, שם טעות-בחירה אפשרית. זורק כדי שהטופס יציג את השגיאה.
    */
   async function createAndAdd(input: { name: string; phone: string; email: string }) {
-    const created = await createProfessionalAction(siteId, input);
-    if (!created.ok) throw new Error(created.error);
-    const added = await addRecipientsAction(ticketId, [
-      { kind: "professional", id: created.data.id },
-    ]);
-    if (!added.ok) throw new Error(added.error);
+    const created = unwrapOrThrow(await createProfessionalAction(siteId, input));
+    unwrapOrThrow(
+      await addRecipientsAction(ticketId, [{ kind: "professional", id: created.id }]),
+    );
     setShowCreate(false);
   }
 
@@ -309,15 +309,15 @@ export function RecipientEditor({
       ) : null}
 
       {notice ? (
-        <p role="status" className="mt-2 text-sm font-medium text-success">
+        <FormNotice className="mt-2">
           {notice}
-        </p>
+        </FormNotice>
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-2 text-sm font-medium text-danger">
+        <FormError className="mt-2">
           {error}
-        </p>
+        </FormError>
       ) : null}
     </section>
   );

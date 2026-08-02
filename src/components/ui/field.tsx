@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
+import { FormError } from "@/components/ui/message";
 
 /**
  * פקדי הקלט של המערכת — מקור אמת אחד.
@@ -133,12 +134,8 @@ export function Field({ label, hint, error, className, children }: FieldProps) {
         {children}
       </label>
       {hint ? <p className="text-xs text-muted">{hint}</p> : null}
-      {/* צבע לבדו אינו נגיש ואינו נראה בשמש — השגיאה היא תמיד גם טקסט */}
-      {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
-          {error}
-        </p>
-      ) : null}
+      {/* דרך `FormError` ולא JSX משלו — אחרת `Field` הוא העותק העשרים ותשעה */}
+      {error ? <FormError>{error}</FormError> : null}
     </div>
   );
 }

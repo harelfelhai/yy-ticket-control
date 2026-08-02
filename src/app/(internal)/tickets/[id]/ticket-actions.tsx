@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { ActionResult } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
-import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { cardClasses } from "@/components/ui/card";
@@ -14,6 +13,8 @@ import {
   replyAction,
   setHandlerAction,
 } from "./actions";
+import { FormError, FormNotice } from "@/components/ui/message";
+import { ReplyField } from "@/components/reply-field";
 
 interface TicketActionsProps {
   ticketId: string;
@@ -64,13 +65,7 @@ export function TicketActions({
     <div className="flex flex-col gap-3">
       {canComment ? (
         <div className={cardClasses("flex flex-col gap-2")}>
-          <Field label={he.ticket.reply}>
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={3}
-            />
-          </Field>
+          <ReplyField value={text} onChange={setText} />
 
           <MediaPicker
             ticketId={ticketId}
@@ -134,15 +129,15 @@ export function TicketActions({
       </div>
 
       {notice ? (
-        <p role="status" className="text-sm font-medium text-success">
+        <FormNotice>
           {notice}
-        </p>
+        </FormNotice>
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </div>
   );

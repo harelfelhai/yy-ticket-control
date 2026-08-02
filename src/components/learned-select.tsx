@@ -6,6 +6,7 @@ import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
 import type { SelectOption } from "@/lib/options";
 import { useHydrated } from "@/lib/use-hydrated";
+import { FormError } from "@/components/ui/message";
 
 export type LearnedOption = SelectOption;
 
@@ -177,9 +178,9 @@ export function LearnedSelect({
           ) : null}
 
           {error ? (
-            <p role="alert" className="mt-2 px-1 text-sm text-danger">
+            <FormError className="mt-2 px-1">
               {error}
-            </p>
+            </FormError>
           ) : null}
         </div>
       ) : null}

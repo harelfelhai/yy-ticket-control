@@ -8,6 +8,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
+import { Banner, FormError } from "@/components/ui/message";
 
 interface ProfessionalRow {
   id: string;
@@ -94,12 +95,12 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
         </Button>
 
         {notice ? (
-          <p className="rounded-xl bg-success/10 p-3 text-sm font-medium text-success">{notice}</p>
+          <Banner tone="success">{notice}</Banner>
         ) : null}
         {error ? (
-          <p role="alert" className="text-sm font-medium text-danger">
+          <FormError>
             {error}
-          </p>
+          </FormError>
         ) : null}
       </section>
 
@@ -168,9 +169,9 @@ function ProfessionalItem({
         <Input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" inputMode="email" />
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
       <div className="flex gap-2">
         <Button onClick={save} disabled={pending} className="flex-1">

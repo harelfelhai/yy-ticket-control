@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { type LoginState, loginAction } from "./actions";
+import { FormError } from "@/components/ui/message";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -46,9 +47,9 @@ export function LoginForm({ next }: { next?: string }) {
       </Field>
 
       {state.error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {state.error}
-        </p>
+        </FormError>
       ) : null}
 
       <SubmitButton />

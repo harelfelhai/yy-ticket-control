@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
+import { FormError } from "@/components/ui/message";
 
 /**
  * טופס יצירת איש מקצוע חדש — שם, טלפון ומייל.
@@ -79,9 +80,9 @@ export function ProfessionalCreateForm({ onCreate, onCancel }: ProfessionalCreat
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
 
       <div className="flex gap-2">

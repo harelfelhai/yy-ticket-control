@@ -29,3 +29,19 @@ export async function guard<T>(run: () => Promise<T>): Promise<ActionResult<T>> 
     throw error;
   }
 }
+
+/**
+ * מוציא את הערך, או זורק את הודעת השגיאה.
+ *
+ * **הצד ההפוך של `guard`, ובצד הלקוח.** ‏`guard` הופך חריגה לערך כדי שההודעה
+ * תשרוד את הצנזור של Next; כאן היא חוזרת להיות חריגה, מפני שהקוראים —
+ * `LearnedSelect` ו-`RecipientPicker` — מצפים לחריגה כדי להציג את ההודעה
+ * בתוך הבורר עצמו.
+ *
+ * הפונקציה הזו הייתה משוכפלת בשישה קבצים כ-`unwrap` מקומית. השכפול לא היה
+ * מזיק בפני עצמו, אבל הוא בדיוק הצורה שבה ערכים נפרדים בשקט (ראו פער 1).
+ */
+export function unwrapOrThrow<T>(result: ActionResult<T>): T {
+  if (!result.ok) throw new Error(result.error);
+  return result.data;
+}

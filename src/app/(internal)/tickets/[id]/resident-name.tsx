@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { updateResidentNameAction } from "./actions";
+import { FormError } from "@/components/ui/message";
 
 /**
  * שם הדייר בכותרת הפנייה (אפיון §3.2 שדה 11).
@@ -90,9 +91,7 @@ export function ResidentName({ ticketId, initial, canEdit }: ResidentNameProps) 
         {he.common.cancel}
       </Button>
       {error ? (
-        <span role="alert" className="text-danger">
-          {error}
-        </span>
+        <FormError>{error}</FormError>
       ) : null}
     </span>
   );

@@ -6,6 +6,7 @@ import { Field, Input } from "@/components/ui/field";
 import type { ActionResult } from "@/lib/action-result";
 import { useHydrated } from "@/lib/use-hydrated";
 import { cardClasses } from "@/components/ui/card";
+import { FormError } from "@/components/ui/message";
 
 interface AdminAddFormProps {
   label: string;
@@ -54,9 +55,9 @@ export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminA
         {buttonLabel}
       </Button>
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </div>
   );

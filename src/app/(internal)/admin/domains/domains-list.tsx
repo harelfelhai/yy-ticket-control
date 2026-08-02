@@ -7,6 +7,7 @@ import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
 import { renameDomainAction } from "../actions";
 import { cardClasses } from "@/components/ui/card";
+import { FormError } from "@/components/ui/message";
 
 interface DomainRow {
   id: string;
@@ -65,9 +66,9 @@ function DomainItem({ domain }: { domain: DomainRow }) {
         </Button>
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
     </li>
   );

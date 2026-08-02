@@ -18,8 +18,7 @@ import {
   saveDraft,
 } from "@/lib/offline-draft";
 import { useHydrated } from "@/lib/use-hydrated";
-import type { ActionResult } from "@/lib/action-result";
-import type { SelectOption } from "@/lib/options";
+import { unwrapOrThrow } from "@/lib/action-result";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { chipClasses } from "@/components/ui/chip";
 import {
@@ -30,6 +29,7 @@ import {
   createTagAction,
   createTicketAction,
 } from "./actions";
+import { Banner, FormError } from "@/components/ui/message";
 
 /**
  * הופך תוצאת פעולה לערך או לחריגה.
@@ -38,10 +38,6 @@ import {
  * בפרודקשן), בעוד שהבוררים מצפים לחריגה כדי להציג את ההודעה במקום.
  * ההמרה מרוכזת כאן ולא משוכפלת בכל קריאה.
  */
-function unwrap(result: ActionResult<SelectOption>): SelectOption {
-  if (!result.ok) throw new Error(result.error);
-  return result.data;
-}
 
 export interface BuildingWithApartments extends LearnedOption {
   apartments: LearnedOption[];
@@ -307,7 +303,7 @@ export function CreateTicketForm({
           setApartmentId(null);
         }}
         onCreate={async (name) => {
-          const created = unwrap(await createBuildingAction(siteId, name));
+          const created = unwrapOrThrow(await createBuildingAction(siteId, name));
           setBuildings((prev) => [...prev, { ...created, apartments: [] }]);
           return created;
         }}
@@ -323,7 +319,7 @@ export function CreateTicketForm({
         onCreate={
           selectedBuilding
             ? async (number) => {
-                const created = unwrap(
+                const created = unwrapOrThrow(
                   await createApartmentAction(siteId, selectedBuilding.id, number),
                 );
                 setBuildings((prev) =>
@@ -345,7 +341,7 @@ export function CreateTicketForm({
         value={domainId}
         onChange={setDomainId}
         onCreate={async (name) => {
-          const created = unwrap(await createDomainAction(siteId, name));
+          const created = unwrapOrThrow(await createDomainAction(siteId, name));
           setDomains((prev) => [...prev, created]);
           return created;
         }}
@@ -373,7 +369,7 @@ export function CreateTicketForm({
           value={recipients}
           onChange={setRecipients}
           onCreateProfessional={async (input) => {
-            const created = unwrap(await createProfessionalAction(siteId, input));
+            const created = unwrapOrThrow(await createProfessionalAction(siteId, input));
             const option: RecipientOption = { ...created, kind: "professional" };
             setAvailableRecipients((prev) => [...prev, option]);
             return option;
@@ -416,7 +412,7 @@ export function CreateTicketForm({
             if (option) setTags((prev) => (prev.some((t) => t.id === id) ? prev : [...prev, option]));
           }}
           onCreate={async (name) => {
-            const created = unwrap(await createTagAction(name));
+            const created = unwrapOrThrow(await createTagAction(name));
             setAvailableTags((prev) => [...prev, created]);
             setTags((prev) => (prev.some((t) => t.id === created.id) ? prev : [...prev, created]));
             return created;
@@ -425,21 +421,18 @@ export function CreateTicketForm({
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <FormError>
           {error}
-        </p>
+        </FormError>
       ) : null}
 
       {/* הבאנר אינו קישוט: הוא ההבטחה שמה שהוקלד לא אבד. בלעדיו המנהל
           רואה מסך שלא הגיב, מניח שהפנייה נשלחה או שנעלמה, ומקליד הכול שוב. */}
       {restored ? (
-        <p
-          role="status"
-          className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm font-medium text-warning"
-        >
+        <Banner tone="warning">
           {restored === "pending" ? he.notices.savedLocally : he.ticket.draftRestored}
           {restored === "pending" && pending ? ` · ${he.ticket.pendingRetry}` : ""}
-        </p>
+        </Banner>
       ) : null}
 
       <div className="sticky bottom-0 flex gap-2 border-t border-border bg-bg py-3">
