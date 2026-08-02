@@ -29,6 +29,7 @@
     "load-test": "tsx scripts/load-test.ts",
     "db:studio": "prisma studio",
     "smoke:notify": "tsx scripts/smoke-notify.mts",
+    "smoke:prod": "tsx scripts/smoke-prod.mts",
     "gen:icons": "node scripts/gen-icons.mjs",
     "postinstall": "prisma generate"
   },
