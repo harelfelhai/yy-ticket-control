@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import type { Role } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { createUserAction, setUserActiveAction } from "../actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
@@ -41,40 +41,31 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
   const [role, setRole] = useState<Role>("SITE_MANAGER");
   const [siteId, setSiteId] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   function add() {
-    setError(null);
-    startTransition(async () => {
-      const result = await createUserAction({
-        name,
-        phone,
-        email: email || undefined,
-        role,
-        siteId: role === "SITE_MANAGER" ? siteId || null : null,
-        password,
-      });
-      if (result.ok) {
+    run(
+      () =>
+        createUserAction({
+          name,
+          phone,
+          email: email || undefined,
+          role,
+          siteId: role === "SITE_MANAGER" ? siteId || null : null,
+          password,
+        }),
+      () => {
         setName("");
         setPhone("");
         setEmail("");
         setPassword("");
         setSiteId("");
-      } else {
-        setError(result.error);
-      }
-    });
+      },
+    );
   }
 
   function toggleActive(id: string, active: boolean) {
-    setError(null);
-    startTransition(async () => {
-      const result = await setUserActiveAction(id, active);
-      if (!result.ok) setError(result.error);
-    });
+    run(() => setUserActiveAction(id, active));
   }
 
   return (

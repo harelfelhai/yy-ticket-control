@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { renameDomainAction } from "../actions";
 import { cardClasses } from "@/components/ui/card";
 import { FormError } from "@/components/ui/message";
@@ -32,18 +32,12 @@ export function DomainsList({ domains }: { domains: DomainRow[] }) {
 
 function DomainItem({ domain }: { domain: DomainRow }) {
   const [name, setName] = useState(domain.name);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
+  const { busy, error, run } = useAction();
 
   const dirty = name.trim() !== domain.name && name.trim().length > 0;
 
   function save() {
-    setError(null);
-    startTransition(async () => {
-      const result = await renameDomainAction(domain.id, name);
-      if (!result.ok) setError(result.error);
-    });
+    run(() => renameDomainAction(domain.id, name));
   }
 
   return (
@@ -60,7 +54,7 @@ function DomainItem({ domain }: { domain: DomainRow }) {
           variant="secondary"
           size="compact"
           onClick={save}
-          disabled={pending || !hydrated || !dirty}
+          disabled={busy || !dirty}
         >
           {he.admin.renameDomain}
         </Button>

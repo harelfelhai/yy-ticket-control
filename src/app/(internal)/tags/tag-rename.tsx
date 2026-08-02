@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { renameTagAction } from "./actions";
 import { FormError } from "@/components/ui/message";
 
@@ -17,18 +17,14 @@ import { FormError } from "@/components/ui/message";
 export function TagRename({ id, name }: { id: string; name: string }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
+  const { busy, error, run } = useAction();
   const dirty = value.trim() !== name && value.trim().length > 0;
 
   function save() {
-    setError(null);
-    startTransition(async () => {
-      const result = await renameTagAction(id, value);
-      if (result.ok) setEditing(false);
-      else setError(result.error);
-    });
+    run(
+      () => renameTagAction(id, value),
+      () => setEditing(false),
+    );
   }
 
   if (!editing) {
@@ -53,7 +49,7 @@ export function TagRename({ id, name }: { id: string; name: string }) {
           size="compact"
           className="flex-1"
         />
-        <Button size="compact" onClick={save} disabled={pending || !hydrated || !dirty}>
+        <Button size="compact" onClick={save} disabled={busy || !dirty}>
           {he.common.save}
         </Button>
         <Button

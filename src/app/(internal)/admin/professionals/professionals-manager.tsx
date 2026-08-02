@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
@@ -27,10 +27,7 @@ interface ProfessionalRow {
  */
 export function ProfessionalsManager({ professionals }: { professionals: ProfessionalRow[] }) {
   const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, run } = useAction();
 
   const [keepId, setKeepId] = useState("");
   const [dropId, setDropId] = useState("");
@@ -39,22 +36,19 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
 
   function merge() {
     setNotice(null);
-    setError(null);
     const keep = byId(keepId);
     const drop = byId(dropId);
     if (!keep || !drop) return;
     if (!window.confirm(he.admin.mergeConfirm(drop.name, keep.name))) return;
 
-    startTransition(async () => {
-      const result = await mergeProfessionalsAction(keepId, dropId);
-      if (result.ok) {
-        setNotice(he.admin.merged(result.data));
+    run(
+      () => mergeProfessionalsAction(keepId, dropId),
+      (moved) => {
+        setNotice(he.admin.merged(moved));
         setKeepId("");
         setDropId("");
-      } else {
-        setError(result.error);
-      }
-    });
+      },
+    );
   }
 
   return (
@@ -124,16 +118,13 @@ function ProfessionalItem({
   const [name, setName] = useState(professional.name);
   const [phone, setPhone] = useState(professional.phone ?? "");
   const [email, setEmail] = useState(professional.email ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const { busy, error, run } = useAction();
 
   function save() {
-    setError(null);
-    startTransition(async () => {
-      const result = await updateProfessionalAction(professional.id, { name, phone, email });
-      if (result.ok) setEditing(false);
-      else setError(result.error);
-    });
+    run(
+      () => updateProfessionalAction(professional.id, { name, phone, email }),
+      () => setEditing(false),
+    );
   }
 
   if (!editing) {
@@ -174,7 +165,7 @@ function ProfessionalItem({
         </FormError>
       ) : null}
       <div className="flex gap-2">
-        <Button onClick={save} disabled={pending} className="flex-1">
+        <Button onClick={save} disabled={busy} className="flex-1">
           {he.admin.saveProfessional}
         </Button>
         <Button variant="secondary" size="compact" onClick={() => setEditing(false)}>

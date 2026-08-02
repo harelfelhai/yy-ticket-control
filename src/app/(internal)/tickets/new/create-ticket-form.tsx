@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
@@ -17,7 +17,7 @@ import {
   loadDraft,
   saveDraft,
 } from "@/lib/offline-draft";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { unwrapOrThrow } from "@/lib/action-result";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { chipClasses } from "@/components/ui/chip";
@@ -82,7 +82,6 @@ export function CreateTicketForm({
   const [recipients, setRecipients] = useState<RecipientOption[]>([]);
   const [tags, setTags] = useState<LearnedOption[]>([]);
   const [files, setFiles] = useState<AttachedFile[]>([]);
-  const [error, setError] = useState<string | null>(null);
   /** האם המסך עדיין קורא טיוטה שמורה — עד אז אין לכתוב עליה */
   const [restoring, setRestoring] = useState(true);
   const [restored, setRestored] = useState<"restored" | "pending" | null>(null);
@@ -97,11 +96,15 @@ export function CreateTicketForm({
   const submittedRef = useRef(false);
   /** הכתיבה האחרונה לבסיס המקומי — ממתינים לה לפני שמנקים */
   const lastSaveRef = useRef<Promise<void>>(Promise.resolve());
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  // מושבת עד ל-hydration: לחיצה על "שלח" לפני שהמטפלים חוברו נבלעת בשקט,
-  // והמנהל בשטח מניח שהפנייה נשלחה.
-  const busy = pending || !hydrated;
+  /**
+   * ‏`start` ולא `run`: השיגור כאן עטוף ב-try/catch על **כשל רשת** — מקרה
+   * שאינו `ActionResult` כלל, כי הבקשה לא הגיעה לשרת ו-`guard` לא רץ. הוא
+   * נופל חזרה לטיוטה מקומית, מסמן אותה כממתינה, ומנסה שוב באירוע `online`.
+   *
+   * ‏`busy` מגיע מה-hook ומכיל את תנאי ה-hydration: לחיצה על "שלח" לפני
+   * שהמטפלים חוברו נבלעת בשקט, והמנהל בשטח מניח שהפנייה נשלחה.
+   */
+  const { busy, pending, error, setError, start } = useAction();
 
   const selectedBuilding = buildings.find((b) => b.id === buildingId) ?? null;
 
@@ -214,7 +217,7 @@ export function CreateTicketForm({
           saveAsDraft,
         });
 
-        if (result?.error) {
+        if (result && !result.ok) {
           // שגיאה עסקית — משהו שרק המשתמש יכול לתקן. ניסיון חוזר עליה הוא
           // לולאה אינסופית שקטה, ולכן הטיוטה נשארת אך אינה מסומנת כממתינה.
           // השמירה השוטפת חוזרת לפעול: הוא עומד לתקן ולנסות שוב.
@@ -256,11 +259,14 @@ export function CreateTicketForm({
       tags,
       files,
       snapshot,
+      // יציבים לכל אורך חיי הרכיב (setter של useState, ו-startTransition),
+      // ולכן אינם משנים את זהות `submit` — נרשמים כדי שהכלל יישאר נאכף.
+      setError,
     ],
   );
 
-  function run(saveAsDraft: boolean) {
-    startTransition(() => submit(saveAsDraft));
+  function send(saveAsDraft: boolean) {
+    start(() => submit(saveAsDraft));
   }
 
   /**
@@ -272,10 +278,10 @@ export function CreateTicketForm({
   useEffect(() => {
     if (restored !== "pending") return;
 
-    const retry = () => startTransition(() => submit(false));
+    const retry = () => start(() => submit(false));
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
-  }, [restored, submit]);
+  }, [restored, submit, start]);
 
   return (
     // pb-28: רצועת הפעולות דביקה בתחתית (sticky), והריפוד נותן לתוכן — למשל
@@ -436,10 +442,10 @@ export function CreateTicketForm({
       ) : null}
 
       <div className="sticky bottom-0 flex gap-2 border-t border-border bg-bg py-3">
-        <Button onClick={() => run(false)} disabled={busy} className="flex-1">
+        <Button onClick={() => send(false)} disabled={busy} className="flex-1">
           {he.ticket.submit}
         </Button>
-        <Button variant="secondary" onClick={() => run(true)} disabled={busy}>
+        <Button variant="secondary" onClick={() => send(true)} disabled={busy}>
           {he.ticket.saveDraft}
         </Button>
       </div>

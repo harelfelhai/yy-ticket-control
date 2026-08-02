@@ -145,6 +145,90 @@ describe("שדה התגובה", () => {
   });
 });
 
+/**
+ * שני מסכים מריצים כמה פעולות ברצף בתוך מעבר אחד, עם יציאה מוקדמת ביניהן
+ * ועם דגל שמירה מקומית שיש להחזיר לאחור בכשל. הם עוברים דרך ה-hook — ולכן
+ * `busy` ו-`error` נשארים במקום אחד — אבל לא דרך `run`.
+ *
+ * הרשימה מכוונת להיות **קשה להארכה**: להוסיף אליה פירושו לטעון שהזרימה אינה
+ * פעולה בודדת, ולא שנוח לכתוב אותה ביד.
+ */
+const START_ALLOWED: Record<string, string> = {
+  "app/(internal)/tickets/new/create-ticket-form.tsx":
+    "שיגור עם נפילה חזרה לטיוטה מקומית: try/catch על כשל רשת, וניסיון חוזר באירוע online",
+  "app/(internal)/tickets/[id]/draft-completion.tsx":
+    "שיגור דו-שלבי — שמירת שדות ואז שיגור — עם החזרת דגל השמירה לאחור בכשל",
+};
+
+describe("hook הפעולה", () => {
+  /**
+   * ‏`useTransition` הוא העוגן, ולא `busy` או `error`: הוא היבוא שאי אפשר
+   * לכתוב את התבנית בלעדיו, והוא יושב תמיד בשורת ה-`import` ובשורת השימוש.
+   *
+   * מה שהוא מונע כבר קרה: `tag-access-control` ויתר על בדיקת ה-hydration
+   * לגמרי, ושני קבצים נעלו את הממשק על `pending` בלבד — כלומר שלוש גרסאות
+   * שונות של "מתי הכפתור מושבת" בתוך אותה מערכת.
+   */
+  it("אין `useTransition` מחוץ ל-`lib/use-action.ts`", () => {
+    const offenders = scan(/\buseTransition\b/, ["lib/use-action.ts"]);
+
+    expect(
+      offenders,
+      `הפעלת Server Action עוברת דרך useAction מ-@/lib/use-action:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * ‏"מתי הממשק נעול" מוגדר במקום אחד — והגבול עובר בין **מסך** לבין
+   * **פרימיטיב קלט משותף**.
+   *
+   * מסך מחזיק את הפעולה, ולכן `busy` שלו מגיע מ-`useAction`. פרימיטיב קלט
+   * אינו קורא ל-Server Action כלל: הוא מקבל `disabled` מההורה או הבטחה
+   * מוזרקת שזורקת בכשל, ומה שנשאר לו הוא תנאי ה-hydration לבדו.
+   *
+   * הבדיקה סורקת את `!hydrated` ולא את `pending || !hydrated`, וזה ההבדל
+   * שגילה את הווריאנט הרביעי: `professional-create-form` בנה `saving ||
+   * !hydrated` על `useState` ידני, ולכן חמק גם מהסריקה על `useTransition`
+   * וגם מהניסוח הצר.
+   */
+  const HYDRATION_EXEMPT: Record<string, string> = {
+    "lib/use-action.ts": "המקור — כאן `busy` מוגדר, וממנו הוא מגיע לכל מסך",
+    "components/recipient-picker.tsx": "פרימיטיב קלט; ההוספה מקומית וה-action יושב אצל ההורה",
+    "components/learned-select.tsx": "פרימיטיב קלט; `onCreate` מוזרק מההורה וזורק בכשל",
+    "components/media-picker.tsx": "העלאה ל-R2 ולא Server Action — `busy` שלו הוא `disabled` של ההורה",
+    "components/professional-create-form.tsx":
+      "טופס מוצג בלבד: `onCreate` מוזרק מההורה וזורק, ולכן אין כאן `ActionResult` לפרוק",
+  };
+
+  it("‏`!hydrated` מחוץ ל-`useAction` שמור לפרימיטיבים משותפים", () => {
+    const offenders = scan(/!hydrated/, Object.keys(HYDRATION_EXEMPT));
+
+    expect(
+      offenders,
+      `"מתי הממשק נעול" הוא busy מ-useAction; מסך אינו מרכיב אותו ביד:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("רשימת הפרימיטיבים קצרה, וכל אחד מנומק", () => {
+    expect(Object.keys(HYDRATION_EXEMPT).length).toBeLessThanOrEqual(6);
+    for (const reason of Object.values(HYDRATION_EXEMPT)) expect(reason.length).toBeGreaterThan(20);
+  });
+
+  it("פתח המילוט `start` שמור לזרימות רב-שלביות מוצהרות", () => {
+    const offenders = scan(/\bstart\b[^;]*=\s*useAction\(/, Object.keys(START_ALLOWED));
+
+    expect(
+      offenders,
+      `פעולה בודדת מופעלת ב-run ולא ב-start; זרימה רב-שלבית דורשת חריג מנומק:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("רשימת פתח המילוט קצרה, וכל חריג מנומק", () => {
+    expect(Object.keys(START_ALLOWED).length).toBeLessThanOrEqual(3);
+    for (const reason of Object.values(START_ALLOWED)) expect(reason.length).toBeGreaterThan(20);
+  });
+});
+
 describe("פרימיטיב שדה התאריך", () => {
   /**
    * ‏`<input type="date">` הוא **חריג מכוון** — אייקון הלוח של הדפדפן אינו

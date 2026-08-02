@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import { deleteTicketAction } from "./actions";
 import { cardClasses } from "@/components/ui/card";
 import { FormError } from "@/components/ui/message";
@@ -17,17 +17,12 @@ import { FormError } from "@/components/ui/message";
  */
 export function DeleteTicket({ ticketId }: { ticketId: string }) {
   const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
+  const { busy, error, run } = useAction();
 
   function remove() {
-    setError(null);
-    startTransition(async () => {
-      // בהצלחה ה-action מבצע redirect ואינו חוזר; רק כשל מחזיר ערך.
-      const result = await deleteTicketAction(ticketId);
-      if (result?.error) setError(result.error);
-    });
+    // בהצלחה ה-action מבצע redirect ואינו חוזר; `run` מפרש תשובה חסרה
+    // כהצלחה, ורק כשל מחזיר ערך.
+    run(() => deleteTicketAction(ticketId));
   }
 
   if (!confirming) {
@@ -54,11 +49,11 @@ export function DeleteTicket({ ticketId }: { ticketId: string }) {
           variant="danger"
           size="compact"
           onClick={remove}
-          disabled={pending || !hydrated}
+          disabled={busy}
         >
           {he.ticket.confirmDeleteButton}
         </Button>
-        <Button variant="secondary" size="compact" onClick={() => setConfirming(false)} disabled={pending}>
+        <Button variant="secondary" size="compact" onClick={() => setConfirming(false)} disabled={busy}>
           {he.common.cancel}
         </Button>
       </div>

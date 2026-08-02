@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import { unwrapOrThrow } from "@/lib/action-result";
@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import {
   createApartmentAction,
   createBuildingAction,
@@ -100,7 +100,6 @@ export function DraftCompletion({
   const [description, setDescription] = useState("");
   const [recipients, setRecipients] = useState<RecipientOption[]>(initial.recipients);
 
-  const [error, setError] = useState<string | null>(null);
   /** האם עדיין קוראים snapshot שמור מ-IndexedDB — עד אז אין לכתוב עליו */
   const [restoring, setRestoring] = useState(true);
   /**
@@ -109,9 +108,14 @@ export function DraftCompletion({
    * לטיימר ממתין לירות **אחרי** הניקוי ולכתוב את ה-snapshot בחזרה.
    */
   const submittedRef = useRef(false);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  /**
+   * ‏`start` ולא `run`: השיגור כאן הוא **שני שלבים ברצף בתוך מעבר אחד** —
+   * שמירת השדות שמולאו ואז השיגור עצמו — עם יציאה מוקדמת ביניהם ועם החזרת
+   * `submittedRef` לאחור בכשל, כדי שהשמירה השוטפת תחזור לפעול. זו אינה
+   * פעולה בודדת עם `onSuccess`, וכפייתה לתוך `run` הייתה מחזירה בדיוק את
+   * שפת התצורה שנדחתה בפער 27.
+   */
+  const { busy, error, setError, start } = useAction();
 
   /** צילום המצב הנוכחי, בצורה שנשמרת בדפדפן */
   const snapshot = useCallback(
@@ -187,7 +191,7 @@ export function DraftCompletion({
     // עוצר את השמירה השוטפת מרגע הלחיצה: מכאן והלאה הטיימר לא יכתוב snapshot
     // ישן בחזרה אחרי שהטיוטה כבר שוגרה.
     submittedRef.current = true;
-    startTransition(async () => {
+    start(async () => {
       // שלב 1: שמירת השדות שמולאו. רק שדות שהמסך הציג ושבאמת נבחרו.
       const fields: {
         buildingId?: string;
@@ -232,10 +236,10 @@ export function DraftCompletion({
     submittedRef.current = true;
     // הטיוטה נמחקת — נקה גם את ה-snapshot המקומי כדי שלא יישאר יתום.
     void clearCompletion(ticketId);
-    startTransition(async () => {
+    start(async () => {
       // מצליח → deleteDraftAction מנווט ללוח; חוזר רק במקרה שגיאה.
       const result = await deleteDraftAction(ticketId);
-      if (result?.error) {
+      if (result && !result.ok) {
         submittedRef.current = false;
         setError(result.error);
       }

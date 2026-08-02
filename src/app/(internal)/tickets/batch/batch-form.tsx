@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
@@ -10,7 +10,7 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { ROOMS } from "@/lib/rooms";
-import { useHydrated } from "@/lib/use-hydrated";
+import { useAction } from "@/lib/use-action";
 import type { BatchResult } from "@/lib/services/batch";
 import {
   createApartmentAction,
@@ -71,10 +71,7 @@ export function BatchForm({
   const [rows, setRows] = useState<RowState[]>(() => [emptyRow(0), emptyRow(1), emptyRow(2)]);
 
   const [summary, setSummary] = useState<BatchResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
-  const busy = pending || !hydrated;
+  const { busy, error, setError, run } = useAction();
 
   const selectedBuilding = buildings.find((b) => b.id === buildingId) ?? null;
 
@@ -104,26 +101,24 @@ export function BatchForm({
   }
 
   function submit(dispatch: boolean) {
-    setError(null);
-    startTransition(async () => {
-      const result = await createBatchAction({
-        siteId,
-        buildingId: buildingId ?? "",
-        apartmentId: apartmentId ?? "",
-        tagName,
-        sourceMediaIds: files.map((f) => f.mediaId),
-        rows: rows.map((r) => ({
-          description: r.description,
-          domainId: r.domainId,
-          room: (r.room as Room | null) ?? null,
-          recipient: r.recipient ? { kind: r.recipient.kind, id: r.recipient.id } : null,
-        })),
-        dispatch,
-      });
-
-      if (result.ok) setSummary(result.data);
-      else setError(result.error);
-    });
+    run(
+      () =>
+        createBatchAction({
+          siteId,
+          buildingId: buildingId ?? "",
+          apartmentId: apartmentId ?? "",
+          tagName,
+          sourceMediaIds: files.map((f) => f.mediaId),
+          rows: rows.map((r) => ({
+            description: r.description,
+            domainId: r.domainId,
+            room: (r.room as Room | null) ?? null,
+            recipient: r.recipient ? { kind: r.recipient.kind, id: r.recipient.id } : null,
+          })),
+          dispatch,
+        }),
+      setSummary,
+    );
   }
 
   if (summary) {
