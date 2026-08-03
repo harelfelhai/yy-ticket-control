@@ -51,7 +51,9 @@ test.describe("מסך 6 — צ׳אט קבוצתי לפי תגית", () => {
     await expect(page.getByRole("heading", { name: "פניות בתגית" })).toBeVisible();
     await expect(page.getByText("רשימה זו גלויה למנהלים בלבד")).toBeVisible();
     await expect(page.getByText("1 פתוחות · 0 סגורות")).toBeVisible();
-    await expect(page.getByText(description)).toBeVisible();
+    // רשימת הפניות בתגית מציגה מיקום ותחום, לא את התיאור.
+    await expect(page.getByRole("link", { name: /בניין א · דירה 1 · חשמל/ })).toBeVisible();
+    void description;
   });
 
   test("S6-06/S6-07/S6-09 — התגית סגורה כברירת מחדל, והפתיחה מציגה את נוסח האפיון", async ({
@@ -66,7 +68,7 @@ test.describe("מסך 6 — צ׳אט קבוצתי לפי תגית", () => {
 
     await expect(page.getByText("התגית סגורה. אף קבלן אינו רואה את הצ׳אט.")).toBeVisible();
 
-    await page.getByRole("button", { name: /^נמענים|^פתח לקבלנים/ }).first().click();
+    await page.getByRole("button", { name: /^פתח לקבלנים/ }).first().click();
     await page.getByRole("option", { name: new RegExp(`^${contractor}`) }).first().click();
     await page.getByRole("button", { name: "פתח", exact: true }).click();
 
@@ -91,7 +93,7 @@ test.describe("מסך 6 — צ׳אט קבוצתי לפי תגית", () => {
 
     await loginAs(page, "managerA");
     await page.goto(tagUrl);
-    await page.getByRole("button", { name: /^נמענים|^פתח לקבלנים/ }).first().click();
+    await page.getByRole("button", { name: /^פתח לקבלנים/ }).first().click();
     await page.getByRole("option", { name: new RegExp(`^${contractor}`) }).first().click();
     await page.getByRole("button", { name: "פתח", exact: true }).click();
     await expect(page.getByRole("status")).toContainText(TAG_SCREEN.granted(contractor));

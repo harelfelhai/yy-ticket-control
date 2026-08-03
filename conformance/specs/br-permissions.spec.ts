@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { CAST, PROS, SITE_A, SITE_B } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
 import { TICKET_SCREEN } from "../fixtures/spec-text";
-import { createTicket, uniq } from "../fixtures/world";
+import { acceptDialogs, createTicket, uniq } from "../fixtures/world";
 
 /**
  * §5.ז — מטריצת ההרשאות, חיובי ושלילי.
@@ -28,6 +28,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
   test("A3-01/A3-09 — מנהל אתר ב׳ אינו מגיע לפנייה של אתר א׳ גם בכתובת ישירה", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("פנייה של אתר א");
     const path = await createTicket(page, {
@@ -45,6 +46,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
   });
 
   test("A3-02 — מנהל רואה כל פניות האתר שלו, לא רק את שלו", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA2");
     const description = uniq("נפתחה בידי א2");
     await createTicket(page, {
@@ -63,6 +65,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
   test("A3-04/A3-08 — מנהל אינו סוגר פנייה שפתח מנהל אחר, וכן סוגר את שלו", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const path = await createTicket(page, {
       building: "בניין א",
@@ -85,6 +88,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
   });
 
   test("A3-10 — חמשת מסכי הניהול חסומים למנהל עבודה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     for (const url of ADMIN_PAGES) {
       await page.goto(url);
@@ -93,6 +97,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
   });
 
   test("S10-01 — מנהל עבודה מופנה מתצוגת הבעלים ללוח", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/overview");
     await expect(page).toHaveURL(/\/board/);
@@ -101,6 +106,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
 
 test.describe("§5.ז — בעלים", () => {
   test("A2-04 — בעלים פותח פנייה בכל אתר", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "owner");
     const description = uniq("בעלים באתר ב");
     await createTicket(page, {
@@ -115,6 +121,7 @@ test.describe("§5.ז — בעלים", () => {
   });
 
   test("A2-07 — בעלים אינו סוגר פנייה שלא פתח, וכן סוגר את שלו", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const foreignPath = await createTicket(page, {
       building: "בניין א",
@@ -142,6 +149,7 @@ test.describe("§5.ז — בעלים", () => {
   });
 
   test("A2-01 — בעלים קורא בכל האתרים", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerB");
     const description = uniq("אתר ב לבעלים");
     const path = await createTicket(page, {
@@ -158,6 +166,7 @@ test.describe("§5.ז — בעלים", () => {
   });
 
   test("A2-05 — בעלים אינו עורך נמענים בפנייה שלא פתח", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const path = await createTicket(page, {
       building: "בניין ב",
@@ -173,6 +182,7 @@ test.describe("§5.ז — בעלים", () => {
   });
 
   test("A2-08 — חמשת מסכי הניהול חסומים לבעלים", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "owner");
     for (const url of ADMIN_PAGES) {
       await page.goto(url);
@@ -183,6 +193,7 @@ test.describe("§5.ז — בעלים", () => {
 
 test.describe("§5.ז — מנהל מערכת", () => {
   test("A1-05 — אדמין סוגר ופותח מחדש פנייה שפתח אחר", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const path = await createTicket(page, {
       building: "בניין א",
@@ -194,13 +205,13 @@ test.describe("§5.ז — מנהל מערכת", () => {
 
     await loginAs(page, "admin");
     await page.goto(path);
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
     await expect(page.getByRole("button", { name: TICKET_SCREEN.reopen })).toBeVisible();
   });
 
   test("A1-01 — אדמין ניגש לפניות בשני האתרים", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerB");
     const description = uniq("אתר ב לאדמין");
     const path = await createTicket(page, {
@@ -221,6 +232,7 @@ test.describe("§5.ז — נמען פנימי", () => {
   test("A4-01/A4-04 — נמען פנימי באותו אתר מקבל את הפנייה בלוח הרגיל שלו", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("שיוך פנימי");
     await createTicket(page, {
@@ -237,6 +249,7 @@ test.describe("§5.ז — נמען פנימי", () => {
   });
 
   test("A4-03 — נמען פנימי מאתר אחר אינו ניתן לשיוך כלל", async ({ page }) => {
+    acceptDialogs(page);
     /**
      * §5.ז קובע על נמען לטיפול: "אך ורק פניות ששויכו אליו, **מכל האתרים**",
      * ו-§2.2 שלב 3 קובע ש"נמען פנימי רואה את הפנייה בלוח הרגיל שלו".
@@ -263,6 +276,7 @@ test.describe("§5.ז — נמען פנימי", () => {
 
 test.describe("§4 מסך 9 — היקף ההרשאה מסנן את החיפוש", () => {
   test("S9-01 — מנהל אתר ב׳ אינו מוצא בחיפוש פנייה של אתר א׳", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const needle = uniq("מחט");
     await createTicket(page, {

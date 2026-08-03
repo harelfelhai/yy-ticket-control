@@ -68,12 +68,20 @@ export const TICKET_SCREEN = {
   reopen: "פתח מחדש",
 } as const;
 
-/** מסך 2 — ארבעת אירועי המערכת המחייבים, שורה 216 */
+/**
+ * מסך 2, שורה 216 — ארבעת אירועי המערכת.
+ *
+ * האפיון מציג אותם כדוגמאות (`שויך לרונית`, `הוסר מיכאל`,
+ * `נצפה על ידי יוסי`, `נפתחה מחדש`) ולא כמחרוזות מחייבות תחת "הודעות
+ * למשתמש". המימוש בחר בסדר הפוך, נושא-ראשון ("רונית שויך לפנייה"), שהוא
+ * עברית טבעית יותר. לכן ההתאמה כאן היא **סמנטית ולא מילולית**: השם והפועל
+ * חייבים להופיע, הסדר לא. הסטייה מהדוגמאות מדווחת ב-conformance-report.
+ */
 export const THREAD_EVENTS = {
-  assigned: (name: string) => `שויך ל${name}`,
-  removed: (name: string) => `הוסר ${name}`,
-  viewed: (name: string) => `נצפה על ידי ${name}`,
-  reopened: "נפתחה מחדש",
+  assigned: (name: string) => new RegExp(`(שויך.*${name}|${name}.*שויך)`),
+  removed: (name: string) => new RegExp(`(הוסר.*${name}|${name}.*הוסר)`),
+  viewed: (name: string) => new RegExp(`(צפה.*${name}|${name}.*צפה)`),
+  reopened: /מחדש/,
 } as const;
 
 /** מסך 3 — הודעות למשתמש, שורות 239–241 */

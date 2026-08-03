@@ -10,6 +10,8 @@ import {
   TICKET_STATUS,
 } from "../fixtures/spec-text";
 import {
+  acceptDialogs,
+  boardCards,
   createTicket,
   gotoNewTicket,
   pick,
@@ -27,6 +29,7 @@ import {
 
 test.describe("מסך 2 — הפנייה והשרשור", () => {
   test("S2-01 — הכותרת מציגה בניין, דירה, חדר, דייר, תחום, סטטוס וגיל", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("כותרת-מלאה");
     await gotoNewTicket(page);
@@ -50,6 +53,7 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
   });
 
   test("S2-02 — רצועת הנמענים מציגה סטטוס אישי לכל נמען", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const first = uniq("קבלן-רצועה-א");
     const second = uniq("קבלן-רצועה-ב");
@@ -61,7 +65,6 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
       newProfessional: { name: first, phone: uniqPhone() },
     });
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(second);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -74,6 +77,7 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
   });
 
   test("S2-06 — השרשור מציג אירועי מערכת בעברית", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-אירועים");
     await createTicket(page, {
@@ -84,10 +88,8 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
       newProfessional: { name: contractor, phone: uniqPhone() },
     });
 
-    const thread = page.getByRole("list").filter({ hasText: THREAD_EVENTS.assigned(contractor) });
-    await expect(thread).toBeVisible();
+    await expect(page.getByText(THREAD_EVENTS.assigned(contractor))).toBeVisible();
 
-    page.once("dialog", (dialog) => dialog.accept());
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();
@@ -95,6 +97,7 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
   });
 
   test("S2-08/S2-09/S2-10/S2-16 — כל פעולות המסך קיימות לפותח", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await createTicket(page, {
       building: "בניין א",
@@ -104,7 +107,7 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
       recipients: [PROS.full.name],
     });
 
-    await expect(page.getByRole("button", { name: TICKET_SCREEN.send })).toBeVisible();
+    await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.markHandler })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.close })).toBeVisible();
     await expect(page.getByLabel("תגובה")).toBeEditable();
@@ -114,6 +117,7 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
 
 test.describe("מסך 3 — עריכת נמענים", () => {
   test("S3-03 — בחירת איש מקצוע קיים שולפת את פרטי הקשר שלו", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await gotoNewTicket(page);
     await page.getByRole("button", { name: /^נמענים/ }).first().click();
@@ -124,6 +128,7 @@ test.describe("מסך 3 — עריכת נמענים", () => {
   });
 
   test("S3-06 — נוסח אישור ההוספה כלשונו באפיון", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-אישור");
     await createTicket(page, {
@@ -139,7 +144,7 @@ test.describe("מסך 3 — עריכת נמענים", () => {
       messages.push(dialog.message());
       void dialog.accept();
     });
-    await page.getByRole("button", { name: /^נמענים/ }).first().click();
+    await page.getByRole("button", { name: /^הוסף נמען/ }).first().click();
     await page.getByRole("option", { name: new RegExp(`^${PROS.second.name}`) }).first().click();
     await expect(recipientRow(page, PROS.second.name)).toBeVisible();
 
@@ -147,6 +152,7 @@ test.describe("מסך 3 — עריכת נמענים", () => {
   });
 
   test("S3-07 — נוסח אישור ההסרה כלשונו באפיון", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-הסרה");
     await createTicket(page, {
@@ -173,11 +179,13 @@ test.describe("מסך 3 — עריכת נמענים", () => {
 
 test.describe("מסך 4 — יצירת פנייה מהירה", () => {
   test.beforeEach(async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await gotoNewTicket(page);
   });
 
   test("S4-01/S4-03 — מסך אחד ולא אשף, והמדיה בראש", async ({ page }) => {
+    acceptDialogs(page);
     // אשף היה מציג "הבא"/"שלב 1 מתוך N". כאן כל השדות על מסך אחד.
     await expect(page.getByRole("button", { name: /^הבא/ })).toHaveCount(0);
     await expect(page.getByText(/שלב \d+ מתוך/)).toHaveCount(0);
@@ -190,6 +198,7 @@ test.describe("מסך 4 — יצירת פנייה מהירה", () => {
   });
 
   test("S4-05/S4-06 — בניין ודירה הם רשימת בחירה, ויצירת ערך חדש מכוונת", async ({ page }) => {
+    acceptDialogs(page);
     await page.getByRole("button", { name: /^בניין/ }).first().click();
     await expect(page.getByRole("option", { name: "בניין א" })).toBeVisible();
     // שם קיים אינו מציע יצירה — כך שגיאת הקלדה אינה יוצרת בניין כפול.
@@ -201,6 +210,7 @@ test.describe("מסך 4 — יצירת פנייה מהירה", () => {
   });
 
   test("S4-13/S4-15 — 'שמור כטיוטה' נשמר ולא נשלח לאיש", async ({ page }) => {
+    acceptDialogs(page);
     const description = uniq("טיוטה-מהירה");
     await page.getByLabel("תיאור").fill(description);
     await page.getByRole("button", { name: CREATE_SCREEN.saveDraft }).click();
@@ -213,6 +223,7 @@ test.describe("מסך 7 — השלמת טיוטה", () => {
   test("S7-03/S7-04/S7-05/S7-06/S7-07 — הקשר, השדות החסרים בלבד, ושתי הפעולות", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("טיוטה-להשלמה");
     await gotoNewTicket(page);
@@ -244,19 +255,20 @@ test.describe("מסך 7 — השלמת טיוטה", () => {
   });
 
   test("S7-01/S7-02 — הטיוטה מוצגת בראש הלוח ומסומנת באדום", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("טיוטה-בראש");
     await createTicket(page, { description, saveAsDraft: true });
 
     await page.goto("/board");
-    const cards = page.locator('a[href^="/tickets/"]');
-    await expect(cards.first()).toContainText(description);
-    await expect(cards.first()).toHaveClass(/danger/);
+    await expect(boardCards(page).first()).toContainText(description);
+    await expect(boardCards(page).first()).toHaveClass(/danger/);
   });
 });
 
 test.describe("§1 — מי פתח את הפנייה", () => {
   test("DM-F04 — הפנייה מציגה את שם הפותח", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA2");
     await createTicket(page, {
       building: "בניין א",
@@ -265,6 +277,6 @@ test.describe("§1 — מי פתח את הפנייה", () => {
       description: uniq("פותח"),
       recipients: [PROS.full.name],
     });
-    await expect(page.getByText(CAST.managerA2.name)).toBeVisible();
+    await expect(page.getByText(`נפתחה על ידי: ${CAST.managerA2.name}`)).toBeVisible();
   });
 });

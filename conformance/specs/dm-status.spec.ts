@@ -10,9 +10,11 @@ import {
   TICKET_STATUS,
 } from "../fixtures/spec-text";
 import {
+  acceptDialogs,
   ageTicket,
   boardArchive,
   boardCard,
+  expandArchive,
   boardSection,
   createTicket,
   openPortalTicket,
@@ -54,10 +56,12 @@ async function ticketWithContractor(
 
 test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   test.beforeEach(async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
   });
 
   test("DM-D07 — אף נמען לא צפה ⇒ חדש", async ({ page }) => {
+    acceptDialogs(page);
     const { path, contractor } = await ticketWithContractor(page, "חדש");
     await page.goto(path);
     await expect(page.getByText(TICKET_STATUS.fresh, { exact: true })).toBeVisible();
@@ -65,6 +69,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   });
 
   test("DM-D06/DM-S02 — נמען פתח ⇒ נצפה, והמנהל רואה מי צפה", async ({ page }) => {
+    acceptDialogs(page);
     const { path, contractor, link, description } = await ticketWithContractor(page, "נצפה");
 
     await openPortalTicket(page, link, description);
@@ -77,6 +82,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   test("DM-D05/DM-D10 — חלק סיימו ⇒ בטיפול חלקי, והסיבה היא '1 מתוך 2 סיימו'", async ({
     page,
   }) => {
+    acceptDialogs(page);
     const first = uniq("קבלן-חלקי-א");
     const second = uniq("קבלן-חלקי-ב");
     const description = uniq("תקלה-חלקית");
@@ -89,7 +95,6 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     });
 
     // הנמען השני מתווסף אחרי היצירה — זהו מסלול המשנה WF-S02.
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(second);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -112,6 +117,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   test("DM-D04 — כל הנמענים סיימו ⇒ ממתין לפותח (אישור), והפנייה ב'דורש ממך'", async ({
     page,
   }) => {
+    acceptDialogs(page);
     const { path, link, description } = await ticketWithContractor(page, "אישור", {
       apartment: "3",
     });
@@ -128,6 +134,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   });
 
   test("DM-D03/DM-D08 — שאלה גוברת על טופל", async ({ page }) => {
+    acceptDialogs(page);
     const asker = uniq("קבלן-שואל");
     const finisher = uniq("קבלן-מסיים");
     const description = uniq("תקלה-שאלה");
@@ -139,7 +146,6 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
       newProfessional: { name: finisher, phone: uniqPhone() },
     });
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(asker);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -168,6 +174,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   });
 
   test("DM-D02 — חסרים שדות חובה ⇒ טיוטה", async ({ page }) => {
+    acceptDialogs(page);
     const description = uniq("תקלה-טיוטה");
     await createTicket(page, { description, saveAsDraft: true });
     await expect(page.getByText(TICKET_STATUS.draft, { exact: true })).toBeVisible();
@@ -176,9 +183,9 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   test("DM-D01/DM-D09 — סגירה ⇒ סגור; פתיחה מחדש מחזירה לכללים ומוסיפה תג", async ({
     page,
   }) => {
+    acceptDialogs(page);
     const { path, contractor, description } = await ticketWithContractor(page, "סגירה");
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
     await expect(page.getByText(TICKET_STATUS.closed, { exact: true })).toBeVisible();
@@ -187,11 +194,10 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     await page.goto("/board");
     await expect(boardSection(page, BOARD.actionRequired)).not.toContainText(description);
     await expect(boardSection(page, BOARD.withRecipients)).not.toContainText(description);
-    await boardArchive(page).getByText(BOARD.archive).click();
+    await expandArchive(page);
     await expect(boardArchive(page)).toContainText(description);
     await page.goto(path);
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.reopen }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.reopenedNotice);
     // "'נפתח מחדש' אינו סטטוס נפרד" — הסטטוס חוזר לכללים, והתג נוסף.
@@ -203,9 +209,9 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
   });
 
   test("DM-D11 — כל השיוכים הוסרו: מצב שהאפיון לא הגדיר (GAP-05)", async ({ page }) => {
+    acceptDialogs(page);
     const { path, contractor } = await ticketWithContractor(page, "הוסרו");
 
-    page.once("dialog", (dialog) => dialog.accept());
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();
@@ -229,6 +235,7 @@ test.describe("§5.ג — הסלמה על היעדר תנועה", () => {
   test("BR-10/BR-16 — פנייה בת 9 ימים מוסלמת, עוברת ל'דורש ממך' ומציגה את מספר הימים", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const { path, description } = await ticketWithContractor(page, "הסלמה", { apartment: "2" });
     const id = ticketIdFromPath(path);
@@ -243,11 +250,11 @@ test.describe("§5.ג — הסלמה על היעדר תנועה", () => {
   });
 
   test("BR-14 — פנייה סגורה אינה מוסלמת", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const { path } = await ticketWithContractor(page, "סגורה-ישנה", { apartment: "3" });
     const id = ticketIdFromPath(path);
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
 

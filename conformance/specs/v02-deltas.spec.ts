@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { loginAs } from "../fixtures/roles";
 import { DRAFT_SCREEN, TICKET_SCREEN } from "../fixtures/spec-text";
 import {
+  acceptDialogs,
   expectExpiredLink,
   activeTokenCount,
   createTicket,
@@ -24,6 +25,7 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
   test("V02-06/V02-13 — אותו קישור בשלוש הצגות; 'צור קישור חדש' הורג את הקודם", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-קישור");
     const description = uniq("תקלה-קישור");
@@ -52,7 +54,6 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
     await loginAs(page, "managerA");
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).first().click();
-    page.once("dialog", (dialog) => dialog.accept());
     await recipientRow(page, contractor)
       .getByRole("button", { name: "צור קישור חדש" })
       .click();
@@ -69,6 +70,7 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
   });
 
   test("V02-10 — 'שלח בוואטסאפ' הוא קישור wa.me עם ההודעה מוכנה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-וואטסאפ");
     const description = uniq("תקלה-וואטסאפ");
@@ -96,6 +98,7 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
   test("V02-09 — 'שלח שוב במייל' זמין לנמען עם מייל ומעדכן את חיווי השליחה", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-מייל");
     await createTicket(page, {
@@ -122,13 +125,13 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
 
 test.describe("V02 — מחיקת טיוטה", () => {
   test("V02-21/V02-23 — מנהל עבודה מוחק טיוטה, ואינו מוחק פנייה ששוגרה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
 
     const draftText = uniq("טיוטה-למחיקה");
     await createTicket(page, { description: draftText, saveAsDraft: true });
     await expect(page.getByText(DRAFT_SCREEN.banner)).toBeVisible();
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: DRAFT_SCREEN.delete }).click();
     await expect(page).toHaveURL(/\/board/);
     await expect(page.getByText(draftText)).toHaveCount(0);

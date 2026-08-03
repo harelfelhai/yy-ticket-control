@@ -48,8 +48,17 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["json", { outputFile: "../test-results/conformance-results.json" }]],
   outputDir: "../test-results/conformance",
-  timeout: 90_000,
-  expect: { timeout: 15_000 },
+  /**
+   * ‏120 שניות ו-25 שניות ל-`expect`, גבוה מחבילת ה-E2E (60/15).
+   *
+   * החבילה הזו מריצה מאות בדיקות ברצף על אותו שרת, ומחליפה תפקיד תדיר —
+   * כל החלפה היא גיבוב argon2 מלא. בהרצה מול שרת פיתוח, קימפול ראשון של
+   * ‏Server Action תחת העומס הזה חרג מ-15 שניות והפיל בדיקות שאין להן שום
+   * קשר לזמן. הסף הגבוה סופג את זה בלי להסתיר כשל אמיתי — כשל אמיתי אינו
+   * נעשה תקין אחרי עוד עשר שניות.
+   */
+  timeout: 120_000,
+  expect: { timeout: 25_000 },
 
   use: {
     baseURL: BASE_URL,

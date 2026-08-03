@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { CAST, PROS } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
 import { BOARD, REASON_EXAMPLES, TICKET_SCREEN, TICKET_STATUS } from "../fixtures/spec-text";
-import { boardCard, createTicket, uniq } from "../fixtures/world";
+import { acceptDialogs, boardArchive, boardCard, createTicket, expandArchive, uniq } from "../fixtures/world";
 
 /**
  * §5.א–ד — החוקים העסקיים שאינם הרשאה ואינם מקרה קצה.
@@ -14,6 +14,7 @@ import { boardCard, createTicket, uniq } from "../fixtures/world";
 
 test.describe("§5.ד — מי מטפל", () => {
   test("BR-20/BR-21/V02-05 — מנהל שני שמגיב אינו גונב את הסימון", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("מי-מטפל");
     const path = await createTicket(page, {
@@ -26,7 +27,7 @@ test.describe("§5.ד — מי מטפל", () => {
 
     // מנהל א׳ מגיב ראשון — ואין עדיין מטפל, ולכן הוא נקבע.
     await page.getByLabel("תגובה").fill("בדקתי בשטח");
-    await page.getByRole("button", { name: TICKET_SCREEN.send }).click();
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(page.getByText("בדקתי בשטח")).toBeVisible();
 
     await page.goto("/board");
@@ -38,7 +39,7 @@ test.describe("§5.ד — מי מטפל", () => {
     await loginAs(page, "managerA2");
     await page.goto(path);
     await page.getByLabel("תגובה").fill("גם אני הסתכלתי");
-    await page.getByRole("button", { name: TICKET_SCREEN.send }).click();
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(page.getByText("גם אני הסתכלתי")).toBeVisible();
 
     await page.goto("/board");
@@ -48,6 +49,7 @@ test.describe("§5.ד — מי מטפל", () => {
   });
 
   test("BR-22/BR-23 — החלפת מטפל נעשית מפורשות דרך הכפתור", async ({ page }) => {
+    acceptDialogs(page);
     /**
      * ‏§5.ד (הכרעת 0.2): "החלפת מטפל נעשית **מפורשות דרך הכפתור**".
      *
@@ -67,6 +69,9 @@ test.describe("§5.ד — מי מטפל", () => {
       recipients: [PROS.full.name],
     });
     await page.getByRole("button", { name: TICKET_SCREEN.markHandler }).click();
+    // הכפתור נעלם ברגע שנקבע מטפל — זו ההמתנה לסיום ה-Server Action, וגם
+    // ההוכחה להיעדר מנגנון ההחלפה.
+    await expect(page.getByRole("button", { name: TICKET_SCREEN.markHandler })).toHaveCount(0);
 
     await page.goto("/board");
     await expect(boardCard(page, description)).toContainText(
@@ -86,6 +91,7 @@ test.describe("§5.ד — מי מטפל", () => {
 
 test.describe("§5.א–ב — הסגירה היא שיקול דעת אנושי", () => {
   test("PROH-04 — סגירה אינה מותנית בצירוף תיעוד", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("סגירה-בלי-תיעוד");
     await createTicket(page, {
@@ -97,13 +103,13 @@ test.describe("§5.א–ב — הסגירה היא שיקול דעת אנושי"
     });
 
     // אין מדיה, אין תגובה, אין "טופל" — ובכל זאת אפשר לסגור.
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
     await expect(page.getByText(TICKET_STATUS.closed, { exact: true })).toBeVisible();
   });
 
   test("BR-08/PROH-06 — פנייה סגורה יורדת לארכיון ואינה נעלמת", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("לארכיון");
     await createTicket(page, {
@@ -113,19 +119,18 @@ test.describe("§5.א–ב — הסגירה היא שיקול דעת אנושי"
       description,
       recipients: [PROS.full.name],
     });
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
 
     await page.goto("/board");
-    const archive = page.locator("details").filter({ hasText: BOARD.archive });
-    await archive.getByText(BOARD.archive).click();
-    await expect(archive).toContainText(description);
+    await expandArchive(page);
+    await expect(boardArchive(page)).toContainText(description);
   });
 });
 
 test.describe("§4 מסך 1 — הלוח מסביר את עצמו", () => {
   test("S1-01/S1-02 — רשימה אחת עם כותרות קיבוץ, לא טאבים", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/board");
 
@@ -140,6 +145,7 @@ test.describe("§4 מסך 1 — הלוח מסביר את עצמו", () => {
   });
 
   test("S1-03/S1-05 — לכל קבוצה מונה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/board");
     await expect(
@@ -151,6 +157,7 @@ test.describe("§4 מסך 1 — הלוח מסביר את עצמו", () => {
   });
 
   test("S1-13/S1-14 — הכרטיס מציג מיקום, תחום, תיאור, נמען, גיל וסיבה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("כרטיס-מלא");
     await createTicket(page, {
@@ -175,6 +182,7 @@ test.describe("§4 מסך 1 — הלוח מסביר את עצמו", () => {
   });
 
   test("S1-18/S1-19 — כפתור פנייה חדשה וחיפוש זמינים מהלוח", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/board");
     await expect(page.getByRole("link", { name: BOARD.newTicket })).toBeVisible();
@@ -184,6 +192,7 @@ test.describe("§4 מסך 1 — הלוח מסביר את עצמו", () => {
   test("S1-10/S1-12 — מצב סיור מקבץ לפי בניין ודירה, והטיוטות נשארות בראש", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const draftText = uniq("טיוטה-בסיור");
     await createTicket(page, { description: draftText, saveAsDraft: true });

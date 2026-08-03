@@ -4,6 +4,7 @@ import { query } from "../fixtures/db";
 import { loginAs } from "../fixtures/roles";
 import { EDGE_CASES, PORTAL, TICKET_SCREEN } from "../fixtures/spec-text";
 import {
+  acceptDialogs,
   TICKET_URL,
   createTicket,
   openPortalTicket,
@@ -33,6 +34,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
   test("BR-32 — נמען מגיב על פנייה שנסגרה: התגובה נחסמת עם הנוסח מהאפיון", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-נסגרה");
     const description = uniq("תקלה-נסגרה");
@@ -45,7 +47,6 @@ test.describe("§5.ו — מקרי הקצה", () => {
     });
     const link = await showLink(page, contractor);
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
 
@@ -56,6 +57,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
   });
 
   test("BR-33 — נמען שהוסר: הפנייה אינה ברשימתו ואין לו הרשאת כתיבה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const stay = uniq("קבלן-נשאר");
     const removed = uniq("קבלן-מוסר");
@@ -70,7 +72,6 @@ test.describe("§5.ו — מקרי הקצה", () => {
 
     // נמען שני, כדי שהטוקן של הראשון לא יבוטל בהסרה האחרונה — כך נבדק
     // המצב שהאפיון מתאר: קישור **תקף** שהפנייה נעלמה ממנו.
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(stay);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -83,7 +84,6 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await loginAs(page, "managerA");
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).first().click();
-    page.once("dialog", (dialog) => dialog.accept());
     await recipientRow(page, removed)
       .getByRole("button", { name: /^הסר/ })
       .click();
@@ -98,6 +98,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
     page,
     browser,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("תקלה-מקבילה");
     const path = await createTicket(page, {
@@ -117,15 +118,15 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await page.goto(path);
     await secondPage.goto(path);
 
-    const firstText = `הערה של ${CAST.managerA.name}`;
-    const secondText = `הערה של ${CAST.managerA2.name}`;
+    const firstText = uniq("הערה-ראשונה");
+    const secondText = uniq("הערה-שנייה");
 
     await page.getByLabel("תגובה").fill(firstText);
     await secondPage.getByLabel("תגובה").fill(secondText);
 
-    await page.getByRole("button", { name: TICKET_SCREEN.send }).click();
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(page.getByText(firstText)).toBeVisible();
-    await secondPage.getByRole("button", { name: TICKET_SCREEN.send }).click();
+    await secondPage.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(secondPage.getByText(secondText)).toBeVisible();
 
     // "שניהם רשאים. השרשור מציג את שתי הפעולות לפי סדר."
@@ -146,6 +147,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
   test("BR-35 — התמלול נכשל: המדיה נשמרת ומוצגת, והשדה מסומן 'התמלול נכשל'", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("תקלה-תמלול");
     const path = await createTicket(page, {
@@ -163,7 +165,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
     });
     await expect(page.getByText("מעלה…")).toHaveCount(0);
     await page.getByLabel("תגובה").fill("הקלטה מהשטח");
-    await page.getByRole("button", { name: TICKET_SCREEN.send }).click();
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(page.getByText("הקלטה מהשטח")).toBeVisible();
 
     // בלי מפתח OpenAI הג׳וב מסמן SKIPPED ולא FAILED. מקרה הקצה שהאפיון
@@ -185,6 +187,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
   });
 
   test("BR-36 — שיגור בלי קליטה נשמר מקומית ואינו הולך לאיבוד", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/tickets/new");
     const description = uniq("תקלה-בלי-קליטה");

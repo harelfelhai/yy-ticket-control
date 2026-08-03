@@ -154,12 +154,27 @@ export function boardSection(page: Page, label: string) {
 
 /** הארכיון המקופל — `<details>` ולא `<section>` (S1-08) */
 export function boardArchive(page: Page) {
-  return page.locator("details").filter({ hasText: "ארכיון" });
+  return page.locator("details").filter({ has: page.locator("summary") });
+}
+
+/** פותח את הארכיון המקופל. הלחיצה היא על ה-`summary` ולא על טקסט "ארכיון",
+ *  כי אותו טקסט מופיע גם בתיאור של פנייה שנשמרה שם. */
+export async function expandArchive(page: Page): Promise<void> {
+  const summary = boardArchive(page).locator("summary").first();
+  if (await summary.isVisible().catch(() => false)) await summary.click();
 }
 
 /** כרטיס פנייה בלוח, לפי טקסט שמופיע בו */
 export function boardCard(page: Page, text: string) {
-  return page.locator('a[href^="/tickets/"]').filter({ hasText: text });
+  return boardCards(page).filter({ hasText: text });
+}
+
+/** כל כרטיסי הפניות בלוח — בלי קישורי הניווט `/tickets/new` ו-`/tickets/batch`,
+ *  ששניהם תואמים `a[href^="/tickets/"]` ויושבים בכותרת העמוד. */
+export function boardCards(page: Page) {
+  return page.locator(
+    'a[href^="/tickets/"]:not([href="/tickets/batch"]):not([href="/tickets/new"])',
+  );
 }
 
 /**
@@ -186,7 +201,13 @@ export async function showLink(page: Page, contractorName: string): Promise<stri
   await recipientRow(page, contractorName)
     .getByRole("button", { name: `קישור גישה ${contractorName}` })
     .click();
-  await expect(page.getByText(`קישור עבור ${contractorName}`)).toBeVisible();
+  // המתנה ארוכה במפורש: הצגת הקישור היא Server Action, והקריאה הראשונה
+  // אליה בשרת פיתוח מקמפלת אותה תוך כדי. ההמתנה היא לכותרת הנושאת את שם
+  // הנמען ולא רק לתיבה — בפנייה עם כמה קבלנים התיבה כבר מציגה את הקישור
+  // הקודם, וקריאה מוקדמת הייתה מחזירה את הקישור של הקבלן האחר.
+  await expect(page.getByText(`קישור עבור ${contractorName}`)).toBeVisible({
+    timeout: 45_000,
+  });
   const field = page.getByRole("textbox", { name: "קישור גישה", exact: true });
   return (await field.inputValue()).replace(/^https?:\/\/[^/]+/, "");
 }
@@ -204,7 +225,16 @@ export async function openPortalTicket(
   description: string,
 ): Promise<void> {
   await page.goto(link);
-  await page.getByRole("link").filter({ hasText: description }).first().click();
+  const card = page.getByRole("link").filter({ hasText: description }).first();
+
+  // פנייה שנסגרה יורדת ללשונית הארכיון המקופלת (§4 מסך 8), ולכן הקישור
+  // אינו נראה עד שפותחים אותה. זו התנהגות נדרשת ולא תקלה.
+  if (!(await card.isVisible().catch(() => false))) {
+    const summary = page.locator("details > summary").first();
+    if (await summary.isVisible().catch(() => false)) await summary.click();
+  }
+
+  await card.click();
   await expect(page.getByText(description).first()).toBeVisible();
 }
 
@@ -213,11 +243,34 @@ export async function openPortalTicket(
  * הסף הוא 7 ימים, והבדיקה אינה יכולה להמתין.
  */
 export async function ageTicket(ticketId: string, days: number): Promise<void> {
-  const at = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  await query(`update "Ticket" set "lastActivityAt" = $1, "createdAt" = $1 where id = $2`, [
-    at,
-    ticketId,
-  ]);
+  /**
+   * חשבון הזמן נעשה **בתוך** Postgres ולא בצד הלקוח.
+   *
+   * העברת אובייקט `Date` דרך `pg` לעמודת `timestamp` חסרת אזור-זמן מאבדת את
+   * ההיסט: השעון הישראלי הוא UTC+3 בקיץ, ולכן "לפני 9 ימים" נשמר כ-8 ימים
+   * ו-21 שעות, ו-`Math.floor` בחישוב הגיל החזיר **8**. הבדיקה נכשלה על
+   * "ללא תנועה 8 ימים" ונראתה כפער במוצר.
+   */
+  await query(
+    `update "Ticket"
+        set "lastActivityAt" = now() - ($1 || ' days')::interval - interval '2 hours',
+            "createdAt"      = now() - ($1 || ' days')::interval - interval '2 hours'
+      where id = $2`,
+    [String(days), ticketId],
+  );
+}
+
+/**
+ * מאשר כל דיאלוג `confirm` בעמוד, פעם אחת לכל הבדיקה.
+ *
+ * ‏`page.once("dialog", …)` פעמיים באותה בדיקה נכשל עם
+ * "Cannot accept dialog which is already handled" ברגע ששני דיאלוגים
+ * מגיעים בזה אחר זה — מטפל אחד ומתמיד עדיף.
+ */
+export function acceptDialogs(page: Page): void {
+  page.on("dialog", (dialog) => {
+    void dialog.accept();
+  });
 }
 
 /** קורא את מספר הטוקנים הפעילים של איש מקצוע — לאימות יציבות הקישור (V02-06) */

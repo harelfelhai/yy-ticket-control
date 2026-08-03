@@ -23,7 +23,16 @@ async function expectRtlNoOverflow(page: Page, label: string) {
   expect(overflow, `${label}: גלישה אופקית`).toBeLessThanOrEqual(2);
 }
 
-async function expectTouchTargets(page: Page, label: string) {
+/**
+ * חריגים שהתקן העיצובי מכיר בהם במפורש.
+ *
+ * "ערוך" של שם הדייר הוא קישור **בתוך משפט** — `DESIGN.md § Layout` מתיר
+ * זאת, ו-`tests/unit/primitives.test.ts` כבר מחזיק אותו ברשימת החריגים
+ * המנומקת. "×" של צ׳יפ הנמען מטופל בבדיקה נפרדת ומדווח כפער.
+ */
+const SANCTIONED = ["ערוך", "×"];
+
+async function smallTargets(page: Page): Promise<string[]> {
   const targets = page.locator("main button:visible, main a:visible");
   const count = await targets.count();
   const small: string[] = [];
@@ -31,15 +40,17 @@ async function expectTouchTargets(page: Page, label: string) {
     const target = targets.nth(index);
     const box = await target.boundingBox();
     if (!box || box.height === 0) continue;
-    // קישור בתוך משפט אינו אזור מגע עצמאי (`DESIGN.md § Touch`), ולכן
-    // נמדדים רק אלמנטים שעומדים בפני עצמם.
     const inline = await target.evaluate((el) => getComputedStyle(el).display === "inline");
     if (inline) continue;
-    if (box.height < MIN_TOUCH) {
-      small.push(`${(await target.innerText()).slice(0, 30)} (${Math.round(box.height)}px)`);
-    }
+    const text = (await target.innerText()).trim().slice(0, 30);
+    if (SANCTIONED.includes(text)) continue;
+    if (box.height < MIN_TOUCH) small.push(`${text} (${Math.round(box.height)}px)`);
   }
-  expect(small, `${label}: אזורי מגע קטנים מ-${MIN_TOUCH}px`).toEqual([]);
+  return small;
+}
+
+async function expectTouchTargets(page: Page, label: string) {
+  expect(await smallTargets(page), `${label}: אזורי מגע קטנים מ-${MIN_TOUCH}px`).toEqual([]);
 }
 
 test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים", () => {
@@ -122,18 +133,46 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
     await expectRtlNoOverflow(page, "מסך 8 — קישור לא בתוקף");
   });
 
-  test("S0-04 — מסך 404 בעברית ובכיווניות ימין-לשמאל", async ({ page }) => {
+  test("S0-03 — כפתור הסרת נמען מצ׳יפ עומד בסף המגע", async ({ page }) => {
     /**
-     * ‏§4 שורה 176 קובע "שפת הממשק: עברית, כיווניות מימין לשמאל" ללא חריג.
-     * לפרויקט אין `not-found.tsx` ואין `error.tsx` בשום מקום, בעוד
-     * ‏`notFound()` נקרא מ-`/tickets/[id]` ומ-`/tags/[id]` — ולכן משתמש
-     * שמגיע לפנייה שאין לו גישה אליה מקבל את מסך ברירת המחדל של Next,
-     * באנגלית ומשמאל לימין. מדווח ב-conformance-report.
+     * ‏`DESIGN.md § Touch` מחייב 44px, ו-`e2e/mobile-qa.spec.ts` מודד זאת —
+     * אך על ארבעה מסכים בלבד, ואף אחד מהם אינו מסך היצירה.
+     * ‏`tests/unit/layout-guards.test.ts` סורק `min-h-*` בקוד המקור, ולכן
+     * אלמנט שאינו מצהיר `min-h` כלל **אינו נראה לו**. כפתור ה-"×" של צ׳יפ
+     * הנמען (`recipient-picker.tsx:66`) נופל בין שני האוכפים. מדווח.
+     */
+    test.fail();
+    await loginAs(page, "managerA");
+    await page.goto("/tickets/new");
+    await page.getByRole("button", { name: /^נמענים/ }).first().click();
+    await page.getByRole("option").first().click();
+
+    const remove = page.getByRole("button", { name: /^הסר / }).first();
+    const box = await remove.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(MIN_TOUCH);
+  });
+
+  test("S0-04 — מסך 404: המעטפת עברית ו-RTL", async ({ page }) => {
+    await loginAs(page, "managerA");
+    await page.goto("/tickets/lokayamlokayam");
+    // המעטפת תקינה: `app/layout.tsx` עוטף גם את מסך ברירת המחדל של Next.
+    await expect(page.locator("html")).toHaveAttribute("lang", "he");
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  });
+
+  test("S0-04 — תוכן מסך 404 בעברית", async ({ page }) => {
+    /**
+     * ‏§4 שורה 176: "שפת הממשק: עברית" — ללא חריג.
+     *
+     * המעטפת אכן עברית ו-RTL (הבדיקה שמעל), אך **הטקסט** הוא מסך ברירת
+     * המחדל של Next באנגלית: "This page could not be found". לפרויקט אין
+     * ‏`not-found.tsx` ואין `error.tsx` בשום מקום, בעוד `notFound()` נקרא
+     * מ-`/tickets/[id]` ומ-`/tags/[id]` — כלומר כל חסימת הרשאה חוצת-אתרים
+     * מגיעה לשם. מדווח ב-conformance-report.
      */
     test.fail();
     await loginAs(page, "managerA");
     await page.goto("/tickets/lokayamlokayam");
-    await expect(page.locator("html")).toHaveAttribute("lang", "he");
-    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    await expect(page.locator("body")).not.toContainText("could not be found");
   });
 });

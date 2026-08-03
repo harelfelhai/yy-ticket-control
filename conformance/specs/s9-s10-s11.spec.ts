@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { CAST, PROS, SITE_A, SITE_B } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
 import { TICKET_SCREEN } from "../fixtures/spec-text";
-import { createTicket, openFilters, uniq, uniqPhone } from "../fixtures/world";
+import { acceptDialogs, createTicket, openFilters, uniq, uniqPhone } from "../fixtures/world";
 
 /**
  * מסכים 9, 10 ו-11–15: חיפוש, תצוגת הבעלים והניהול.
@@ -14,6 +14,7 @@ import { createTicket, openFilters, uniq, uniqPhone } from "../fixtures/world";
 
 test.describe("מסך 9 — חיפוש", () => {
   test("S9-02 — חיפוש מוצא לפי התיאור ולפי מה שנכתב בשרשור", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const inDescription = uniq("מילה-בתיאור");
     const inThread = uniq("מילה-בשרשור");
@@ -26,7 +27,7 @@ test.describe("מסך 9 — חיפוש", () => {
       recipients: [PROS.full.name],
     });
     await page.getByLabel("תגובה").fill(`הערה עם ${inThread}`);
-    await page.getByRole("button", { name: TICKET_SCREEN.send }).click();
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(page.getByText(inThread)).toBeVisible();
 
     await page.goto("/search");
@@ -46,6 +47,7 @@ test.describe("מסך 9 — חיפוש", () => {
   });
 
   test("S9-03/DM-Q02 — תשעת המסננים של §3.6 קיימים במסך", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "admin");
     await page.goto("/search");
     await openFilters(page);
@@ -56,7 +58,7 @@ test.describe("מסך 9 — חיפוש", () => {
       "בניין",
       "דירה",
       "תחום",
-      "נמען",
+      "איש מקצוע",
       "תגיות",
       "כל הסטטוסים",
       "מתאריך",
@@ -67,6 +69,7 @@ test.describe("מסך 9 — חיפוש", () => {
   });
 
   test("DM-Q01 — המסך מצהיר שהחיפוש כולל תמלול וטקסט שזוהה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/search");
     await expect(page.getByText(/תמלול/)).toBeVisible();
@@ -75,6 +78,7 @@ test.describe("מסך 9 — חיפוש", () => {
 
 test.describe("מסך 10 — תצוגת הבעלים", () => {
   test("S10-02/S10-03/S10-04/S10-05 — שלושת המדדים לכל אתר, חוצה-אתרים", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "owner");
     await page.goto("/overview");
 
@@ -88,6 +92,7 @@ test.describe("מסך 10 — תצוגת הבעלים", () => {
   });
 
   test("S10-06 — מכל מספר ניתן לצלול לרשימה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("לצלילה");
     await createTicket(page, {
@@ -112,6 +117,7 @@ test.describe("מסך 10 — תצוגת הבעלים", () => {
 
 test.describe("מסכים 11–15 — ניהול", () => {
   test("S11-15-00 — חמשת המסכים נגישים למנהל המערכת", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "admin");
     for (const [url, heading] of [
       ["/admin", "ניהול המערכת"],
@@ -126,22 +132,24 @@ test.describe("מסכים 11–15 — ניהול", () => {
   });
 
   test("S12-01/S12-02/S12-03 — הקמת משתמש עם תפקיד ואתר", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "admin");
     await page.goto("/admin/users");
     const name = uniq("עובד חדש");
     const phone = uniqPhone();
 
-    await page.getByLabel("שם").fill(name);
-    await page.getByLabel("טלפון").fill(phone);
+    await page.getByLabel("שם", { exact: true }).fill(name);
+    await page.getByLabel("טלפון", { exact: true }).fill(phone);
     await page.getByLabel("תפקיד").selectOption({ label: "מנהל עבודה" });
-    await page.getByLabel("אתר").selectOption({ label: SITE_A });
-    await page.getByLabel("סיסמה").fill("conformance-1234");
-    await page.getByRole("button", { name: /שמור|הוסף/ }).first().click();
+    await page.getByLabel("אתר", { exact: true }).selectOption({ label: SITE_A });
+    await page.getByLabel("סיסמה ראשונית").fill("conformance-1234");
+    await page.getByRole("button", { name: "הוסף משתמש" }).click();
 
     await expect(page.getByText(name)).toBeVisible();
   });
 
   test("S13-04 — איחוד כפילויות של אנשי מקצוע", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const keep = uniq("קבלן-נשמר");
     const drop = uniq("קבלן-נמחק");
@@ -159,21 +167,22 @@ test.describe("מסכים 11–15 — ניהול", () => {
     await page.goto("/admin/professionals");
     await page.getByLabel("להשאיר").selectOption({ label: keep });
     await page.getByLabel("לאחד ולמחוק").selectOption({ label: drop });
-    page.once("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: /אחד|איחוד/ }).first().click();
+    await page.getByRole("button", { name: "אחד", exact: true }).click();
     await expect(page.getByText(/הכפילות אוחדה/)).toBeVisible();
   });
 
   test("S14-01 — ניהול רשימת התחומים", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "admin");
     await page.goto("/admin/domains");
     const domain = uniq("תחום-חדש");
-    await page.getByLabel("שם").fill(domain);
-    await page.getByRole("button", { name: /שמור|הוסף/ }).first().click();
+    await page.getByLabel("תחום חדש").fill(domain);
+    await page.getByRole("button", { name: "הוסף תחום" }).click();
     await expect(page.getByRole("textbox", { name: domain })).toBeVisible();
   });
 
   test("S15 — מסך התגיות: שינוי שם שמור למנהל המערכת", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "admin");
     await page.goto("/tags");
     const rename = page.getByRole("button", { name: "שנה שם" });
@@ -190,6 +199,7 @@ test.describe("מסכים 11–15 — ניהול", () => {
   });
 
   test("BR-38/A1-09 — מנהל המערכת מוחק פנייה כפולה באישור כפול", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("כפילות");
     const path = await createTicket(page, {
@@ -205,7 +215,6 @@ test.describe("מסכים 11–15 — ניהול", () => {
     await page.getByRole("button", { name: "מחק פנייה" }).click();
     // אישור כפול: הלחיצה הראשונה חושפת את האזהרה בלבד.
     await expect(page.getByText(/מחיקה היא לכפילות/)).toBeVisible();
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: /כן, מחק/ }).click();
     await expect(page).toHaveURL(/\/board/);
 
@@ -216,6 +225,7 @@ test.describe("מסכים 11–15 — ניהול", () => {
 
 test.describe("§1 — זיהוי יוצר הרשומה", () => {
   test("A2-01 — הבעלים רואה מי פתח את הפנייה", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("מי-פתח");
     const path = await createTicket(page, {

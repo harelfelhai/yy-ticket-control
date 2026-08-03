@@ -3,6 +3,7 @@ import { CAST } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
 import { ASSIGNMENT_STATUS, PORTAL, TICKET_SCREEN } from "../fixtures/spec-text";
 import {
+  acceptDialogs,
   expectExpiredLink,
   createTicket,
   openPortalTicket,
@@ -22,6 +23,7 @@ import {
 
 test.describe("מסך 8 — פורטל הקבלן", () => {
   test("S8-04/S8-05/S8-06 — הקישור פותח לוח בקרה אישי, לא פנייה בודדת", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-לוח");
     const firstDescription = uniq("תקלה-א");
@@ -55,7 +57,6 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
     await loginAs(page, "managerA");
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: firstDescription }).first().click();
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
 
@@ -68,6 +69,7 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
   });
 
   test("S8-07 — הנמען שנוסף רואה את השרשור המלא, כולל מה שקדם לצירופו", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const early = uniq("הערה שקדמה לצירוף");
     const first = uniq("קבלן-ראשון");
@@ -83,10 +85,9 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
     });
 
     await page.getByLabel("תגובה").fill(early);
-    await page.getByRole("button", { name: TICKET_SCREEN.send }).click();
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(page.getByText(early)).toBeVisible();
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(late);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -101,6 +102,7 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
   test("S8-08/S8-13 — 'סיימתי — טופל' מחזיר את הפנייה לאישור הפותח, בנוסח האפיון", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-טופל");
     const description = uniq("תקלה-טופל");
@@ -121,6 +123,7 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
   });
 
   test("S8-09/S8-14 — 'יש לי שאלה' נשלחת לפותח, בנוסח האפיון", async ({ page }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-שאלה");
     const description = uniq("תקלה-שאלה-פורטל");
@@ -147,6 +150,7 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
   });
 
   test("S8-15 — קישור שאינו קיים מציג את נוסח האפיון", async ({ page }) => {
+    acceptDialogs(page);
     await page.goto("/p/lo-kayam-bichlal");
     await expectExpiredLink(page);
   });
@@ -154,6 +158,7 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
   test("S8-01/S8-02 — הפורטל אינו האפליקציה הפנימית: אין ניווט, אין יציאה, אין חיפוש", async ({
     page,
   }) => {
+    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-מוצר-נפרד");
     const description = uniq("תקלה-מוצר-נפרד");
