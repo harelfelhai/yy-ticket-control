@@ -57,7 +57,7 @@ export default async function globalSetup() {
  * הטבלאות נשלפות מהקטלוג ולא נכתבות ידנית, כדי שטבלה חדשה בסכימה לא
  * תישאר מלוכלכת בשקט.
  */
-async function truncateAll(connectionString: string): Promise<void> {
+export async function truncateAll(connectionString: string): Promise<void> {
   const { Client } = await import("pg");
   const client = new Client({ connectionString });
   await client.connect();

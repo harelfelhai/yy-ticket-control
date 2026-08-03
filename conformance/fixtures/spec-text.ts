@@ -1,0 +1,169 @@
+/**
+ * נוסחי האפיון — מקור אמת לבדיקות ההתאמה.
+ *
+ * **הקובץ הזה קיים כדי לא לייבא מ-`src/lib/he.ts`.** בדיקה שמייבאת את
+ * המחרוזת מהקוד מוכיחה רק שהקוד עקבי עם עצמו: אם `he.ts` נכתב בטעות עם
+ * נוסח אחר מזה שבאפיון, ההשוואה תעבור והפער יישאר סמוי. לכן כל מחרוזת כאן
+ * הועתקה **ידנית מטקסט האפיון**, ולצידה מספר השורה במסמך שממנה נלקחה:
+ * `docs/specs/ticket-control-pre-plan.md`.
+ *
+ * מקום שבו האפיון משתמש בסוגריים מרובעים (`[שם]`, `[שמות]`, `[שם הפותח]`)
+ * מיוצג כאן כפונקציה או כתבנית, ולא כמחרוזת קבועה — כי הערך משתנה בזמן ריצה
+ * והחלק הקבוע הוא מה שנבדק.
+ */
+
+/** קבוצות הלוח — מסך 1, שורות 185–189 */
+export const BOARD = {
+  /** שורה 185. שים לב: §2.2 שלב 7 (שורה 59) כותב "דורש ממני" — סתירה פנימית GAP-01 */
+  actionRequired: "דורש ממך",
+  withRecipients: "אצל הנמענים",
+  archive: "ארכיון",
+  tourToggle: "מצב סיור",
+  newTicket: "+ פנייה חדשה",
+} as const;
+
+/** ארבעת נוסחי טקסט-הסיבה המחייבים — מסך 1, שורות 199–202 */
+export const REASON_EXAMPLES = {
+  question: (name: string) => `${name} שאל שאלה`,
+  partial: (done: number, total: number) => `${done} מתוך ${total} סיימו`,
+  stale: (days: number) => `ללא תנועה ${days} ימים`,
+  handler: (name: string) => `${name} מטפל`,
+} as const;
+
+/** סטטוס ברמת השיוך — §3.4, שורות 141–146 */
+export const ASSIGNMENT_STATUS = {
+  sent: "נשלח",
+  viewed: "נצפה",
+  done: "טופל",
+  question: "שאלה",
+  removed: "הוסר",
+} as const;
+
+/** סטטוס פנייה נגזר — §3.5, שורות 154–160 */
+export const TICKET_STATUS = {
+  closed: "סגור",
+  draft: "טיוטה",
+  awaitingQuestion: "ממתין לפותח (שאלה)",
+  awaitingApproval: "ממתין לפותח (אישור)",
+  partial: "בטיפול חלקי",
+  viewed: "נצפה",
+  fresh: "חדש",
+  /** שורה 164 — תג על הכרטיס, לא סטטוס */
+  reopenedBadge: "נפתחה מחדש",
+} as const;
+
+/** מסך 2 — הודעות למשתמש, שורות 226–228 */
+export const TICKET_SCREEN = {
+  closedNotice: "הפנייה נסגרה.",
+  reopenedNotice: "הפנייה נפתחה מחדש. הנמענים קיבלו התראה.",
+  linkResent: (name: string) => `הקישור נשלח שוב ל${name}.`,
+  /** שורות 218–223 — שמות הפעולות */
+  send: "שלח",
+  markHandler: "סמן: אני מטפל",
+  editRecipients: "ערוך נמענים",
+  resendEmail: "שלח שוב במייל",
+  sendWhatsApp: "שלח בוואטסאפ",
+  newLink: "צור קישור חדש",
+  close: "סגור פנייה",
+  reopen: "פתח מחדש",
+} as const;
+
+/** מסך 2 — ארבעת אירועי המערכת המחייבים, שורה 216 */
+export const THREAD_EVENTS = {
+  assigned: (name: string) => `שויך ל${name}`,
+  removed: (name: string) => `הוסר ${name}`,
+  viewed: (name: string) => `נצפה על ידי ${name}`,
+  reopened: "נפתחה מחדש",
+} as const;
+
+/** מסך 3 — הודעות למשתמש, שורות 239–241 */
+export const RECIPIENTS_SCREEN = {
+  confirmAdd:
+    "לנמען שנוסף תיחשף כל היסטוריית השיחה בפנייה, כולל תמונות והקלטות. להוסיף?",
+  confirmRemove: (name: string) =>
+    `הפנייה תיעלם מהרשימה של ${name} והוא לא יוכל להגיב יותר. התגובות שכתב יישארו. להסיר?`,
+  missingContact: "חסר טלפון או מייל — בלעדיהם לא ניתן לשלוח לו את הפנייה.",
+} as const;
+
+/** מסך 4 — פעולות והודעות, שורות 259–264 */
+export const CREATE_SCREEN = {
+  submit: "שלח לנמענים",
+  saveDraft: "שמור כטיוטה",
+  sentTo: (names: string) => `הפנייה נשלחה ל${names}.`,
+  savedAsDraft: "נשמר כטיוטה. לא נשלח לאיש.",
+} as const;
+
+/** מסך 5 — פעולות והודעות, שורות 279–284 */
+export const BATCH_SCREEN = {
+  addRow: "הוסף שורה",
+  dispatchAll: "שגר הכל",
+  saveAllAsDraft: "שמור הכל כטיוטה",
+  created: (tickets: number, professionals: number) =>
+    `נוצרו ${tickets} פניות ושויכו ל-${professionals} אנשי מקצוע.`,
+  missingRecipients: (rows: number) => `${rows} שורות חסרות נמען. הן נשמרו כטיוטה.`,
+} as const;
+
+/** מסך 6 — הודעה למשתמש, שורה 296 */
+export const TAG_SCREEN = {
+  granted: (names: string) =>
+    `התגית נפתחה ל${names}. הם יראו את הצ׳אט הקבוצתי בלבד, לא את הפניות.`,
+} as const;
+
+/** מסך 7 — טיוטה, שורות 305–306 */
+export const DRAFT_SCREEN = {
+  banner: "טיוטה — חסרים פרטים. לא נשלחה לאיש.",
+  submit: "שגר",
+  delete: "מחק טיוטה",
+} as const;
+
+/** מסך 8 — פורטל הקבלן, שורות 319–329 */
+export const PORTAL = {
+  markDone: "סיימתי — טופל",
+  askQuestion: "יש לי שאלה",
+  doneNotice: (opener: string) => `תודה. הפנייה הועברה לאישור ${opener}.`,
+  questionNotice: (opener: string) => `השאלה נשלחה ל${opener}.`,
+  expired: "הקישור אינו בתוקף. פנה למנהל העבודה שלך.",
+} as const;
+
+/** §5.ו — מקרי קצה, שורות 386, 389 */
+export const EDGE_CASES = {
+  closedTicketBlocked: "הפנייה נסגרה. פנה למנהל העבודה.",
+  transcriptionFailed: "התמלול נכשל",
+} as const;
+
+/**
+ * §3.3 — רשימת החדרים הקבועה, שורה 132.
+ * **11 ערכים בדיוק, בעברית.** חצרות ושטחי חוץ אינם בתחולה (שורה 134).
+ */
+export const ROOMS_HE = [
+  "סלון",
+  "מטבח",
+  "חדר שינה",
+  "חדר רחצה",
+  "שירותים",
+  "מרפסת",
+  "ממ״ד",
+  "חדר מדרגות",
+  "חניה",
+  "לובי",
+  "שטח משותף",
+] as const;
+
+/** §3.2 שדה 13 — ערוץ המקור, שורה 118 */
+export const CHANNELS_HE = ["אני", "מההנהלה", "מוואטסאפ"] as const;
+
+/** §3.6 — תשעת המסננים, שורה 170 */
+export const SEARCH_FILTERS = [
+  "אתר",
+  "בניין",
+  "דירה",
+  "תחום",
+  "נמען",
+  "תגית",
+  "סטטוס",
+  "טווח תאריכים",
+  "הפניתי / קיבלתי",
+] as const;
+
+/** §5.ג — סף ההסלמה, שורה 363 */
+export const STALE_DAYS = 7;

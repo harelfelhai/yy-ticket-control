@@ -17,6 +17,8 @@
     "test:e2e": "playwright test",
     "test:e2e:prod": "cross-env E2E_PRODUCTION=1 playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:conformance": "playwright test -c conformance/playwright.conformance.config.ts",
+    "test:conformance:prod": "cross-env CONFORMANCE_PRODUCTION=1 playwright test -c conformance/playwright.conformance.config.ts",
     "visual": "playwright test -c playwright.visual.config.ts",
     "design:lint": "node node_modules/@google/design.md/dist/index.js lint docs/DESIGN.md",
     "db:up": "node scripts/local-db.mjs start",
