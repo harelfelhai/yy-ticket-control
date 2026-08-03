@@ -138,11 +138,17 @@ test.describe("מסכים 11–15 — ניהול", () => {
     const name = uniq("עובד חדש");
     const phone = uniqPhone();
 
+    // הטופס מושבת עד ההידרציה; `selectOption` לפניה נבלע, התפקיד נשאר
+    // ברירת המחדל, ושדה האתר (שמותנה ב-SITE_MANAGER) אינו מרונדר כלל.
+    await expect(page.getByRole("button", { name: "הוסף משתמש" })).toBeEnabled();
     await page.getByLabel("שם", { exact: true }).fill(name);
     await page.getByLabel("טלפון", { exact: true }).fill(phone);
     await page.getByLabel("תפקיד").selectOption({ label: "מנהל עבודה" });
-    await expect(page.getByLabel("אתר", { exact: true })).toBeVisible();
-    await page.getByLabel("אתר", { exact: true }).selectOption({ label: SITE_A });
+    // ‏`getByLabel("אתר", {exact:true})` נכשל כאן: ה-`Field` עוטף את ה-select
+    // בתוך ה-`label`, ולכן ה-textContent שלו הוא "אתר" ועוד כל טקסטי
+    // האפשרויות. ‏`getByRole` משתמש בשם הנגיש המחושב ולא בטקסט הגולמי.
+    await expect(page.getByRole("combobox", { name: "אתר" })).toBeVisible();
+    await page.getByRole("combobox", { name: "אתר" }).selectOption({ label: SITE_A });
     await page.getByLabel("סיסמה ראשונית").fill("conformance-1234");
     await page.getByRole("button", { name: "הוסף משתמש" }).click();
 

@@ -128,7 +128,9 @@ test.describe("מסך 3 — עריכת נמענים", () => {
   });
 
   test("S3-06 — נוסח אישור ההוספה כלשונו באפיון", async ({ page }) => {
-    acceptDialogs(page);
+    // אין `acceptDialogs` כאן: הבדיקה רושמת מאזין משלה שגם קורא את הנוסח
+    // וגם מאשר. שני מאזינים שמאשרים את אותו דיאלוג נופלים על
+    // "Cannot accept dialog which is already handled".
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-אישור");
     await createTicket(page, {
@@ -152,7 +154,6 @@ test.describe("מסך 3 — עריכת נמענים", () => {
   });
 
   test("S3-07 — נוסח אישור ההסרה כלשונו באפיון", async ({ page }) => {
-    acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-הסרה");
     await createTicket(page, {

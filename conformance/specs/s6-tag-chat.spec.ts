@@ -84,6 +84,9 @@ test.describe("מסך 6 — צ׳אט קבוצתי לפי תגית", () => {
 
     await page.goto("/tags");
     await page.getByRole("link", { name: new RegExp(tagName) }).click();
+    // ההמתנה אינה קוסמטית: בלעדיה `page.url()` עדיין מחזיר `/tags`,
+    // ו-`tagUrl` היה מצביע על הרשימה במקום על מסך התגית.
+    await expect(page).toHaveURL(/\/tags\/[a-z0-9]+$/);
     const tagUrl = new URL(page.url()).pathname;
     const tagId = tagUrl.split("/").pop() ?? "";
 
@@ -101,7 +104,9 @@ test.describe("מסך 6 — צ׳אט קבוצתי לפי תגית", () => {
 
     // אחרי הפתיחה — הצ׳אט נפתח, והפניות אינן מוצגות בשום צורה.
     await page.goto(`${link}/tag/${tagId}`);
-    await expect(page.getByText("צ׳אט קבוצתי")).toBeVisible();
+    // כותרת המסך בפורטל היא שם התגית, ומתחתיה "צ׳אטים קבוצתיים" ברבים.
+    await expect(page.getByRole("heading", { name: tagName })).toBeVisible();
+    await expect(page.getByLabel("תגובה")).toBeVisible();
     await expect(page.getByText("פניות בתגית")).toHaveCount(0);
     await expect(page.getByText(description)).toHaveCount(0);
     await expect(page.getByText(/פתוחות · .* סגורות/)).toHaveCount(0);
