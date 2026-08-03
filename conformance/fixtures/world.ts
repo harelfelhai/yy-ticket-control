@@ -4,7 +4,7 @@ import path from "node:path";
 import { type Page, expect } from "@playwright/test";
 import { openFilters, pick } from "../../e2e/helpers";
 import { SITE_A } from "./cast";
-import { cdb } from "./db";
+import { query } from "./db";
 
 export { openFilters, pick };
 
@@ -59,6 +59,30 @@ export interface TicketDraftInput {
   saveAsDraft?: boolean;
 }
 
+/**
+ * בוחר נמען קיים מתוך הבורר.
+ *
+ * לא `pick`: אפשרות של נמען מציגה גם רמז (טלפון או מייל) בתוך אותו
+ * `role="option"` (`learned-select.tsx:152`), ולכן השם הנגיש שלה הוא
+ * "קבלן מלא 0521111111" והתאמה מדויקת לשם לבדו אינה מוצאת אותה. זו הסיבה
+ * שהמסלול הזה לא נבדק עד היום — הבדיקות הקיימות תמיד **יוצרות** נמען חדש
+ * ואינן בוחרות קיים.
+ */
+export async function pickRecipient(page: Page, name: string): Promise<void> {
+  await page
+    .getByRole("button", { name: /^נמענים/ })
+    .first()
+    .click();
+  await page
+    .getByRole("option", { name: new RegExp(`^${escapeRegExp(name)}`) })
+    .first()
+    .click();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** יוצר איש מקצוע חדש מתוך בורר הנמענים */
 export async function addProfessional(
   page: Page,
@@ -87,20 +111,66 @@ export async function createTicket(page: Page, input: TicketDraftInput = {}): Pr
   if (input.description) await page.getByLabel("תיאור").fill(input.description);
 
   for (const name of input.recipients ?? []) {
-    await pick(page, "נמענים", name);
+    await pickRecipient(page, name);
   }
   if (input.newProfessional) await addProfessional(page, input.newProfessional);
 
   const button = input.saveAsDraft ? "שמור כטיוטה" : "שלח לנמענים";
   await page.getByRole("button", { name: button }).click();
-  await expect(page).toHaveURL(/\/tickets\/[a-z0-9]+$/);
+  await expect(page).toHaveURL(TICKET_URL);
   return new URL(page.url()).pathname;
 }
 
+/**
+ * כתובת של פנייה קיימת — **ולא** `/tickets/new` או `/tickets/batch`.
+ *
+ * ‏`/\/tickets\/[a-z0-9]+$/` נראה נכון והוא מלכודת: `new` תואם אותו. המתנה
+ * לניווט אחרי השיגור הסתיימה מיד, `createTicket` החזיר `/tickets/new`, וכל
+ * בדיקה שהמשיכה משם עבדה על המסך הלא נכון — כולל בדיקת הרשאה שהחזירה 200
+ * על טופס היצירה במקום 404 על פנייה זרה. הכשל נראה כפער במוצר.
+ */
+export const TICKET_URL = /\/tickets\/(?!new$|batch$)[a-z0-9]+$/;
+
 export function ticketIdFromPath(pathname: string): string {
   const id = pathname.split("/").pop();
-  if (!id) throw new Error(`נתיב פנייה לא תקין: ${pathname}`);
+  if (!id || id === "new" || id === "batch") {
+    throw new Error(`נתיב פנייה לא תקין: ${pathname}`);
+  }
   return id;
+}
+
+/**
+ * קבוצה בלוח, לפי כותרתה.
+ *
+ * הקבוצות הן `<section>` בלי `aria-label`, ולכן אין להן תפקיד `region`
+ * בעץ הנגישות ו-`getByRole("region")` לא ימצא אותן. הלוקטור מסתמך על
+ * הכותרת שבתוכן — שהיא ממילא מה שהאפיון מחייב שיהיה שם (S1-03/05/07).
+ */
+export function boardSection(page: Page, label: string) {
+  return page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: new RegExp(`^${label}`) }) });
+}
+
+/** הארכיון המקופל — `<details>` ולא `<section>` (S1-08) */
+export function boardArchive(page: Page) {
+  return page.locator("details").filter({ hasText: "ארכיון" });
+}
+
+/** כרטיס פנייה בלוח, לפי טקסט שמופיע בו */
+export function boardCard(page: Page, text: string) {
+  return page.locator('a[href^="/tickets/"]').filter({ hasText: text });
+}
+
+/**
+ * מסך "הקישור אינו בתוקף" (§4 מסך 8, שורה 329).
+ *
+ * שני חלקים ולא משפט אחד: המימוש מפצל את הנוסח לכותרת ולפסקה. הפיצול
+ * מדווח כפער ניסוח, אך ההתנהגות — חסימת הגישה — נבדקת כאן.
+ */
+export async function expectExpiredLink(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { name: "הקישור אינו בתוקף" })).toBeVisible();
+  await expect(page.getByText("פנה למנהל העבודה שלך.")).toBeVisible();
 }
 
 /** שורת נמען ברצועת הנמענים במסך הפנייה */
@@ -122,15 +192,44 @@ export async function showLink(page: Page, contractorName: string): Promise<stri
 }
 
 /**
+ * נכנס לפורטל הקבלן ופותח משם פנייה מסוימת.
+ *
+ * הניווט הוא דרך **הלוח** ולא ישירות לכתובת הפנייה, כי זו הדרישה עצמה:
+ * "הכניסה בקישור אישי… ומציג לו לוח בקרה אישי — לא פנייה בודדת" (§4 מסך 8).
+ * בדיקה שקופצת ישר לפנייה מדלגת על מה שהאפיון מחייב.
+ */
+export async function openPortalTicket(
+  page: Page,
+  link: string,
+  description: string,
+): Promise<void> {
+  await page.goto(link);
+  await page.getByRole("link").filter({ hasText: description }).first().click();
+  await expect(page.getByText(description).first()).toBeVisible();
+}
+
+/**
  * מזיז את הפנייה אחורה בזמן. זו הדרך היחידה לאמת את §5.ג בתוך ריצה —
  * הסף הוא 7 ימים, והבדיקה אינה יכולה להמתין.
  */
 export async function ageTicket(ticketId: string, days: number): Promise<void> {
   const at = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  await cdb.ticket.update({
-    where: { id: ticketId },
-    data: { lastActivityAt: at, createdAt: at },
-  });
+  await query(`update "Ticket" set "lastActivityAt" = $1, "createdAt" = $1 where id = $2`, [
+    at,
+    ticketId,
+  ]);
+}
+
+/** קורא את מספר הטוקנים הפעילים של איש מקצוע — לאימות יציבות הקישור (V02-06) */
+export async function activeTokenCount(professionalName: string): Promise<number> {
+  const rows = await query<{ count: string }>(
+    `select count(*)::text as count
+       from "AccessToken" t
+       join "Professional" p on p.id = t."professionalId"
+      where p.name = $1 and t."revokedAt" is null`,
+    [professionalName],
+  );
+  return Number(rows[0]?.count ?? 0);
 }
 
 /** מריץ ג׳וב אמיתי של המערכת (לא שכפול שלו) מול בסיס הבדיקות */

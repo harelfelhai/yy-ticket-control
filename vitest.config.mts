@@ -23,7 +23,14 @@ export default defineConfig({
         test: {
           name: "unit",
           environment: "jsdom",
-          include: ["tests/unit/**/*.test.{ts,tsx}"],
+          // `tests/conformance/source/**` נכלל כאן ולא באינטגרציה: אלה
+          // בדיקות שקוראות את קוד המקור ואת הסכימה כטקסט — הן מאמתות
+          // **היעדר** של פיצ׳רים שהאפיון הוציא מהתחולה (§6), ולכן אין להן
+          // מה לעשות מול בסיס נתונים.
+          include: [
+            "tests/unit/**/*.test.{ts,tsx}",
+            "tests/conformance/source/**/*.test.ts",
+          ],
           setupFiles: ["tests/setup-unit.ts"],
         },
       },
@@ -32,7 +39,10 @@ export default defineConfig({
         test: {
           name: "integration",
           environment: "node",
-          include: ["tests/integration/**/*.test.ts"],
+          include: [
+            "tests/integration/**/*.test.ts",
+            "tests/conformance/db/**/*.test.ts",
+          ],
           setupFiles: ["tests/setup-integration.ts"],
           globalSetup: ["tests/global-setup-integration.ts"],
           // כל קובצי האינטגרציה חולקים בסיס נתונים אחד. הרצה במקביל הייתה
