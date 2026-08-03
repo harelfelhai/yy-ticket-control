@@ -72,7 +72,7 @@ test.describe("מסך 9 — חיפוש", () => {
     acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/search");
-    await expect(page.getByText(/תמלול/)).toBeVisible();
+    await expect(page.getByText(/תמלול/).first()).toBeVisible();
   });
 });
 
@@ -141,6 +141,7 @@ test.describe("מסכים 11–15 — ניהול", () => {
     await page.getByLabel("שם", { exact: true }).fill(name);
     await page.getByLabel("טלפון", { exact: true }).fill(phone);
     await page.getByLabel("תפקיד").selectOption({ label: "מנהל עבודה" });
+    await expect(page.getByLabel("אתר", { exact: true })).toBeVisible();
     await page.getByLabel("אתר", { exact: true }).selectOption({ label: SITE_A });
     await page.getByLabel("סיסמה ראשונית").fill("conformance-1234");
     await page.getByRole("button", { name: "הוסף משתמש" }).click();
@@ -212,10 +213,13 @@ test.describe("מסכים 11–15 — ניהול", () => {
 
     await loginAs(page, "admin");
     await page.goto(path);
-    await page.getByRole("button", { name: "מחק פנייה" }).click();
-    // אישור כפול: הלחיצה הראשונה חושפת את האזהרה בלבד.
+    // האזהרה מוצגת לצד הכפתור עוד לפני הלחיצה — "מחיקה היא לכפילות או
+    // רשומה שגויה בלבד. פנייה שטופלה — סגור, אל תמחק."
     await expect(page.getByText(/מחיקה היא לכפילות/)).toBeVisible();
-    await page.getByRole("button", { name: /כן, מחק/ }).click();
+    await page.getByRole("button", { name: "מחק פנייה" }).click();
+    // הלחיצה הראשונה חושפת את האישור הסופי; זהו האישור הכפול.
+    await expect(page.getByText(/יימחקו לצמיתות/)).toBeVisible();
+    await page.getByRole("button", { name: "כן, מחק לצמיתות" }).click();
     await expect(page).toHaveURL(/\/board/);
 
     await page.goto(path);

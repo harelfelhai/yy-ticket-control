@@ -28,7 +28,10 @@ test.describe("§5.ד — מי מטפל", () => {
     // מנהל א׳ מגיב ראשון — ואין עדיין מטפל, ולכן הוא נקבע.
     await page.getByLabel("תגובה").fill("בדקתי בשטח");
     await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
-    await expect(page.getByText("בדקתי בשטח")).toBeVisible();
+    // תיבת הכתיבה מתרוקנת רק אחרי שההודעה נשמרה — זו ההמתנה האמיתית.
+    // ‏`getByText` לבדו היה נתפס גם על הטקסט שבתוך ה-textarea.
+    await expect(page.getByLabel("תגובה")).toHaveValue("");
+    await expect(page.getByText(/מטפל בפנייה/)).toBeVisible();
 
     await page.goto("/board");
     await expect(boardCard(page, description)).toContainText(
@@ -40,7 +43,7 @@ test.describe("§5.ד — מי מטפל", () => {
     await page.goto(path);
     await page.getByLabel("תגובה").fill("גם אני הסתכלתי");
     await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
-    await expect(page.getByText("גם אני הסתכלתי")).toBeVisible();
+    await expect(page.getByLabel("תגובה")).toHaveValue("");
 
     await page.goto("/board");
     await expect(boardCard(page, description)).toContainText(
@@ -80,12 +83,8 @@ test.describe("§5.ד — מי מטפל", () => {
 
     await loginAs(page, "managerA2");
     await page.goto(path);
-    await page.getByRole("button", { name: TICKET_SCREEN.markHandler }).click();
-
-    await page.goto("/board");
-    await expect(boardCard(page, description)).toContainText(
-      REASON_EXAMPLES.handler(CAST.managerA2.name),
-    );
+    // כאן אמור להיות הכפתור שהאפיון מחייב. הוא אינו קיים.
+    await expect(page.getByRole("button", { name: TICKET_SCREEN.markHandler })).toBeVisible();
   });
 });
 

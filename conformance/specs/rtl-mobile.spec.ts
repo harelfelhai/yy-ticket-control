@@ -28,9 +28,15 @@ async function expectRtlNoOverflow(page: Page, label: string) {
  *
  * "ערוך" של שם הדייר הוא קישור **בתוך משפט** — `DESIGN.md § Layout` מתיר
  * זאת, ו-`tests/unit/primitives.test.ts` כבר מחזיק אותו ברשימת החריגים
- * המנומקת. "×" של צ׳יפ הנמען מטופל בבדיקה נפרדת ומדווח כפער.
+ * המנומקת (36px).
+ *
+ * שלושת האחרים **אינם** חריגים מסונקצנים אלא פערים שנמדדו: "×" של צ׳יפ
+ * הנמען (16px), "שנה שם" ברשימת התגיות (16px) ו-"← חזרה לרשימה" בפורטל
+ * (20px). הם מוחרגים כאן כדי שהסריקה הרוחבית תמשיך לתפוס פערים **חדשים**
+ * ולא תיתקע על שלושה ידועים; כל אחד מהם מדווח ב-conformance-report,
+ * ו-`S0-03` מחזיק אותם כבדיקה שנועדה להיכשל עד שיתוקנו.
  */
-const SANCTIONED = ["ערוך", "×"];
+const SANCTIONED = ["ערוך", "×", "שנה שם", "← חזרה לרשימה"];
 
 async function smallTargets(page: Page): Promise<string[]> {
   const targets = page.locator("main button:visible, main a:visible");

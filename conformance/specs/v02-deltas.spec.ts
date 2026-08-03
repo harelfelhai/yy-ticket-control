@@ -54,6 +54,8 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
     await loginAs(page, "managerA");
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).first().click();
+    // הניווט סגר את תיבת הקישור; "צור קישור חדש" חי בתוכה, ולכן פותחים שוב.
+    await showLink(page, contractor);
     await recipientRow(page, contractor)
       .getByRole("button", { name: "צור קישור חדש" })
       .click();

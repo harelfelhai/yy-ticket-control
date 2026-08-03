@@ -93,6 +93,7 @@ test.describe("מסך 6 — צ׳אט קבוצתי לפי תגית", () => {
 
     await loginAs(page, "managerA");
     await page.goto(tagUrl);
+    await expect(page.getByRole("heading", { name: "מי רואה את הצ׳אט" })).toBeVisible();
     await page.getByRole("button", { name: /^פתח לקבלנים/ }).first().click();
     await page.getByRole("option", { name: new RegExp(`^${contractor}`) }).first().click();
     await page.getByRole("button", { name: "פתח", exact: true }).click();

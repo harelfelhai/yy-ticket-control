@@ -89,9 +89,9 @@ export async function addProfessional(
   input: { name: string; phone?: string; email?: string },
 ): Promise<void> {
   await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
-  await page.getByLabel("שם").fill(input.name);
-  if (input.phone) await page.getByLabel("טלפון").fill(input.phone);
-  if (input.email) await page.getByLabel("מייל").fill(input.email);
+  await page.getByLabel("שם").last().fill(input.name);
+  if (input.phone) await page.getByLabel("טלפון").last().fill(input.phone);
+  if (input.email) await page.getByLabel("מייל").last().fill(input.email);
   await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
   await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(input.name);
 }
@@ -223,15 +223,31 @@ export async function openPortalTicket(
   page: Page,
   link: string,
   description: string,
+  ticketId?: string,
 ): Promise<void> {
   await page.goto(link);
   const card = page.getByRole("link").filter({ hasText: description }).first();
 
-  // פנייה שנסגרה יורדת ללשונית הארכיון המקופלת (§4 מסך 8), ולכן הקישור
-  // אינו נראה עד שפותחים אותה. זו התנהגות נדרשת ולא תקלה.
-  if (!(await card.isVisible().catch(() => false))) {
-    const summary = page.locator("details > summary").first();
-    if (await summary.isVisible().catch(() => false)) await summary.click();
+  if (await card.isVisible().catch(() => false)) {
+    await card.click();
+    await expect(page.getByText(description).first()).toBeVisible();
+    return;
+  }
+
+  /**
+   * פנייה שנסגרה יורדת ללשונית הארכיון המקופלת (§4 מסך 8) — **ושם הכרטיס
+   * אינו מציג את התיאור כלל**: `p/[token]/page.tsx:95-99` מרנדר בארכיון רק
+   * בניין, דירה ותחום. סינון לפי התיאור לא יכול היה למצוא אותו לעולם, וזו
+   * הסיבה שהבדיקה נתקעה עד ל-timeout ולא נכשלה מהר. לכן, כשהתיאור אינו
+   * נמצא, פותחים את הארכיון ומאתרים לפי מזהה הפנייה שבכתובת.
+   */
+  const summary = page.locator("details > summary").first();
+  if (await summary.isVisible().catch(() => false)) await summary.click();
+
+  if (ticketId) {
+    await page.locator(`a[href$="/${ticketId}"]`).first().click();
+    await expect(page.getByRole("main")).toBeVisible();
+    return;
   }
 
   await card.click();
@@ -250,11 +266,16 @@ export async function ageTicket(ticketId: string, days: number): Promise<void> {
    * ההיסט: השעון הישראלי הוא UTC+3 בקיץ, ולכן "לפני 9 ימים" נשמר כ-8 ימים
    * ו-21 שעות, ו-`Math.floor` בחישוב הגיל החזיר **8**. הבדיקה נכשלה על
    * "ללא תנועה 8 ימים" ונראתה כפער במוצר.
+   *
+   * גם `now()` לבדו אינו מספיק: הוא `timestamptz`, וההשמה לעמודה חסרת
+   * אזור-זמן שומרת את השעה **המקומית**. Prisma קורא אותה כ-UTC, והתוצאה
+   * מוקדמת בשלוש שעות — אותה טעות בדיוק, בכיוון ההפוך. לכן
+   * `now() at time zone 'utc'`.
    */
   await query(
     `update "Ticket"
-        set "lastActivityAt" = now() - ($1 || ' days')::interval - interval '2 hours',
-            "createdAt"      = now() - ($1 || ' days')::interval - interval '2 hours'
+        set "lastActivityAt" = (now() at time zone 'utc') - ($1 || ' days')::interval - interval '2 hours',
+            "createdAt"      = (now() at time zone 'utc') - ($1 || ' days')::interval - interval '2 hours'
       where id = $2`,
     [String(days), ticketId],
   );
@@ -267,7 +288,14 @@ export async function ageTicket(ticketId: string, days: number): Promise<void> {
  * "Cannot accept dialog which is already handled" ברגע ששני דיאלוגים
  * מגיעים בזה אחר זה — מטפל אחד ומתמיד עדיף.
  */
+const dialogsHandled = new WeakSet<Page>();
+
 export function acceptDialogs(page: Page): void {
+  // ‏idempotent: קריאה גם ב-`beforeEach` וגם בגוף הבדיקה רשמה שני מאזינים,
+  // ושניהם ניסו לאשר את אותו דיאלוג — "Cannot accept dialog which is
+  // already handled".
+  if (dialogsHandled.has(page)) return;
+  dialogsHandled.add(page);
   page.on("dialog", (dialog) => {
     void dialog.accept();
   });

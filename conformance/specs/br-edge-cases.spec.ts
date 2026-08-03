@@ -1,5 +1,4 @@
 import { type Page, expect, test } from "@playwright/test";
-import { CAST } from "../fixtures/cast";
 import { query } from "../fixtures/db";
 import { loginAs } from "../fixtures/roles";
 import { EDGE_CASES, PORTAL, TICKET_SCREEN } from "../fixtures/spec-text";
@@ -38,7 +37,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-נסגרה");
     const description = uniq("תקלה-נסגרה");
-    await createTicket(page, {
+    const path = await createTicket(page, {
       building: "בניין א",
       apartment: "1",
       domain: "חשמל",
@@ -50,7 +49,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await page.getByRole("button", { name: TICKET_SCREEN.close }).click();
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.closedNotice);
 
-    await openPortalTicket(page, link, description);
+    await openPortalTicket(page, link, description, ticketIdFromPath(path));
     await expect(page.getByText(EDGE_CASES.closedTicketBlocked)).toBeVisible();
     await expect(page.getByRole("button", { name: PORTAL.markDone })).toHaveCount(0);
     await expect(page.getByRole("button", { name: PORTAL.askQuestion })).toHaveCount(0);
@@ -87,7 +86,7 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await recipientRow(page, removed)
       .getByRole("button", { name: /^הסר/ })
       .click();
-    await expect(page.getByText("נמענים שהוסרו")).toBeVisible();
+    await expect(page.getByRole("list", { name: "נמענים שהוסרו" })).toBeVisible();
 
     // אותו קישור — הפנייה כבר אינה ברשימה.
     await page.goto(link);

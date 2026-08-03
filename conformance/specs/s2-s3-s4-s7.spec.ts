@@ -88,12 +88,12 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
       newProfessional: { name: contractor, phone: uniqPhone() },
     });
 
-    await expect(page.getByText(THREAD_EVENTS.assigned(contractor))).toBeVisible();
+    await expect(page.getByText(THREAD_EVENTS.assigned(contractor)).first()).toBeVisible();
 
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();
-    await expect(page.getByText(THREAD_EVENTS.removed(contractor))).toBeVisible();
+    await expect(page.getByText(THREAD_EVENTS.removed(contractor)).first()).toBeVisible();
   });
 
   test("S2-08/S2-09/S2-10/S2-16 — כל פעולות המסך קיימות לפותח", async ({ page }) => {
@@ -171,7 +171,7 @@ test.describe("מסך 3 — עריכת נמענים", () => {
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();
-    await expect(page.getByText("נמענים שהוסרו")).toBeVisible();
+    await expect(page.getByRole("list", { name: "נמענים שהוסרו" })).toBeVisible();
 
     expect(messages).toContain(RECIPIENTS_SCREEN.confirmRemove(contractor));
   });

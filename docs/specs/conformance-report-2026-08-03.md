@@ -132,7 +132,17 @@
 | 9 | `MediaFile.r2Key` | `MediaFile.storageKey` + `uploaded` | שיפור: הפשטת אחסון שמאפשרת דרייבר מקומי |
 | 10 | `Message.eventType` — 8 ערכים | 11 ערכים (נוספו `FIELDS_EDITED`, `TAG_GRANTED`, `TAG_REVOKED`) | הרחבה עקבית |
 
-<!-- PLAN-VERIFY -->
+### 2.3 אימות הדלתות בפועל
+
+| מה נבדק | הפקודה / הסריקה | התוצאה |
+|---|---|---|
+| מספר סביבות Railway | `railway status --json` | **סביבה אחת** — `production`; שירותים: `web`, `Postgres` |
+| ‏route handlers מול Server Actions | `find src/app -name route.ts` · `grep -rl '"use server"' src/app` | **3 route handlers** מול **9 קובצי Server Actions** |
+| ‏service worker | סריקת מקור על `serviceWorker.register`/`next-pwa`/`workbox` | **אין** — מאשר את ביטול ה-PWA |
+| אינדקסי `pg_trgm` | שאילתה ל-`pg_indexes` במסד המקומי ובמסד הפרודקשן | **0 ו-0.** התוסף מותקן בשניהם |
+| מה שמוגש בפרודקשן מול הריפו | `npm run smoke:prod` | **13/13 עברו**, כולל השוואת 10 טוקני צבע מוגשים מול הריפו |
+
+
 
 ---
 

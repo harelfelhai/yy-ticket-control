@@ -215,7 +215,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();
-    await expect(page.getByText("נמענים שהוסרו")).toBeVisible();
+    await expect(page.getByRole("list", { name: "נמענים שהוסרו" })).toBeVisible();
 
     // האפיון אינו קובע מה הסטטוס כאן. הבדיקה מתעדת את ההתנהגות בפועל
     // ואינה קובעת שהיא שגויה — הפער הוא באפיון, ומדווח ככזה.

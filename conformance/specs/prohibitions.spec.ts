@@ -239,6 +239,8 @@ test.describe("PROH — הפנייה חוזרת לפותח", () => {
     await page.goto(path);
     // הפנייה אינה נעולה: המנהל השני קורא, מגיב, ועורך נמענים.
     await expect(page.getByLabel("תגובה")).toBeEditable();
+    // כפתור השליחה מושבת כשאין מה לשלוח — מקלידים ואז בודקים.
+    await page.getByLabel("תגובה").fill("גם אני יכול לפעול");
     await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "+ איש מקצוע חדש" })).toBeVisible();
   });
