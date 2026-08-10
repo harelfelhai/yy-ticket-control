@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "./db";
 import { normalizeEmail, normalizePhone } from "./normalize";
 import { clearRateLimit, consumeRateLimit, peekRateLimit } from "./rate-limit";
-import { type SessionUser, destroySession, getSessionUser } from "./session";
+import { type SessionUser, getSessionUser } from "./session";
 
 /**
  * גיבוב סיסמאות ואימות פרטי התחברות.
@@ -154,22 +154,51 @@ const DUMMY_HASH =
   "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHR2YWx1ZTEy$Iq0PC7L5v8XZ3Ff8m3z8YQZ0xU6bYVQm3Yy0mSJm7hI";
 
 /**
- * שער הכניסה לכל מסך פנימי: מחזיר את המשתמש המחובר או מפנה למסך ההתחברות.
+ * הנתיב שמסיים סשן שאינו תקף עוד. ‏Route Handler, ולא כאן.
+ *
+ * מחיקת סשן היא כתיבת עוגייה, ו-Next מתיר אותה רק ב-Server Action או
+ * ב-Route Handler. ‏`requireUser()` רץ ברובו בתוך רינדור של Server Component
+ * (ה-layout הפנימי וכל מסך מוגן), ושם `destroySession()` זורק
+ * ‏"Cookies can only be modified in a Server Action or Route Handler".
+ * החריגה הזו קדמה ל-`redirect()` שאמור היה לבוא אחריה, ולכן ההפניה למסך
+ * ההתחברות לא בוצעה מעולם והמשתמש קיבל 500 בכל מסך — כולל התרחיש השגרתי
+ * שבו מנהל משבית עובד במסך הניהול.
+ */
+export const SESSION_ENDED_PATH = "/api/auth/session-ended";
+
+/**
+ * טוען מחדש מה-DB את המשתמש שבעוגייה, או null אם אין סשן, המשתמש נמחק, או הושבת.
+ *
+ * מקור האמת היחיד לשאלה "האם הסשן הזה עדיין תקף": גם שער המסכים
+ * (`requireUser`) וגם ה-Route Handler שמסיים את הסשן נשענים עליו, כך שאין
+ * שתי הגדרות שיכולות להיפרד בשקט ולהכריע הפוך זו מזו.
+ */
+export async function activeSessionUser(): Promise<SessionUser | null> {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return null;
+
+  const user = await db.user.findUnique({ where: { id: sessionUser.id } });
+  if (!user || !user.active) return null;
+
+  return { id: user.id, name: user.name, role: user.role, siteId: user.siteId };
+}
+
+/**
+ * שער הכניסה לכל מסך פנימי: מחזיר את המשתמש המחובר או מפנה החוצה.
  *
  * הבדיקה מרעננת מול ה-DB ולא מסתפקת בעוגייה. העוגייה תקפה 30 יום, ובלי
  * הריענון הזה משתמש שהושבת או שתפקידו שונה היה ממשיך לפעול עם ההרשאות
  * הישנות עד שהעוגייה תפוג. זו גם הסיבה ש-`proxy.ts` מבצע רק בדיקה
  * אופטימית — ההכרעה האמיתית נמצאת כאן, קרוב לנתונים.
+ *
+ * ההפניה היא ל-`SESSION_ENDED_PATH` ולא ישירות ל-`/login`, מפני שהעוגייה
+ * חייבת להימחק: מסך ההתחברות מעביר ללוח כל מי שמחזיק עוגייה (`getSessionUser`
+ * קורא אותה בלי לפנות ל-DB), וסשן פגום שנשאר על מקומו היה יוצר לולאת הפניות
+ * בין הלוח למסך ההתחברות.
  */
 export async function requireUser(): Promise<SessionUser> {
-  const sessionUser = await getSessionUser();
-  if (!sessionUser) redirect("/login");
+  const user = await activeSessionUser();
+  if (!user) redirect(SESSION_ENDED_PATH);
 
-  const user = await db.user.findUnique({ where: { id: sessionUser.id } });
-  if (!user || !user.active) {
-    await destroySession();
-    redirect("/login");
-  }
-
-  return { id: user.id, name: user.name, role: user.role, siteId: user.siteId };
+  return user;
 }

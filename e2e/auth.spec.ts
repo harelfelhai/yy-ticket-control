@@ -69,3 +69,62 @@ test.describe("התחברות", () => {
     await expect(page).toHaveURL(/\/board$/);
   });
 });
+
+/**
+ * השבתת עובד — הפעולה השגרתית ביותר במסך הניהול — במסלול המלא ובשני
+ * דפדפנים: מנהל שמשבית, ועובד שכבר מחובר.
+ *
+ * הבדיקה קיימת בגלל תקלה אמיתית: `requireUser` מחק את הסשן בתוך רינדור,
+ * ‏Next אוסר כתיבת עוגייה בשלב הזה, והחריגה החליפה את ההפניה למסך ההתחברות
+ * ב-500. העובד המושבת לא "הוצא החוצה" — **המערכת כולה נפלה עבורו**, בכל מסך.
+ *
+ * ולכן נבדק כאן קוד התשובה ולא רק הכתובת: הפניה למסך ההתחברות ו-500 נראים
+ * דומה בצילום מסך, והבדיקה חייבת להבחין ביניהם.
+ */
+test("עובד שהושבת מוחזר למסך ההתחברות, ואינו מקבל שגיאת שרת", async ({ page, browser }) => {
+  const stamp = Date.now();
+  const employeeName = `עובד להשבתה ${stamp}`;
+  const employeePhone = `054${String(stamp).slice(-7)}`;
+  const employeePassword = "sod-chazak-456";
+
+  // ── המנהל מקים את העובד ────────────────────────────────────────────
+  await page.goto("/board");
+  if (new URL(page.url()).pathname === "/login") await login(page);
+  await expect(page).toHaveURL(/\/board$/);
+
+  await page.goto("/admin/users");
+  await page.getByLabel("שם", { exact: true }).fill(employeeName);
+  await page.getByLabel("טלפון").fill(employeePhone);
+  await page.getByLabel("אתר").selectOption({ label: "אתר לדוגמה" });
+  await page.getByLabel("סיסמה ראשונית").fill(employeePassword);
+  await page.getByRole("button", { name: "הוסף משתמש" }).click();
+  await expect(page.getByText(employeeName)).toBeVisible();
+
+  // ── העובד מתחבר בדפדפן נפרד ומגיע ללוח ─────────────────────────────
+  const employeeContext = await browser.newContext();
+  const employeePage = await employeeContext.newPage();
+  try {
+    await employeePage.goto("/login");
+    await employeePage.getByLabel("טלפון או מייל").fill(employeePhone);
+    await employeePage.getByLabel("סיסמה").fill(employeePassword);
+    await employeePage.getByRole("button", { name: "כניסה" }).click();
+    await expect(employeePage).toHaveURL(/\/board$/);
+
+    // ── המנהל משבית אותו בזמן שהוא מחובר ─────────────────────────────
+    const row = page.getByRole("listitem").filter({ hasText: employeeName });
+    await row.getByRole("button", { name: "השבת" }).click();
+    await expect(row.getByRole("button", { name: "הפעל" })).toBeVisible();
+
+    // ── ומכאן: הפניה למסך ההתחברות, לא 500 ───────────────────────────
+    const response = await employeePage.goto("/board");
+    expect(response?.status()).toBe(200);
+    await expect(employeePage).toHaveURL(/\/login/);
+
+    // הסשן באמת מת, ולא רק ניווט אחד נחסם.
+    const tagsResponse = await employeePage.goto("/tags");
+    expect(tagsResponse?.status()).toBe(200);
+    await expect(employeePage).toHaveURL(/\/login/);
+  } finally {
+    await employeeContext.close();
+  }
+});
