@@ -161,8 +161,16 @@ export function LearnedSelect({
               </li>
             ))}
 
+            {/*
+             * ‏`filtered` ריק ו-`canCreate` כבוי פירושו בפועל **רשימה ריקה בלי
+             * חיפוש** — שורת "צור חדש" דורשת טקסט בשדה, ולכן היא עדיין אינה
+             * קיימת. זה בדיוק המסך שדווח מהשטח כ"אין איפה להגדיר בניינים":
+             * "אין תוצאות" לבדו קורא כמבוי סתום, בעוד שהמסלול פתוח לגמרי.
+             */}
             {filtered.length === 0 && !canCreate ? (
-              <li className="px-3 py-2 text-sm text-muted">{he.common.noResults}</li>
+              <li className="px-3 py-2 text-sm text-muted">
+                {onCreate ? he.directory.emptyListHint : he.common.noResults}
+              </li>
             ) : null}
           </ul>
 

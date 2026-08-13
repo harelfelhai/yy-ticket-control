@@ -7,6 +7,7 @@ import {
   TagError,
   addTagMessage,
   addTagToTicket,
+  deleteTag,
   findOrCreateTag,
   getPortalTagChat,
   getTagContractorLink,
@@ -366,5 +367,56 @@ describe("renameTag — שינוי שם, למנהל המערכת בלבד", () =
   it("מנהל עבודה אינו רשאי לשנות שם תגית", async () => {
     const tag = await findOrCreateTag("תגית", adminId);
     await expect(renameTag(managerAUser, tag.id, "אחר")).rejects.toThrow(he.common.notAllowed);
+  });
+});
+
+/**
+ * ‏`Tag` היא הישות שבה ה-DB **אינו** מגן: ל-`TicketTag`, ל-`TagAccess` ול-
+ * ‏`Message` יש Cascade, כלומר `db.tag.delete` הייתה עוברת בשקט ומשמידה צ׳אט
+ * קבוצתי שלם. הבדיקות כאן מאמתות שהחסימה בקוד היא זו שעוצרת, ושהתוכן שורד.
+ */
+describe("deleteTag — מחיקה חסומה, והיא כל ההגנה שיש", () => {
+  it("פנייה מתויגת חוסמת, והקיבוץ שורד", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    const ticket = await makeTicket(siteAId, managerAId);
+    await db.ticketTag.create({ data: { ticketId: ticket.id, tagId: tag.id } });
+
+    await expect(deleteTag(adminUser, tag.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.taggedTickets(1)),
+    );
+    expect(await db.ticketTag.count({ where: { tagId: tag.id } })).toBe(1);
+  });
+
+  it("הודעה בצ׳אט חוסמת, והצ׳אט אינו נמחק ב-cascade", async () => {
+    const tag = await findOrCreateTag("צ׳אט חי", adminId);
+    await addTagMessage(adminViewer, tag.id, "יש כאן דיון");
+
+    await expect(deleteTag(adminUser, tag.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.tagMessages(1)),
+    );
+    expect(await db.message.count({ where: { tagId: tag.id } })).toBe(1);
+  });
+
+  it("תגית ריקה נמחקת, וגישת הקבלן יורדת איתה", async () => {
+    const tag = await findOrCreateTag("תגית ריקה", adminId);
+    await deleteTag(adminUser, tag.id);
+    expect(await db.tag.findUnique({ where: { id: tag.id } })).toBeNull();
+  });
+
+  it("פתיחה לקבלן יוצרת אירוע בצ׳אט — ולכן היא עצמה חוסמת", async () => {
+    // ‏`grantTagAccess` רושם אירוע `TAG_GRANTED` בצ׳אט התגית, וזו הודעה
+    // לכל דבר. כלומר תגית שנפתחה למישהו אינה "ריקה" — וזה נכון: המחיקה
+    // הייתה מוחקת את התיעוד של מי קיבל גישה ומתי.
+    const tag = await findOrCreateTag("תגית שנפתחה", adminId);
+    await grantTagAccess(adminViewer, tag.id, [electricianId]);
+
+    await expect(deleteTag(adminUser, tag.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.tagMessages(1)),
+    );
+  });
+
+  it("מנהל עבודה אינו רשאי למחוק תגית", async () => {
+    const tag = await findOrCreateTag("תגית", adminId);
+    await expect(deleteTag(managerAUser, tag.id)).rejects.toThrow(he.common.notAllowed);
   });
 });

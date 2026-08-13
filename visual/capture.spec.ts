@@ -145,6 +145,22 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await page.goto("/admin");
   await shot(page, device, "09-admin");
 
+  // מסך 16 — בניינים ודירות. הנתיב תלוי באתר קיים ולכן נשלף ולא נכתב קשיח.
+  // בלי הלכידה הזו זהו המסך היחיד שסבב ה-design-review אינו רואה כלל, והוא
+  // גם הצפוף מבין מסכי הניהול: שתי רמות היררכיה וארבע פעולות לשורה.
+  await page.goto("/admin/sites");
+  await shot(page, device, "13-admin-sites");
+  const firstSite = page.locator('a[href^="/admin/sites/"]').first();
+  if (await firstSite.count()) {
+    await firstSite.click();
+    // בלי ההמתנה הזו הצילום נלכד לפני שהניווט הסתיים, והקובץ שנקרא
+    // "מסך הבניינים" מכיל בפועל את מסך האתרים — תקלה שקטה שהתגלתה רק
+    // כשהסתכלתי על התמונה.
+    await page.waitForURL(/\/admin\/sites\/.+/);
+    await expect(page.getByLabel("שם הבניין")).toBeVisible();
+    await shot(page, device, "14-admin-site-buildings");
+  }
+
   await captureBatchAndTag(page, device);
 });
 

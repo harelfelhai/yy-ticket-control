@@ -3,7 +3,9 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
-import { TagRename } from "./tag-rename";
+import { deleteTagAction, renameTagAction } from "./actions";
+import { DeleteButton } from "@/components/delete-button";
+import { InlineRename } from "@/components/inline-rename";
 import { cardClasses } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -48,7 +50,12 @@ export default async function TagsPage() {
                   {he.tag.grantedCount(tag.grantedCount)}
                 </span>
               </div>
-              {canManage ? <TagRename id={tag.id} name={tag.name} /> : null}
+              {canManage ? (
+                <div className="flex flex-wrap items-start gap-2">
+                  <InlineRename value={tag.name} action={renameTagAction.bind(null, tag.id)} />
+                  <DeleteButton name={tag.name} action={deleteTagAction.bind(null, tag.id)} />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>

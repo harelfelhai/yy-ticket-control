@@ -5,17 +5,30 @@ import { he } from "@/lib/he";
 import type { SessionUser } from "@/lib/session";
 import {
   AdminError,
+  createApartment,
+  createBuilding,
   createInternalUser,
   createSite,
+  deleteApartment,
+  deleteBuilding,
+  deleteDomain,
+  deleteProfessional,
+  deleteSite,
   listDomains,
   listProfessionalsForAdmin,
+  listSiteTree,
   listSites,
   listUsers,
   mergeProfessionals,
+  renameApartment,
+  renameBuilding,
   renameDomain,
+  renameSite,
   setUserActive,
   updateProfessional,
+  updateUser,
 } from "@/lib/services/admin";
+import { countBlockingReferences } from "@/lib/services/deletion";
 import { resetDb } from "../helpers/reset-db";
 
 let admin: SessionUser;
@@ -261,5 +274,294 @@ describe("renameDomain", () => {
     await db.domain.create({ data: { name: "חשמל" } });
     const d = await db.domain.create({ data: { name: "חשמלל" } });
     await expect(renameDomain(admin, d.id, "חשמל")).rejects.toThrow(he.admin.domainExists);
+  });
+});
+
+// ═══════════════════ בניינים, דירות, ומחיקה חסומה (0.3) ═══════════════════
+//
+// כל בדיקת מחיקה כאן **יוצרת את הרשומה שלה ומוחקת אותה**, ולעולם אינה נוגעת
+// בנתוני ה-seed. מחיקה שנוגעת בנתונים משותפים הייתה מרעילה את ההרצה הבאה.
+
+/** פנייה מינימלית — מספיקה כדי לחסום מחיקה, וזה כל מה שנבדק כאן */
+async function ticketAt(where: {
+  siteId?: string;
+  buildingId?: string;
+  apartmentId?: string;
+  domainId?: string;
+}) {
+  return db.ticket.create({
+    data: {
+      siteId: where.siteId ?? siteId,
+      buildingId: where.buildingId,
+      apartmentId: where.apartmentId,
+      domainId: where.domainId,
+      createdById: admin.id,
+      channel: "SELF",
+      description: "פנייה חוסמת",
+    },
+  });
+}
+
+describe("בניינים ודירות — הזנה מראש (מסך 16)", () => {
+  it("מקים בניין ודירה, ומנרמל את הקלט", async () => {
+    const building = await createBuilding(admin, siteId, "  בניין א  ");
+    expect(building.name).toBe("בניין א");
+
+    // "07" ו-"7" הן אותה דירה — הנרמול יושב ב-`normalizeApartmentNumber`.
+    const apartment = await createApartment(admin, building.id, "07");
+    expect(apartment.number).toBe("7");
+  });
+
+  it("דוחה בניין כפול באותו אתר, ומתיר את אותו שם באתר אחר", async () => {
+    await createBuilding(admin, siteId, "בניין א");
+    await expect(createBuilding(admin, siteId, "בניין א")).rejects.toThrow(
+      he.admin.buildingExists,
+    );
+
+    // הייחודיות היא (אתר, שם): "בניין א׳" קיים בכל אתר, וזה תקין.
+    const other = await createSite(admin, "אתר שני");
+    await expect(createBuilding(admin, other.id, "בניין א")).resolves.toBeDefined();
+  });
+
+  it("דוחה דירה כפולה באותו בניין", async () => {
+    const building = await createBuilding(admin, siteId, "בניין א");
+    await createApartment(admin, building.id, "3");
+    await expect(createApartment(admin, building.id, "3")).rejects.toThrow(
+      he.admin.apartmentExists,
+    );
+  });
+
+  it("משנה שם בניין ומספר דירה", async () => {
+    const building = await createBuilding(admin, siteId, "בנין א");
+    expect((await renameBuilding(admin, building.id, "בניין א")).name).toBe("בניין א");
+
+    const apartment = await createApartment(admin, building.id, "3");
+    expect((await renameApartment(admin, apartment.id, "04")).number).toBe("4");
+  });
+
+  it("דוחה שינוי שם לבניין שכבר קיים באותו אתר", async () => {
+    await createBuilding(admin, siteId, "בניין א");
+    const b = await createBuilding(admin, siteId, "בניין ב");
+    await expect(renameBuilding(admin, b.id, "בניין א")).rejects.toThrow(he.admin.buildingExists);
+  });
+
+  it("עץ האתר מחזיר בניינים, דירות ומוני פניות", async () => {
+    const building = await createBuilding(admin, siteId, "בניין א");
+    const apartment = await createApartment(admin, building.id, "3");
+    await ticketAt({ buildingId: building.id, apartmentId: apartment.id });
+
+    const tree = await listSiteTree(admin, siteId);
+    expect(tree.site.name).toBe("אתר קיים");
+    expect(tree.buildings).toHaveLength(1);
+    expect(tree.buildings[0].ticketCount).toBe(1);
+    expect(tree.buildings[0].apartments[0].ticketCount).toBe(1);
+  });
+
+  it("אתר שאינו קיים מוחזר כשגיאה מוסברת ולא כקריסה", async () => {
+    await expect(listSiteTree(admin, "לא-קיים")).rejects.toThrow(he.admin.siteNotFound);
+  });
+
+  it("מנהל עבודה אינו רשאי בשום פעולה של המסך", async () => {
+    await expect(listSiteTree(manager, siteId)).rejects.toThrow(he.admin.forbidden);
+    await expect(createBuilding(manager, siteId, "בניין")).rejects.toThrow(he.admin.forbidden);
+    await expect(deleteBuilding(manager, "x")).rejects.toThrow(he.admin.forbidden);
+  });
+});
+
+describe("מחיקה — נחסמת כשקיימות הפניות, ומסבירה מה חוסם", () => {
+  it("תחום: נמחק כשאין פניות, ונחסם כשיש — עם המונה בהודעה", async () => {
+    const free = await db.domain.create({ data: { name: "תחום פנוי" } });
+    await deleteDomain(admin, free.id);
+    expect(await db.domain.findUnique({ where: { id: free.id } })).toBeNull();
+
+    const used = await db.domain.create({ data: { name: "תחום בשימוש" } });
+    await ticketAt({ domainId: used.id });
+
+    await expect(deleteDomain(admin, used.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.tickets(1)),
+    );
+    expect(await db.domain.findUnique({ where: { id: used.id } })).not.toBeNull();
+  });
+
+  it("דירה: נחסמת בפנייה אחת, ונמחקת כשאין", async () => {
+    const building = await createBuilding(admin, siteId, "בניין א");
+    const used = await createApartment(admin, building.id, "1");
+    const free = await createApartment(admin, building.id, "2");
+    await ticketAt({ buildingId: building.id, apartmentId: used.id });
+
+    await expect(deleteApartment(admin, used.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.tickets(1)),
+    );
+    await deleteApartment(admin, free.id);
+    expect(await db.apartment.findUnique({ where: { id: free.id } })).toBeNull();
+  });
+
+  it("בניין: הדירות שבתוכו חוסמות אותו, וגם פניות", async () => {
+    const building = await createBuilding(admin, siteId, "בניין א");
+    const apartment = await createApartment(admin, building.id, "1");
+
+    // דירה אחת בלבד — הבניין חסום, ולא נמחק בשרשרת.
+    await expect(deleteBuilding(admin, building.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.apartments(1)),
+    );
+
+    await ticketAt({ buildingId: building.id });
+    const blockers = await countBlockingReferences("building", building.id);
+    expect(blockers).toEqual([
+      { kind: "tickets", count: 1 },
+      { kind: "apartments", count: 1 },
+    ]);
+
+    await deleteApartment(admin, apartment.id);
+    await db.ticket.deleteMany({ where: { buildingId: building.id } });
+    await deleteBuilding(admin, building.id);
+    expect(await db.building.findUnique({ where: { id: building.id } })).toBeNull();
+  });
+
+  it("אתר: בניין, משתמש משויך ופנייה — כולם חוסמים ומופיעים בהודעה יחד", async () => {
+    const site = await createSite(admin, "אתר למחיקה");
+    await createBuilding(admin, site.id, "בניין א");
+    await createInternalUser(admin, {
+      name: "מנהל האתר",
+      phone: "0561111111",
+      role: "SITE_MANAGER",
+      siteId: site.id,
+      password: "password1",
+    });
+
+    await expect(deleteSite(admin, site.id)).rejects.toThrow(
+      he.admin.deleteBlocked(
+        `${he.admin.blockedBy.buildings(1)}, ${he.admin.blockedBy.users(1)}`,
+      ),
+    );
+  });
+
+  it("אתר ריק נמחק", async () => {
+    const site = await createSite(admin, "אתר ריק");
+    await deleteSite(admin, site.id);
+    expect(await db.site.findUnique({ where: { id: site.id } })).toBeNull();
+  });
+
+  it("איש מקצוע: גם שיוך שהוסר חוסם — ההיסטוריה של ההסרה שייכת לפנייה", async () => {
+    const professional = await db.professional.create({
+      data: { name: "קבלן שהוסר", phone: "0509999999" },
+    });
+    const ticket = await ticketAt({});
+    await db.assignment.create({
+      data: { ticketId: ticket.id, professionalId: professional.id, status: "REMOVED" },
+    });
+
+    await expect(deleteProfessional(admin, professional.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.assignments(1)),
+    );
+  });
+
+  it("איש מקצוע: הודעה בשרשור חוסמת גם בלי שיוך", async () => {
+    const professional = await db.professional.create({
+      data: { name: "קבלן שכתב", phone: "0508888888" },
+    });
+    const ticket = await ticketAt({});
+    await db.message.create({
+      data: { ticketId: ticket.id, kind: "TEXT", text: "בדרך", authorProfessionalId: professional.id },
+    });
+
+    await expect(deleteProfessional(admin, professional.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.messages(1)),
+    );
+  });
+
+  it("איש מקצוע שלא נגע בכלום נמחק, והטוקן שלו יורד איתו", async () => {
+    const professional = await db.professional.create({
+      data: { name: "קבלן שנוצר בטעות", phone: "0507777777" },
+    });
+    await db.accessToken.create({
+      data: { professionalId: professional.id, tokenHash: "hash-לבדיקה" },
+    });
+
+    await deleteProfessional(admin, professional.id);
+
+    expect(await db.professional.findUnique({ where: { id: professional.id } })).toBeNull();
+    // ‏Cascade מכוון: קישור אישי חסר משמעות בלי בעליו.
+    expect(await db.accessToken.count({ where: { professionalId: professional.id } })).toBe(0);
+  });
+});
+
+describe("updateUser — עריכה בלבד, בלי מחיקה", () => {
+  it("מעדכן שם, טלפון ומייל", async () => {
+    const target = await createInternalUser(admin, {
+      name: "יעל",
+      phone: "0521111111",
+      role: "OWNER",
+      password: "password1",
+    });
+
+    const updated = await updateUser(admin, target.id, {
+      name: "יעל כהן",
+      phone: "052-1111111",
+      email: "yael@example.com",
+    });
+
+    expect(updated.name).toBe("יעל כהן");
+    expect(updated.phone).toBe("0521111111");
+    expect(updated.email).toBe("yael@example.com");
+  });
+
+  it("מרוקן מייל שנמחק, ולא שומר מחרוזת ריקה", async () => {
+    const target = await createInternalUser(admin, {
+      name: "יעל",
+      phone: "0522222222",
+      email: "yael@example.com",
+      role: "OWNER",
+      password: "password1",
+    });
+
+    expect((await updateUser(admin, target.id, { name: "יעל", phone: "0522222222", email: "" })).email).toBeNull();
+  });
+
+  it("דוחה טלפון שכבר שייך למשתמש אחר, ומתיר את הטלפון של עצמו", async () => {
+    const target = await createInternalUser(admin, {
+      name: "יעל",
+      phone: "0523333333",
+      role: "OWNER",
+      password: "password1",
+    });
+
+    await expect(
+      updateUser(admin, target.id, { name: "יעל", phone: "0500000000" }),
+    ).rejects.toThrow(he.admin.phoneTaken);
+
+    await expect(
+      updateUser(admin, target.id, { name: "יעל ל.", phone: "0523333333" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("דוחה מייל לא תקין", async () => {
+    const target = await createInternalUser(admin, {
+      name: "יעל",
+      phone: "0524444444",
+      role: "OWNER",
+      password: "password1",
+    });
+
+    await expect(
+      updateUser(admin, target.id, { name: "יעל", phone: "0524444444", email: "לא-מייל" }),
+    ).rejects.toThrow(he.directory.invalidEmail);
+  });
+
+  it("מנהל עבודה אינו רשאי לערוך משתמשים", async () => {
+    await expect(updateUser(manager, admin.id, { name: "x", phone: "0500000000" })).rejects.toThrow(
+      he.admin.forbidden,
+    );
+  });
+});
+
+describe("renameSite", () => {
+  it("משנה שם אתר", async () => {
+    expect((await renameSite(admin, siteId, "אתר צפון")).name).toBe("אתר צפון");
+  });
+
+  it("דוחה שם שכבר תפוס", async () => {
+    const other = await createSite(admin, "אתר דרום");
+    await expect(renameSite(admin, other.id, "אתר קיים")).rejects.toThrow(he.admin.siteExists);
   });
 });

@@ -13,6 +13,7 @@ import {
 } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
+import { assertDeletable } from "./deletion";
 import { ensureAccessToken, ensurePortalLink, revokeAccessIfOrphaned } from "./portal";
 
 /**
@@ -71,6 +72,33 @@ export async function renameTag(actor: SessionUser, id: string, rawName: string)
   if (clash && clash.id !== id) throw new TagError(he.tag.tagExists);
 
   return db.tag.update({ where: { id }, data: { name } });
+}
+
+/**
+ * מוחק תגית ריקה. **הישות המסוכנת ביותר מבין השש.**
+ *
+ * ל-`Tag` יש שלושה יחסי Cascade — `TicketTag`, `TagAccess` ו-`Message` —
+ * כלומר `db.tag.delete` הייתה עוברת בשקט ומשמידה צ׳אט קבוצתי שלם ואת
+ * הקיבוץ של כל הפניות שתחתיה. ה-DB לא יעצור כאן דבר; `assertDeletable`
+ * הוא כל ההגנה, ולכן היא נקראת לפני כל נגיעה ברשומה.
+ *
+ * גישות הקבלנים לתגית כן נמחקות איתה — הרשאה על תגית שאינה קיימת חסרת
+ * משמעות — ולכן מי שנשאר בלי שום סיבה אחרת לקישור פורטל מאבד אותו.
+ */
+export async function deleteTag(actor: SessionUser, id: string): Promise<void> {
+  denyUnless(canManageAdmin(toViewer(actor)));
+
+  const tag = await db.tag.findUnique({ where: { id }, select: { id: true } });
+  if (!tag) throw new TagError(he.tag.notFound);
+
+  await assertDeletable("tag", id);
+
+  const granted = await grantedProfessionalIds(id);
+  await db.tag.delete({ where: { id } });
+
+  for (const professionalId of granted) {
+    await revokeAccessIfOrphaned(professionalId);
+  }
 }
 
 /** פרטי הפנייה המינימליים לבדיקת הרשאת תיוג */

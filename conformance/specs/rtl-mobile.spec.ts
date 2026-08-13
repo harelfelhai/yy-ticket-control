@@ -83,6 +83,12 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
       ? await firstTag.getAttribute("href")
       : null;
 
+    // מסך הבניינים תלוי באתר קיים, ולכן הנתיב נשלף ולא נכתב קשיח — בדיוק
+    // כמו מסך התגית. בלעדיו הוא היה המסך היחיד שאיש אינו מודד בו אזורי מגע.
+    await page.goto("/admin/sites");
+    const firstSite = page.locator('a[href^="/admin/sites/"]').first();
+    const sitePath = (await firstSite.count()) ? await firstSite.getAttribute("href") : null;
+
     const screens: [string, string][] = [
       ["/login", "מסך התחברות"],
       ["/board", "מסך 1 — הלוח"],
@@ -96,6 +102,7 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
       ...(tagPath ? ([[tagPath, "מסך 6 — צ׳אט תגית"]] as [string, string][]) : []),
       ["/admin", "מסך ניהול"],
       ["/admin/sites", "מסך 11 — אתרים"],
+      ...(sitePath ? ([[sitePath, "מסך 16 — בניינים ודירות"]] as [string, string][]) : []),
       ["/admin/users", "מסך 12 — משתמשים"],
       ["/admin/professionals", "מסך 13 — אנשי מקצוע"],
       ["/admin/domains", "מסך 14 — תחומים"],

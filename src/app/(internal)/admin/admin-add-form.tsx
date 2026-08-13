@@ -13,16 +13,29 @@ interface AdminAddFormProps {
   placeholder?: string;
   buttonLabel: string;
   action: (name: string) => Promise<ActionResult>;
+  /**
+   * ‏`plain` מוותר על הכרטיס. נדרש כשהטופס יושב **בתוך** כרטיס — הוספת דירה
+   * לבניין — ששם כרטיס בתוך כרטיס קורא כשתי רמות היררכיה שאינן קיימות.
+   */
+  surface?: "card" | "plain";
+  inputMode?: "text" | "numeric";
 }
 
 /**
- * טופס "הוספת שם" משותף למסכי הניהול הפשוטים (אתר חדש, תחום חדש).
+ * טופס "הוספת שם" משותף למסכי הניהול הפשוטים (אתר, תחום, בניין, דירה).
  *
- * ה-Server Action מועברת כ-prop — אותו רכיב משרת שני מסכים בלי לשכפל את
+ * ה-Server Action מועברת כ-prop — אותו רכיב משרת ארבעה מסכים בלי לשכפל את
  * הטיפול בטעינה ובשגיאה. הקלט מתאפס בהצלחה, וה-Server Component שמעליו
  * מתרענן ומציג את הרשומה החדשה.
  */
-export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminAddFormProps) {
+export function AdminAddForm({
+  label,
+  placeholder,
+  buttonLabel,
+  action,
+  surface = "card",
+  inputMode,
+}: AdminAddFormProps) {
   const [value, setValue] = useState("");
   const { busy, error, run } = useAction();
 
@@ -33,13 +46,16 @@ export function AdminAddForm({ label, placeholder, buttonLabel, action }: AdminA
     );
   }
 
+  const layout = "flex flex-col gap-2";
+
   return (
-    <div className={cardClasses("flex flex-col gap-2")}>
+    <div className={surface === "card" ? cardClasses(layout) : layout}>
       <Field label={label}>
         <Input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
+          inputMode={inputMode}
           size="compact"
         />
       </Field>

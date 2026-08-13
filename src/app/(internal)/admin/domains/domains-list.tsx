@@ -1,13 +1,7 @@
-"use client";
-
-import { useState } from "react";
-import { Input } from "@/components/ui/field";
-import { Button } from "@/components/ui/button";
-import { he } from "@/lib/he";
-import { useAction } from "@/lib/use-action";
-import { renameDomainAction } from "../actions";
+import { DeleteButton } from "@/components/delete-button";
+import { InlineRename } from "@/components/inline-rename";
 import { cardClasses } from "@/components/ui/card";
-import { FormError } from "@/components/ui/message";
+import { deleteDomainAction, renameDomainAction } from "../actions";
 
 interface DomainRow {
   id: string;
@@ -15,55 +9,30 @@ interface DomainRow {
 }
 
 /**
- * רשימת התחומים עם שינוי שם בשורה.
+ * רשימת התחומים: שינוי שם ומחיקה בשורה.
  *
- * שינוי שם קיים כדי לתקן שגיאת הקלדה שיצרה תחום כמעט-כפול. איחוד תחומים
- * אינו בתחולה, ולכן שינוי לשם שכבר קיים נדחה — וזה מוצג למשתמש.
+ * שינוי שם קיים כדי לתקן שגיאת הקלדה שיצרה תחום כמעט-כפול; שינוי לשם שכבר
+ * קיים נדחה, כי איחוד תחומים אינו בתחולה. מחיקה נחסמת כשקיימות פניות
+ * בתחום, וההודעה נוקבת בכמה — תחום שנעשה בו שימוש אינו טעות הקלדה.
+ *
+ * הרכיב הוא רכיב **שרת**: כל מה שהיה בו מצב לקוח עבר לשני הפקדים המשותפים,
+ * והפעולות נמסרות להם קשורות (`bind`) למזהה השורה.
  */
 export function DomainsList({ domains }: { domains: DomainRow[] }) {
   return (
     <ul className="flex flex-col gap-2">
       {domains.map((domain) => (
-        <DomainItem key={domain.id} domain={domain} />
+        <li
+          key={domain.id}
+          className={cardClasses("flex flex-wrap items-center gap-x-3 gap-y-2", {
+            padding: "compact",
+          })}
+        >
+          <span className="min-w-0 flex-1 font-medium">{domain.name}</span>
+          <InlineRename value={domain.name} action={renameDomainAction.bind(null, domain.id)} />
+          <DeleteButton name={domain.name} action={deleteDomainAction.bind(null, domain.id)} />
+        </li>
       ))}
     </ul>
-  );
-}
-
-function DomainItem({ domain }: { domain: DomainRow }) {
-  const [name, setName] = useState(domain.name);
-  const { busy, error, run } = useAction();
-
-  const dirty = name.trim() !== domain.name && name.trim().length > 0;
-
-  function save() {
-    run(() => renameDomainAction(domain.id, name));
-  }
-
-  return (
-    <li className={cardClasses("flex flex-col gap-1", { padding: "compact" })}>
-      <div className="flex items-center gap-2">
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          aria-label={domain.name}
-          size="compact"
-          className="flex-1"
-        />
-        <Button
-          variant="secondary"
-          size="compact"
-          onClick={save}
-          disabled={busy || !dirty}
-        >
-          {he.admin.renameDomain}
-        </Button>
-      </div>
-      {error ? (
-        <FormError>
-          {error}
-        </FormError>
-      ) : null}
-    </li>
   );
 }

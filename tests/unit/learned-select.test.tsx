@@ -141,6 +141,26 @@ describe("LearnedSelect — יצירה כפעולה מכוונת", () => {
   });
 
   /**
+   * הרגע שדווח מהשטח כ"לא מצאתי איפה מגדירים בניינים": אתר חדש, רשימה
+   * ריקה, ובלי טקסט בשדה החיפוש שורת "צור חדש" עדיין אינה קיימת. המסלול
+   * פתוח לגמרי — הוא פשוט אינו נראה.
+   */
+  it("רשימה נלמדת ריקה מסבירה שהקלדה יוצרת ערך, במקום 'אין תוצאות'", async () => {
+    const { user } = setup({ options: [] });
+    await user.click(screen.getByRole("button", { name: /בחר/ }));
+
+    expect(screen.getByText(he.directory.emptyListHint)).toBeVisible();
+    expect(screen.queryByText(he.common.noResults)).not.toBeInTheDocument();
+  });
+
+  it("רשימה סגורה וריקה נשארת עם 'אין תוצאות' — אין שם מה ליצור", async () => {
+    const { user } = setup({ options: [], onCreate: undefined });
+    await user.click(screen.getByRole("button", { name: /בחר/ }));
+
+    expect(screen.getByText(he.common.noResults)).toBeVisible();
+  });
+
+  /**
    * הבורר הזה יושב בשורת ההזנה המרוכזת **צמוד** ל-`<select>` נייטיב. שני
    * פקדים שנראים כמעט זהים ונבדלים בפרט מקרי נקראים כרשלנות ולא כהבחנה —
    * המשתמש אינו לומד ש"חץ דק = אפשר לחפש".

@@ -75,6 +75,28 @@ export function normalizeApartmentNumber(input: string): string {
   return normalizeName(input).replace(/^0+(?=\d)/, "");
 }
 
+/**
+ * סדר טבעי למספרי דירה: 2 לפני 10.
+ *
+ * ‏Postgres ממיין מחרוזות לקסיקוגרפית, ולכן `orderBy: { number: "asc" }` לבדו
+ * נותן 1, 10, 11, 12, 2, 20 — נסבל בבניין עם שלוש דירות, ובלתי-שמיש בסדר
+ * הגודל שהאפיון נוקב בו (כ-50 דירות לאתר). המיון נעשה בקוד ולא ב-SQL כי
+ * המספר אינו מספר: "12א" הוא ערך חוקי, ואין לו ייצוג מספרי.
+ *
+ * הכלל: קידומת מספרית קודם ולפי ערכה, ומה שנשאר משמש לשבירת שוויון —
+ * כך "12" קודמת ל-"12א", ושתיהן אחרי "2".
+ */
+export function compareApartmentNumbers(a: string, b: string): number {
+  const numericA = Number.parseInt(a, 10);
+  const numericB = Number.parseInt(b, 10);
+
+  // מספר תמיד לפני ערך שאינו מתחיל בספרה ("מחסן", "קומת קרקע").
+  if (Number.isNaN(numericA) !== Number.isNaN(numericB)) return Number.isNaN(numericA) ? 1 : -1;
+  if (!Number.isNaN(numericA) && numericA !== numericB) return numericA - numericB;
+
+  return a.localeCompare(b, "he");
+}
+
 /** בדיקה רופפת בכוונה: תפקידה למנוע שגיאת הקלדה, לא לאמת שהתיבה קיימת */
 export function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());

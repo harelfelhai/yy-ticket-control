@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
-import { mergeProfessionalsAction, updateProfessionalAction } from "../actions";
+import { deleteProfessionalAction, mergeProfessionalsAction, updateProfessionalAction } from "../actions";
+import { DeleteButton } from "@/components/delete-button";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { Banner, FormError } from "@/components/ui/message";
@@ -58,9 +59,16 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
         <h2 className={TITLE_DESCRIPTIVE}>{he.admin.mergeHeading}</h2>
         <p className="text-xs text-muted">{he.admin.mergeHint}</p>
 
+        {/*
+         * שני הבוררים מושבתים עד ההידרציה, כמו כל פקד קלט במערכת. בלי זה
+         * בחירה מוקדמת מעדכנת את ה-`<select>` אך לא את מצב React: המשתמש
+         * רואה שני ערכים נבחרים וכפתור "אחד" שנשאר מושבת בלי שום הסבר —
+         * בדיוק הכפתור המת שדווח מהשטח במקום אחר. פקד מושבת שנדלק הוא
+         * מצב שאפשר להבין; פקד שעונה ואינו קולט אינו.
+         */}
         <div className="grid grid-cols-2 gap-2">
           <Field label={he.admin.mergeKeep}>
-            <Select value={keepId} onChange={(e) => setKeepId(e.target.value)}>
+            <Select value={keepId} onChange={(e) => setKeepId(e.target.value)} disabled={busy}>
               <option value="">{he.common.choose}</option>
               {professionals.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -71,7 +79,7 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
           </Field>
 
           <Field label={he.admin.mergeDrop}>
-            <Select value={dropId} onChange={(e) => setDropId(e.target.value)}>
+            <Select value={dropId} onChange={(e) => setDropId(e.target.value)} disabled={busy}>
               <option value="">{he.common.choose}</option>
               {professionals
                 .filter((p) => p.id !== keepId)
@@ -139,15 +147,24 @@ function ProfessionalItem({
             {he.admin.activeTickets(professional.activeAssignments)}
           </span>
         </div>
-        <Button
-          variant="secondary"
-          size="compact"
-          onClick={() => setEditing(true)}
-          disabled={disabled}
-          className="shrink-0"
-        >
-          {he.admin.editProfessional}
-        </Button>
+        {/* מחיקה נחסמת ברגע שיש שיוך אחד — גם `REMOVED` — ולכן היא מנקה
+            רשומה שנוצרה בטעות הקלדה בלבד. איש מקצוע שכבר עבד מוצא מהרשימה
+            באיחוד (`mergeProfessionals`), לא במחיקה. */}
+        <div className="flex shrink-0 items-start gap-2">
+          <Button
+            variant="secondary"
+            size="compact"
+            onClick={() => setEditing(true)}
+            disabled={disabled}
+          >
+            {he.admin.editProfessional}
+          </Button>
+          <DeleteButton
+            name={professional.name}
+            action={deleteProfessionalAction.bind(null, professional.id)}
+            disabled={disabled}
+          />
+        </div>
       </li>
     );
   }

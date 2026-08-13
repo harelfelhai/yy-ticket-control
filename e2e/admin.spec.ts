@@ -62,7 +62,9 @@ test("מנהל מערכת מקים משתמש ותחום", async ({ page }) => {
   await page.goto("/admin/domains");
   await page.getByLabel("תחום חדש").fill(domainName);
   await page.getByRole("button", { name: "הוסף תחום" }).click();
-  await expect(page.getByRole("textbox", { name: domainName })).toBeVisible();
+  // ‏0.3: שם התחום מוצג כטקסט, ושדה העריכה נפתח בלחיצה על "שנה שם" — משנוספה
+  // המחיקה לשורה, שדה קלט פתוח בכל שורה הפך את הרשימה לטופס.
+  await expect(page.getByRole("button", { name: `שנה שם ${domainName}` })).toBeVisible();
 });
 
 test("מנהל מערכת מאחד שני אנשי מקצוע כפולים", async ({ page }) => {

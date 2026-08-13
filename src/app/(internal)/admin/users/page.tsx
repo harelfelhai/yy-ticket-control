@@ -29,6 +29,7 @@ export default async function AdminUsersPage() {
           id: u.id,
           name: u.name,
           phone: u.phone,
+          email: u.email,
           role: u.role,
           siteName: u.site?.name ?? null,
           active: u.active,

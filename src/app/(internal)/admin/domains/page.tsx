@@ -9,7 +9,10 @@ import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.domains} — ${he.app.name}` };
 
-/** ניהול תחומים (מסך 14): הוספה ותיקון שם. הרשימה נלמדת גם דרך הפניות. */
+/**
+ * ניהול תחומים (מסך 14): הוספה, תיקון שם ומחיקה. הרשימה נלמדת גם דרך
+ * הפניות, ולכן המסך הזה אינו התנאי לעבודה אלא הדרך לנקות אחריה.
+ */
 export default async function AdminDomainsPage() {
   const actor = await requireUser();
   const domains = await listDomains(actor);

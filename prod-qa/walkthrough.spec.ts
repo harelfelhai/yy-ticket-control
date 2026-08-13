@@ -78,6 +78,15 @@ test("כל המסכים הפנימיים נטענים ומצולמים", async (
     ["/admin/sites", "11-admin-sites"],
   ];
 
+  // מסך הבניינים (16) תלוי באתר קיים, ולכן הוא נשלף מרשימת האתרים ונוסף
+  // לסריקה. בלעדיו הוא המסך היחיד שאינו נבדק כלל בסבב הפרודקשן.
+  await page.goto("/admin/sites");
+  const firstSite = page.locator('a[href^="/admin/sites/"]').first();
+  if (await firstSite.count()) {
+    const sitePath = await firstSite.getAttribute("href");
+    if (sitePath) screens.push([sitePath, "12-admin-site-buildings"]);
+  }
+
   for (const [path, name] of screens) {
     const response = await page.goto(path);
     expect(response?.status(), `${path} החזיר ${response?.status()}`).toBeLessThan(400);

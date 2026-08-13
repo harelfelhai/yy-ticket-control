@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   looksLikeEmail,
+  compareApartmentNumbers,
   normalizeApartmentNumber,
   normalizeEmail,
   normalizeName,
@@ -72,6 +73,28 @@ describe("normalizeApartmentNumber", () => {
 
   it("שתי צורות של אותה דירה מגיעות לאותה תוצאה", () => {
     expect(normalizeApartmentNumber("07")).toBe(normalizeApartmentNumber("7"));
+  });
+});
+
+describe("compareApartmentNumbers — סדר טבעי", () => {
+  it("ממיין לפי ערך מספרי ולא לפי תו ראשון", () => {
+    // הסדר הלקסיקוגרפי של Postgres הוא 1, 10, 11, 12, 2, 20 — נסבל בשלוש
+    // דירות, בלתי-שמיש בחמישים (סדר הגודל שהאפיון נוקב בו).
+    const sorted = ["10", "2", "1", "20", "11"].sort(compareApartmentNumbers);
+    expect(sorted).toEqual(["1", "2", "10", "11", "20"]);
+  });
+
+  it("מספר עם אות בא אחרי המספר הנקי", () => {
+    expect(["12א", "12", "2"].sort(compareApartmentNumbers)).toEqual(["2", "12", "12א"]);
+  });
+
+  it("ערך שאינו מתחיל בספרה נדחק לסוף", () => {
+    // "מחסן" הוא ערך חוקי בשדה חופשי, ואין לו מקום טבעי בין המספרים.
+    expect(["מחסן", "3", "1"].sort(compareApartmentNumbers)).toEqual(["1", "3", "מחסן"]);
+  });
+
+  it("יציב: שני ערכים זהים אינם מחליפים מקום", () => {
+    expect(compareApartmentNumbers("7", "7")).toBe(0);
   });
 });
 

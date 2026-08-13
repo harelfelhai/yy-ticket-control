@@ -4,7 +4,9 @@ import { hashPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import {
+  compareApartmentNumbers,
   looksLikeEmail,
+  normalizeApartmentNumber,
   normalizeEmail,
   normalizeName,
   normalizePhone,
@@ -12,7 +14,8 @@ import {
 import { canManageAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
-import { prepareProfessional } from "./directory";
+import { assertDeletable } from "./deletion";
+import { findOrCreateApartment, findOrCreateBuilding, prepareProfessional } from "./directory";
 
 /**
  * מסכי הניהול (11–15): אתרים, משתמשים, אנשי מקצוע ותחומים.
@@ -64,6 +67,171 @@ export async function listSites(actor: SessionUser) {
       },
     },
   });
+}
+
+/**
+ * משנה שם אתר. שם תפוס נדחה ואינו מאחד — איחוד אתרים אינו בתחולה, והוא
+ * היה מזיז פניות בין אתרים ובכך שובר את מודל ההרשאות של מנהל העבודה.
+ */
+export async function renameSite(actor: SessionUser, id: string, rawName: string) {
+  assertAdmin(actor);
+  const name = normalizeName(rawName);
+  if (!name) throw new AdminError(he.admin.siteNameRequired);
+
+  const clash = await db.site.findUnique({ where: { name } });
+  if (clash && clash.id !== id) throw new AdminError(he.admin.siteExists);
+
+  return db.site.update({ where: { id }, data: { name } });
+}
+
+export async function deleteSite(actor: SessionUser, id: string): Promise<void> {
+  assertAdmin(actor);
+  const site = await db.site.findUnique({ where: { id }, select: { id: true } });
+  if (!site) throw new AdminError(he.admin.siteNotFound);
+
+  await assertDeletable("site", id);
+  await db.site.delete({ where: { id } });
+}
+
+// ──────────────────────── בניינים ודירות (מסך 16) ────────────────────────
+
+/**
+ * עץ האתר: בניינים, הדירות שבהם, ומונה פניות לכל רמה.
+ *
+ * המונים אינם קישוט — הם הסיבה שאפשר להחליט מה למחוק. מנהל שרואה "0 פניות"
+ * יודע שהשורה בטוחה למחיקה בלי לנסות ולקבל שגיאה.
+ */
+export async function listSiteTree(actor: SessionUser, siteId: string) {
+  assertAdmin(actor);
+
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, name: true } });
+  if (!site) throw new AdminError(he.admin.siteNotFound);
+
+  const buildings = await db.building.findMany({
+    where: { siteId },
+    orderBy: { name: "asc" },
+    include: {
+      _count: { select: { tickets: true } },
+      apartments: {
+        orderBy: { number: "asc" },
+        include: { _count: { select: { tickets: true } } },
+      },
+    },
+  });
+
+  return {
+    site,
+    buildings: buildings.map((building) => ({
+      id: building.id,
+      name: building.name,
+      ticketCount: building._count.tickets,
+      apartments: building.apartments
+        .map((apartment) => ({
+          id: apartment.id,
+          number: apartment.number,
+          residentName: apartment.residentName,
+          ticketCount: apartment._count.tickets,
+        }))
+        // המיון בקוד ולא ב-`orderBy`: ראה `compareApartmentNumbers`.
+        .sort((a, b) => compareApartmentNumbers(a.number, b.number)),
+    })),
+  };
+}
+
+/**
+ * מוסיף בניין מהמסך הניהולי.
+ *
+ * בדיקת הקיום מפורשת ורק אחריה `findOrCreateBuilding`: הפונקציה ההיא
+ * אידמפוטנטית בכוונה (הזנה מרוכזת יוצרת עשרות פניות ברצף ואסור לה להיכשל
+ * על בניין שכבר קיים), אבל במסך ניהול "הוסף" שלא מוסיף דבר ולא אומר כלום
+ * נראה כתקלה. הנרמול והאטומיות נשארים במקום אחד — שם.
+ */
+export async function createBuilding(actor: SessionUser, siteId: string, rawName: string) {
+  assertAdmin(actor);
+
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true } });
+  if (!site) throw new AdminError(he.admin.siteNotFound);
+
+  const name = normalizeName(rawName);
+  if (!name) throw new AdminError(he.directory.buildingNameRequired);
+
+  const existing = await db.building.findUnique({ where: { siteId_name: { siteId, name } } });
+  if (existing) throw new AdminError(he.admin.buildingExists);
+
+  return findOrCreateBuilding(siteId, name);
+}
+
+export async function renameBuilding(actor: SessionUser, id: string, rawName: string) {
+  assertAdmin(actor);
+  const name = normalizeName(rawName);
+  if (!name) throw new AdminError(he.directory.buildingNameRequired);
+
+  const building = await db.building.findUnique({ where: { id }, select: { siteId: true } });
+  if (!building) throw new AdminError(he.admin.buildingNotFound);
+
+  // הייחודיות היא (אתר, שם) ולא השם לבדו — "בניין א׳" קיים בכל אתר.
+  const clash = await db.building.findUnique({
+    where: { siteId_name: { siteId: building.siteId, name } },
+  });
+  if (clash && clash.id !== id) throw new AdminError(he.admin.buildingExists);
+
+  return db.building.update({ where: { id }, data: { name } });
+}
+
+export async function deleteBuilding(actor: SessionUser, id: string): Promise<void> {
+  assertAdmin(actor);
+  const building = await db.building.findUnique({ where: { id }, select: { id: true } });
+  if (!building) throw new AdminError(he.admin.buildingNotFound);
+
+  await assertDeletable("building", id);
+  await db.building.delete({ where: { id } });
+}
+
+export async function createApartment(actor: SessionUser, buildingId: string, rawNumber: string) {
+  assertAdmin(actor);
+
+  const building = await db.building.findUnique({ where: { id: buildingId }, select: { id: true } });
+  if (!building) throw new AdminError(he.admin.buildingNotFound);
+
+  const number = normalizeApartmentNumber(rawNumber);
+  if (!number) throw new AdminError(he.directory.apartmentNumberRequired);
+
+  const existing = await db.apartment.findUnique({
+    where: { buildingId_number: { buildingId, number } },
+  });
+  if (existing) throw new AdminError(he.admin.apartmentExists);
+
+  return findOrCreateApartment(buildingId, number);
+}
+
+export async function renameApartment(actor: SessionUser, id: string, rawNumber: string) {
+  assertAdmin(actor);
+  const number = normalizeApartmentNumber(rawNumber);
+  if (!number) throw new AdminError(he.directory.apartmentNumberRequired);
+
+  const apartment = await db.apartment.findUnique({ where: { id }, select: { buildingId: true } });
+  if (!apartment) throw new AdminError(he.admin.apartmentNotFound);
+
+  const clash = await db.apartment.findUnique({
+    where: { buildingId_number: { buildingId: apartment.buildingId, number } },
+  });
+  if (clash && clash.id !== id) throw new AdminError(he.admin.apartmentExists);
+
+  return db.apartment.update({ where: { id }, data: { number } });
+}
+
+/**
+ * מוחק דירה. ⚠️ `residentName` הוא הבית היחיד של שם הדייר (אפיון §3.2 שדה 11),
+ * ולכן דירה בלי פניות נמחקת יחד עם השם. זו הסיבה שהאישור בממשק נוקב במספר
+ * הדירה ומציג את שם הדייר לצדה.
+ */
+export async function deleteApartment(actor: SessionUser, id: string): Promise<void> {
+  assertAdmin(actor);
+  const apartment = await db.apartment.findUnique({ where: { id }, select: { id: true } });
+  if (!apartment) throw new AdminError(he.admin.apartmentNotFound);
+
+  await assertDeletable("apartment", id);
+  await db.apartment.delete({ where: { id } });
 }
 
 // ────────────────────────────── משתמשים ──────────────────────────────
@@ -135,6 +303,47 @@ export async function listUsers(actor: SessionUser) {
  *
  * אי אפשר להשבית את עצמך: מנהל שינעל את עצמו בטעות יישאר בלי דרך פנימה.
  */
+/**
+ * עורך פרטי קשר של משתמש. **מחיקת משתמש אינה קיימת בכוונה** (אפיון §7
+ * שורה 25): לשלוש ההפניות אליו יש `SetNull` — `Ticket.handlerId`,
+ * `Ticket.closedById` ו-`MediaFile.uploaderUserId` — כלומר מחיקה הייתה מוחקת
+ * בשקט את "מי מטפל" ואת "מי סגר" מכל פנייה שנגע בה. זו מחיקת היסטוריה דרך
+ * הדלת האחורית, ולא ניקוי רשימה. מסלול ההוצאה הוא `setUserActive`.
+ *
+ * התפקיד והאתר אינם נערכים כאן: הם כפופים לכללי §5.ג (מנהל עבודה חייב אתר,
+ * בעלים ומנהל מערכת אינם משויכים), ושינוי שלהם מזיז הרשאות על פניות קיימות.
+ */
+export async function updateUser(
+  actor: SessionUser,
+  id: string,
+  input: { name: string; phone: string; email?: string | null },
+) {
+  assertAdmin(actor);
+
+  const name = normalizeName(input.name);
+  if (!name) throw new AdminError(he.admin.userNameRequired);
+
+  const phone = normalizePhone(input.phone);
+  if (!phone) throw new AdminError(he.directory.phone);
+
+  const email = normalizeEmail(input.email ?? "");
+  if (email && !looksLikeEmail(email)) throw new AdminError(he.directory.invalidEmail);
+
+  const existing = await db.user.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) throw new AdminError(he.admin.userNotFound);
+
+  // התנגשות `@unique` נבדקת מראש כדי להחזיר הודעה מובנת ולא כשל אילוץ גולמי.
+  const phoneClash = await db.user.findUnique({ where: { phone }, select: { id: true } });
+  if (phoneClash && phoneClash.id !== id) throw new AdminError(he.admin.phoneTaken);
+
+  if (email) {
+    const emailClash = await db.user.findUnique({ where: { email }, select: { id: true } });
+    if (emailClash && emailClash.id !== id) throw new AdminError(he.admin.emailTaken);
+  }
+
+  return db.user.update({ where: { id }, data: { name, phone, email: email || null } });
+}
+
 export async function setUserActive(actor: SessionUser, userId: string, active: boolean) {
   assertAdmin(actor);
   if (userId === actor.id && !active) throw new AdminError(he.admin.cannotDeactivateSelf);
@@ -175,6 +384,22 @@ export async function updateProfessional(
   if (!existing) throw new AdminError(he.admin.professionalNotFound);
 
   return db.professional.update({ where: { id }, data: prepared });
+}
+
+/**
+ * מוחק איש מקצוע שאין אליו שום הפניה — כלומר רשומה שנוצרה בטעות הקלדה
+ * ומעולם לא שימשה. איש מקצוע שקיבל ולו פנייה אחת חסום לנצח, ומסלול ההוצאה
+ * שלו הוא `mergeProfessionals` (איחוד לתוך הרשומה הנכונה).
+ *
+ * הטוקנים שלו נמחקים ב-cascade, וזה נכון: קישור אישי חסר משמעות בלי בעליו.
+ */
+export async function deleteProfessional(actor: SessionUser, id: string): Promise<void> {
+  assertAdmin(actor);
+  const professional = await db.professional.findUnique({ where: { id }, select: { id: true } });
+  if (!professional) throw new AdminError(he.admin.professionalNotFound);
+
+  await assertDeletable("professional", id);
+  await db.professional.delete({ where: { id } });
 }
 
 /**
@@ -278,4 +503,17 @@ export async function renameDomain(actor: SessionUser, id: string, rawName: stri
   if (clash && clash.id !== id) throw new AdminError(he.admin.domainExists);
 
   return db.domain.update({ where: { id }, data: { name } });
+}
+
+/**
+ * מוחק תחום שאין עליו פניות. זהו הדפוס הפשוט ביותר מבין השישה — הפניה אחת
+ * בלבד חוסמת אותו — ולכן הוא נכתב ראשון ושימש מודל לשאר.
+ */
+export async function deleteDomain(actor: SessionUser, id: string): Promise<void> {
+  assertAdmin(actor);
+  const domain = await db.domain.findUnique({ where: { id }, select: { id: true } });
+  if (!domain) throw new AdminError(he.admin.domainNotFound);
+
+  await assertDeletable("domain", id);
+  await db.domain.delete({ where: { id } });
 }

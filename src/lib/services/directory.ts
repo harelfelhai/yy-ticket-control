@@ -2,6 +2,7 @@ import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import {
+  compareApartmentNumbers,
   looksLikeEmail,
   normalizeApartmentNumber,
   normalizeEmail,
@@ -12,10 +13,10 @@ import {
 /**
  * הרשימות הנלמדות: בניין, דירה, תחום ואיש מקצוע.
  *
- * אף אחת מהן אינה מוגדרת מראש (הכרעת המשתמש) — הן נוצרות ברגע שמנהל
- * עבודה מקליד ערך שאינו קיים. זה מה שמאפשר להתחיל לעבוד בלי שלב הזנה
- * מוקדם, וזה גם הסיכון: כל שגיאת הקלדה הופכת לישות חדשה שמפצלת דוחות
- * ותגיות. שתי הגנות פועלות כאן:
+ * אף אחת מהן אינה **דורשת** הגדרה מראש — הן נוצרות ברגע שמנהל עבודה מקליד
+ * ערך שאינו קיים. זה מה שמאפשר להתחיל לעבוד בלי שלב הזנה מוקדם, וזה גם
+ * הסיכון: כל שגיאת הקלדה הופכת לישות חדשה שמפצלת דוחות ותגיות. שתי הגנות
+ * פועלות כאן:
  *
  * 1. נרמול לפני חיפוש — "07" ו-"7" הן אותה דירה, "050-1234567" ו-
  *    "0501234567" הם אותו קבלן.
@@ -24,6 +25,10 @@ import {
  *
  * ההגנה השלישית היא בממשק: הערכים מוצגים כרשימת בחירה קצרה ולא כשדה
  * טקסט חופשי, כדי שהמסלול הקל יהיה בחירה בקיים ולא יצירה של חדש.
+ *
+ * מגרסה 0.3 קיימת גם הדרך ההפוכה: בניינים ודירות ניתנים להגדרה מראש במסך
+ * 16 (`/admin/sites/[siteId]`), ואפשר לתקן שם או למחוק רשומה שנוצרה בטעות.
+ * ההזנה תוך כדי עבודה לא הוסרה — נוספה לה אלטרנטיבה ודרך תיקון.
  */
 
 /** שגיאות הרשימות הנלמדות נועדו להיראות על ידי המשתמש, בעברית */
@@ -156,17 +161,31 @@ export async function findOrCreateProfessional(input: ProfessionalInput) {
   return db.professional.create({ data: prepared });
 }
 
-/** רשימות לתצוגה במסכי היצירה. מוגבלות לאתר, כי מנהל עבודה פועל באתר אחד. */
+/**
+ * רשימות לתצוגה במסכי היצירה. מוגבלות לאתר, כי מנהל עבודה פועל באתר אחד.
+ *
+ * הדירות ממוינות בסדר טבעי ולא לקסיקוגרפי: בבניין עם 50 דירות, בורר שמציג
+ * 1, 10, 11, 12, 2 מאלץ לחפש כל בחירה מחדש.
+ */
 export async function listSiteDirectory(siteId: string) {
   const [buildings, domains, professionals] = await Promise.all([
     db.building.findMany({
       where: { siteId },
       orderBy: { name: "asc" },
-      include: { apartments: { orderBy: { number: "asc" } } },
+      include: { apartments: true },
     }),
     db.domain.findMany({ orderBy: { name: "asc" } }),
     db.professional.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  return { buildings, domains, professionals };
+  return {
+    buildings: buildings.map((building) => ({
+      ...building,
+      apartments: [...building.apartments].sort((a, b) =>
+        compareApartmentNumbers(a.number, b.number),
+      ),
+    })),
+    domains,
+    professionals,
+  };
 }

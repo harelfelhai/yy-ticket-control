@@ -172,6 +172,9 @@ test.describe("מסכים 11–15 — ניהול", () => {
 
     await loginAs(page, "admin");
     await page.goto("/admin/professionals");
+    // הבוררים מושבתים עד ההידרציה — `selectOption` לפניה נבלע ומשאיר את
+    // "אחד" מושבת לנצח. ממתינים שהם יידלקו, כמו ב-S12-01.
+    await expect(page.getByLabel("להשאיר")).toBeEnabled();
     await page.getByLabel("להשאיר").selectOption({ label: keep });
     await page.getByLabel("לאחד ולמחוק").selectOption({ label: drop });
     await page.getByRole("button", { name: "אחד", exact: true }).click();
@@ -185,7 +188,9 @@ test.describe("מסכים 11–15 — ניהול", () => {
     const domain = uniq("תחום-חדש");
     await page.getByLabel("תחום חדש").fill(domain);
     await page.getByRole("button", { name: "הוסף תחום" }).click();
-    await expect(page.getByRole("textbox", { name: domain })).toBeVisible();
+    // ‏0.3: השורה מציגה את השם כטקסט, ושדה העריכה נפתח רק בלחיצה על "שנה
+    // שם" — שדה פתוח בכל שורה הפך את הרשימה לטופס משנוספה גם המחיקה.
+    await expect(page.getByRole("button", { name: `שנה שם ${domain}` })).toBeVisible();
   });
 
   test("S15 — מסך התגיות: שינוי שם שמור למנהל המערכת", async ({ page }) => {

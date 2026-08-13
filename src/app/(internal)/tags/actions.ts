@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { toViewer } from "@/lib/session";
 import {
   addTagMessage,
+  deleteTag,
   getTagContractorLink,
   grantTagAccess,
   renameTag,
@@ -81,6 +82,14 @@ export async function revokeTagAccessAction(
 export async function renameTagAction(id: string, name: string): Promise<ActionResult> {
   return guard(async () => {
     await renameTag(await requireUser(), z.string().min(1).parse(id), z.string().parse(name));
+    revalidatePath("/tags");
+  });
+}
+
+/** מוחק תגית ריקה — מנהל מערכת בלבד (הבדיקה בשירות) */
+export async function deleteTagAction(id: string): Promise<ActionResult> {
+  return guard(async () => {
+    await deleteTag(await requireUser(), z.string().min(1).parse(id));
     revalidatePath("/tags");
   });
 }

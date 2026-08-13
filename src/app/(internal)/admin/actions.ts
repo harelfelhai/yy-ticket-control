@@ -5,13 +5,24 @@ import { z } from "zod";
 import { type ActionResult, guard } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
 import {
+  createApartment,
+  createBuilding,
   createDomain,
   createInternalUser,
   createSite,
+  deleteApartment,
+  deleteBuilding,
+  deleteDomain,
+  deleteProfessional,
+  deleteSite,
   mergeProfessionals,
+  renameApartment,
+  renameBuilding,
   renameDomain,
+  renameSite,
   setUserActive,
   updateProfessional,
+  updateUser,
 } from "@/lib/services/admin";
 
 /**
@@ -24,10 +35,93 @@ import {
 
 const roleSchema = z.enum(["ADMIN", "OWNER", "SITE_MANAGER"]);
 
+/** מזהה חובה. חוזר בכל פעולה, ולכן מנורמל במקום אחד ולא בכל קריאה מחדש. */
+const id = (value: string) => z.string().min(1).parse(value);
+
 export async function createSiteAction(name: string): Promise<ActionResult> {
   return guard(async () => {
     await createSite(await requireUser(), z.string().parse(name));
     revalidatePath("/admin/sites");
+  });
+}
+
+export async function renameSiteAction(siteId: string, name: string): Promise<ActionResult> {
+  return guard(async () => {
+    await renameSite(await requireUser(), id(siteId), z.string().parse(name));
+    revalidatePath("/admin/sites");
+  });
+}
+
+export async function deleteSiteAction(siteId: string): Promise<ActionResult> {
+  return guard(async () => {
+    await deleteSite(await requireUser(), id(siteId));
+    revalidatePath("/admin/sites");
+  });
+}
+
+// ──────────────────────── בניינים ודירות (מסך 16) ────────────────────────
+//
+// ‏`siteId` נמסר לכל פעולה גם כשהשירות אינו זקוק לו: הוא הנתיב שיש לרענן.
+// הלקוח יושב על `/admin/sites/[siteId]` ויודע אותו, והחלופה — לשלוף את
+// האתר מהדירה דרך הבניין בכל פעולה — היא שאילתה נוספת עבור מידע שכבר קיים.
+
+export async function createBuildingAction(siteId: string, name: string): Promise<ActionResult> {
+  return guard(async () => {
+    await createBuilding(await requireUser(), id(siteId), z.string().parse(name));
+    revalidatePath(`/admin/sites/${siteId}`);
+  });
+}
+
+export async function renameBuildingAction(
+  siteId: string,
+  buildingId: string,
+  name: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await renameBuilding(await requireUser(), id(buildingId), z.string().parse(name));
+    revalidatePath(`/admin/sites/${siteId}`);
+  });
+}
+
+export async function deleteBuildingAction(
+  siteId: string,
+  buildingId: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await deleteBuilding(await requireUser(), id(buildingId));
+    revalidatePath(`/admin/sites/${siteId}`);
+  });
+}
+
+export async function createApartmentAction(
+  siteId: string,
+  buildingId: string,
+  number: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await createApartment(await requireUser(), id(buildingId), z.string().parse(number));
+    revalidatePath(`/admin/sites/${siteId}`);
+  });
+}
+
+export async function renameApartmentAction(
+  siteId: string,
+  apartmentId: string,
+  number: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await renameApartment(await requireUser(), id(apartmentId), z.string().parse(number));
+    revalidatePath(`/admin/sites/${siteId}`);
+  });
+}
+
+export async function deleteApartmentAction(
+  siteId: string,
+  apartmentId: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await deleteApartment(await requireUser(), id(apartmentId));
+    revalidatePath(`/admin/sites/${siteId}`);
   });
 }
 
@@ -45,6 +139,26 @@ export async function createUserAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     await createInternalUser(await requireUser(), createUserSchema.parse(input));
+    revalidatePath("/admin/users");
+  });
+}
+
+const updateUserSchema = z.object({
+  name: z.string(),
+  phone: z.string(),
+  email: z.string().optional(),
+});
+
+/**
+ * עריכת פרטי קשר בלבד. אין `deleteUserAction` — ראה `updateUser` בשירות:
+ * מחיקת משתמש הייתה מוחקת בשקט "מי מטפל" ו"מי סגר" מפניות קיימות.
+ */
+export async function updateUserAction(
+  userId: string,
+  input: z.infer<typeof updateUserSchema>,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await updateUser(await requireUser(), id(userId), updateUserSchema.parse(input));
     revalidatePath("/admin/users");
   });
 }
@@ -91,6 +205,13 @@ export async function mergeProfessionalsAction(
   });
 }
 
+export async function deleteProfessionalAction(professionalId: string): Promise<ActionResult> {
+  return guard(async () => {
+    await deleteProfessional(await requireUser(), id(professionalId));
+    revalidatePath("/admin/professionals");
+  });
+}
+
 export async function createDomainAction(name: string): Promise<ActionResult> {
   return guard(async () => {
     await createDomain(await requireUser(), z.string().parse(name));
@@ -98,9 +219,16 @@ export async function createDomainAction(name: string): Promise<ActionResult> {
   });
 }
 
-export async function renameDomainAction(id: string, name: string): Promise<ActionResult> {
+export async function renameDomainAction(domainId: string, name: string): Promise<ActionResult> {
   return guard(async () => {
-    await renameDomain(await requireUser(), z.string().min(1).parse(id), z.string().parse(name));
+    await renameDomain(await requireUser(), id(domainId), z.string().parse(name));
+    revalidatePath("/admin/domains");
+  });
+}
+
+export async function deleteDomainAction(domainId: string): Promise<ActionResult> {
+  return guard(async () => {
+    await deleteDomain(await requireUser(), id(domainId));
     revalidatePath("/admin/domains");
   });
 }
