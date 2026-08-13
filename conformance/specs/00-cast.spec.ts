@@ -31,16 +31,24 @@ test.describe("צוות ההתאמה", () => {
   });
 
   test("שני האתרים קיימים והמנהלים משויכים נכון", async ({ page }) => {
-    // מנהל עבודה משויך לאתר אחד ולכן מגיע ישירות לטופס, בלי בורר אתר.
+    // מנהל עבודה משויך לאתר אחד: האתר מוצג כערך ולא כבורר — אין לו מה
+    // לבחור — ואתר ב׳ אינו מופיע כלל.
     await loginAs(page, "managerA");
     await page.goto("/tickets/new");
-    await expect(page.getByRole("button", { name: /^בניין/ }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: SITE_B, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "שלח לנמענים" })).toBeEnabled();
+    await expect(page.getByText(SITE_A, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^אתר/ })).toHaveCount(0);
+    await expect(page.getByText(SITE_B, { exact: true })).toHaveCount(0);
 
-    // אדמין פועל בכל האתרים ולכן **בוחר במפורש** (`tickets/new/page.tsx:39`).
+    // אדמין פועל בכל האתרים, ולכן השדה פתוח ואינו נבחר מראש: **בחירה
+    // מפורשת**, כי ברירת מחדל שרירותית הייתה משייכת פניות לאתר הלא נכון.
     await loginAs(page, "admin");
     await page.goto("/tickets/new");
-    await expect(page.getByRole("link", { name: SITE_A, exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: SITE_B, exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "שלח לנמענים" })).toBeEnabled();
+    const openSite = page.getByRole("button", { name: /^אתר/ }).first();
+    await expect(openSite).toBeEnabled();
+    await openSite.click();
+    await expect(page.getByRole("option", { name: SITE_A, exact: true })).toBeVisible();
+    await expect(page.getByRole("option", { name: SITE_B, exact: true })).toBeVisible();
   });
 });

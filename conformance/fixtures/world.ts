@@ -33,17 +33,24 @@ export function uniqPhone(): string {
 /**
  * פותח את מסך יצירת הפנייה עבור אתר מסוים.
  *
- * לאדמין ולבעלים יש **שני** אתרים בחבילה הזו, ולכן המסך מציג בורר אתר לפני
- * הטופס (`tickets/new/page.tsx:39`). זו אינה תקלה אלא דרישה: "בחירה שרירותית
- * הייתה משייכת פניות לאתר הלא נכון". מנהל עבודה מגיע ישר לטופס.
+ * לאדמין ולבעלים יש **שני** אתרים בחבילה הזו, ולכן האתר אינו נבחר מאליו והם
+ * בוחרים אותו **מפורשות** בבורר שבראש הטופס: "בחירה שרירותית הייתה משייכת
+ * פניות לאתר הלא נכון". למנהל עבודה יש אתר אחד, ואצלו אין בורר כלל — האתר
+ * מוצג כערך קבוע — ולכן הבחירה מדולגת.
+ *
+ * **התנאי הוא קיום הבורר, לא נראוּת שלו.** תנאי נראוּת היה עובר תמיד ומדלג
+ * על הבחירה בשקט, ופניות של אדמין היו נוצרות באתר ברירת המחדל בלי שאיש
+ * יבחין. וההמתנה ל-hydration קודמת לו: `LearnedSelect` מושבת עד שהמטפלים
+ * חוברו, והלחיצה עליו לפני כן נבלעת.
  */
 export async function gotoNewTicket(page: Page, siteName: string = SITE_A): Promise<void> {
   await page.goto("/tickets/new");
-  const chooser = page.getByRole("link", { name: siteName, exact: true });
-  if (await chooser.isVisible().catch(() => false)) {
-    await chooser.click();
+  await expect(page.getByRole("button", { name: "שלח לנמענים" })).toBeEnabled();
+
+  if ((await page.getByRole("button", { name: /^אתר/ }).count()) > 0) {
+    await pick(page, "אתר", siteName);
   }
-  await expect(page.getByRole("button", { name: /^בניין/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^בניין/ }).first()).toBeEnabled();
 }
 
 export interface TicketDraftInput {

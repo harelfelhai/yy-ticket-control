@@ -17,7 +17,13 @@ import { DRAFT_MAX_AGE_MS, idbDelete, idbGet, idbPut } from "@/lib/idb-store";
 const DRAFT_KEY = "new-ticket";
 
 export interface OfflineDraft {
-  siteId: string;
+  /**
+   * האתר שנבחר בטופס, או `null` כשעדיין לא נבחר.
+   *
+   * מאז שהאתר הוא שדה בטופס ולא מסך שקודם לו, המשתמש יכול להקליד תיאור
+   * לפני שבחר אתר — וטיוטה שלא נשמרה עד לבחירה הייתה מאבדת בדיוק את זה.
+   */
+  siteId: string | null;
   buildingId: string | null;
   apartmentId: string | null;
   domainId: string | null;
@@ -68,6 +74,32 @@ export function isEmptyDraft(draft: OfflineDraft): boolean {
     draft.recipientIds.length === 0 &&
     draft.mediaIds.length === 0
   );
+}
+
+/**
+ * באיזה אתר ייפתח הטופס אחרי שחזור טיוטה.
+ *
+ * **הכלל התהפך, ולכן הוא צריך אוכף.** קודם לכן טיוטה שהאתר שלה לא תאם את
+ * המסך נזרקה בשלמותה — התנהגות סבירה כשהאתר נבחר במסך שקדם לטופס, ואובדן
+ * נתונים מרגע שהוא שדה בתוכו: המשתמש חוזר, נפתח לו אתר אחר, ומה שהקליד
+ * נעלם. עכשיו **הטיוטה קובעת את האתר**.
+ *
+ * שני סייגים שנשארים:
+ * - טיוטה בלי אתר (הוקלד תיאור לפני שנבחר אתר) אינה דורסת את בחירת המסך.
+ * - אתר שכבר אינו מוצע למשתמש — הרשאתו השתנתה מאז — אינו משוחזר. `null`
+ *   פירושו "אל תשחזר את הטיוטה כלל": השדות שלה מצביעים על בניין ודירה
+ *   באתר שאינו שלו, ושחזורם היה נכשל בשיגור בלי שיבין למה.
+ *
+ * שלוש תשובות ולא שתיים, כי "אין מה לשנות" ו"אין לשחזר" הן החלטות הפוכות:
+ * `undefined` — להשאיר את בחירת המסך · `null` — לדחות את הטיוטה ·
+ * מחרוזת — לעבור לאתר הזה.
+ */
+export function resolveDraftSite(
+  draftSiteId: string | null,
+  allowedSiteIds: readonly string[],
+): string | null | undefined {
+  if (!draftSiteId) return undefined;
+  return allowedSiteIds.includes(draftSiteId) ? draftSiteId : null;
 }
 
 /**

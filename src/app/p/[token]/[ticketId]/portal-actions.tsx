@@ -39,7 +39,7 @@ export function PortalActions({
 }: PortalActionsProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
-  const { busy, error, run } = useAction();
+  const { busy, error, setError, run } = useAction();
 
   // תגובה יכולה להיות תמונה בלבד — וזה המקרה השכיח כאן: קבלן מצלם את מה
   // שתיקן במקום לתאר אותו במילים.
@@ -97,15 +97,26 @@ export function PortalActions({
 
         <button
           type="button"
-          // שאלה דורשת טקסט גם כשמצורפת תמונה: תמונה בלי מילים אינה שאלה
-          // שמנהל העבודה יודע לענות עליה.
-          disabled={busy || text.trim().length === 0}
-          onClick={() =>
+          /*
+           * **הכפתור לחיץ תמיד, והדרישה נאמרת במילים.**
+           *
+           * שאלה עדיין מחייבת טקסט גם כשמצורפת תמונה — תמונה בלי מילים
+           * אינה שאלה שמנהל העבודה יודע לענות עליה. מה שהשתנה הוא איך זה
+           * נאמר: קודם הכפתור היה `disabled` עד שהוקלד משהו, כלומר קבלן
+           * שלחץ עליו לא קיבל שום תגובה ולא היה לו רמז מה חסר. `opacity-60`
+           * נראה כמו כפתור מעוצב שאינו עובד, לא כמו דרישה שלא מולאה.
+           */
+          disabled={busy}
+          onClick={() => {
+            if (text.trim().length === 0) {
+              setError(he.portal.questionNeedsText);
+              return;
+            }
             run(
               () => askQuestionAction(token, ticketId, text, files.map((f) => f.mediaId)),
               clear,
-            )
-          }
+            );
+          }}
           className="min-h-12 rounded-xl border border-warning bg-warning/10 px-4 font-semibold text-warning disabled:opacity-60"
         >
           {he.portal.askQuestion}

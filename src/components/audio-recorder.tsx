@@ -21,11 +21,33 @@ interface AudioRecorderProps {
  *
  * ‏MediaRecorder ולא ספרייה חיצונית: הוא נתמך בכל דפדפן רלוונטי היום,
  * ותוסף להקלטה היה מוסיף מאות קילובייטים לטובת פונקציה אחת.
+ *
+ * **הביטול הוא פעולה בזמן ההקלטה, לא אחריה.** קודם לכן הייתה דרך אחת
+ * לצאת מהקלטה — לעצור אותה, ואז הקובץ כבר עלה לשרת ונרשם, והסרתו הייתה
+ * פעולה שנייה על צ׳יפ ברשימה. מי שהתחיל להקליד־בקול והתחרט העלה בכל פעם
+ * הקלטת סרק. עכשיו "בטל" מוצג לצד "עצור ושמור" כל עוד ההקלטה רצה.
  */
 export function AudioRecorder({ onRecorded, onError, disabled, className }: AudioRecorderProps) {
   const [recording, setRecording] = useState(false);
+  /**
+   * ההרשאה נבדקת, ההקלטה טרם התחילה.
+   *
+   * לא קוסמטיקה: `getUserMedia` ממתין לאישור המשתמש, ובזמן הזה הכפתור נראה
+   * כאילו הלחיצה נבלעה. לחיצה שנייה הייתה פותחת **זרם שני** ודורסת את
+   * ‏`recorderRef` — כלומר הראשון נשאר פתוח לנצח והמיקרופון ממשיך לדלוק
+   * בלי שום דרך לכבותו. התגלה בהרצה בפועל.
+   */
+  const [starting, setStarting] = useState(false);
+  const [seconds, setSeconds] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  /**
+   * ‏ref ולא state, וזו הנקודה: `MediaRecorder.stop()` יורה `onstop` תמיד,
+   * ואין ב-API דרך "לזרוק" הקלטה. הביטול הוא לכן החלטה **להתעלם** מה-blob
+   * — והיא חייבת להיות קריאה בתוך `onstop`, שרץ מחוץ למחזור הרינדור.
+   * ‏state היה מתעדכן מאוחר מדי, וההקלטה המבוטלת הייתה עולה בכל זאת.
+   */
+  const cancelledRef = useRef(false);
 
   // עצירה בעת פירוק הרכיב: בלעדיה נורית המיקרופון נשארת דולקת אחרי מעבר
   // מסך, וזו התנהגות שנראית למשתמש כמו האזנה.
@@ -33,12 +55,27 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
     return () => stopTracks(recorderRef.current);
   }, []);
 
+  /**
+   * מונה הזמן החולף.
+   *
+   * לא קישוט: בלעדיו אין שום חיווי שההקלטה באמת רצה — הכפתור מחליף טקסט
+   * וזהו. מנהל שמדבר לתוך מיקרופון חסום ראה מסך זהה למסך של הקלטה תקינה.
+   */
+  useEffect(() => {
+    if (!recording) return;
+    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, [recording]);
+
   async function start() {
+    if (starting || recording) return;
+
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       onError(he.media.micUnavailable);
       return;
     }
 
+    setStarting(true);
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -47,10 +84,13 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
       // השכיחה, שהיא הרשאה שלא ניתנה.
       onError(he.media.micDenied);
       return;
+    } finally {
+      setStarting(false);
     }
 
     const recorder = new MediaRecorder(stream, pickMimeType());
     chunksRef.current = [];
+    cancelledRef.current = false;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data);
@@ -61,7 +101,11 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
       const blob = new Blob(chunksRef.current, { type });
       stopTracks(recorder);
       setRecording(false);
+      setSeconds(0);
 
+      // הבתים נאספו ממילא — מה שהביטול עושה הוא לא להעביר אותם הלאה,
+      // כלומר לא לרשום מדיה בשרת ולא להעלות דבר.
+      if (cancelledRef.current) return;
       if (blob.size > 0) {
         onRecorded(new File([blob], `${he.media.audioLabel}.webm`, { type }));
       }
@@ -69,26 +113,78 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
 
     recorder.start();
     recorderRef.current = recorder;
+    setSeconds(0);
     setRecording(true);
   }
 
   function stop() {
+    cancelledRef.current = false;
     recorderRef.current?.stop();
   }
 
+  function cancel() {
+    cancelledRef.current = true;
+    recorderRef.current?.stop();
+  }
+
+  if (!recording) {
+    return (
+      <button
+        type="button"
+        disabled={disabled || starting}
+        onClick={() => void start()}
+        aria-pressed={false}
+        className={`rounded-xl border border-border px-3 font-medium disabled:opacity-60 ${
+          className ?? "min-h-11 text-sm"
+        }`}
+      >
+        {/* טקסט מפורש בזמן המתנה להרשאה — כפתור שנראה כאילו הלחיצה נבלעה
+            הוא בדיוק מה שדווח מהשטח על פקדים אחרים. */}
+        {starting ? he.media.micStarting : he.media.record}
+      </button>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => (recording ? stop() : void start())}
-      aria-pressed={recording}
-      className={`rounded-xl px-3 font-medium disabled:opacity-60 ${
-        recording ? "bg-danger text-white" : "border border-border"
-      } ${className ?? "min-h-11 text-sm"}`}
+    // ‏`className` מגיע מההורה כאילוץ פריסה של תא בגריד (`min-h-16 w-full`),
+    // ולכן הוא נשאר על המיכל — שני הכפתורים מתחלקים ברוחב שהוקצה לפקד אחד.
+    <div
+      className={`flex items-stretch gap-2 ${className ?? "text-sm"}`}
+      // הכרזה לקורא מסך שההקלטה החלה. הטיימר לבדו הוא מספר שמשתנה כל
+      // שנייה — הכרזה עליו הייתה רעש, ולכן הוא `aria-hidden` והמצב נמסר פעם אחת.
+      role="group"
+      aria-label={he.media.recording}
     >
-      {recording ? he.media.stopRecording : he.media.record}
-    </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={stop}
+        aria-pressed
+        className="min-h-11 flex-1 rounded-xl bg-danger px-3 font-medium text-brand-fg disabled:opacity-60"
+      >
+        {he.media.stopRecording}
+        {/* הזמן צמוד לפעולה השומרת, כי הוא מתאר אותה: כמה ייכנס לקובץ.
+            ‏`dir="ltr"` — שעון הוא מספר ולא טקסט עברי. */}
+        <span dir="ltr" aria-hidden className="ms-2 tabular-nums">
+          {formatElapsed(seconds)}
+        </span>
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={cancel}
+        className="min-h-11 rounded-xl border border-border px-3 font-medium disabled:opacity-60"
+      >
+        {he.media.cancelRecording}
+      </button>
+    </div>
   );
+}
+
+/** ‏m:ss — הקלטה בשטח נמדדת בשניות ובדקות בודדות, ולא בשעות */
+function formatElapsed(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 /**

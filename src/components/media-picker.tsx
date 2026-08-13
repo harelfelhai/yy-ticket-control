@@ -8,6 +8,7 @@ import { he } from "@/lib/he";
 import { mediaKind } from "@/lib/media-view";
 import { useHydrated } from "@/lib/use-hydrated";
 import { AudioRecorder } from "./audio-recorder";
+import { CameraCapture } from "./camera-capture";
 
 export interface AttachedFile {
   mediaId: string;
@@ -59,11 +60,27 @@ export function MediaPicker({
 }: MediaPickerProps) {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(0);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const hydrated = useHydrated();
   const busy = disabled || !hydrated;
+
+  /**
+   * לאן מוביל "צלם".
+   *
+   * ‏`capture="environment"` פותח את אפליקציית המצלמה בנייד — המסלול הנכון
+   * שם, עם איכות מלאה, פלאש וממשק מוכר. **בדסקטופ הדפדפן מתעלם ממנו בשקט**
+   * ופותח בורר קבצים, כך שמי שלוחץ "צלם" מקבל "בחר קובץ" ומסיק שהמערכת
+   * שבורה. שם, ורק שם, נפתחת מצלמה מובנית.
+   *
+   * ‏`pointer: coarse` ולא סניפת user-agent: השאלה האמיתית היא אם זה מכשיר
+   * מגע, וזו בדיוק השאלה שה-media query עונה עליה. הבדיקה אחרי hydration
+   * מפני ש-`matchMedia` אינו קיים בשרת, ורינדור שונה בין השניים הוא שגיאת
+   * hydration.
+   */
+  const nativeCamera = hydrated && window.matchMedia("(pointer: coarse)").matches;
 
   /** מעלה קובץ יחיד ומחזיר את הרשומה, או null אם נכשל */
   async function upload(file: File): Promise<AttachedFile | null> {
@@ -155,6 +172,13 @@ export function MediaPicker({
     }
   }
 
+  /** "צלם" — מצלמת המכשיר בנייד, חלון צילום מובנה בדסקטופ */
+  function openCamera() {
+    setError(null);
+    if (nativeCamera) cameraInput.current?.click();
+    else setCameraOpen(true);
+  }
+
   function remove(mediaId: string) {
     const target = files.find((f) => f.mediaId === mediaId);
     if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
@@ -222,7 +246,7 @@ export function MediaPicker({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => cameraInput.current?.click()}
+                onClick={openCamera}
                 className="min-h-16 rounded-xl border border-brand bg-brand/10 px-3 text-base font-semibold text-brand disabled:opacity-60"
               >
                 {he.media.camera}
@@ -259,12 +283,7 @@ export function MediaPicker({
             >
               {he.media.attach}
             </Button>
-            <Button
-              variant="secondary"
-              size="compact"
-              disabled={busy}
-              onClick={() => cameraInput.current?.click()}
-            >
+            <Button variant="secondary" size="compact" disabled={busy} onClick={openCamera}>
               {he.media.camera}
             </Button>
 
@@ -287,6 +306,13 @@ export function MediaPicker({
         <p role="alert" className="text-sm font-medium text-danger">
           {error}
         </p>
+      ) : null}
+
+      {cameraOpen ? (
+        <CameraCapture
+          onCaptured={(file) => void addFiles(toFileList(file))}
+          onClose={() => setCameraOpen(false)}
+        />
       ) : null}
     </div>
   );

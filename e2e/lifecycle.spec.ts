@@ -117,8 +117,23 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   // ── 3. הקבלן השני שואל שאלה ───────────────────────────────────────
   await page.goto(plumberLink);
   await page.getByRole("link").filter({ hasText: description }).click();
+
+  /*
+   * לחיצה על "יש לי שאלה" בלי טקסט **מסבירה מה חסר**.
+   *
+   * קודם הכפתור היה `disabled` עד שהוקלד משהו, כלומר לחיצה לא עשתה כלום
+   * ולא נאמר דבר — הקבלן בשטח דיווח עליו כ"כפתור שבור". הדרישה עצמה
+   * נשארה; מה שנוסף הוא שהיא נאמרת.
+   */
+  const ask = page.getByRole("button", { name: "יש לי שאלה" });
+  await expect(ask).toBeEnabled();
+  await ask.click();
+  // ‏`main` ולא `getByRole("alert")` לבדו: ל-route announcer של Next יש
+  // גם הוא `role="alert"`, והבורר הרחב נופל על ריבוי התאמות.
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("כתוב את השאלה");
+
   await page.getByLabel("תגובה").fill("איפה הכניסה לדירה?");
-  await page.getByRole("button", { name: "יש לי שאלה" }).click();
+  await ask.click();
   await expect(page.getByText("השאלה נשלחה למנהל ראשי.")).toBeVisible();
 
   // ── 4. אצל המנהל: הפנייה ב"דורש ממך", והסיבה היא השאלה ───────────

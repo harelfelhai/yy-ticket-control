@@ -6,6 +6,7 @@ import {
   isEmptyDraft,
   isNetworkFailure,
   loadDraft,
+  resolveDraftSite,
   saveDraft,
 } from "@/lib/offline-draft";
 
@@ -145,5 +146,33 @@ describe("isNetworkFailure", () => {
     // "לא ניתן לשגר — חסר תחום" הוא משהו שרק המשתמש יכול לתקן, וניסיון
     // חוזר עליו הוא לולאה אינסופית שקטה.
     expect(isNetworkFailure(new Error("לא ניתן לשגר — חסר תחום"))).toBe(false);
+  });
+});
+
+/**
+ * הכלל הזה **התהפך** כשהאתר הפך משדה במסך שקדם לטופס לשדה בתוכו, והוא
+ * נכתב כאן דווקא מפני שקודם לא היה לו אוכף: התנאי ישב בתוך הקומפוננטה
+ * (`create-ticket-form.tsx`), אף בדיקה לא נגעה בו, והחלפתו לא הייתה
+ * מאדימה דבר.
+ */
+describe("resolveDraftSite", () => {
+  it("טיוטה קובעת את האתר, גם כשהמסך נפתח על אחר", () => {
+    // זה השינוי עצמו: קודם טיוטה כזו נזרקה, והמשתמש איבד מה שהקליד.
+    expect(resolveDraftSite("site-2", ["site-1", "site-2"])).toBe("site-2");
+  });
+
+  it("טיוטה בלי אתר אינה דורסת את בחירת המסך", () => {
+    // הוקלד תיאור לפני שנבחר אתר — אין כאן החלטה לשחזר.
+    expect(resolveDraftSite(null, ["site-1"])).toBeUndefined();
+  });
+
+  it("אתר שאינו מוצע עוד למשתמש דוחה את הטיוטה כולה", () => {
+    // ‏null ולא undefined: הבניין והדירה שבטיוטה שייכים לאתר שאינו שלו,
+    // ושחזורם היה נכשל בשיגור בלי שיבין למה.
+    expect(resolveDraftSite("site-9", ["site-1", "site-2"])).toBeNull();
+  });
+
+  it("רשימת אתרים ריקה דוחה כל טיוטה עם אתר", () => {
+    expect(resolveDraftSite("site-1", [])).toBeNull();
   });
 });

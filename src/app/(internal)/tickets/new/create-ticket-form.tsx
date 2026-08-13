@@ -15,6 +15,7 @@ import {
   isEmptyDraft,
   isNetworkFailure,
   loadDraft,
+  resolveDraftSite,
   saveDraft,
 } from "@/lib/offline-draft";
 import { useAction } from "@/lib/use-action";
@@ -43,12 +44,27 @@ export interface BuildingWithApartments extends LearnedOption {
   apartments: LearnedOption[];
 }
 
+/**
+ * נמען פנימי, עם האתר שאליו הוא משויך.
+ *
+ * ‏`siteId: null` הוא מנהל מערכת או בעלים — הם אינם קשורים לאתר וזמינים
+ * בכולם. השדה נשלח ללקוח כדי שהחלפת אתר תסנן מיד, בלי סבב רשת: **נמען
+ * פנימי מאתר אחר יקבל את הפנייה אך לא יוכל לראות אותה** (`canViewTicket`
+ * משווה `siteId`), כלומר שיוך שנשבר בשקט.
+ */
+export interface InternalRecipientOption extends RecipientOption {
+  kind: "user";
+  siteId: string | null;
+}
+
 interface CreateTicketFormProps {
-  siteId: string;
-  siteName: string;
-  buildings: BuildingWithApartments[];
+  sites: LearnedOption[];
+  /** האתר שנבחר מראש: היחיד שיש למשתמש, או `?site=`. `null` = טרם נבחר */
+  initialSiteId: string | null;
+  buildingsBySite: Record<string, BuildingWithApartments[]>;
   domains: LearnedOption[];
-  recipients: RecipientOption[];
+  professionals: RecipientOption[];
+  internalUsers: InternalRecipientOption[];
   tags: LearnedOption[];
 }
 
@@ -56,22 +72,26 @@ interface CreateTicketFormProps {
  * מסך יצירת פנייה מהירה (מסך 4 באפיון).
  *
  * מסך אחד ולא אשף רב-שלבי, במכוון: מנהל עבודה עומד מול הדירה ומזין ביד
- * אחת. כל מעבר מסך הוא הזדמנות לאבד את מה שהוקלד.
+ * אחת. כל מעבר מסך הוא הזדמנות לאבד את מה שהוקלד. מאותה סיבה גם **האתר
+ * הוא שדה כאן ולא מסך שקודם לטופס**: מסך ביניים שאין ממנו חזרה הכריח לנחש
+ * כתובת כדי להחליף אתר.
  *
  * הרשימות שנוצרות תוך כדי (בניין חדש, תחום חדש) נוספות למצב המקומי מיד,
  * כדי שהבחירה תמשיך בלי רענון של כל המסך.
  */
 export function CreateTicketForm({
-  siteId,
-  siteName,
-  buildings: initialBuildings,
+  sites,
+  initialSiteId,
+  buildingsBySite: initialBuildingsBySite,
   domains: initialDomains,
-  recipients: recipientOptions,
+  professionals: initialProfessionals,
+  internalUsers,
   tags: initialTags,
 }: CreateTicketFormProps) {
-  const [buildings, setBuildings] = useState(initialBuildings);
+  const [siteId, setSiteId] = useState<string | null>(initialSiteId);
+  const [buildingsBySite, setBuildingsBySite] = useState(initialBuildingsBySite);
   const [domains, setDomains] = useState(initialDomains);
-  const [availableRecipients, setAvailableRecipients] = useState(recipientOptions);
+  const [professionals, setProfessionals] = useState(initialProfessionals);
   const [availableTags, setAvailableTags] = useState(initialTags);
 
   const [buildingId, setBuildingId] = useState<string | null>(null);
@@ -96,6 +116,8 @@ export function CreateTicketForm({
   const submittedRef = useRef(false);
   /** הכתיבה האחרונה לבסיס המקומי — ממתינים לה לפני שמנקים */
   const lastSaveRef = useRef<Promise<void>>(Promise.resolve());
+  /** שחזור הטיוטה נעשה פעם אחת בלבד — ראה ההערה על ה-effect */
+  const restoreStartedRef = useRef(false);
   /**
    * ‏`start` ולא `run`: השיגור כאן עטוף ב-try/catch על **כשל רשת** — מקרה
    * שאינו `ActionResult` כלל, כי הבקשה לא הגיעה לשרת ו-`guard` לא רץ. הוא
@@ -106,12 +128,48 @@ export function CreateTicketForm({
    */
   const { busy, pending, error, setError, start } = useAction();
 
+  const buildings = siteId ? (buildingsBySite[siteId] ?? []) : [];
   const selectedBuilding = buildings.find((b) => b.id === buildingId) ?? null;
+
+  /**
+   * הנמענים הזמינים לאתר הנבחר.
+   *
+   * אנשי מקצוע גלובליים; משתמשים פנימיים מסוננים לפי האתר, בדיוק כפי
+   * שהשרת סינן אותם קודם. בלי הסינון הזה מנהל מערכת יכול לשייך פנייה של
+   * אתר א׳ למנהל של אתר ב׳ — הוא יקבל אותה ולא יוכל לפתוח אותה.
+   */
+  const availableRecipients = useMemo<RecipientOption[]>(
+    () => [
+      ...professionals,
+      ...internalUsers.filter((u) => u.siteId === null || u.siteId === siteId),
+    ],
+    [professionals, internalUsers, siteId],
+  );
 
   const roomOptions = useMemo(
     () => ROOMS.map((value) => ({ id: value, label: he.room[value] })),
     [],
   );
+
+  /**
+   * החלפת אתר.
+   *
+   * מאפסת בניין ודירה (הם שייכים לאתר), ומשליכה נמענים פנימיים שאינם
+   * זמינים באתר החדש. השארתם הייתה משגרת פנייה לנמען שאינו רשאי לראותה —
+   * כישלון שקט, שהוא בדיוק מה שהמערכת נועדה למנוע.
+   */
+  function changeSite(next: string | null) {
+    setSiteId(next);
+    setBuildingId(null);
+    setApartmentId(null);
+    setRecipients((prev) =>
+      prev.filter((r) => {
+        if (r.kind === "professional") return true;
+        const user = internalUsers.find((u) => u.id === r.id);
+        return user ? user.siteId === null || user.siteId === next : false;
+      }),
+    );
+  }
 
   /** צילום המצב הנוכחי, בצורה שנשמרת בדפדפן */
   const snapshot = useCallback(
@@ -152,15 +210,40 @@ export function CreateTicketForm({
     return () => clearTimeout(timer);
   }, [snapshot, restoring]);
 
-  /** משחזר טיוטה שנשארה מכניסה קודמת */
+  /**
+   * משחזר טיוטה שנשארה מכניסה קודמת.
+   *
+   * **האתר מגיע מהטיוטה ולא מהמסך.** קודם לכן טיוטה שהאתר שלה לא תאם
+   * נזרקה בשקט — התנהגות שהייתה סבירה כשהאתר נבחר במסך שקדם לטופס, ושהיא
+   * אובדן נתונים עכשיו: המשתמש חוזר למסך, נפתח לו אתר אחר כברירת מחדל,
+   * ומה שהקליד נעלם. התנאי היחיד שנשאר הוא שהאתר עדיין מוצע לו — טיוטה
+   * שנשמרה לפני שהרשאתו השתנתה לא תשחזר אתר שאינו שלו.
+   */
   useEffect(() => {
+    // ‏ref ולא מערך תלויות ריק: הפרופס מגיעים מרכיב שרת ומקבלים זהות חדשה
+    // בכל רינדור שלו, כך שהתלות בהם הייתה מריצה את השחזור שוב — ודורסת את
+    // מה שהמשתמש מקליד באותו רגע. ההערה למטה תמיד תיארה "פעם אחת"; זה מה
+    // שמממש אותה בפועל.
+    if (restoreStartedRef.current) return;
+    restoreStartedRef.current = true;
+
     let cancelled = false;
 
     void loadDraft().then((draft) => {
-      if (cancelled || !draft || draft.siteId !== siteId) {
+      if (cancelled || !draft) {
         setRestoring(false);
         return;
       }
+
+      const draftSite = resolveDraftSite(
+        draft.siteId,
+        sites.map((s) => s.id),
+      );
+      if (draftSite === null) {
+        setRestoring(false);
+        return;
+      }
+      if (draftSite !== undefined) setSiteId(draftSite);
 
       setBuildingId(draft.buildingId);
       setApartmentId(draft.apartmentId);
@@ -170,7 +253,9 @@ export function CreateTicketForm({
       setRecipients(
         draft.recipientIds
           .map((ref) =>
-            recipientOptions.find((o) => o.id === ref.id && o.kind === ref.kind),
+            [...initialProfessionals, ...internalUsers].find(
+              (o) => o.id === ref.id && o.kind === ref.kind,
+            ),
           )
           .filter((option): option is RecipientOption => option !== undefined),
       );
@@ -187,7 +272,7 @@ export function CreateTicketForm({
       cancelled = true;
     };
     // פעם אחת בטעינת המסך בלבד: שחזור חוזר היה דורס מה שהמשתמש מקליד עכשיו.
-  }, [siteId, recipientOptions, initialTags]);
+  }, [sites, initialProfessionals, internalUsers, initialTags]);
 
   /**
    * שיגור. כשל תקשורת אינו מאבד את מה שהוקלד.
@@ -199,6 +284,16 @@ export function CreateTicketForm({
   const submit = useCallback(
     async (saveAsDraft: boolean) => {
       setError(null);
+
+      // אתר הוא שדה חובה גם לטיוטה: הפנייה שייכת לאתר כבר ברמת הסכימה
+      // (`Ticket.siteId` אינו nullable), ולכן אין מה לשלוח בלעדיו. הבדיקה
+      // כאן ולא בהשבתת הכפתור — כפתור מושבת בלי הסבר הוא בדיוק התקלה
+      // שדווחה על "יש לי שאלה" בפורטל.
+      if (!siteId) {
+        setError(he.ticket.siteRequired);
+        return;
+      }
+
       // עוצרים את השמירה השוטפת כבר עכשיו: מרגע הלחיצה ועד לתשובה עוברת
       // שהות שבה טיימר ממתין עלול לירות ולכתוב טיוטה שכבר אינה רלוונטית.
       submittedRef.current = true;
@@ -287,16 +382,36 @@ export function CreateTicketForm({
     // pb-28: רצועת הפעולות דביקה בתחתית (sticky), והריפוד נותן לתוכן — למשל
     // טופס יצירת איש מקצוע כשהוא פתוח — מקום להיגלל מעליה במקום להיחסם מאחוריה.
     <div className={`flex flex-col gap-4 p-4 pb-28 ${CONTENT_WIDTH}`}>
-      <div>
-        <h1 className={TITLE_DESCRIPTIVE}>{he.ticket.createTitle}</h1>
-        <p className="text-sm text-muted">
-          {he.ticket.site}: {siteName}
-        </p>
-      </div>
+      <h1 className={TITLE_DESCRIPTIVE}>{he.ticket.createTitle}</h1>
 
       {/* המדיה היא הפעולה הראשונה (אפיון מסך 4): בשטח מצלמים לפני שמקלידים.
           בלי ticketId — הפנייה עדיין אינה קיימת; הקלטה ממלאת את התיאור אם ריק. */}
       <MediaPicker variant="prominent" files={files} onChange={setFiles} disabled={busy} />
+
+      {/*
+        האתר הוא שדה בטופס ולא מסך שקודם לו.
+
+        **כשיש אתר אחד זו אינה בחירה, ולכן זה אינו בורר.** הגרסה הראשונה
+        רינדרה `LearnedSelect` מושבת, וסבב הצילומים חשף למה זה שגוי:
+        ‏`disabled:opacity-60` צבע את שם האתר באותו אפור בדיוק כמו
+        ה-placeholder "בחר בניין תחילה" שמתחתיו — שני שדות עמומים, ואי
+        אפשר לדעת מהסריקה מי מהם מחזיק ערך ומי ממתין. על מסך בשמש זה ההבדל
+        בין קריאה לניחוש. בורר שלעולם אינו נפתח הוא גם הבטחה שקרית:
+        ‏`aria-haspopup="listbox"` על כפתור שאין לו מה להציע.
+      */}
+      {sites.length === 1 ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">{he.ticket.site}</span>
+          <span>{sites[0].label}</span>
+        </div>
+      ) : (
+        <LearnedSelect
+          label={he.ticket.site}
+          options={sites}
+          value={siteId}
+          onChange={changeSite}
+        />
+      )}
 
       <LearnedSelect
         label={he.directory.building}
@@ -308,11 +423,20 @@ export function CreateTicketForm({
           // הבחירה הקודמת הייתה משייכת את הפנייה לדירה הלא נכונה בשקט.
           setApartmentId(null);
         }}
-        onCreate={async (name) => {
-          const created = unwrapOrThrow(await createBuildingAction(siteId, name));
-          setBuildings((prev) => [...prev, { ...created, apartments: [] }]);
-          return created;
-        }}
+        disabled={!siteId}
+        placeholder={siteId ? undefined : he.ticket.chooseSiteFirst}
+        onCreate={
+          siteId
+            ? async (name) => {
+                const created = unwrapOrThrow(await createBuildingAction(siteId, name));
+                setBuildingsBySite((prev) => ({
+                  ...prev,
+                  [siteId]: [...(prev[siteId] ?? []), { ...created, apartments: [] }],
+                }));
+                return created;
+              }
+            : undefined
+        }
       />
 
       <LearnedSelect
@@ -323,18 +447,19 @@ export function CreateTicketForm({
         disabled={!selectedBuilding}
         placeholder={selectedBuilding ? undefined : he.ticket.chooseBuildingFirst}
         onCreate={
-          selectedBuilding
+          siteId && selectedBuilding
             ? async (number) => {
                 const created = unwrapOrThrow(
                   await createApartmentAction(siteId, selectedBuilding.id, number),
                 );
-                setBuildings((prev) =>
-                  prev.map((b) =>
+                setBuildingsBySite((prev) => ({
+                  ...prev,
+                  [siteId]: (prev[siteId] ?? []).map((b) =>
                     b.id === selectedBuilding.id
                       ? { ...b, apartments: [...b.apartments, created] }
                       : b,
                   ),
-                );
+                }));
                 return created;
               }
             : undefined
@@ -346,11 +471,17 @@ export function CreateTicketForm({
         options={domains}
         value={domainId}
         onChange={setDomainId}
-        onCreate={async (name) => {
-          const created = unwrapOrThrow(await createDomainAction(siteId, name));
-          setDomains((prev) => [...prev, created]);
-          return created;
-        }}
+        disabled={!siteId}
+        placeholder={siteId ? undefined : he.ticket.chooseSiteFirst}
+        onCreate={
+          siteId
+            ? async (name) => {
+                const created = unwrapOrThrow(await createDomainAction(siteId, name));
+                setDomains((prev) => [...prev, created]);
+                return created;
+              }
+            : undefined
+        }
       />
 
       {/* רשימה קבועה שאינה נלמדת (אפיון §3.3) — ולכן בלי onCreate */}
@@ -375,9 +506,10 @@ export function CreateTicketForm({
           value={recipients}
           onChange={setRecipients}
           onCreateProfessional={async (input) => {
+            if (!siteId) throw new Error(he.ticket.siteRequired);
             const created = unwrapOrThrow(await createProfessionalAction(siteId, input));
             const option: RecipientOption = { ...created, kind: "professional" };
-            setAvailableRecipients((prev) => [...prev, option]);
+            setProfessionals((prev) => [...prev, option]);
             return option;
           }}
         />
