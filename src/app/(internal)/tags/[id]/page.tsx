@@ -63,8 +63,8 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
                   className="flex items-center justify-between gap-2 rounded-lg bg-bg p-3 text-sm"
                 >
                   <span>
-                    {ticket.buildingName ?? he.ticket.noLocation}
-                    {ticket.apartmentNumber ? ` · ${he.directory.apartment} ${ticket.apartmentNumber}` : ""}
+                    {he.ticket.location(ticket.buildingName, ticket.apartmentNumber) ||
+                      he.ticket.noLocation}
                     {ticket.domainName ? ` · ${ticket.domainName}` : ""}
                   </span>
                   <span className="shrink-0 text-xs text-muted" dir="ltr">

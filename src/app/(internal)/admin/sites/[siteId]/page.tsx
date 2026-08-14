@@ -125,14 +125,19 @@ export default async function AdminSiteBuildingsPage(
                         <span className="text-sm text-muted">
                           {he.admin.linkedTickets(apartment.ticketCount)}
                         </span>
+                        {/*
+                         * השם הנגיש נושא גם את הבניין. "דירה 1" קיימת בכל
+                         * בניין באתר, ובלעדיו שני כפתורים במסך אחד נושאים
+                         * את אותו שם והאישור אינו אומר איזו דירה נמחקת.
+                         */}
                         <InlineRename
                           value={apartment.number}
-                          name={`${he.directory.apartment} ${apartment.number}`}
+                          name={he.ticket.location(building.name, apartment.number)}
                           inputMode="numeric"
                           action={renameApartmentAction.bind(null, siteId, apartment.id)}
                         />
                         <DeleteButton
-                          name={`${he.directory.apartment} ${apartment.number}`}
+                          name={he.ticket.location(building.name, apartment.number)}
                           action={deleteApartmentAction.bind(null, siteId, apartment.id)}
                         />
                       </li>

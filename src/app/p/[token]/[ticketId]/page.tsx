@@ -44,7 +44,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h1 className={TITLE_IDENTIFYING}>
-              {ticket.building?.name} · {he.directory.apartment} {ticket.apartment?.number}
+              {he.ticket.location(ticket.building?.name, ticket.apartment?.number)}
             </h1>
             <AssignmentStatusChip status={assignment.status} />
           </div>

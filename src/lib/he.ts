@@ -20,6 +20,26 @@ import type { BoardSection, DerivedTicketStatus } from "./ticket-status";
 const APP_NAME = "בקרת פניות";
 const COMPANY = "Y&Y";
 
+const APARTMENT = "דירה";
+
+/**
+ * "בניין א · דירה 3" — הצורה האחת שבה מיקום נכתב בכל המערכת.
+ *
+ * היא הייתה מורכבת מחדש בכל מסך שהציג מיקום, וכשמסך הניהול נזקק לה כדי
+ * להבחין בין "דירה 1" שבשני בניינים, הניסוח שנכתב שם מזיכרון יצר
+ * "דירה 1 בבניין בניין א" — הבניינים עצמם נקראים "בניין א".
+ *
+ * שני החלקים אופציונליים: טיוטה יכולה להישמר בלי מיקום מלא (אפיון §2.5).
+ */
+function locationLabel(
+  building?: string | null,
+  apartmentNumber?: string | null,
+): string {
+  return [building, apartmentNumber && `${APARTMENT} ${apartmentNumber}`]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export const he = {
   app: {
     /** שם המוצר כפי שהמשתמשים מכירים אותו */
@@ -294,6 +314,11 @@ export const he = {
 
   ticket: {
     description: "תיאור",
+    /**
+     * "בניין א · דירה 3". מקור אחד לכותרת הפנייה, לשורת הלוח ולתוויות
+     * הנגישות במסך הניהול — כדי שהמיקום ייקרא אותו דבר בכל מקום שבו הוא מופיע.
+     */
+    location: locationLabel,
     recipients: "נמענים",
     addRecipient: "הוסף נמען",
     removeRecipient: "הסר",
@@ -522,7 +547,7 @@ export const he = {
   /** הרשימות הנלמדות: בניין, דירה, תחום, איש מקצוע */
   directory: {
     building: "בניין",
-    apartment: "דירה",
+    apartment: APARTMENT,
     domain: "תחום",
     professional: "איש מקצוע",
     professionalName: "שם",

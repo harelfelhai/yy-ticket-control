@@ -46,7 +46,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
                 className={cardClasses("flex flex-col gap-1")}
               >
                 <span className="font-semibold">
-                  {ticket.building?.name} · {he.directory.apartment} {ticket.apartment?.number}
+                  {he.ticket.location(ticket.building?.name, ticket.apartment?.number)}
                 </span>
                 <span className="text-sm text-muted">{ticket.domain?.name}</span>
                 {ticket.description ? (
@@ -93,8 +93,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
                   className={cardClasses("flex flex-col gap-1 text-muted")}
                 >
                   <span className="font-medium">
-                    {ticket.building?.name} · {he.directory.apartment}{" "}
-                    {ticket.apartment?.number}
+                    {he.ticket.location(ticket.building?.name, ticket.apartment?.number)}
                   </span>
                   <span className="text-sm">{ticket.domain?.name}</span>
                 </Link>

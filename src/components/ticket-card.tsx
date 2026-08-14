@@ -15,12 +15,7 @@ import { chipClasses } from "@/components/ui/chip";
  * הכרטיס כולו הוא קישור אחד: אצבע בכפפה על מסך בשמש לא מכוונת לאזור קטן.
  */
 export function TicketCard({ card }: { card: BoardCard }) {
-  const location = [
-    card.buildingName,
-    card.apartmentNumber && `${he.directory.apartment} ${card.apartmentNumber}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const location = he.ticket.location(card.buildingName, card.apartmentNumber);
 
   // טיוטה מסומנת באדום (אפיון מסך 7): מסגרת אדומה ושורת סיבה אדומה, כדי
   // שתיקרא מיד כ"דורש השלמה" ולא כפנייה רגילה.

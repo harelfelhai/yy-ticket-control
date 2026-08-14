@@ -42,8 +42,15 @@ test.describe("מסך 16 — בניינים ודירות", () => {
     await row.getByRole("button", { name: "הוסף דירה", exact: true }).click();
     await expect(row.getByText("דירה 12")).toBeVisible();
 
+    // השם הנגיש נושא גם את הבניין, ובכוונה: "דירה 1" קיימת בכל בניין באתר,
+    // ובלעדיו שני כפתורים במסך נושאים את אותו שם והאישור אינו אומר איזו
+    // דירה נמחקת. הניסוח הוא זה של כותרת הפנייה ("בניין א · דירה 3"),
+    // ולא ניסוח שני. הטענה כאן היא האוכף של שניהם.
+    const apartmentLabel = `${building} · דירה 12`;
+    await expect(row.getByRole("button", { name: `מחק ${apartmentLabel}` })).toBeVisible();
+
     // ניקוי אחרי עצמנו — הבדיקה אינה משאירה שאריות לריצה הבאה.
-    await row.getByRole("button", { name: "מחק דירה 12" }).click();
+    await row.getByRole("button", { name: `מחק ${apartmentLabel}` }).click();
     await expect(row.getByText("דירה 12")).toHaveCount(0);
     await row.getByRole("button", { name: `מחק ${building}` }).click();
     await expect(page.getByRole("listitem").filter({ hasText: building })).toHaveCount(0);

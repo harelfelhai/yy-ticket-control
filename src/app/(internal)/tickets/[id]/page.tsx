@@ -126,12 +126,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
     canTag ? listTags() : Promise.resolve([]),
   ]);
 
-  const location = [
-    ticket.building?.name,
-    ticket.apartment && `${he.directory.apartment} ${ticket.apartment.number}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const location = he.ticket.location(ticket.building?.name, ticket.apartment?.number);
 
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
   const ageDays = Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY);
