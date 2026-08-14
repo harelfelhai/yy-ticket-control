@@ -125,6 +125,10 @@ export async function createTicket(page: Page, input: TicketDraftInput = {}): Pr
   const button = input.saveAsDraft ? "שמור כטיוטה" : "שלח לנמענים";
   await page.getByRole("button", { name: button }).click();
   await expect(page).toHaveURL(TICKET_URL);
+
+  // הפאנל נפתח מיד אחרי הנחיתה: כמעט כל בדיקה שממשיכה מכאן נוגעת בנמענים
+  // או בתגיות, ושתיהן יושבות בתוכו מגרסה 0.3.
+  await openDetails(page);
   return new URL(page.url()).pathname;
 }
 
@@ -195,6 +199,33 @@ export async function expectExpiredLink(page: Page): Promise<void> {
   await expect(page.getByText("פנה למנהל העבודה שלך.")).toBeVisible();
 }
 
+/**
+ * פותח את פאנל "פרטים" במסך הפנייה, אם הוא סגור.
+ *
+ * **למה זה נדרש בכלל.** מגרסה 0.3 המטא-דאטה של הפנייה — הנמענים, התגיות,
+ * שם הדייר והמחיקה — יושבת בפאנל `<details>` מקופל. הדפדפן מסיר תוכן של
+ * ‏`<details>` סגור מעץ הנגישות, ולכן `getByRole` תחתיו נפתר ל**אפס**
+ * אלמנטים: לא רק ש-`click` נכשל, גם `toHaveCount(0)` הופך ירוק-שקר.
+ *
+ * אידמפוטנטי בכוונה: בטיוטה הפאנל פתוח מהשרת, ולחיצה הייתה סוגרת אותו.
+ */
+export async function openDetails(page: Page): Promise<void> {
+  const summary = page.locator("summary", { hasText: "פרטים" });
+  const details = page.locator("details", { has: summary });
+  await expect(details).toBeVisible();
+
+  /*
+   * ‏`toPass` ולא בדיקה חד-פעמית: `open` נגזר מ-`isDraft` **בשרת**, ולכן
+   * שיגור טיוטה סוגר את הפאנל בזמן ה-re-render. בדיקה שרצה רגע לפני
+   * הסגירה הייתה רואה אותו פתוח, חוזרת, ומשאירה אותו סגור בפועל.
+   */
+  await expect(async () => {
+    const isOpen = () => details.evaluate((el) => (el as HTMLDetailsElement).open);
+    if (!(await isOpen())) await summary.click();
+    expect(await isOpen()).toBe(true);
+  }).toPass({ timeout: 15_000 });
+}
+
 /** שורת נמען ברצועת הנמענים במסך הפנייה */
 export function recipientRow(page: Page, name: string) {
   return page
@@ -205,6 +236,7 @@ export function recipientRow(page: Page, name: string) {
 
 /** מציג את קישור הפורטל של קבלן ומחזיר אותו כנתיב יחסי */
 export async function showLink(page: Page, contractorName: string): Promise<string> {
+  await openDetails(page);
   await recipientRow(page, contractorName)
     .getByRole("button", { name: `קישור גישה ${contractorName}` })
     .click();

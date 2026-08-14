@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { addProfessional, loginAsManager, makeMinimalDraft, pick } from "./helpers";
+import { openDetails } from "./ticket-screen";
 
 /**
  * מחזור חיי הטיוטה מקצה לקצה (אפיון §2.5, מסך 7):
@@ -62,6 +63,9 @@ test("השלמת טיוטה ושיגורה: ממלאים את החסר, משגר
 
   // אחרי השיגור: הבאנר נעלם, הנמען ברצועה עם "נשלח", ואירוע שיוך בשרשור.
   await expect(page.getByText("טיוטה — חסרים פרטים. לא נשלחה לאיש.")).toHaveCount(0);
+  // הפאנל נפתח מהשרת בטיוטה ונסגר עם השיגור (`open={ticket.isDraft}`) —
+  // פותחים אותו שוב כדי להגיע לרצועה.
+  await openDetails(page);
   const recipients = page.getByRole("list", { name: "נמענים", exact: true });
   await expect(recipients).toContainText(electrician);
   await expect(recipients).toContainText("נשלח");
@@ -91,6 +95,10 @@ test("נמעני הטיוטה נשמרים: טיוטה עם נמען וחסרו�
   await page.getByRole("button", { name: "שגר", exact: true }).click();
 
   // הנמען ששמור בטיוטה מופיע ברצועה אחרי השיגור — הוא לא אבד.
+  // ההמתנה להיעלמות הבאנר קודמת לפתיחת הפאנל: `open` נגזר מ-`isDraft`
+  // בשרת, ופתיחה לפני שה-re-render הסתיים הייתה נסגרת מיד אחריה.
+  await expect(page.getByText("טיוטה — חסרים פרטים. לא נשלחה לאיש.")).toHaveCount(0);
+  await openDetails(page);
   const recipients = page.getByRole("list", { name: "נמענים", exact: true });
   await expect(recipients).toContainText(plumber);
 });

@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openDetails } from "./ticket-screen";
 
 /**
  * הפעולות על פנייה קיימת, דרך הממשק האמיתי.
@@ -105,6 +106,8 @@ test.describe("פעולות על פנייה", () => {
 
   test("הוספת נמען מעדכנת את הרצועה מיד", async ({ page }) => {
     await createTicket(page);
+    // הנמענים ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+    await openDetails(page);
 
     // ‏exact: בלי זה "נמענים שהוסרו" נתפס גם הוא, כי ההתאמה היא לפי הכלה.
     const strip = page.getByRole("list", { name: "נמענים", exact: true });
@@ -120,6 +123,7 @@ test.describe("פעולות על פנייה", () => {
 
   test("הסרת נמען מעבירה אותו לרשימת המוסרים ואינה מוחקת אותו", async ({ page }) => {
     await createTicket(page);
+    await openDetails(page);
 
     // ‏exact: בלי זה "נמענים שהוסרו" נתפס גם הוא, כי ההתאמה היא לפי הכלה.
     const strip = page.getByRole("list", { name: "נמענים", exact: true });

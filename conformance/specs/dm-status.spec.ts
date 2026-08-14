@@ -18,6 +18,7 @@ import {
   boardSection,
   createTicket,
   openPortalTicket,
+  openDetails,
   recipientRow,
   runJob,
   showLink,
@@ -65,6 +66,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     const { path, contractor } = await ticketWithContractor(page, "חדש");
     await page.goto(path);
     await expect(page.getByText(TICKET_STATUS.fresh, { exact: true })).toBeVisible();
+    await openDetails(page);
     await expect(recipientRow(page, contractor)).toContainText(ASSIGNMENT_STATUS.sent);
   });
 
@@ -76,6 +78,8 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
 
     await loginAs(page, "managerA");
     await page.goto(path);
+    // הנמענים ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+    await openDetails(page);
     await expect(recipientRow(page, contractor)).toContainText(ASSIGNMENT_STATUS.viewed);
   });
 
@@ -202,6 +206,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     await expect(page.getByRole("status")).toContainText(TICKET_SCREEN.reopenedNotice);
     // "'נפתח מחדש' אינו סטטוס נפרד" — הסטטוס חוזר לכללים, והתג נוסף.
     await expect(page.getByText(TICKET_STATUS.fresh, { exact: true })).toBeVisible();
+    await openDetails(page);
     await expect(recipientRow(page, contractor)).toContainText(ASSIGNMENT_STATUS.sent);
 
     await page.goto("/board");

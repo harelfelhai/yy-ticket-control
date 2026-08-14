@@ -24,7 +24,10 @@ export function ThreadEvent({
   const text = describe(eventType, recipientName, userName);
   if (!text) return null;
 
-  return <p className="text-sm text-muted">{text}</p>;
+  // ממורכז וללא בועה (DESIGN.md § בועת שרשור): אירוע קורה **לשיחה** ולא
+  // **בתוכה**, ולכן אין לו כותב, אין לו צד, ואין לו משטח. עד 0.3 הוא נראה
+  // כאן כשורת טקסט מיושרת להתחלה — כלומר כמעט כמו הודעה של מישהו.
+  return <p className="py-1 text-center text-xs text-muted">{text}</p>;
 }
 
 function describe(eventType: string | null, recipient: string, actor: string): string | null {

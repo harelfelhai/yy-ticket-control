@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openDetails } from "./ticket-screen";
 
 /**
  * המסלול המרכזי של M1: מנהל פותח פנייה מהשטח ומשייך אותה לקבלן.
@@ -80,6 +81,8 @@ test.describe("יצירת פנייה", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("בניין א");
     await expect(page.getByText(description)).toBeVisible();
     // רצועת הנמענים ולא כל העמוד: השם מופיע גם באירוע "שויך לפנייה" בשרשור.
+    // הרצועה ירדה לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+    await openDetails(page);
     await expect(page.getByRole("list", { name: "נמענים" })).toContainText(contractorName);
     // אף אחד לא צפה עדיין — הסטטוס הנגזר חייב להיות "חדש", והשיוך "נשלח".
     await expect(page.getByText("חדש", { exact: true })).toBeVisible();

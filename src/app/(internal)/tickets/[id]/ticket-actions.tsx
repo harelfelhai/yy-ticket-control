@@ -61,7 +61,51 @@ export function TicketActions({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    /*
+     * צמוד לתחתית (אפיון מסך 2 אזור ד׳, DESIGN.md § אלמנט דביק).
+     *
+     * בשרשור ארוך התיבה הייתה נופלת מתחת לקיפול, והמשתמש נאלץ לגלול לסוף
+     * כדי לענות — בדיוק ההפך ממה שצ׳אט אמור לעשות. `-mx-4 px-4` מותח את
+     * הרצועה לקצה המסך, אחרת ההודעות זולגות בצדדים מתחתיה.
+     *
+     * **פעולות הפנייה נשארות ברצועה ולא בפאנל**: תוכן של `<details>` סגור
+     * מוסר מעץ הנגישות, וסגירת פנייה אינה פרט מנהלי אלא התוצאה של המסך.
+     */
+    <div className="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-3 border-t border-border bg-bg px-4 py-3">
+      {/* פעולות הפנייה **מעל** הקומפוזר: הן על הפנייה כולה, בעוד שהקומפוזר
+          מוסיף לה הודעה. הסמיכות לתיבת הכתיבה הייתה קוראת אותן כחלק ממנה. */}
+      <div className="flex flex-wrap gap-2">
+        {canSetHandler && !hasHandler && !isClosed ? (
+          <Button
+            variant="secondary"
+            size="compact"
+            disabled={busy}
+            onClick={() => act(() => setHandlerAction(ticketId))}
+          >
+            {he.ticket.setHandler}
+          </Button>
+        ) : null}
+
+        {canClose ? (
+          <Button
+            variant="secondary"
+            size="compact"
+            disabled={busy}
+            onClick={() => {
+              const closing = !isClosed;
+              const question = closing ? he.ticket.confirmClose : he.ticket.confirmReopen;
+              if (!window.confirm(question)) return;
+              act(
+                () => (closing ? closeTicketAction(ticketId) : reopenTicketAction(ticketId)),
+                () => setNotice(closing ? he.ticket.closedNotice : he.ticket.reopenedNotice),
+              );
+            }}
+          >
+            {isClosed ? he.ticket.reopen : he.ticket.close}
+          </Button>
+        ) : null}
+      </div>
+
       {canComment ? (
         <div className={cardClasses("flex flex-col gap-2")}>
           <ReplyField value={text} onChange={setText} />
@@ -96,36 +140,6 @@ export function TicketActions({
           {he.notices.closedTicketBlocked}
         </p>
       )}
-
-      <div className="flex flex-wrap gap-2">
-        {canSetHandler && !hasHandler && !isClosed ? (
-          <Button
-            variant="secondary"
-            disabled={busy}
-            onClick={() => act(() => setHandlerAction(ticketId))}
-          >
-            {he.ticket.setHandler}
-          </Button>
-        ) : null}
-
-        {canClose ? (
-          <Button
-            variant="secondary"
-            disabled={busy}
-            onClick={() => {
-              const closing = !isClosed;
-              const question = closing ? he.ticket.confirmClose : he.ticket.confirmReopen;
-              if (!window.confirm(question)) return;
-              act(
-                () => (closing ? closeTicketAction(ticketId) : reopenTicketAction(ticketId)),
-                () => setNotice(closing ? he.ticket.closedNotice : he.ticket.reopenedNotice),
-              );
-            }}
-          >
-            {isClosed ? he.ticket.reopen : he.ticket.close}
-          </Button>
-        ) : null}
-      </div>
 
       {notice ? (
         <FormNotice>

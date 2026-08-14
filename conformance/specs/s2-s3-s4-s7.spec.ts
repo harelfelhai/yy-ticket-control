@@ -15,6 +15,7 @@ import {
   createTicket,
   gotoNewTicket,
   pick,
+  openDetails,
   recipientRow,
   uniq,
   uniqPhone,
@@ -28,7 +29,7 @@ import {
  */
 
 test.describe("מסך 2 — הפנייה והשרשור", () => {
-  test("S2-01 — הכותרת מציגה בניין, דירה, חדר, דייר, תחום, סטטוס וגיל", async ({ page }) => {
+  test("S2-01 — הפס העליון מציג מיקום, תחום, חדר וסטטוס; דייר וגיל בפאנל", async ({ page }) => {
     acceptDialogs(page);
     await loginAs(page, "managerA");
     const description = uniq("כותרת-מלאה");
@@ -42,14 +43,21 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
     await page.getByRole("option", { name: new RegExp(`^${PROS.full.name}`) }).first().click();
     await page.getByRole("button", { name: CREATE_SCREEN.submit }).click();
 
-    const header = page.getByRole("banner").locator("xpath=following::header[1]");
+    /*
+     * גרסה 0.3 פיצלה את כותרת שמונת הפריטים לשניים (§7 שורה 26): מה שנקרא
+     * בכל מבט נשאר בפס העליון, ומה שנקרא פעם אחת ירד לפאנל "פרטים".
+     * הבדיקה עוקבת אחרי הפיצול — שני האזורים, ולא אזור אחד.
+     */
     await expect(page.getByRole("heading", { level: 1 })).toContainText("בניין א");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("דירה 1");
     await expect(page.getByText("חשמל · מטבח")).toBeVisible();
     await expect(page.getByText(TICKET_STATUS.fresh, { exact: true })).toBeVisible();
-    await expect(page.getByText("היום")).toBeVisible();
+
+    // דייר וגיל בפאנל. "· היום" ולא "היום": מפריד היום בשרשור נושא את
+    // אותה מילה, ובלי הנקודה הטענה מתפצלת לשתי התאמות.
+    await openDetails(page);
     await expect(page.getByText("דייר")).toBeVisible();
-    void header;
+    await expect(page.getByText("· היום")).toBeVisible();
   });
 
   test("S2-02 — רצועת הנמענים מציגה סטטוס אישי לכל נמען", async ({ page }) => {
@@ -252,6 +260,9 @@ test.describe("מסך 7 — השלמת טיוטה", () => {
     await page.getByRole("button", { name: DRAFT_SCREEN.submit }).click();
 
     await expect(page.getByText(DRAFT_SCREEN.banner)).toHaveCount(0);
+    // אחרי השיגור הפנייה אינה טיוטה עוד, ולכן הפאנל נסגר: `open` נגזר
+    // מ-`isDraft` בשרת. פותחים אותו שוב כדי להגיע לרצועת הנמענים.
+    await openDetails(page);
     await expect(recipientRow(page, PROS.full.name)).toContainText("נשלח");
   });
 

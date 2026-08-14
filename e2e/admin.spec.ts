@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openDetails } from "./ticket-screen";
 
 /**
  * מסכי הניהול (11–15), מקצה לקצה.
@@ -104,6 +105,9 @@ test("מנהל מערכת מוחק פנייה כפולה — אישור כפול
   await loginAsAdmin(page);
   await createTicketWithProfessional(page, description, `קבלן ${stamp}`, `053${String(stamp).slice(-7)}`);
   const ticketUrl = new URL(page.url()).pathname;
+
+  // המחיקה ירדה לפאנל "פרטים" ב-0.3, יחד עם שאר המטא-דאטה.
+  await openDetails(page);
 
   // לחיצה ראשונה רק חושפת את האזהרה — אישור כפול.
   await page.getByRole("button", { name: "מחק פנייה" }).click();

@@ -2,7 +2,14 @@ import { expect, test } from "@playwright/test";
 import { CAST, PROS, SITE_A, SITE_B } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
 import { TICKET_SCREEN } from "../fixtures/spec-text";
-import { acceptDialogs, createTicket, openFilters, uniq, uniqPhone } from "../fixtures/world";
+import {
+  acceptDialogs,
+  createTicket,
+  openDetails,
+  openFilters,
+  uniq,
+  uniqPhone,
+} from "../fixtures/world";
 
 /**
  * מסכים 9, 10 ו-11–15: חיפוש, תצוגת הבעלים והניהול.
@@ -224,6 +231,8 @@ test.describe("מסכים 11–15 — ניהול", () => {
 
     await loginAs(page, "admin");
     await page.goto(path);
+    // המחיקה ירדה לפאנל "פרטים" ב-0.3, יחד עם שאר המטא-דאטה.
+    await openDetails(page);
     // האזהרה מוצגת לצד הכפתור עוד לפני הלחיצה — "מחיקה היא לכפילות או
     // רשומה שגויה בלבד. פנייה שטופלה — סגור, אל תמחק."
     await expect(page.getByText(/מחיקה היא לכפילות/)).toBeVisible();
@@ -256,6 +265,15 @@ test.describe("§1 — זיהוי יוצר הרשומה", () => {
 
     await loginAs(page, "owner");
     await page.goto(path);
-    await expect(page.getByText(CAST.managerA.name)).toBeVisible();
+    // "נפתחה על ידי" ירד לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳): מי פתח
+    // נקרא פעם אחת, בעוד שהשרשור הוא העבודה החוזרת.
+    await openDetails(page);
+    /*
+     * הטענה מכוונת ל**שורת המטא-דאטה** ולא לשם לבדו. מ-0.3 השם מופיע פעמיים
+     * במסך, ובצדק: בפאנל כ"נפתחה על ידי", ובשרשור כמחבר ההודעה הפותחת —
+     * התיאור הפך להודעה, ולהודעה יש כותב. הניסוח המלא הוא גם מה שהאפיון
+     * דורש בפועל ("הבעלים רואה **מי פתח**"), ולא נוכחות המחרוזת במסך.
+     */
+    await expect(page.getByText(`נפתחה על ידי: ${CAST.managerA.name}`)).toBeVisible();
   });
 });

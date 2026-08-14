@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openDetails, recipientRow, showLink } from "./ticket-screen";
 
 /**
  * התרחיש המרכזי של M1, מקצה לקצה ודרך הממשק בלבד:
@@ -42,26 +43,6 @@ async function addProfessional(page: Page, name: string, phone: string) {
   await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(name);
 }
 
-function recipientRow(page: Page, contractorName: string) {
-  return page
-    .getByRole("list", { name: "נמענים", exact: true })
-    .getByRole("listitem")
-    .filter({ hasText: contractorName });
-}
-
-/** מציג את קישור הפורטל של קבלן מתוך מסך הפנייה ומחזיר אותו */
-async function showLink(page: Page, contractorName: string): Promise<string> {
-  await recipientRow(page, contractorName)
-    .getByRole("button", { name: `קישור גישה ${contractorName}` })
-    .click();
-
-  // ההמתנה היא לכותרת שנושאת את שם הנמען, ולא רק לתיבה: בפנייה עם כמה
-  // קבלנים התיבה כבר גלויה עם הקישור הקודם, וקריאה מוקדמת הייתה מחזירה
-  // את הקישור של הקבלן הקודם.
-  await expect(page.getByText(`קישור עבור ${contractorName}`)).toBeVisible();
-  const field = page.getByRole("textbox", { name: "קישור גישה", exact: true });
-  return (await field.inputValue()).replace(/^https?:\/\/[^/]+/, "");
-}
 
 test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מענה, סגירה ופתיחה מחדש", async ({
   page,
@@ -184,6 +165,7 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   await expect(page.getByText("נפתחה מחדש", { exact: true })).toBeVisible();
   await expect(page.getByText("חדש", { exact: true })).toBeVisible();
   // שני השיוכים חזרו ל"נשלח" — העבודה לא הושלמה, וזה חייב להיות גלוי.
+  await openDetails(page);
   await expect(
     page.getByRole("list", { name: "נמענים", exact: true }).getByText("נשלח", { exact: true }),
   ).toHaveCount(2);
@@ -244,6 +226,7 @@ test("כפתור וואטסאפ מוכן לשליחה, וחיווי השליחה
 
   // לקבלן הזה אין מייל, ולכן המערכת לא שלחה לו דבר — וזה נאמר במפורש.
   // "נשלח" בסטטוס פירושו ששייכנו אותו, לא שהוא יודע.
+  await openDetails(page);
   const row = recipientRow(page, contractor);
   await expect(row).toContainText("אין מייל — שלח בוואטסאפ");
 
@@ -300,6 +283,8 @@ test("קבלן שהוסר מאבד את הפנייה מיידית, ואת הקי
   async function removeFrom(description: string) {
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).click();
+    // הנמענים ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+    await openDetails(page);
     // הסרת נמען מציגה אישור (אפיון מסך 3): הפנייה תיעלם מרשימתו.
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: `הסר ${contractor}` }).click();
@@ -357,6 +342,7 @@ test("פתיחת הקישור מסמנת 'נצפה' אצל המנהל", async ({
   // המנהל רואה עכשיו "נצפה" ברצועת הנמענים — כך הוא יודע שהקישור הגיע ליעדו.
   await loginAsManager(page);
   await page.goto(ticketUrl);
+  await openDetails(page);
   await expect(
     page.getByRole("list", { name: "נמענים", exact: true }).getByText("נצפה", { exact: true }),
   ).toBeVisible();

@@ -1,7 +1,8 @@
 import { he } from "@/lib/he";
 import { type MediaView, toMediaView } from "@/lib/media-view";
 import type { TagMessage } from "@/lib/services/tags";
-import { MediaAttachments } from "./media-attachments";
+import { toThreadMessageView } from "@/lib/thread-view";
+import { ThreadBubble } from "./thread-bubble";
 
 interface TagChatMessagesProps {
   messages: TagMessage[];
@@ -15,6 +16,10 @@ interface TagChatMessagesProps {
  * מוצג כרכיב שרת: אין כאן אינטראקציה, רק הצגה. שיתוף אותו רכיב בין שני
  * הצדדים מבטיח שהקבלן והמנהל רואים בדיוק את אותו שרשור — וזו כל מטרת
  * הצ׳אט הקבוצתי.
+ *
+ * מ-0.3 הרכיב הוא **עטיפה דקה מעל `ThreadBubble`** ואינו מרנדר הודעה בעצמו:
+ * שני "רכיבים משותפים" מתחרים היו מייצרים בדיוק את הסחיפה שהאיחוד נועד
+ * לעצור. מה שנשאר כאן ייחודי לתגית הוא אירועי הגישה (`TAG_GRANTED`).
  */
 export function TagChatMessages({ messages, token }: TagChatMessagesProps) {
   if (messages.length === 0) {
@@ -32,14 +37,11 @@ export function TagChatMessages({ messages, token }: TagChatMessagesProps) {
           );
         }
 
-        const author = message.authorUser?.name ?? message.authorProfessional?.name ?? "";
         const media: MediaView[] = message.media.map((file) => toMediaView(file, token));
 
         return (
-          <li key={message.id} className="rounded-xl bg-bg p-3">
-            <p className="text-xs font-medium text-muted">{author}</p>
-            {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
-            <MediaAttachments media={media} />
+          <li key={message.id} className="flex flex-col">
+            <ThreadBubble message={toThreadMessageView(message, media)} />
           </li>
         );
       })}

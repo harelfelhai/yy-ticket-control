@@ -13,6 +13,7 @@ import {
 import {
   expectExpiredLink,
   createTicket,
+  openDetails,
   openPortalTicket,
   recipientRow,
   showLink,
@@ -242,6 +243,8 @@ test.describe("PROH — הפנייה חוזרת לפותח", () => {
     // כפתור השליחה מושבת כשאין מה לשלוח — מקלידים ואז בודקים.
     await page.getByLabel("תגובה").fill("גם אני יכול לפעול");
     await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toBeEnabled();
+    // עריכת הנמענים ירדה לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+    await openDetails(page);
     await expect(page.getByRole("button", { name: "+ איש מקצוע חדש" })).toBeVisible();
   });
 });

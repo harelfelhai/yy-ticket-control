@@ -7,6 +7,7 @@ import {
   TICKET_URL,
   createTicket,
   openPortalTicket,
+  openDetails,
   recipientRow,
   showLink,
   ticketIdFromPath,
@@ -83,6 +84,8 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await loginAs(page, "managerA");
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).first().click();
+    // הנמענים ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+    await openDetails(page);
     await recipientRow(page, removed)
       .getByRole("button", { name: /^הסר/ })
       .click();

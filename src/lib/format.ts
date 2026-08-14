@@ -36,3 +36,37 @@ export function formatTime(value: Date): string {
 export function formatDateTime(value: Date): string {
   return dateTimeFormatter.format(value);
 }
+
+const dayFormatter = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: TIME_ZONE,
+  day: "numeric",
+  month: "numeric",
+  year: "numeric",
+});
+
+/**
+ * מפתח היום בשעון ישראל — הבסיס להשוואה "אותו יום".
+ *
+ * ההשוואה נעשית על המחרוזת המפורמטת ולא על `getDate()`, כי `getDate()` קורא
+ * את היום **בשעון המכונה**: הודעה מ-01:30 בישראל היא 22:30 של אתמול ב-UTC,
+ * ושרת שרץ ב-UTC היה מציב מפריד יום באמצע הלילה במקום הנכון.
+ */
+export function dayKey(value: Date): string {
+  return dayFormatter.format(value);
+}
+
+/**
+ * שם היום למפריד בשרשור: "היום" · "אתמול" · תאריך מלא.
+ *
+ * ‏`now` נמסר ולא נקרא מ-`new Date()`: הפורמט נעשה בשרת, ורכיב שקורא את השעה
+ * בעצמו אינו ניתן לבדיקה בלי לזייף את השעון הגלובלי.
+ */
+export function formatDaySeparator(value: Date, now: Date, labels: { today: string; yesterday: string }): string {
+  const key = dayKey(value);
+  if (key === dayKey(now)) return labels.today;
+
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  if (key === dayKey(yesterday)) return labels.yesterday;
+
+  return key;
+}

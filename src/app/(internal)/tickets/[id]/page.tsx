@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
-import { MediaAttachments } from "@/components/media-attachments";
 import { TicketStatusChip } from "@/components/status-chip";
+import { ThreadBubble, ThreadDaySeparator } from "@/components/thread-bubble";
 import { toMediaView } from "@/lib/media-view";
+import { buildThreadItems } from "@/lib/thread-items";
+import { type ThreadMessageView, toThreadMessageView } from "@/lib/thread-view";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
@@ -131,45 +133,108 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
   const ageDays = Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY);
 
+  /**
+   * פריטי השרשור: הודעות, אירועי מערכת, ומפרידי יום ביניהם.
+   *
+   * **תיאור הפנייה הוא ההודעה הראשונה** (אפיון §7 שורה 26) — מאת מי שפתח,
+   * בזמן הפתיחה. הוא אינו תכונה של הפנייה אלא ההודעה שפתחה את השיחה, וזה
+   * גם מה שמונע ממנו להופיע פעמיים: הוא ירד מהמטא-דאטה ואינו מוצג בפאנל.
+   *
+   * המדיה ההתחלתית כבר יושבת בשרשור כהודעת MEDIA נפרדת (`attachInitialMedia`),
+   * ולכן הבועה הזו נושאת טקסט בלבד.
+   */
+  const openingMessage: ThreadMessageView | null =
+    ticket.description.trim().length > 0
+      ? {
+          id: `opening-${ticket.id}`,
+          authorName: ticket.createdBy.name,
+          own: ticket.createdById === user.id,
+          text: ticket.description,
+          media: [],
+          createdAt: ticket.createdAt,
+        }
+      : null;
+
+  const threadItems = buildThreadItems({
+    opening: openingMessage,
+    messages: ticket.messages.map((message) => ({
+      id: message.id,
+      kind: message.kind,
+      eventType: message.eventType,
+      eventMeta: message.eventMeta,
+      createdAt: message.createdAt,
+      view: toThreadMessageView(
+        message,
+        message.media.map((file) => toMediaView(file)),
+        { userId: user.id },
+      ),
+    })),
+    now,
+    labels: { today: he.ticket.today, yesterday: he.ticket.yesterday },
+  });
+
   return (
     <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
-      <header className={cardClasses("flex flex-col gap-2")}>
-        {/*
-          הסטטוס ומספר הפנייה בשורת הכותרת ולא בעמודה בקצה הנגדי.
-          ‏`justify-between` הרחיק אותם מאות פיקסלים מהכותרת ברוחב דסקטופ, והם
-          נקראו כאלמנטים תלושים. ראו `docs/DESIGN.md` § Layout.
-        */}
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h1 className={TITLE_IDENTIFYING}>{location || he.ticket.noLocation}</h1>
-            <TicketStatusChip status={status} />
-            <span className="text-xs text-muted" dir="ltr">
-              #{ticket.seq}
-            </span>
-          </div>
-          <p className="text-sm text-muted">
-            {ticket.domain?.name ?? he.ticket.noDomain}
-            {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
-          </p>
-          {/* שם הדייר — מקושר לדירה. מוצג רק כשיש דירה לשייך אליה. */}
-          {ticket.apartmentId ? (
-            <p className="text-sm text-muted">
-              <ResidentName
-                ticketId={ticket.id}
-                initial={ticket.apartment?.residentName ?? null}
-                canEdit={canEdit}
-              />
-            </p>
+      {/*
+       * פס עליון קבוע (אפיון מסך 2 אזור א׳, הכרעת 0.3).
+       *
+       * מחזיק את מה שצריך להיות גלוי **בלי לגלול ובלי לפתוח**: איפה, באיזה
+       * מצב, ולמה. שאר המטא-דאטה יורדת לפאנל "פרטים" מתחתיו.
+       *
+       * ‏`top-14` תלוי ב-`h-14` של סרגל הניווט; `-mx-4 px-4` מותח את הרצועה
+       * לקצה המסך, אחרת התוכן הגולל זולג בצדדים. ראו DESIGN.md § אלמנט דביק.
+       */}
+      <header className="sticky top-14 z-[1] -mx-4 flex flex-col gap-1 border-b border-border bg-bg px-4 py-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h1 className={TITLE_IDENTIFYING}>{location || he.ticket.noLocation}</h1>
+          <TicketStatusChip status={status} />
+          <span className="text-xs text-muted" dir="ltr">
+            #{ticket.seq}
+          </span>
+          {/* "נפתחה מחדש" אינו סטטוס אלא תג — הפנייה מתנהגת לפי הכללים הרגילים */}
+          {ticket.reopenCount > 0 ? (
+            <span className={chipClasses("warning")}>{he.ticket.reopenedBadge}</span>
           ) : null}
         </div>
-
-        {/* אותו עיצוב כמו שורת הסיבה בכרטיס הלוח — זה אותו מידע בדיוק,
-            והצגתו כמטא-דאטה כאן וכהדגשה שם קראה כשני דברים שונים. */}
+        <p className="text-sm text-muted">
+          {ticket.domain?.name ?? he.ticket.noDomain}
+          {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
+        </p>
+        {/*
+         * שורת הסיבה נשארת גלויה תמיד ואינה נכנסת לפאנל: בלעדיה פנייה קופצת
+         * בין קבוצות הלוח בלי הסבר, וזה שוחק את האמון במיון (אפיון §5.ב).
+         * אותו עיצוב כמו בכרטיס הלוח — זה אותו מידע בדיוק.
+         */}
         <p className={`text-sm font-medium ${status === "DRAFT" ? "text-danger" : "text-brand"}`}>
           {reason}
         </p>
+      </header>
 
-        {ticket.description ? <p className="whitespace-pre-wrap">{ticket.description}</p> : null}
+      {/*
+       * פאנל "פרטים" (אפיון מסך 2 אזור ב׳).
+       *
+       * ‏`<details>` נייטיב ולא רכיב לקוח: עובד בלי JavaScript, נשאר מרונדר
+       * בשרת, ואינו הופך את העמוד לעמוד לקוח רק כדי לקפל אזור.
+       *
+       * ‏`open` בטיוטה מגיע **מהשרת** ולא מ-`useEffect`: הצביעה הראשונה
+       * הייתה מסתירה את `DraftCompletion` ואז חושפת אותו, והבדיקות היו
+       * מהבהבות. בטיוטה הפאנל מחזיק בדיוק את מה שחסר לשיגור.
+       */}
+      <details open={ticket.isDraft} className={cardClasses("flex flex-col gap-3")}>
+        <summary className={`flex min-h-11 cursor-pointer items-center ${TITLE_DESCRIPTIVE}`}>
+          {he.ticket.detailsPanel}
+        </summary>
+
+        {/* שם הדייר — מקושר לדירה. מוצג רק כשיש דירה לשייך אליה. */}
+        {ticket.apartmentId ? (
+          <p className="text-sm text-muted">
+            <ResidentName
+              ticketId={ticket.id}
+              initial={ticket.apartment?.residentName ?? null}
+              canEdit={canEdit}
+            />
+          </p>
+        ) : null}
 
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
           <span>
@@ -178,16 +243,9 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           <span>· {he.channel[ticket.channel]}</span>
           <span>· {he.board.ageDays(ageDays)}</span>
           {ticket.handler ? <span>· {he.ticket.handledBy(ticket.handler.name)}</span> : null}
-          {/* "נפתחה מחדש" אינו סטטוס אלא תג — הפנייה מתנהגת לפי הכללים הרגילים */}
-          {ticket.reopenCount > 0 ? (
-            <span className={chipClasses("warning")}>
-              {he.ticket.reopenedBadge}
-            </span>
-          ) : null}
         </p>
-      </header>
 
-      {ticket.isDraft ? (
+        {ticket.isDraft ? (
         canEdit && draftDirectory ? (
           <DraftCompletion
             // key יציב: מונע re-mount של הרכיב (ואיפוס המצב המקומי — למשל
@@ -222,60 +280,61 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
             {he.notices.draftBanner}
           </p>
         )
-      ) : (
-        <RecipientEditor
-          ticketId={ticket.id}
-          siteId={ticket.siteId}
-          assignments={assignmentRows}
-          available={available}
-          canEdit={canEdit}
-        />
-      )}
+        ) : (
+          <RecipientEditor
+            ticketId={ticket.id}
+            siteId={ticket.siteId}
+            assignments={assignmentRows}
+            available={available}
+            canEdit={canEdit}
+          />
+        )}
 
-      <TicketTags
-        ticketId={ticket.id}
-        initial={ticketTags.map((t) => ({ id: t.id, label: t.name }))}
-        all={allTags.map((t) => ({ id: t.id, label: t.name }))}
-        canEdit={canTag}
-      />
+        <TicketTags
+          ticketId={ticket.id}
+          initial={ticketTags.map((t) => ({ id: t.id, label: t.name }))}
+          all={allTags.map((t) => ({ id: t.id, label: t.name }))}
+          canEdit={canTag}
+        />
+
+        {/* מחיקה — למנהל מערכת בלבד, בתחתית הפאנל והרחק מפעולות היום-יום.
+            בטיוטה המחיקה נעשית דרך "מחק טיוטה" במסך ההשלמה, לא כאן. */}
+        {!ticket.isDraft && canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
+      </details>
 
       {/*
-       * ‏`aria-label` על האזור, בנוסף לכותרת הגלויה.
+       * השרשור — גוף המסך (אפיון מסך 2 אזור ג׳).
        *
-       * ‏29 אתרי קריאה בחבילות הבדיקה משתמשים בכותרת "שרשור" כעוגן
-       * "הניווט למסך הפנייה הסתיים". כשהשרשור יהפוך לגוף העמוד הכותרת
-       * הגלויה תרד, ובלי עוגן חלופי **שכבר בשימוש** אותם 29 אתרים היו
-       * הופכים לטיימאאוטים בבת אחת. השם הנגיש נשאר זהה, ולכן שני העוגנים
-       * חופפים בדיוק — וזו כל הנקודה: אפשר להעביר אותם אחד-אחד בירוק.
+       * ‏`aria-label` ולא כותרת גלויה: 29 אתרי קריאה בחבילות הבדיקה משתמשים
+       * בשם "שרשור" כעוגן "הניווט למסך הפנייה הסתיים", והם הועברו לעוגן
+       * האזור בקומיט נפרד בעודו חופף לכותרת. כאן הכותרת הגלויה יורדת —
+       * השרשור אינו עוד אזור אחד מבין כמה, ולכן אינו זקוק לשלט.
        */}
-      <section className={cardClasses()} aria-label={he.ticket.thread}>
-        <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.thread}</h2>
-        {ticket.messages.length === 0 ? (
-          <p className="text-sm text-muted">{he.ticket.threadEmpty}</p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {ticket.messages.map((message) => {
-              if (message.kind === "EVENT") {
-                return (
-                  <li key={message.id}>
-                    <ThreadEvent eventType={message.eventType} meta={message.eventMeta} />
-                  </li>
-                );
-              }
-
-              const author = message.authorUser?.name ?? message.authorProfessional?.name ?? "";
-              return (
-                <li key={message.id} className="rounded-lg bg-bg p-3">
-                  <p className="text-xs font-medium text-muted">{author}</p>
-                  {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
-                  <MediaAttachments media={message.media.map((file) => toMediaView(file))} />
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <section aria-label={he.ticket.thread} className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-2">
+          {threadItems.map((item) =>
+            item.kind === "day" ? (
+              <ThreadDaySeparator key={item.key} label={item.label} />
+            ) : item.kind === "event" ? (
+              <li key={item.key}>
+                <ThreadEvent eventType={item.eventType} meta={item.meta} />
+              </li>
+            ) : (
+              <li key={item.key} className="flex flex-col">
+                <ThreadBubble message={item.message} />
+              </li>
+            ),
+          )}
+        </ul>
       </section>
 
+      {/*
+       * פעולות הפנייה והקומפוזר, צמודים לתחתית (אפיון מסך 2 אזור ד׳).
+       *
+       * **הפעולות מחוץ לפאנל בכוונה.** תוכן של `<details>` סגור מוסר מעץ
+       * הנגישות, ולכן פעולה שנכנסת לשם אינה נגישה למקלדת, לקורא מסך ולבדיקה
+       * — וסגירת פנייה היא התוצאה של המסך, לא פרט מנהלי.
+       */}
       <TicketActions
         ticketId={ticket.id}
         isClosed={ticket.closedAt !== null}
@@ -285,10 +344,6 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         canSetHandler={canSetHandler(viewer, ticket, ticket.assignments)}
         hasHandler={ticket.handlerId !== null}
       />
-
-      {/* מחיקה — למנהל מערכת בלבד, בתחתית המסך והרחק מפעולות היום-יום.
-          בטיוטה המחיקה נעשית דרך "מחק טיוטה" במסך ההשלמה, לא כאן. */}
-      {!ticket.isDraft && canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
     </div>
   );
 }

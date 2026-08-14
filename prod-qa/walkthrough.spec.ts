@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
+import { openDetails } from "../e2e/ticket-screen";
 
 /**
  * מעבר QA על הפרודקשן החי — כל המסך, וגם כתיבה.
@@ -136,6 +137,8 @@ test("מסלול מלא: פנייה, מדיה ל-R2, פורטל, תגובה, ס�
   await shot(page, "13-ticket-detail", testInfo);
 
   // ── 2. הקישור האישי של הקבלן ──────────────────────────────────────
+  // הנמענים ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+  await openDetails(page);
   await page
     .getByRole("list", { name: "נמענים", exact: true })
     .getByRole("listitem")
@@ -214,7 +217,8 @@ test("תגית: יצירה, פתיחה לקבלן וצ׳אט קבוצתי", asyn
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
-  // תגית נלמדת — נוצרת מתוך מסך הפנייה
+  // תגית נלמדת — נוצרת מתוך מסך הפנייה, מתוך פאנל "פרטים"
+  await openDetails(page);
   await page.getByRole("button", { name: /^הוסף תגית/ }).first().click();
   await page.getByRole("textbox", { name: /חיפוש/ }).fill(tagName);
   await page.getByRole("button", { name: /צור חדש/ }).click();

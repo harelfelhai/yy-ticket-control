@@ -1,6 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
 import { openFilters } from "./helpers";
+import { openDetails, showLink } from "./ticket-screen";
 
 /**
  * תגיות וצ׳אט קבוצתי (מסך 6), מקצה לקצה ודרך הממשק בלבד.
@@ -33,18 +34,6 @@ async function addProfessional(page: Page, name: string, phone: string) {
   await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(name);
 }
 
-/** מציג את קישור הפורטל של קבלן מתוך מסך הפנייה ומחזיר אותו כנתיב */
-async function showTicketLink(page: Page, contractor: string): Promise<string> {
-  await page
-    .getByRole("list", { name: "נמענים", exact: true })
-    .getByRole("listitem")
-    .filter({ hasText: contractor })
-    .getByRole("button", { name: `קישור גישה ${contractor}` })
-    .click();
-  await expect(page.getByText(`קישור עבור ${contractor}`)).toBeVisible();
-  const field = page.getByRole("textbox", { name: "קישור גישה", exact: true });
-  return (await field.inputValue()).replace(/^https?:\/\/[^/]+/, "");
-}
 
 test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרואה צ׳אט בלבד", async ({ page }) => {
   const stamp = Date.now();
@@ -66,10 +55,12 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   const ticketUrl = new URL(page.url()).pathname;
-  const contractorLink = await showTicketLink(page, contractor);
+  const contractorLink = await showLink(page, contractor);
 
   // ── 2. תיוג הפנייה — התגית נלמדת ונוצרת מהשם ──────────────────────
   await page.goto(ticketUrl);
+  // התגיות ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+  await openDetails(page);
   await page.getByRole("button", { name: /^הוסף תגית/ }).click();
   await page.getByRole("textbox", { name: /הוסף תגית/ }).fill(tagName);
   await page.getByRole("button", { name: `צור חדש: "${tagName}"` }).click();

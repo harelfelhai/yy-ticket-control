@@ -6,6 +6,7 @@ import {
   acceptDialogs,
   expectExpiredLink,
   createTicket,
+  openDetails,
   openPortalTicket,
   recipientRow,
   showLink,
@@ -146,6 +147,8 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
     await loginAs(page, "managerA");
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).first().click();
+    // הנמענים ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
+    await openDetails(page);
     await expect(recipientRow(page, contractor)).toContainText(ASSIGNMENT_STATUS.question);
   });
 

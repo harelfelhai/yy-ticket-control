@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openDetails } from "./ticket-screen";
 
 /**
  * צירוף קבצים — מהבחירה ועד להצגה בשרשור, אצל שני הצדדים.
@@ -64,6 +65,7 @@ async function openTicketWithContractor(page: Page, stamp: number) {
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
+  await openDetails(page);
   await page
     .getByRole("list", { name: "נמענים", exact: true })
     .getByRole("listitem")
@@ -107,7 +109,9 @@ test("מנהל מצרף תמונה לתגובה, והקבלן רואה אותה 
   await page.getByRole("button", { name: "שלח", exact: true }).click();
 
   // ── התמונה בשרשור, ונטענת בפועל ───────────────────────────────────
-  const thread = page.locator("section").filter({ hasText: "שרשור" });
+  // ‏`region` ולא `filter({ hasText: "שרשור" })`: הכותרת הגלויה ירדה ב-0.3
+  // כשהשרשור הפך לגוף המסך, והשם נשאר כשם נגיש על האזור.
+  const thread = page.getByRole("region", { name: "שרשור" });
   const image = thread.getByRole("img", { name: "wall.png" });
   await expect(image).toBeVisible();
 

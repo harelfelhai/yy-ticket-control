@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { MediaAttachments } from "@/components/media-attachments";
 import { AssignmentStatusChip } from "@/components/status-chip";
+import { ThreadBubble, ThreadDaySeparator } from "@/components/thread-bubble";
 import { he } from "@/lib/he";
 import { toMediaView } from "@/lib/media-view";
 import { getPortalTicket, markViewed, resolveToken } from "@/lib/services/portal";
+import { buildThreadItems } from "@/lib/thread-items";
+import { type ThreadMessageView, toThreadMessageView } from "@/lib/thread-view";
 import { ExpiredLink } from "../expired-link";
 import { PortalActions } from "./portal-actions";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_IDENTIFYING } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 /**
@@ -32,6 +34,48 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
   const { ticket, assignment } = result;
   await markViewed(assignment.id);
 
+  const now = new Date();
+
+  /**
+   * ‏`own` הוא תמיד `false` כאן, ובכוונה: `getPortalTicket` בוחר `{name}`
+   * בלבד ואינו שולף את מזהה הכותב. הקבלן רואה שרשור אחיד — הוא צד אחד
+   * מול המערכת, ולא משתתף בשיחה רב-משתתפים שבה יש "שלי" ו"שלהם".
+   */
+  const opening: ThreadMessageView | null =
+    ticket.description.trim().length > 0
+      ? {
+          id: `opening-${ticket.id}`,
+          authorName: ticket.createdBy.name,
+          own: false,
+          text: ticket.description,
+          media: [],
+          createdAt: ticket.createdAt,
+        }
+      : null;
+
+  const threadItems = buildThreadItems({
+    opening,
+    messages: ticket.messages
+      // אירועי מערכת אינם מוצגים לנמען: "שויך לפנייה" ו"הוסר מהפנייה" הם
+      // מידע ניהולי פנימי שאינו נוגע לעבודה שלו.
+      .filter((message) => message.kind !== "EVENT")
+      .map((message) => ({
+        id: message.id,
+        kind: message.kind,
+        eventType: message.eventType,
+        eventMeta: message.eventMeta,
+        createdAt: message.createdAt,
+        // הטוקן נכנס לכתובת: לפורטל אין עוגיית סשן, ובלעדיו ה-route
+        // שמגיש את הקובץ אינו יודע מי מבקש.
+        view: toThreadMessageView(
+          message,
+          message.media.map((file) => toMediaView(file, token)),
+        ),
+      })),
+    now,
+    labels: { today: he.ticket.today, yesterday: he.ticket.yesterday },
+  });
+
   return (
     <main className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
       <Link href={`/p/${token}`} className="text-sm font-medium text-brand">
@@ -53,34 +97,27 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
             {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
           </p>
         </div>
-        {ticket.description ? <p className="whitespace-pre-wrap">{ticket.description}</p> : null}
       </header>
 
-      <section className={cardClasses()}>
-        <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.thread}</h2>
-        {ticket.messages.filter((m) => m.kind !== "EVENT").length === 0 ? (
-          <p className="text-sm text-muted">{he.ticket.threadEmpty}</p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {ticket.messages
-              // אירועי מערכת אינם מוצגים לנמען: "שויך לפנייה" ו"הוסר
-              // מהפנייה" הם מידע ניהולי פנימי שאינו נוגע לעבודה שלו.
-              .filter((message) => message.kind !== "EVENT")
-              .map((message) => (
-                <li key={message.id} className="rounded-xl bg-bg p-3">
-                  <p className="text-xs font-medium text-muted">
-                    {message.authorUser?.name ?? message.authorProfessional?.name ?? ""}
-                  </p>
-                  {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
-                  {/* הטוקן נכנס לכתובת: לפורטל אין עוגיית סשן, ובלעדיו
-                      ה-route שמגיש את הקובץ אינו יודע מי מבקש. */}
-                  <MediaAttachments
-                    media={message.media.map((file) => toMediaView(file, token))}
-                  />
-                </li>
-              ))}
-          </ul>
-        )}
+      {/*
+       * אותה בועה בדיוק כמו במסך הפנימי (אפיון §2.3: "לשני הצדדים אותה שפה
+       * ויזואלית — קבלן שרואה ממשק זר חושד בו"). לפני האיחוד היו כאן
+       * ‏`rounded-xl` מול `rounded-lg` בפנימי, בלי חותמת זמן ובלי מפריד יום.
+       *
+       * תיאור הפנייה הוא ההודעה הראשונה גם כאן, ולא פסקה בכותרת.
+       */}
+      <section aria-label={he.ticket.thread} className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-2">
+          {threadItems.map((item) =>
+            item.kind === "day" ? (
+              <ThreadDaySeparator key={item.key} label={item.label} />
+            ) : item.kind === "message" ? (
+              <li key={item.key} className="flex flex-col">
+                <ThreadBubble message={item.message} />
+              </li>
+            ) : null,
+          )}
+        </ul>
       </section>
 
       <PortalActions

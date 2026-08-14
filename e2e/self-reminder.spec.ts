@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { openDetails } from "./ticket-screen";
 
 /**
  * התזכורן — פנייה שהמנהל משייך לעצמו (תוכנית M1.7).
@@ -47,6 +48,7 @@ test("מנהל פותח פנייה ומשייך את עצמו — הפנייה �
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   // רצועת הנמענים מציגה אותו כנמען לכל דבר, עם סטטוס אישי משלו.
+  await openDetails(page);
   const strip = page.getByRole("list", { name: "נמענים", exact: true });
   await expect(strip).toContainText(E2E_ADMIN.name);
   await expect(strip.getByText("נשלח", { exact: true })).toHaveCount(1);

@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { addProfessional, loginAsManager, makeMinimalDraft, pick } from "./helpers";
+import { openDetails } from "./ticket-screen";
 
 /**
  * מצב השלמת הטיוטה שורד רענון דף (אפיון §2.5, מסך 7).
@@ -79,6 +80,8 @@ test("מצב ההשלמה שורד רענון דף: תחום, תיאור ונמ�
   await page.getByRole("button", { name: "שגר", exact: true }).click();
 
   await expect(page.getByText("טיוטה — חסרים פרטים. לא נשלחה לאיש.")).toHaveCount(0);
+  // הפאנל נסגר עם השיגור (`open={ticket.isDraft}`) — פותחים אותו שוב.
+  await openDetails(page);
   const recipients = page.getByRole("list", { name: "נמענים", exact: true });
   await expect(recipients).toContainText(electrician);
   await expect(recipients).toContainText("נשלח");
