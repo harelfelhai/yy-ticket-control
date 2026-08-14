@@ -148,3 +148,80 @@ test.describe("הלוח הראשי", () => {
     await expect(page).toHaveURL(/\/tickets\/new$/);
   });
 });
+
+/**
+ * מתג התצוגה (הכרעת 0.3 §7 שורה 28).
+ *
+ * שתי טענות שקל לפספס: ששלוש כותרות הקיבוץ **נשארות** בטבלה — כלומר
+ * שהשינוי הוא ברינדור השורה ולא במבנה המסך — ושהשורה נשארת **קישור**,
+ * כי `role="row"` על `<Link>` היה דורס את תפקיד הקישור ושובר את שאר
+ * בדיקות הלוח בלי שאיש ישים לב.
+ */
+test.describe("תצוגת טבלה", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await createTicket(page, "1");
+  });
+
+  test("המתג מחליף לטבלה, הכותרות נשארות, והשורה מובילה לפנייה", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "הטבלה היא דסקטופ בלבד");
+
+    await page.goto("/board");
+    await page.getByRole("button", { name: "טבלה" }).click();
+    await expect(page).toHaveURL(/view=table/);
+
+    // שלוש כותרות הקיבוץ נשארות — הטבלה אינה מחליפה את מבנה המסך.
+    await expect(page.getByRole("heading", { name: /^דורש ממך/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toBeVisible();
+
+    // כותרות העמודות מוצגות. `.first()` בכוונה: לכל קבוצה שורת כותרות
+    // משלה — הטבלה מקובצת, ואינה טבלה אחת עם כותרת אחת בראש המסך.
+    await expect(page.getByText("מיקום", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("סיבה", { exact: true }).first()).toBeVisible();
+
+    // השורה היא קישור אחד לפנייה — ולא תא בתוך טבלה.
+    const row = page.getByRole("link").filter({ hasText: "בניין א · דירה 1" }).first();
+    await expect(row).toBeVisible();
+    await row.click();
+    await expect(page).toHaveURL(/\/tickets\/c/);
+  });
+
+  test("אין תפקידי ARIA של טבלה — הסמנטיקה היא רשימת קישורים", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "הטבלה היא דסקטופ בלבד");
+
+    await page.goto("/board?view=table");
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(page.getByRole("row")).toHaveCount(0);
+  });
+
+  test("המתג אינו מוצג בנייד, והלוח נשאר כרטיסים", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "הטענה היא על הנייד");
+
+    await page.goto("/board");
+    await openFilters(page);
+    // ‏hidden ולא count(0): הכפתור קיים ב-DOM ומוסתר ב-`md:` — מה שנבדק
+    // הוא שהמשתמש אינו יכול ללחוץ עליו ולא לראות שינוי.
+    await expect(page.getByRole("button", { name: "טבלה" })).toBeHidden();
+  });
+
+  test("גם כשהכתובת מבקשת טבלה במפורש, בנייד מוצגים כרטיסים", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "הטענה היא על הנייד");
+
+    /*
+     * הסתרת המתג אינה מספיקה: הכתובת נגישה מקישור שנשמר ומחזרה בהיסטוריה.
+     * סבב הצילום הראה שב-390px כותרות העמודות נדבקות זו לזו והתאים נחתכים
+     * לאות אחת — וזה **אינו** נתפס באוכף הגלישה, כי הרשת מצטמצמת ואינה גולשת.
+     */
+    await page.goto("/board?view=table");
+    // ‏`.first()`: הטבלה מרונדרת פעם לכל קבוצה, וכולן מוסתרות ב-`md:`.
+    await expect(page.getByText("מיקום", { exact: true }).first()).toBeHidden();
+    /*
+     * ‏`getByRole` ולא `getByText`: הטבלה עדיין ב-DOM ומוסתרת ב-`display:none`,
+     * ולכן `getByText` היה תופס את התא המוסתר שלה כראשון. אלמנט מוסתר אינו
+     * בעץ הנגישות, ולכן חיפוש לפי תפקיד מוצא רק את הכרטיס שבאמת מוצג.
+     */
+    await expect(
+      page.getByRole("link").filter({ hasText: "נשלח, טרם נצפה" }).first(),
+    ).toBeVisible();
+  });
+});

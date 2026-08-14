@@ -52,6 +52,7 @@ export function BoardFilters({ sites, buildings, domains, recipients, tags }: Bo
   const syncKey = params.toString();
 
   const tour = params.get("tour") === "1";
+  const table = params.get("view") === "table";
   const activeCount = FILTER_PARAMS.filter((key) => params.get(key)).length;
 
   return (
@@ -59,6 +60,23 @@ export function BoardFilters({ sites, buildings, domains, recipients, tags }: Bo
       activeCount={activeCount}
       trailing={
         <>
+          {/*
+           * מתג התצוגה (0.3). **מוסתר מתחת ל-`md`**: טבלה ברוחב 390px היא
+           * גלישה אופקית או טקסט קטוע, ומשתמש נייד שלוחץ ולא רואה שינוי
+           * לומד שהמערכת לא מגיבה.
+           *
+           * ‏`view` אינו מסנן ולכן הוא ב-`trailing` ואינו מתקפל לתוך
+           * הרצועה — "מה שאינו מסנן אינו מתקפל" (§ FilterBar).
+           */}
+          <Button
+            variant="secondary"
+            size="compact"
+            className="hidden md:inline-flex"
+            onClick={() => update("view", table ? "" : "table")}
+          >
+            {table ? he.board.viewCards : he.board.viewTable}
+          </Button>
+
           <label className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm">
             <input
               key={`tour-${syncKey}`}

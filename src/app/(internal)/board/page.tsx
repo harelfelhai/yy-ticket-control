@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { TicketCard } from "@/components/ticket-card";
+import { TicketTable } from "@/components/ticket-table";
 import { requireUser } from "@/lib/auth";
 import { type BoardCard, groupForTour } from "@/lib/board-view";
 import { he } from "@/lib/he";
@@ -44,6 +45,17 @@ export default async function BoardPage(props: PageProps<"/board">) {
 
   const board = await getBoard(user, filters, new Date());
   const tour = single(params.tour) === "1";
+
+  /**
+   * תצוגת טבלה (אפיון מסך 1, הכרעת 0.3 §7 שורה 28).
+   *
+   * ברירת המחדל היא כרטיסים, ולכן `?view=table` בלבד מפעיל אותה — כל
+   * הקישורים והבדיקות הקיימות ממשיכים לפגוע בתצוגה שהם מכירים.
+   *
+   * **שלוש כותרות הקיבוץ אינן מושפעות.** מה שמשתנה הוא רינדור השורה בלבד,
+   * וזה מה ששומר על "רשימה אחת עם כותרות קיבוץ, לא טאבים" (§מסך 1).
+   */
+  const table = single(params.view) === "table";
 
   // צלילה ממוקדת-מדד מתצוגת הבעלים (אפיון מסך 10): "ממתינות למנהל" מציג רק
   // את "דורש ממך", ו"ללא תנועה" רק את המוסלמות. מתעלמים מ-focus במצב סיור.
@@ -92,18 +104,21 @@ export default async function BoardPage(props: PageProps<"/board">) {
           {focusCards.length === 0 ? (
             <EmptyState>{he.board.empty}</EmptyState>
           ) : (
-            focusCards.map((card) => <TicketCard key={card.id} card={card} />)
+            <CardList cards={focusCards} table={table} />
           )}
         </>
       ) : total === 0 ? (
         <EmptyState>{he.board.empty}</EmptyState>
       ) : tour ? (
-        <TourView cards={[...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS]} />
+        <TourView
+          cards={[...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS]}
+          table={table}
+        />
       ) : (
         <>
-          <Section id="ACTION_REQUIRED" cards={board.sections.ACTION_REQUIRED} />
-          <Section id="WITH_RECIPIENTS" cards={board.sections.WITH_RECIPIENTS} />
-          <ArchiveSection cards={board.sections.ARCHIVE} />
+          <Section id="ACTION_REQUIRED" cards={board.sections.ACTION_REQUIRED} table={table} />
+          <Section id="WITH_RECIPIENTS" cards={board.sections.WITH_RECIPIENTS} table={table} />
+          <ArchiveSection cards={board.sections.ARCHIVE} table={table} />
         </>
       )}
 
@@ -136,7 +151,46 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
   );
 }
 
-function Section({ id, cards }: { id: Exclude<BoardSection, "ARCHIVE">; cards: BoardCard[] }) {
+/**
+ * רשימת הפניות בקבוצה אחת, בתצוגה שנבחרה.
+ *
+ * נקודת ההחלפה **היחידה** בין שתי התצוגות. כותרות הקיבוץ, הארכיון המקופל
+ * ומצב הסיור עוברים דרכה ולכן אינם יודעים על קיומה של הטבלה כלל.
+ */
+function CardList({ cards, table }: { cards: BoardCard[]; table: boolean }) {
+  const asCards = cards.map((card) => <TicketCard key={card.id} card={card} />);
+  if (!table) return <>{asCards}</>;
+
+  /*
+   * **בנייד כרטיסים תמיד, גם כש-`?view=table` מבוקש במפורש.**
+   *
+   * הסתרת המתג מתחת ל-`md` אינה מספיקה: הכתובת נגישה מקישור שנשמר ומחזרה
+   * בהיסטוריה. סבב הצילום הראה מה קורה שם — ב-390px כותרות העמודות נדבקות
+   * זו לזו ("מיקוםתחוםסיבהנמענים") והתאים נחתכים ל-"ב.". זה **לא** נתפס
+   * באוכף הגלישה, כי הרשת מצטמצמת ואינה גולשת; היא פשוט בלתי קריאה.
+   *
+   * ההחלפה ב-CSS ולא בשרת, כי הרינדור בשרת אינו יודע את רוחב החלון.
+   * העלות היא DOM כפול — ורק כשהטבלה התבקשה במפורש.
+   */
+  return (
+    <>
+      <div className="hidden md:block">
+        <TicketTable cards={cards} />
+      </div>
+      <div className="flex flex-col gap-3 md:hidden">{asCards}</div>
+    </>
+  );
+}
+
+function Section({
+  id,
+  cards,
+  table,
+}: {
+  id: Exclude<BoardSection, "ARCHIVE">;
+  cards: BoardCard[];
+  table: boolean;
+}) {
   return (
     <section className="flex flex-col gap-3">
       {/* כותרת דביקה: בגלילה ארוכה המשתמש תמיד יודע באיזו קבוצה הוא נמצא. */}
@@ -146,13 +200,13 @@ function Section({ id, cards }: { id: Exclude<BoardSection, "ARCHIVE">; cards: B
       {cards.length === 0 ? (
         <p className="px-1 text-sm text-muted">{he.board.emptySection}</p>
       ) : (
-        cards.map((card) => <TicketCard key={card.id} card={card} />)
+        <CardList cards={cards} table={table} />
       )}
     </section>
   );
 }
 
-function ArchiveSection({ cards }: { cards: BoardCard[] }) {
+function ArchiveSection({ cards, table }: { cards: BoardCard[]; table: boolean }) {
   if (cards.length === 0) return null;
 
   return (
@@ -161,15 +215,13 @@ function ArchiveSection({ cards }: { cards: BoardCard[] }) {
         <SectionHeading label={he.boardSection.ARCHIVE} count={cards.length} />
       </summary>
       <div className="mt-2 flex flex-col gap-2">
-        {cards.map((card) => (
-          <TicketCard key={card.id} card={card} />
-        ))}
+        <CardList cards={cards} table={table} />
       </div>
     </details>
   );
 }
 
-function TourView({ cards }: { cards: BoardCard[] }) {
+function TourView({ cards, table }: { cards: BoardCard[]; table: boolean }) {
   const { drafts, groups } = groupForTour(cards);
 
   return (
@@ -179,9 +231,7 @@ function TourView({ cards }: { cards: BoardCard[] }) {
           <h2 className={TITLE_DESCRIPTIVE}>
             <SectionHeading label={he.board.tourDrafts} count={drafts.length} />
           </h2>
-          {drafts.map((card) => (
-            <TicketCard key={card.id} card={card} />
-          ))}
+          <CardList cards={drafts} table={table} />
         </section>
       ) : null}
 
@@ -190,9 +240,7 @@ function TourView({ cards }: { cards: BoardCard[] }) {
           <h2 className={`sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 ${TITLE_DESCRIPTIVE}`}>
             <SectionHeading label={group.label} count={group.cards.length} />
           </h2>
-          {group.cards.map((card) => (
-            <TicketCard key={card.id} card={card} />
-          ))}
+          <CardList cards={group.cards} table={table} />
         </section>
       ))}
     </div>

@@ -126,6 +126,15 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await expect(page.getByText("אין חשמל בממ״ד, הפאזה קופצת").first()).toBeVisible();
   await shot(page, device, "03-board");
 
+  // תצוגת הטבלה (0.3). נלכדת בשני הרוחבים אף שהמתג אליה מוסתר בנייד:
+  // הכתובת ניתנת להגעה, ורשת עמודות ברוחב 390px היא בדיוק המצב שצריך
+  // לראות כדי לדעת אם ההסתרה מספיקה.
+  await page.goto("/board?view=table");
+  // ההמתנה היא לכותרת הקיבוץ ולא לכותרת עמודה: בנייד הטבלה מוסתרת בכוונה
+  // ומוצגים כרטיסים, וזה בדיוק מה שהצילום הזה נועד להראות.
+  await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toBeVisible();
+  await shot(page, device, "03c-board-table");
+
   // הלוח המסונן — המצב היחיד שבו רצועת המסננים פרושה בנייד. בלי הצילום הזה
   // הפריסה של הרצועה הפתוחה אינה נראית לאיש עד שמשתמש נתקל בה.
   await page.goto("/board?direction=opened");
