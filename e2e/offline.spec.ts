@@ -63,7 +63,7 @@ test("שיגור בלי קליטה נשמר מקומית, ויוצא לבד כש
   // שינוי המצב אינו תמיד משדר אותו, ולכן משדרים אותו במפורש.
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(description)).toBeVisible();
 });
 
@@ -97,7 +97,7 @@ test("פנייה ששוגרה בהצלחה אינה חוזרת כטיוטה בפ
   await login(page);
   await fillTicket(page, `תקלה ראשונה ${stamp}`, stamp);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   await page.goto("/tickets/new");
   await expect(page.getByText("שוחזר מה שהקלדת קודם")).toHaveCount(0);

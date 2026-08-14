@@ -44,7 +44,7 @@ test("חיפוש מוצא פנייה לפי התיאור ולפי מה שנכת�
     `קבלן ${stamp}`,
   );
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   await page.getByLabel("תגובה").fill(reply);
   await page.getByRole("button", { name: "שלח", exact: true }).click();
@@ -91,7 +91,7 @@ test("מסנן התאריכים מסנן בפועל ונשמר בכתובת", as
   await pick(page, "תחום", "חשמל");
   await page.getByLabel("תיאור").fill(description);
   await page.getByRole("button", { name: "שמור כטיוטה" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   await page.goto("/search");
   await openFilters(page);
@@ -147,7 +147,7 @@ test("החיפוש נשמר בכתובת ושורד חזרה מפנייה", asyn
     `נגר ${stamp}`,
   );
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   await page.goto("/search");
   await page.getByLabel("חיפוש", { exact: true }).fill(description);
@@ -158,7 +158,7 @@ test("החיפוש נשמר בכתובת ושורד חזרה מפנייה", asyn
   await expect(page).toHaveURL(/[?&]q=/);
 
   await card.click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   await page.goBack();
   await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();

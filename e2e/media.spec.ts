@@ -62,7 +62,7 @@ async function openTicketWithContractor(page: Page, stamp: number) {
   await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
   await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(contractor);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   await page
     .getByRole("list", { name: "נמענים", exact: true })
@@ -158,7 +158,7 @@ test("מנהל מצלם לפני שהפנייה קיימת, והתמונה נכ�
   );
 
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   const image = page.getByRole("img", { name: "before.png" });
   await expect(image).toBeVisible();

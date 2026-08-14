@@ -39,7 +39,7 @@ async function createTicket(page: Page, apartment: string): Promise<string> {
     `קבלן ${stamp}`,
   );
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   return description;
 }

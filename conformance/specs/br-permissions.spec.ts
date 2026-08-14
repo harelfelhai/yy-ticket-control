@@ -42,7 +42,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
     await loginAs(page, "managerB");
     const response = await page.goto(path);
     expect(response?.status()).toBe(404);
-    await expect(page.getByRole("heading", { name: "שרשור" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "שרשור" })).toHaveCount(0);
   });
 
   test("A3-02 — מנהל רואה כל פניות האתר שלו, לא רק את שלו", async ({ page }) => {
@@ -78,7 +78,7 @@ test.describe("§5.ז — מנהל עבודה", () => {
     // מנהל אחר באותו אתר — רואה, מגיב, אך אינו סוגר.
     await loginAs(page, "managerA2");
     await page.goto(path);
-    await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.close })).toHaveCount(0);
 
     // הפותח — כן.
@@ -133,7 +133,7 @@ test.describe("§5.ז — בעלים", () => {
 
     await loginAs(page, "owner");
     await page.goto(foreignPath);
-    await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.close })).toHaveCount(0);
 
     const ownPath = await createTicket(page, {

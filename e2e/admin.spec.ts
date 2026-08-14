@@ -35,7 +35,7 @@ async function createTicketWithProfessional(page: Page, description: string, con
   await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
   await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(contractor);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 }
 
 // הערה: אין כאן בדיקת הקמת אתר. הקמת אתר שני משנה את מסך יצירת הפנייה
@@ -114,7 +114,11 @@ test("מנהל מערכת מוחק פנייה כפולה — אישור כפול
   await expect(page).toHaveURL(/\/board$/);
   await expect(page.getByRole("link").filter({ hasText: description })).toHaveCount(0);
 
-  // הפנייה עצמה נעלמה — כניסה ישירה לכתובתה כבר אינה מציגה את השרשור.
-  await page.goto(ticketUrl);
-  await expect(page.getByRole("heading", { name: "שרשור" })).toHaveCount(0);
+  // הפנייה עצמה נעלמה — כניסה ישירה לכתובתה מחזירה 404.
+  //
+  // הטענה היא על **קוד התשובה** ולא על היעדר כותרת במסך, וזה מכוון: טענת
+  // היעדר אינה יודעת להבדיל בין "הרשומה נמחקה" לבין "המסך השתנה". רגע לפני
+  // שהשרשור הופך לגוף העמוד, טענה כזו הייתה נשארת ירוקה לנצח בלי לבדוק דבר.
+  const afterDelete = await page.goto(ticketUrl);
+  expect(afterDelete?.status()).toBe(404);
 });

@@ -63,7 +63,7 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
   await page.getByLabel("תיאור").fill(description);
   await addProfessional(page, contractor, `050-${String(stamp).slice(-7)}`);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   const ticketUrl = new URL(page.url()).pathname;
   const contractorLink = await showTicketLink(page, contractor);

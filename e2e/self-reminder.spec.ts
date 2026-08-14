@@ -44,7 +44,7 @@ test("מנהל פותח פנייה ומשייך את עצמו — הפנייה �
   );
 
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   // רצועת הנמענים מציגה אותו כנמען לכל דבר, עם סטטוס אישי משלו.
   const strip = page.getByRole("list", { name: "נמענים", exact: true });
@@ -52,7 +52,12 @@ test("מנהל פותח פנייה ומשייך את עצמו — הפנייה �
   await expect(strip.getByText("נשלח", { exact: true })).toHaveCount(1);
 
   // ואין לו קישור גישה — הוא נכנס עם סיסמה.
-  await expect(strip.getByRole("button", { name: "צור קישור גישה" })).toHaveCount(0);
+  //
+  // המחרוזת כאן הייתה "צור קישור גישה", שאינה קיימת בשום מקום במוצר
+  // (`he.ticket.showLink` הוא "קישור גישה"), ולכן הטענה הזו מעולם לא בדקה
+  // דבר. שתי הטענות שמעליה הן הבקרה החיובית: הן מוכיחות שהרצועה נפתרה,
+  // ולכן היעדר הכפתור כאן הוא היעדר אמיתי.
+  await expect(strip.getByRole("button", { name: /^קישור גישה/ })).toHaveCount(0);
 
   // הפנייה נמצאת גם תחת "הפניתי" וגם תחת "קיבלתי" — שני הצדדים הם הוא.
   const card = page.getByRole("link").filter({ hasText: description });

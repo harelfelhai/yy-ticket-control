@@ -49,7 +49,7 @@ async function createTicket(page: Page): Promise<string> {
 
   // ‏toHaveURL אינו מספיק: הכתובת מתעדכנת לפני שהמסך החדש מוצג, ובחלון הזה
   // הבדיקה פוגעת בכפתורים של מסך היצירה. "שרשור" קיים רק במסך הפנייה.
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
   return description;
 }
 

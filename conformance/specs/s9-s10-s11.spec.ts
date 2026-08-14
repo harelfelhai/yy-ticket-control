@@ -233,8 +233,11 @@ test.describe("מסכים 11–15 — ניהול", () => {
     await page.getByRole("button", { name: "כן, מחק לצמיתות" }).click();
     await expect(page).toHaveURL(/\/board/);
 
-    await page.goto(path);
-    await expect(page.getByRole("heading", { name: "שרשור" })).toHaveCount(0);
+    // הטענה היא על **קוד התשובה** ולא על היעדר כותרת: טענת היעדר אינה
+    // יודעת להבדיל בין "הפנייה נמחקה" לבין "המסך השתנה", והיא הראיה
+    // היחידה כאן שהמחיקה אכן קרתה.
+    const afterDelete = await page.goto(path);
+    expect(afterDelete?.status()).toBe(404);
   });
 });
 

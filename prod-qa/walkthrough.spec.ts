@@ -131,7 +131,7 @@ test("מסלול מלא: פנייה, מדיה ל-R2, פורטל, תגובה, ס�
 
   await shot(page, "12-ticket-new-filled", testInfo);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
   const ticketUrl = new URL(page.url()).pathname;
   await shot(page, "13-ticket-detail", testInfo);
 
@@ -212,7 +212,7 @@ test("תגית: יצירה, פתיחה לקבלן וצ׳אט קבוצתי", asyn
   await page.getByLabel("טלפון").fill(`054-${String(Date.now()).slice(-7)}`);
   await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   // תגית נלמדת — נוצרת מתוך מסך הפנייה
   await page.getByRole("button", { name: /^הוסף תגית/ }).first().click();

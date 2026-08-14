@@ -86,7 +86,7 @@ async function createSentTicket(
   );
 
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 }
 
 test.describe.configure({ mode: "serial" });
@@ -133,7 +133,7 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await shot(page, device, "03b-board-filtered");
 
   await page.goto(lastTicketPath);
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
   await shot(page, device, "04-ticket-detail");
 
   await page.goto("/overview");

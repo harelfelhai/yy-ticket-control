@@ -239,7 +239,16 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         canEdit={canTag}
       />
 
-      <section className={cardClasses()}>
+      {/*
+       * ‏`aria-label` על האזור, בנוסף לכותרת הגלויה.
+       *
+       * ‏29 אתרי קריאה בחבילות הבדיקה משתמשים בכותרת "שרשור" כעוגן
+       * "הניווט למסך הפנייה הסתיים". כשהשרשור יהפוך לגוף העמוד הכותרת
+       * הגלויה תרד, ובלי עוגן חלופי **שכבר בשימוש** אותם 29 אתרים היו
+       * הופכים לטיימאאוטים בבת אחת. השם הנגיש נשאר זהה, ולכן שני העוגנים
+       * חופפים בדיוק — וזו כל הנקודה: אפשר להעביר אותם אחד-אחד בירוק.
+       */}
+      <section className={cardClasses()} aria-label={he.ticket.thread}>
         <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.thread}</h2>
         {ticket.messages.length === 0 ? (
           <p className="text-sm text-muted">{he.ticket.threadEmpty}</p>

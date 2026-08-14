@@ -81,7 +81,7 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   await addProfessional(page, electrician, `050-${String(stamp).slice(-7)}`);
   await addProfessional(page, plumber, `052-${String(stamp).slice(-7)}`);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   const ticketUrl = new URL(page.url()).pathname;
   const ticketId = ticketUrl.split("/").pop() as string;
@@ -143,7 +143,7 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   await expect(card).toContainText(`${plumber} שאל שאלה`);
 
   await card.click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
   await expect(page.getByText("איפה הכניסה לדירה?")).toBeVisible();
 
   // ── 5. המנהל עונה, והקבלן השני מסמן שסיים ─────────────────────────
@@ -202,7 +202,7 @@ test("הקישור יציב בין שליחות, ו'צור קישור חדש' מ
   await page.getByLabel("תיאור").fill(description);
   await addProfessional(page, contractor, `053-${String(stamp).slice(-7)}`);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   // הצגה חוזרת מחזירה את **אותו** קישור. זו הסיבה שאפשר לשלוח שוב בבטחה:
   // הודעה ישנה בוואטסאפ של הקבלן ממשיכה לעבוד.
@@ -240,7 +240,7 @@ test("כפתור וואטסאפ מוכן לשליחה, וחיווי השליחה
   await page.getByLabel("תיאור").fill(description);
   await addProfessional(page, contractor, `055-${digits}`);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   // לקבלן הזה אין מייל, ולכן המערכת לא שלחה לו דבר — וזה נאמר במפורש.
   // "נשלח" בסטטוס פירושו ששייכנו אותו, לא שהוא יודע.
@@ -294,7 +294,7 @@ test("קבלן שהוסר מאבד את הפנייה מיידית, ואת הקי
     }
 
     await page.getByRole("button", { name: "שלח לנמענים" }).click();
-    await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
   }
 
   async function removeFrom(description: string) {
@@ -344,7 +344,7 @@ test("פתיחת הקישור מסמנת 'נצפה' אצל המנהל", async ({
   await page.getByLabel("תיאור").fill(description);
   await addProfessional(page, contractor, `054-${String(stamp).slice(-7)}`);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("heading", { name: "שרשור" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
   const ticketUrl = new URL(page.url()).pathname;
   const link = await showLink(page, contractor);
