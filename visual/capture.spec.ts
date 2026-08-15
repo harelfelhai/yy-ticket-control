@@ -160,6 +160,13 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await page.goto("/admin");
   await shot(page, device, "09-admin");
 
+  // מסך 13 — אנשי מקצוע. לא נלכד עד 0.4, ולכן מתג ההשבתה שנוסף בו לא היה
+  // נראה לאיש עד שמישהו נתקל בו בשטח. זו גם השורה הצפופה במערכת: שם, צ׳יפ
+  // מצב, שתי שורות מטא-דאטה ושלוש פעולות.
+  await page.goto("/admin/professionals");
+  await expect(page.getByRole("button", { name: "השבת" }).first()).toBeVisible();
+  await shot(page, device, "15-admin-professionals");
+
   // מסך 16 — בניינים ודירות. הנתיב תלוי באתר קיים ולכן נשלף ולא נכתב קשיח.
   // בלי הלכידה הזו זהו המסך היחיד שסבב ה-design-review אינו רואה כלל, והוא
   // גם הצפוף מבין מסכי הניהול: שתי רמות היררכיה וארבע פעולות לשורה.
