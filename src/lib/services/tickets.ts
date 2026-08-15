@@ -20,7 +20,7 @@ import {
   isUser,
 } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
-import { assertLocationInSite } from "./directory";
+import { assertLocationInSite, assertProfessionalsActive } from "./directory";
 import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
 
 /**
@@ -97,6 +97,9 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
     buildingId: input.buildingId,
     apartmentId: input.apartmentId,
   });
+  // ‏0.4: איש מקצוע מושבת אינו בבורר, אך המזהה מגיע מהלקוח (טופס שהיה
+  // פתוח, טיוטה מקומית ששוגרה מאוחר). בלי זה ההשבתה קוסמטית.
+  await assertProfessionalsActive(professionalIds(recipients));
 
   return db.$transaction(async (tx) => {
     const ticket = await tx.ticket.create({
@@ -198,6 +201,7 @@ export async function submitDraft(
   if (!ticket.isDraft) return;
 
   const unique = dedupeRecipients(recipients);
+  await assertProfessionalsActive(professionalIds(unique));
   const missing = missingRequiredFields({
     siteId: ticket.siteId,
     buildingId: ticket.buildingId,
@@ -243,6 +247,11 @@ export function dedupeRecipients(recipients: RecipientRef[]): RecipientRef[] {
     seen.add(key);
     return true;
   });
+}
+
+/** מזהי אנשי המקצוע מתוך רשימת נמענים מעורבת */
+function professionalIds(recipients: RecipientRef[]): string[] {
+  return recipients.filter((r) => r.kind === "professional").map((r) => r.id);
 }
 
 /**
@@ -630,6 +639,8 @@ export async function addAssignments(
   );
   const fresh = dedupeRecipients(recipients).filter((r) => !existing.has(`${r.kind}:${r.id}`));
   if (fresh.length === 0) return;
+  // רק על ה**חדשים**: שיוך קיים לאיש מקצוע שהושבת מאז נשאר בתוקף.
+  await assertProfessionalsActive(professionalIds(fresh));
 
   await db.$transaction(async (tx) => {
     const affected: string[] = [];

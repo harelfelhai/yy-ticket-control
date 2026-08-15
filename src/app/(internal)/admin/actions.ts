@@ -20,6 +20,7 @@ import {
   renameBuilding,
   renameDomain,
   renameSite,
+  setProfessionalActive,
   setUserActive,
   updateProfessional,
   updateUser,
@@ -202,6 +203,16 @@ export async function mergeProfessionalsAction(
     );
     revalidatePath("/admin/professionals");
     return keep.name;
+  });
+}
+
+export async function setProfessionalActiveAction(
+  professionalId: string,
+  active: boolean,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await setProfessionalActive(await requireUser(), id(professionalId), z.boolean().parse(active));
+    revalidatePath("/admin/professionals");
   });
 }
 

@@ -357,8 +357,10 @@ export async function grantTagAccess(
   if (!tag) throw new TagError(he.common.notAllowed);
 
   const unique = [...new Set(professionalIds)];
+  // מושבת אינו נפתח לתגית חדשה (0.4) — אותו כלל כמו בבורר הנמענים.
+  // גישות שכבר ניתנו אינן נוגעות: ההשבתה מכוונת לעתיד.
   const professionals = await db.professional.findMany({
-    where: { id: { in: unique } },
+    where: { id: { in: unique }, active: true },
     select: { id: true, name: true },
   });
   if (professionals.length === 0) return [];

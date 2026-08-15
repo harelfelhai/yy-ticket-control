@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { SITE_A } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
-import { acceptDialogs, createTicket, uniq, uniqPhone } from "../fixtures/world";
+import { acceptDialogs, createTicket, gotoNewTicket, uniq, uniqPhone } from "../fixtures/world";
 
 /**
  * מסכים 11–16 — ניהול הרשומות (הכרעות 0.3, §7 שורות 23–25).
@@ -192,5 +192,52 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
     await expect(alert).toContainText("בניינים באתר");
     // האתר עצמו נשאר — הכשל אינו הרסני ואינו חלקי.
     await expect(page.getByRole("listitem").filter({ hasText: SITE_A })).toBeVisible();
+  });
+});
+
+
+test.describe("מסך 13 — איש מקצוע שעזב (0.4)", () => {
+  /**
+   * הבדיקה מקימה את איש המקצוע שלה ומשביתה אותו בלבד — היא לעולם אינה
+   * נוגעת בקבלני ה-cast, שכל שאר הבדיקות מניחות שהם קיימים ופעילים.
+   */
+  test("S16-06 — השבתה מוציאה אותו מבורר הנמענים, ומשאירה אותו ברשימת הניהול", async ({
+    page,
+  }) => {
+    acceptDialogs(page);
+    await loginAs(page, "admin");
+
+    // נוצר דרך טופס הפנייה, כמו בשטח: איש מקצוע נלמד בהזנה ראשונה.
+    const gone = uniq("קבלן-עזב");
+    await createTicket(page, {
+      building: "בניין א",
+      apartment: "1",
+      domain: "חשמל",
+      description: uniq("תקלה-עזב"),
+      newProfessional: { name: gone, phone: uniqPhone() },
+    });
+
+    await page.goto("/admin/professionals");
+    const row = page.getByRole("listitem").filter({ hasText: gone });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "השבת", exact: true }).click();
+
+    // נשאר ברשימת הניהול ומסומן — אחרת אי אפשר יהיה להפעילו בחזרה.
+    const inactive = page.getByRole("listitem").filter({ hasText: gone });
+    await expect(inactive).toContainText("מושבת");
+    await expect(inactive.getByRole("button", { name: "הפעל", exact: true })).toBeVisible();
+
+    /*
+     * ומכאן העיקר: הוא אינו מוצע יותר כנמען. הבורר נפתח דרך אותו לוקטור
+     * ש-`pickRecipient` משתמש בו, כדי שהבדיקה תישבר יחד עם שאר החבילה אם
+     * הבורר ישתנה — ולא תעבור בשקט על בורר שלא נפתח כלל.
+     */
+    await gotoNewTicket(page);
+    await page
+      .getByRole("button", { name: /^נמענים/ })
+      .first()
+      .click();
+    await expect(page.getByRole("option").first()).toBeVisible();
+    await expect(page.getByRole("option", { name: new RegExp(`^${gone}`) })).toHaveCount(0);
   });
 });

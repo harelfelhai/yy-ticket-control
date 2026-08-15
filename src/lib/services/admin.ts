@@ -368,8 +368,31 @@ export async function listProfessionalsForAdmin(actor: SessionUser) {
     name: p.name,
     phone: p.phone,
     email: p.email,
+    active: p.active,
     activeAssignments: p._count.assignments,
   }));
+}
+
+/**
+ * משבית או מפעיל איש מקצוע (0.4).
+ *
+ * **המקבילה המדויקת ל-`setUserActive`, ומאותו נימוק.** מחיקה חסומה לאיש
+ * מקצוע שקיבל ולו פנייה אחת — נכון, כי היא הייתה משמידה שיוכים והודעות —
+ * אבל בלי מסלול הוצאה הוא נשאר ברשימת הנמענים לנצח. מסלול ההוצאה שהיה
+ * קיים, `mergeProfessionals`, מתאר מציאות אחרת לגמרי (שתי רשומות לאותו
+ * אדם) ואינו מתאים למי שפשוט עזב.
+ *
+ * **מה שההשבתה במפורש אינה עושה: אינה נוגעת ב-`AccessToken`.** קבלן
+ * שמושבת עדיין מחזיק פניות פתוחות שהוא היחיד שיכול לסמן בהן "טופל",
+ * וביטול הקישור היה נועל אותן בלי שאיש ישים לב. ההשבתה מכוונת לעתיד.
+ */
+export async function setProfessionalActive(actor: SessionUser, id: string, active: boolean) {
+  assertAdmin(actor);
+
+  const existing = await db.professional.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) throw new AdminError(he.admin.professionalNotFound);
+
+  return db.professional.update({ where: { id }, data: { active } });
 }
 
 export async function updateProfessional(

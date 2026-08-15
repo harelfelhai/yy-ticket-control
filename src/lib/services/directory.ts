@@ -69,6 +69,31 @@ export async function findOrCreateDomain(rawName: string) {
 }
 
 /**
+ * מאמת שאיש מקצוע שמשויך לפנייה **פעיל** (הכרעת 0.4).
+ *
+ * **למה בשרת ולא רק בבורר.** ההשבתה מוציאה את איש המקצוע מרשימות הבחירה,
+ * אבל המזהה מגיע מהלקוח: קישור שנשמר, טופס שהיה פתוח לפני ההשבתה, או
+ * טיוטה שנשמרה מקומית וששוגרה אחר כך. בלי הבדיקה הזו ההשבתה היא קוסמטיקה
+ * — בדיוק כמו `assertLocationInSite` ששומר על אותו גבול בשדות המיקום.
+ *
+ * **מה שאינו נחסם כאן, בכוונה:** שיוכים שכבר קיימים. השבתה מוציאה אותו
+ * מהעתיד ולא מוחקת את העבר, ולכן פנייה פתוחה שהוא כבר עליה ממשיכה לעבוד
+ * — כולל הקישור האישי שלו, שהוא עדיין נדרש לסגור דרכו מה שנפתח לפניו.
+ */
+export async function assertProfessionalsActive(professionalIds: string[]): Promise<void> {
+  const unique = [...new Set(professionalIds)];
+  if (unique.length === 0) return;
+
+  const inactive = await db.professional.findMany({
+    where: { id: { in: unique }, active: false },
+    select: { name: true },
+  });
+  if (inactive.length > 0) {
+    throw new DirectoryError(he.directory.professionalInactive(inactive.map((p) => p.name)));
+  }
+}
+
+/**
  * מאמת ששיוך מיקום לפנייה עקבי: הבניין שייך לאתר, והדירה לבניין ולאתר.
  *
  * ההרשאה נבדקת על האתר (`canCreateTicketInSite`/`canEditTicketFields`), אבל
@@ -175,7 +200,9 @@ export async function listSiteDirectory(siteId: string) {
       include: { apartments: true },
     }),
     db.domain.findMany({ orderBy: { name: "asc" } }),
-    db.professional.findMany({ orderBy: { name: "asc" } }),
+    // מושבתים אינם בבורר (0.4): זו כל מטרת ההשבתה. פניות קיימות אינן
+    // נשלפות מכאן ולכן אינן מושפעות.
+    db.professional.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
   ]);
 
   return {

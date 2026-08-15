@@ -24,11 +24,13 @@ import {
   renameBuilding,
   renameDomain,
   renameSite,
+  setProfessionalActive,
   setUserActive,
   updateProfessional,
   updateUser,
 } from "@/lib/services/admin";
 import { countBlockingReferences } from "@/lib/services/deletion";
+import { assertProfessionalsActive, listSiteDirectory } from "@/lib/services/directory";
 import { resetDb } from "../helpers/reset-db";
 
 let admin: SessionUser;
@@ -188,6 +190,79 @@ describe("updateProfessional", () => {
     await expect(updateProfessional(admin, p.id, { name: "יוסי" })).rejects.toThrow(
       he.notices.cannotSendNoContact,
     );
+  });
+});
+
+describe("setProfessionalActive — מסלול ההוצאה למי שעזב (0.4)", () => {
+  it("משבית ומפעיל בחזרה", async () => {
+    const p = await db.professional.create({ data: { name: "יוסי", phone: "0501111111" } });
+
+    await setProfessionalActive(admin, p.id, false);
+    expect((await db.professional.findUniqueOrThrow({ where: { id: p.id } })).active).toBe(false);
+
+    await setProfessionalActive(admin, p.id, true);
+    expect((await db.professional.findUniqueOrThrow({ where: { id: p.id } })).active).toBe(true);
+  });
+
+  it("מנהל עבודה אינו רשאי", async () => {
+    const p = await db.professional.create({ data: { name: "יוסי", phone: "0501111111" } });
+    await expect(setProfessionalActive(manager, p.id, false)).rejects.toThrow(AdminError);
+  });
+
+  it("מושבת יוצא מבורר הנמענים, ופעיל נשאר בו", async () => {
+    const gone = await db.professional.create({ data: { name: "עזב", phone: "0501111111" } });
+    const stays = await db.professional.create({ data: { name: "נשאר", phone: "0502222222" } });
+
+    await setProfessionalActive(admin, gone.id, false);
+
+    const directory = await listSiteDirectory(siteId);
+    const names = directory.professionals.map((x) => x.name);
+    expect(names).toContain("נשאר");
+    expect(names).not.toContain("עזב");
+    expect(stays.active).toBe(true);
+  });
+
+  it("נשאר ברשימת הניהול, מסומן כמושבת — אחרת הוא נעלם ואי אפשר להפעילו", async () => {
+    const p = await db.professional.create({ data: { name: "עזב", phone: "0501111111" } });
+    await setProfessionalActive(admin, p.id, false);
+
+    const rows = await listProfessionalsForAdmin(admin);
+    const row = rows.find((r) => r.id === p.id);
+    expect(row).toBeDefined();
+    expect(row?.active).toBe(false);
+  });
+
+  it("השבתה אינה נוגעת בשיוכים קיימים ולא בקישורי הגישה", async () => {
+    const p = await db.professional.create({ data: { name: "עזב", phone: "0501111111" } });
+    const ticket = await db.ticket.create({
+      data: { siteId, createdById: admin.id, channel: "SELF", description: "ד" },
+    });
+    await db.assignment.create({ data: { ticketId: ticket.id, professionalId: p.id, status: "SENT" } });
+    await db.accessToken.create({
+      data: { professionalId: p.id, tokenHash: `hash-${p.id}` },
+    });
+
+    await setProfessionalActive(admin, p.id, false);
+
+    // ההשבתה מכוונת לעתיד: הפנייה הפתוחה שלו עדיין דורשת שיסמן בה "טופל",
+    // וביטול הקישור היה נועל אותה בלי שאיש ישים לב.
+    expect(await db.assignment.count({ where: { professionalId: p.id, status: "SENT" } })).toBe(1);
+    expect(await db.accessToken.count({ where: { professionalId: p.id, revokedAt: null } })).toBe(1);
+  });
+});
+
+describe("assertProfessionalsActive — ההשבתה נאכפת בשרת ולא רק בבורר", () => {
+  it("דוחה שיוך למושבת, ונוקב בשמו", async () => {
+    const p = await db.professional.create({ data: { name: "עזב", phone: "0501111111" } });
+    await setProfessionalActive(admin, p.id, false);
+
+    await expect(assertProfessionalsActive([p.id])).rejects.toThrow(/עזב/);
+  });
+
+  it("מאפשר שיוך לפעיל, ורשימה ריקה אינה נוגעת ב-DB", async () => {
+    const p = await db.professional.create({ data: { name: "פעיל", phone: "0501111111" } });
+    await expect(assertProfessionalsActive([p.id])).resolves.toBeUndefined();
+    await expect(assertProfessionalsActive([])).resolves.toBeUndefined();
   });
 });
 

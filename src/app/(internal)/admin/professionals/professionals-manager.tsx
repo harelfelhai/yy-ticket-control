@@ -5,17 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
-import { deleteProfessionalAction, mergeProfessionalsAction, updateProfessionalAction } from "../actions";
+import {
+  deleteProfessionalAction,
+  mergeProfessionalsAction,
+  setProfessionalActiveAction,
+  updateProfessionalAction,
+} from "../actions";
 import { DeleteButton } from "@/components/delete-button";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { Banner, FormError } from "@/components/ui/message";
+import { chipClasses } from "@/components/ui/chip";
 
 interface ProfessionalRow {
   id: string;
   name: string;
   phone: string | null;
   email: string | null;
+  active: boolean;
   activeAssignments: number;
 }
 
@@ -70,11 +77,13 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
           <Field label={he.admin.mergeKeep}>
             <Select value={keepId} onChange={(e) => setKeepId(e.target.value)} disabled={busy}>
               <option value="">{he.common.choose}</option>
-              {professionals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              {professionals
+                .filter((p) => p.active)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
             </Select>
           </Field>
 
@@ -82,7 +91,7 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
             <Select value={dropId} onChange={(e) => setDropId(e.target.value)} disabled={busy}>
               <option value="">{he.common.choose}</option>
               {professionals
-                .filter((p) => p.id !== keepId)
+                .filter((p) => p.active && p.id !== keepId)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -138,18 +147,28 @@ function ProfessionalItem({
   if (!editing) {
     return (
       <li className={cardClasses("flex items-center justify-between gap-3")}>
-        <div className="flex flex-col gap-1">
-          <span className="font-medium">{professional.name}</span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="font-medium">
+            {professional.name}
+            {!professional.active ? (
+              <span className={chipClasses("danger", "soft", "default", "ms-2")}>
+                {he.admin.inactiveBadge}
+              </span>
+            ) : null}
+          </span>
           <span className="text-sm text-muted" dir="ltr">
             {professional.phone ?? professional.email ?? ""}
           </span>
           <span className="text-xs text-muted">
-            {he.admin.activeTickets(professional.activeAssignments)}
+            {professional.active
+              ? he.admin.activeTickets(professional.activeAssignments)
+              : he.admin.inactiveProfessionalHint}
           </span>
         </div>
         {/* מחיקה נחסמת ברגע שיש שיוך אחד — גם `REMOVED` — ולכן היא מנקה
-            רשומה שנוצרה בטעות הקלדה בלבד. איש מקצוע שכבר עבד מוצא מהרשימה
-            באיחוד (`mergeProfessionals`), לא במחיקה. */}
+            רשומה שנוצרה בטעות הקלדה בלבד. מי שכבר עבד יוצא מהרשימה
+            ב**השבתה** (0.4); האיחוד נשאר למה שהוא באמת מתאר — שתי רשומות
+            לאותו אדם — ולא למי שפשוט עזב. */}
         <div className="flex shrink-0 items-start gap-2">
           <Button
             variant="secondary"
@@ -158,6 +177,14 @@ function ProfessionalItem({
             disabled={disabled}
           >
             {he.admin.editProfessional}
+          </Button>
+          <Button
+            variant="secondary"
+            size="compact"
+            onClick={() => run(() => setProfessionalActiveAction(professional.id, !professional.active))}
+            disabled={disabled || busy}
+          >
+            {professional.active ? he.admin.deactivate : he.admin.activate}
           </Button>
           <DeleteButton
             name={professional.name}

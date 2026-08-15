@@ -29,7 +29,8 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
   // אנשי המקצוע כדי להציג אותם למי שאינו רשאי.
   const grantedIds = new Set(detail.granted.map((g) => g.id));
   const candidates = detail.canManageAccess
-    ? (await db.professional.findMany({ orderBy: { name: "asc" } }))
+    ? // מושבת אינו מועמד לפתיחה (0.4) — אותו כלל כמו בבורר הנמענים.
+      (await db.professional.findMany({ where: { active: true }, orderBy: { name: "asc" } }))
         .filter((p) => !grantedIds.has(p.id))
         .map((p) => ({ id: p.id, label: p.name, hint: p.phone ?? p.email ?? undefined }))
     : [];
