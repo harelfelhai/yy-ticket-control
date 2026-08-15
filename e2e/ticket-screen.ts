@@ -9,6 +9,19 @@ import { type Page, expect } from "@playwright/test";
  */
 
 /**
+ * טקסט כפי שהוא **מוצג על המסך** — ולא כפי שהוא יושב בתוך פקד קלט.
+ *
+ * ‏`getByText(x)` מתאים גם `<textarea>` שערכו `x`, ולכן טענה כזו אחרי
+ * ‏`fill(x)` נפתרת מיד עם ההקלדה ואינה ממתינה לשרת; הצעד הבא מתחרה אז
+ * בכתיבה שטרם נחתה.
+ *
+ * הנימוק המלא והמדידה שהוכיחה אותו — `conformance/fixtures/world.ts`.
+ */
+export function shownText(page: Page, text: string) {
+  return page.getByText(text).and(page.locator(":not(textarea):not(input)"));
+}
+
+/**
  * פותח את פאנל "פרטים", אם הוא סגור.
  *
  * **למה זה נדרש.** הדפדפן מסיר תוכן של `<details>` סגור מעץ הנגישות, ולכן

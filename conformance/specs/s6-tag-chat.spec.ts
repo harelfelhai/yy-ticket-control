@@ -6,6 +6,7 @@ import {
   expectExpiredLink,
   openPortalTicket,
   showLink,
+  shownText,
   uniq,
   uniqPhone,
 } from "../fixtures/world";
@@ -31,7 +32,7 @@ async function tagTicket(page: import("@playwright/test").Page, tagName: string)
   await page.getByRole("button", { name: /^הוסף תגית/ }).first().click();
   await page.getByRole("textbox", { name: /חיפוש/ }).fill(tagName);
   await page.getByRole("button", { name: new RegExp(`צור חדש`) }).click();
-  await expect(page.getByText(tagName)).toBeVisible();
+  await expect(shownText(page, tagName)).toBeVisible();
 
   const link = await showLink(page, contractor);
   return { contractor, description, link };
@@ -123,7 +124,8 @@ test.describe("מסך 6 — צ׳אט קבוצתי לפי תגית", () => {
     const chatText = uniq("הודעה בצ׳אט התגית");
     await page.getByLabel(/הודעה|תגובה/).first().fill(chatText);
     await page.getByRole("button", { name: "שלח" }).click();
-    await expect(page.getByText(chatText)).toBeVisible();
+    // ‏shownText: `getByText` היה נפתר על תיבת הכתיבה ולא ממתין לשרת.
+  await expect(shownText(page, chatText)).toBeVisible();
 
     // ההודעה אינה מופיעה בשרשור הפנייה.
     await page.goto(ticketUrl);

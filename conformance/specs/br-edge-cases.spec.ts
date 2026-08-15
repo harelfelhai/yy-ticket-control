@@ -10,6 +10,7 @@ import {
   openDetails,
   recipientRow,
   showLink,
+  shownText,
   ticketIdFromPath,
   uniq,
   uniqPhone,
@@ -126,15 +127,21 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await page.getByLabel("תגובה").fill(firstText);
     await secondPage.getByLabel("תגובה").fill(secondText);
 
+    /*
+     * ‏`shownText` ולא `getByText`, וזו אינה החמרה סגנונית: הטענה
+     * הקודמת נפתרה על תיבת הכתיבה שזה עתה מולאה, כלומר עברה מיד ולא
+     * המתינה לשרת. הרעננון שאחריה יצא לדרך לפני שההודעה השנייה נכתבה —
+     * ‏47ms הפרש שנמדדו — והשרשור שהתקבל היה נכון לזמנו. ראה `world.ts`.
+     */
     await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
-    await expect(page.getByText(firstText)).toBeVisible();
+    await expect(shownText(page, firstText)).toBeVisible();
     await secondPage.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
-    await expect(secondPage.getByText(secondText)).toBeVisible();
+    await expect(shownText(secondPage, secondText)).toBeVisible();
 
     // "שניהם רשאים. השרשור מציג את שתי הפעולות לפי סדר."
     await page.reload();
-    await expect(page.getByText(firstText)).toBeVisible();
-    await expect(page.getByText(secondText)).toBeVisible();
+    await expect(shownText(page, firstText)).toBeVisible();
+    await expect(shownText(page, secondText)).toBeVisible();
 
     const order = await query<{ text: string }>(
       `select text from "Message" where "ticketId" = $1 and text is not null order by "createdAt" asc`,
@@ -170,9 +177,30 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
     await expect(page.getByText("הקלטה מהשטח")).toBeVisible();
 
-    // בלי מפתח OpenAI הג׳וב מסמן SKIPPED ולא FAILED. מקרה הקצה שהאפיון
-    // מתאר הוא כשל אמיתי, ולכן המצב נקבע ישירות — זו הבאת מצב, לא עקיפה
-    // של פעולה נבדקת.
+    /*
+     * **קודם ממתינים שעיבוד ה-AI יסתיים, ורק אז כופים כשל.**
+     *
+     * בלי מפתח OpenAI הג׳וב מסמן `SKIPPED` ולא `FAILED`, ולכן המצב נקבע
+     * ישירות — זו הבאת מצב, לא עקיפה של פעולה נבדקת. אבל העובד רץ ברקע:
+     * במכונה עמוסה ה-tick שלו מתאחר, הג׳וב נוחת **אחרי** ה-UPDATE וכותב
+     * ‏`SKIPPED` מעליו (`jobs/handlers/ai.ts` — `markSkipped`). אז התצוגה
+     * צודקת כשאינה אומרת דבר, והבדיקה נכשלת על המוצר הנכון.
+     *
+     * ההמתנה היא על **מצב סופי של השורה** ולא על הג׳וב: יש שני מנועים
+     * שעשויים לעבד אותה — העובד שבתוך השרת ו-`runJob("drain")` — והמתנה
+     * לאחד מהם בלבד הייתה משאירה את המרוץ עם השני.
+     */
+    const mediaSettled = async () => {
+      const rows = await query<{ aiStatus: string }>(
+        `select m."aiStatus" from "MediaFile" m
+           join "Message" msg on msg.id = m."messageId"
+          where msg."ticketId" = $1`,
+        [ticketIdFromPath(path)],
+      );
+      return rows.length > 0 && rows.every((r) => r.aiStatus !== "PENDING" && r.aiStatus !== "PROCESSING");
+    };
+    await expect.poll(mediaSettled, { timeout: 30_000 }).toBe(true);
+
     await query(
       `update "MediaFile" set "aiStatus" = 'FAILED', transcription = null
         where id in (
@@ -203,6 +231,6 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await page.context().setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(page).toHaveURL(TICKET_URL, { timeout: 30_000 });
-    await expect(page.getByText(description)).toBeVisible();
+    await expect(shownText(page, description)).toBeVisible();
   });
 });

@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { shownText } from "./ticket-screen";
 
 /**
  * "פנייה לא הולכת לאיבוד" — הכלל הקשיח באפיון §5.ב.
@@ -64,7 +65,7 @@ test("שיגור בלי קליטה נשמר מקומית, ויוצא לבד כש
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(description)).toBeVisible();
+  await expect(shownText(page, description)).toBeVisible();
 });
 
 test("מה שהוקלד שורד רענון של הדפדפן", async ({ page }) => {

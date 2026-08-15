@@ -9,7 +9,7 @@ import {
   openFilters,
   uniq,
   uniqPhone,
-} from "../fixtures/world";
+ shownText,} from "../fixtures/world";
 
 /**
  * מסכים 9, 10 ו-11–15: חיפוש, תצוגת הבעלים והניהול.
@@ -42,11 +42,11 @@ test.describe("מסך 9 — חיפוש", () => {
 
     await page.getByRole("searchbox", { name: "חיפוש" }).fill(inDescription);
     await page.getByRole("button", { name: "חפש" }).click();
-    await expect(page.getByText(inDescription)).toBeVisible();
+    await expect(shownText(page, inDescription)).toBeVisible();
 
     await page.getByRole("searchbox", { name: "חיפוש" }).fill(inThread);
     await page.getByRole("button", { name: "חפש" }).click();
-    await expect(page.getByText(inDescription)).toBeVisible();
+    await expect(shownText(page, inDescription)).toBeVisible();
 
     await page.getByRole("searchbox", { name: "חיפוש" }).fill(uniq("אין-כזה"));
     await page.getByRole("button", { name: "חפש" }).click();
@@ -159,7 +159,7 @@ test.describe("מסכים 11–15 — ניהול", () => {
     await page.getByLabel("סיסמה ראשונית").fill("conformance-1234");
     await page.getByRole("button", { name: "הוסף משתמש" }).click();
 
-    await expect(page.getByText(name)).toBeVisible();
+    await expect(shownText(page, name)).toBeVisible();
   });
 
   test("S13-04 — איחוד כפילויות של אנשי מקצוע", async ({ page }) => {

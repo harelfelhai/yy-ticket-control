@@ -19,7 +19,7 @@ import {
   recipientRow,
   uniq,
   uniqPhone,
-} from "../fixtures/world";
+ shownText,} from "../fixtures/world";
 
 /**
  * מסכים 2, 3, 4 ו-7 — הפנייה, הנמענים, היצירה המהירה והשלמת הטיוטה.
@@ -224,7 +224,7 @@ test.describe("מסך 4 — יצירת פנייה מהירה", () => {
     await page.getByLabel("תיאור").fill(description);
     await page.getByRole("button", { name: CREATE_SCREEN.saveDraft }).click();
     await expect(page.getByText(DRAFT_SCREEN.banner)).toBeVisible();
-    await expect(page.getByText(description)).toBeVisible();
+    await expect(shownText(page, description)).toBeVisible();
   });
 });
 
@@ -243,7 +243,7 @@ test.describe("מסך 7 — השלמת טיוטה", () => {
 
     // הבאנר, ההקשר המקורי, ושתי הפעולות.
     await expect(page.getByText(DRAFT_SCREEN.banner)).toBeVisible();
-    await expect(page.getByText(description)).toBeVisible();
+    await expect(shownText(page, description)).toBeVisible();
     await expect(page.getByRole("button", { name: DRAFT_SCREEN.submit })).toBeVisible();
     await expect(page.getByRole("button", { name: DRAFT_SCREEN.delete })).toBeVisible();
 

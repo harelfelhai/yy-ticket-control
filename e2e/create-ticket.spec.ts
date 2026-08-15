@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openDetails } from "./ticket-screen";
+import { openDetails, shownText} from "./ticket-screen";
 
 /**
  * המסלול המרכזי של M1: מנהל פותח פנייה מהשטח ומשייך אותה לקבלן.
@@ -79,7 +79,7 @@ test.describe("יצירת פנייה", () => {
     // כי הכתובת מתעדכנת לפניו.
     await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toContainText("בניין א");
-    await expect(page.getByText(description)).toBeVisible();
+    await expect(shownText(page, description)).toBeVisible();
     // רצועת הנמענים ולא כל העמוד: השם מופיע גם באירוע "שויך לפנייה" בשרשור.
     // הרצועה ירדה לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
     await openDetails(page);
@@ -96,7 +96,7 @@ test.describe("יצירת פנייה", () => {
 
     await expect(page).toHaveURL(/\/tickets\/[a-z0-9]+$/);
     await expect(page.getByText("טיוטה", { exact: true })).toBeVisible();
-    await expect(page.getByText(description)).toBeVisible();
+    await expect(shownText(page, description)).toBeVisible();
   });
 
   test("איש מקצוע ללא טלפון וללא מייל נדחה עם הסבר", async ({ page }) => {

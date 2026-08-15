@@ -1,7 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
 import { openFilters } from "./helpers";
-import { openDetails, showLink } from "./ticket-screen";
+import { openDetails, showLink, shownText } from "./ticket-screen";
 
 /**
  * תגיות וצ׳אט קבוצתי (מסך 6), מקצה לקצה ודרך הממשק בלבד.
@@ -81,7 +81,8 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
 
   await page.getByLabel("תגובה").fill(managerMessage);
   await page.getByRole("button", { name: "שלח", exact: true }).click();
-  await expect(page.getByText(managerMessage)).toBeVisible();
+  // ‏shownText: `getByText` היה נפתר על תיבת הכתיבה ולא ממתין לשרת.
+  await expect(shownText(page, managerMessage)).toBeVisible();
 
   // ── 4. שלילי: הקבלן תקף אך התגית טרם נפתחה לו — אין גישה לצ׳אט ─────
   await page.goto(`${contractorLink.replace(/\/$/, "")}/tag/${tagId}`);
@@ -114,7 +115,7 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
 
   await page.getByLabel("תגובה").fill(contractorMessage);
   await page.getByRole("button", { name: "שלח", exact: true }).click();
-  await expect(page.getByText(contractorMessage)).toBeVisible();
+  await expect(shownText(page, contractorMessage)).toBeVisible();
 
   // ── 7. אצל המנהל: תגובת הקבלן מופיעה בצ׳אט ────────────────────────
   await loginAsManager(page);

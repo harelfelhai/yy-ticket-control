@@ -10,6 +10,7 @@ import {
   openPortalTicket,
   recipientRow,
   showLink,
+  shownText,
   uniq,
   uniqPhone,
 } from "../fixtures/world";
@@ -87,7 +88,8 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
 
     await page.getByLabel("תגובה").fill(early);
     await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
-    await expect(page.getByText(early)).toBeVisible();
+    // ‏shownText: `getByText` היה נפתר על תיבת הכתיבה ולא ממתין לשרת.
+    await expect(shownText(page, early)).toBeVisible();
 
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(late);
@@ -97,7 +99,7 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
 
     const link = await showLink(page, late);
     await openPortalTicket(page, link, description);
-    await expect(page.getByText(early)).toBeVisible();
+    await expect(shownText(page, early)).toBeVisible();
   });
 
   test("S8-08/S8-13 — 'סיימתי — טופל' מחזיר את הפנייה לאישור הפותח, בנוסח האפיון", async ({

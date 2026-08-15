@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { shownText } from "./ticket-screen";
 
 /**
  * מסלול ההתחברות מקצה לקצה, במסלול האמיתי: טופס → Server Action → עוגייה
@@ -98,7 +99,7 @@ test("עובד שהושבת מוחזר למסך ההתחברות, ואינו מ�
   await page.getByLabel("אתר").selectOption({ label: "אתר לדוגמה" });
   await page.getByLabel("סיסמה ראשונית").fill(employeePassword);
   await page.getByRole("button", { name: "הוסף משתמש" }).click();
-  await expect(page.getByText(employeeName)).toBeVisible();
+  await expect(shownText(page, employeeName)).toBeVisible();
 
   // ── העובד מתחבר בדפדפן נפרד ומגיע ללוח ─────────────────────────────
   const employeeContext = await browser.newContext();

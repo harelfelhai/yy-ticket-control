@@ -1,6 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
 import { openFilters } from "./helpers";
+import { shownText } from "./ticket-screen";
 
 /**
  * מסך החיפוש (מסך 9).
@@ -48,7 +49,8 @@ test("חיפוש מוצא פנייה לפי התיאור ולפי מה שנכת�
 
   await page.getByLabel("תגובה").fill(reply);
   await page.getByRole("button", { name: "שלח", exact: true }).click();
-  await expect(page.getByText(reply)).toBeVisible();
+  // ‏shownText: `getByText` היה נפתר על תיבת הכתיבה ולא ממתין לשרת.
+  await expect(shownText(page, reply)).toBeVisible();
 
   // ── הגעה למסך מהתפריט, לא מהכתובת ─────────────────────────────────
   await page.getByRole("link", { name: "חיפוש" }).click();

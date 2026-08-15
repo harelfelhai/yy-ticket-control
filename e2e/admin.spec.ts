@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openDetails } from "./ticket-screen";
+import { openDetails, shownText} from "./ticket-screen";
 
 /**
  * מסכי הניהול (11–15), מקצה לקצה.
@@ -57,7 +57,7 @@ test("מנהל מערכת מקים משתמש ותחום", async ({ page }) => {
   await page.getByLabel("אתר").selectOption({ label: "אתר לדוגמה" });
   await page.getByLabel("סיסמה ראשונית").fill("sod-chazak-123");
   await page.getByRole("button", { name: "הוסף משתמש" }).click();
-  await expect(page.getByText(managerName)).toBeVisible();
+  await expect(shownText(page, managerName)).toBeVisible();
 
   // ── תחום חדש ──────────────────────────────────────────────────────
   await page.goto("/admin/domains");
