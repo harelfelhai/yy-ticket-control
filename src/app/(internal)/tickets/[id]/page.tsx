@@ -22,7 +22,7 @@ import { listTags, listTicketTags } from "@/lib/services/tags";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { canTagTicket } from "@/lib/permissions";
 import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
 import { RecipientEditor } from "./recipient-editor";
@@ -311,7 +311,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
        * השרשור אינו עוד אזור אחד מבין כמה, ולכן אינו זקוק לשלט.
        */}
       <section aria-label={he.ticket.thread} className="flex flex-col gap-3">
-        <ul className="flex flex-col gap-2">
+        <ul className={CARD_LIST}>
           {threadItems.map((item) =>
             item.kind === "day" ? (
               <ThreadDaySeparator key={item.key} label={item.label} />

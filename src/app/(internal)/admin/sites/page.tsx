@@ -4,7 +4,7 @@ import { he } from "@/lib/he";
 import { listSites } from "@/lib/services/admin";
 import { AdminAddForm } from "../admin-add-form";
 import { createSiteAction, deleteSiteAction, renameSiteAction } from "../actions";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
 import { ButtonLink } from "@/components/ui/button";
 import { DeleteButton } from "@/components/delete-button";
 import { InlineRename } from "@/components/inline-rename";
@@ -35,13 +35,13 @@ export default async function AdminSitesPage() {
 
       <AdminAddForm label={he.admin.siteName} buttonLabel={he.admin.addSite} action={createSiteAction} />
 
-      <ul className="flex flex-col gap-2">
+      <ul className={CARD_LIST}>
         {sites.map((site) => (
           <li
             key={site.id}
             className={cardClasses("flex flex-col gap-2")}
           >
-            <span className="font-semibold">{site.name}</span>
+            <span className={RECORD_NAME}>{site.name}</span>
             <span className="text-sm text-muted">
               {he.admin.siteManagers}:{" "}
               {site.users.length === 0

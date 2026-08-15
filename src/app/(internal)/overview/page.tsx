@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { CONTENT_WIDTH, METRIC_VALUE, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, METRIC_VALUE, TITLE_DESCRIPTIVE, CARD_LIST} from "@/lib/ui";
 import { getOwnerOverview } from "@/lib/services/overview";
 import { cardClasses } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -33,7 +33,7 @@ export default async function OverviewPage() {
       {sites.length === 0 ? (
         <EmptyState>{he.overview.empty}</EmptyState>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className={CARD_LIST}>
           {sites.map((site) => (
             <li
               key={site.siteId}

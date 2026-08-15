@@ -8,7 +8,7 @@ import { buildThreadItems } from "@/lib/thread-items";
 import { type ThreadMessageView, toThreadMessageView } from "@/lib/thread-view";
 import { ExpiredLink } from "../expired-link";
 import { PortalActions } from "./portal-actions";
-import { CONTENT_WIDTH, TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 /**
@@ -107,7 +107,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
        * תיאור הפנייה הוא ההודעה הראשונה גם כאן, ולא פסקה בכותרת.
        */}
       <section aria-label={he.ticket.thread} className="flex flex-col gap-3">
-        <ul className="flex flex-col gap-2">
+        <ul className={CARD_LIST}>
           {threadItems.map((item) =>
             item.kind === "day" ? (
               <ThreadDaySeparator key={item.key} label={item.label} />

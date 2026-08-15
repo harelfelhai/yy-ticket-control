@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
 import { deleteTagAction, renameTagAction } from "./actions";
 import { DeleteButton } from "@/components/delete-button";
@@ -31,7 +31,7 @@ export default async function TagsPage() {
       {tags.length === 0 ? (
         <EmptyState>{he.tag.listEmpty}</EmptyState>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className={CARD_LIST}>
           {tags.map((tag) => (
             <li
               key={tag.id}
@@ -41,7 +41,7 @@ export default async function TagsPage() {
                   ראו DESIGN.md § Layout על `justify-between`. */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <Link href={`/tags/${tag.id}`} className="flex min-w-0 flex-col gap-1">
-                  <span className="font-semibold">{tag.name}</span>
+                  <span className={RECORD_NAME}>{tag.name}</span>
                   <span className="text-sm text-muted">
                     {he.tag.ticketCount(tag.openCount, tag.closedCount)}
                   </span>

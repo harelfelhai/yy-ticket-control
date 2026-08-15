@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { chipClasses } from "@/components/ui/chip";
-import { scan } from "./source-scan";
+import { SRC, scan, sourceFiles, stripComments } from "./source-scan";
 
 /**
  * ריתמוס 4px — בדיקה על הקוד עצמו, כמו `typography.test.ts`.
@@ -91,6 +93,40 @@ describe("תבנית ה-Field", () => {
     expect(
       offenders,
       `יש להשתמש ב-<Field label={...}> מ-@/components/ui/field:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * ריתמוס רשימה אנכית — `CARD_LIST` / `ROW_LIST` (DESIGN.md § ריתמוס).
+ *
+ * **פער 22 נסגר ואז זלג (פער 32).** התיקון הראשון יישר את הלוח ואת מסך
+ * התגיות ידנית, בלי אוכף, ולכן חמש רשימות שנכתבו אחריו — שתיים מהן מסכי
+ * ניהול שנכתבו באותו סבב וחלוקים ביניהם — חזרו ל-`gap-2`. הלקח החוזר
+ * בפרויקט הזה: פער שנסגר בלי אוכף אינו סגור, הוא רק לא נראה כרגע.
+ *
+ * **הניסיון הראשון שלי כאן היה היוריסטיקה, והיא נכשלה במדידה:** לזהות
+ * רשימת כרטיסים לפי `cardClasses` בגוף הרשימה. היא תפסה חמישה מופעים
+ * ופספסה שניים — שם ה-`<li>` מרנדר רכיב, וההגדרה יושבת מאה שורות מתחת.
+ * לכן הכלל מבני ולא מנחש: **רשימה אנכית מצהירה על תפקידה**, והבחירה בין
+ * שני הקבועים היא בדיוק מה שאפשר לסקור.
+ */
+describe("ריתמוס רשימה אנכית", () => {
+  const LITERAL_LIST_GAP = /<(ul|ol)[^>]*flex flex-col gap-\d/;
+
+  /**
+   * ‏"נמענים שהוסרו" ב-`gap-1`: רשימה משנית ומקופלת בתחתית הרצועה, שאינה
+   * פריטים נפרדים ואינה שורות של פריט — היא הערת שוליים. תפקיד שלישי
+   * שאין לו קבוע כי יש לו אתר אחד.
+   */
+  const EXEMPT_LISTS = ["app/(internal)/tickets/[id]/recipient-editor.tsx"];
+
+  it("רשימה אנכית משתמשת ב-CARD_LIST או ב-ROW_LIST ולא במחלקה ישירה", () => {
+    const offenders = scan(LITERAL_LIST_GAP, EXEMPT_LISTS);
+
+    expect(
+      offenders,
+      `רשימה אנכית מצהירה על תפקידה — CARD_LIST (פריטים נפרדים) או ROW_LIST (שורות בתוך פריט), מ-@/lib/ui:\n${offenders.join("\n")}`,
     ).toEqual([]);
   });
 });

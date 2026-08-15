@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import { listSiteDirectory } from "@/lib/services/directory";
 import { BatchForm } from "./batch-form";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { TITLE_DESCRIPTIVE, ROW_LIST} from "@/lib/ui";
 
 export const metadata = { title: `${he.batch.title} — ${he.app.name}` };
 
@@ -33,7 +33,7 @@ export default async function BatchPage(props: PageProps<"/tickets/batch">) {
       <div className="flex flex-col gap-3 p-6">
         <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
         <p className="text-muted">{he.ticket.chooseSite}</p>
-        <ul className="flex flex-col gap-2">
+        <ul className={ROW_LIST}>
           {sites.map((option) => (
             <li key={option.id}>
               <Link

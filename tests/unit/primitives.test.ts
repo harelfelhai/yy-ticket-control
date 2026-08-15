@@ -85,10 +85,20 @@ describe("פרימיטיב הכפתור", () => {
  * ‏`role="status"` ב-`media-picker` מדווח על **התקדמות העלאה**, לא על תוצאת
  * פעולה — הוא `text-muted` ומספר כמה קבצים עולים כרגע. `FormNotice` היה
  * צובע אותו ירוק ומכריז "הצלחה" באמצע הדרך.
+ *
+ * **ההחרגה היא לתפקיד, לא לקובץ (פער 31).** כשהיא ניתנה לקובץ כולו,
+ * ‏`media-picker` החזיק גם העתק תו-בתו של `FormError` — `role="alert"` עם
+ * אותן מחלקות בדיוק — והוא חמק בשקט תחת נימוק שמדבר על משהו אחר. החרגה
+ * רחבה מנימוקה היא חור בגדר, לא חריג מנומק.
  */
-const MESSAGE_EXEMPT: Record<string, string> = {
+const STATUS_EXEMPT: Record<string, string> = {
   "components/ui/message.tsx": "הפרימיטיב עצמו — FormError, FormNotice ו-Banner מוגדרים כאן",
   "components/media-picker.tsx": "מונה התקדמות העלאה, לא תוצאת פעולה — text-muted ולא ירוק",
+};
+
+/** ל-`role="alert"` יש בית אחד בלבד: `FormError`. אין חריגים. */
+const ALERT_EXEMPT: Record<string, string> = {
+  "components/ui/message.tsx": "הפרימיטיב עצמו — FormError מוגדר כאן",
 };
 
 describe("פרימיטיב הודעת המצב", () => {
@@ -97,12 +107,21 @@ describe("פרימיטיב הודעת המצב", () => {
    * לשבת בשורה נפרדת מהתגית. `role="alert"` יושב תמיד באותה שורה של התגית,
    * ולכן הוא העוגן היחיד שאין ממנו מנוס.
    */
-  it("אין הודעת מצב שנכתבת ביד", () => {
-    const offenders = scan(/role="(alert|status)"/, Object.keys(MESSAGE_EXEMPT));
+  it("אין הודעת שגיאה שנכתבת ביד", () => {
+    const offenders = scan(/role="alert"/, Object.keys(ALERT_EXEMPT));
 
     expect(
       offenders,
-      `יש להשתמש ב-FormError / FormNotice מ-@/components/ui/field:\n${offenders.join("\n")}`,
+      `יש להשתמש ב-FormError מ-@/components/ui/message:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("אין הודעת מצב שנכתבת ביד", () => {
+    const offenders = scan(/role="status"/, Object.keys(STATUS_EXEMPT));
+
+    expect(
+      offenders,
+      `יש להשתמש ב-FormNotice מ-@/components/ui/message:\n${offenders.join("\n")}`,
     ).toEqual([]);
   });
 

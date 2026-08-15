@@ -3,6 +3,7 @@ import { type MediaView, toMediaView } from "@/lib/media-view";
 import type { TagMessage } from "@/lib/services/tags";
 import { toThreadMessageView } from "@/lib/thread-view";
 import { ThreadBubble } from "./thread-bubble";
+import { CARD_LIST } from "@/lib/ui";
 
 interface TagChatMessagesProps {
   messages: TagMessage[];
@@ -27,7 +28,7 @@ export function TagChatMessages({ messages, token }: TagChatMessagesProps) {
   }
 
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className={CARD_LIST}>
       {messages.map((message) => {
         if (message.kind === "EVENT") {
           return (

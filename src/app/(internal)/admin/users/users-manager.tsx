@@ -7,7 +7,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
 import { createUserAction, setUserActiveAction, updateUserAction } from "../actions";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
 import { FormError } from "@/components/ui/message";
@@ -138,7 +138,7 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
         ) : null}
       </section>
 
-      <ul className="flex flex-col gap-2">
+      <ul className={CARD_LIST}>
         {users.map((user) => (
           <UserItem key={user.id} user={user} disabled={busy} />
         ))}
@@ -219,9 +219,10 @@ function UserItem({ user, disabled }: { user: UserRow; disabled: boolean }) {
 
   return (
     <li className={cardClasses("flex flex-col gap-2")}>
-      <div className="flex items-center justify-between gap-3">
+      {/* פער 33: הפעולות נצמדות לשם (§ Layout), לא לקצה הנגדי. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="font-medium">
+          <span className={RECORD_NAME}>
             {user.name}
             {!user.active ? (
               <span className={chipClasses("danger", "soft", "default", "ms-2")}>

@@ -7,7 +7,7 @@ import { he } from "@/lib/he";
 import { getTagDetail } from "@/lib/services/tags";
 import { TagAccessControl } from "./tag-access-control";
 import { TagChatBox } from "./tag-chat-box";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, ROW_LIST} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
 
@@ -56,12 +56,12 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         {detail.tickets.length === 0 ? (
           <p className="text-sm text-muted">{he.tag.ticketsEmpty}</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className={ROW_LIST}>
             {detail.tickets.map((ticket) => (
               <li key={ticket.id}>
                 <Link
                   href={`/tickets/${ticket.id}`}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-bg p-3 text-sm"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-bg p-3 text-sm"
                 >
                   <span>
                     {he.ticket.location(ticket.buildingName, ticket.apartmentNumber) ||

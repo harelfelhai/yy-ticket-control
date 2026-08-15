@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { useAction } from "@/lib/use-action";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { TITLE_DESCRIPTIVE, ROW_LIST} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
 import {
@@ -79,7 +79,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
       {granted.length === 0 ? (
         <p className="text-sm text-muted">{he.tag.accessNobody}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className={ROW_LIST}>
           {granted.map((contractor) => (
             <li key={contractor.id} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">

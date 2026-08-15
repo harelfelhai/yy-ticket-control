@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { useId, useRef, useState } from "react";
 import { confirmUploadAction, registerMediaAction } from "@/app/media-actions";
 import { Button } from "@/components/ui/button";
+import { FormError } from "@/components/ui/message";
 import { he } from "@/lib/he";
 import { mediaKind } from "@/lib/media-view";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -302,11 +303,10 @@ export function MediaPicker({
         )}
       </div>
 
-      {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
-          {error}
-        </p>
-      ) : null}
+      {/* פער 31: כאן ישב העתק תו-בתו של `FormError`. הוא חמק מהאוכף כי
+          ההחרגה ניתנה לקובץ כולו בשביל מונה ההעלאה (`role="status"`) —
+          החרגה שהייתה רחבה מנימוקה. האוכף צומצם לתפקיד, לא לקובץ. */}
+      {error ? <FormError>{error}</FormError> : null}
 
       {cameraOpen ? (
         <CameraCapture

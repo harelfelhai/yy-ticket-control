@@ -11,7 +11,7 @@ import { unwrapOrThrow } from "@/lib/action-result";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
 import { createProfessionalAction } from "../new/actions";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { TITLE_DESCRIPTIVE, CARD_LIST} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import {
   addRecipientsAction,
@@ -144,7 +144,7 @@ export function RecipientEditor({
       {active.length === 0 ? (
         <p className="text-sm text-muted">{he.reason.noRecipients}</p>
       ) : (
-        <ul aria-label={he.ticket.recipients} className="flex flex-col gap-3">
+        <ul aria-label={he.ticket.recipients} className={CARD_LIST}>
           {active.map((assignment) => (
             <li key={assignment.id} className="flex flex-col gap-2">
               <div className="flex items-center gap-2">

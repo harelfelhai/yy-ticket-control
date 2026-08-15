@@ -12,7 +12,7 @@ import {
   updateProfessionalAction,
 } from "../actions";
 import { DeleteButton } from "@/components/delete-button";
-import { TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { Banner, FormError } from "@/components/ui/message";
 import { chipClasses } from "@/components/ui/chip";
@@ -115,7 +115,7 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
         ) : null}
       </section>
 
-      <ul className="flex flex-col gap-2">
+      <ul className={CARD_LIST}>
         {professionals.map((professional) => (
           <ProfessionalItem key={professional.id} professional={professional} disabled={busy} />
         ))}
@@ -145,10 +145,13 @@ function ProfessionalItem({
   }
 
   if (!editing) {
+    // פער 33: הפעולות נצמדות לשם ואינן נדחפות לקצה הנגדי — § Layout מונה
+    // גם "פעולה" בין מה שמתייחס לכותרת, ו-justify-between השאיר ברוחב
+    // דסקטופ מאות פיקסלים ריקים באמצע השורה.
     return (
-      <li className={cardClasses("flex items-center justify-between gap-3")}>
+      <li className={cardClasses("flex flex-wrap items-center gap-x-3 gap-y-2")}>
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="font-medium">
+          <span className={RECORD_NAME}>
             {professional.name}
             {!professional.active ? (
               <span className={chipClasses("danger", "soft", "default", "ms-2")}>

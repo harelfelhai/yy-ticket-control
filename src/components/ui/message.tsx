@@ -43,11 +43,18 @@ export function FormNotice({ className, children }: MessageProps) {
   );
 }
 
-export type BannerTone = "success" | "warning";
+export type BannerTone = "success" | "warning" | "brand";
 
+/**
+ * ‏`brand` נוסף בסבב 0.4 (פער 34), ומאותה סיבה שבה `quiet` נוסף ל-`Button`
+ * בדיעבד: **וריאנט חסר דוחף כתיבה ידנית.** באנר המיקוד בלוח נכתב ביד עם
+ * `bg-brand/5` — ערך שקיפות שאינו קיים בתקן כלל — ובלי `role`, כלומר אילם
+ * לקורא מסך. השקיפות מיושרת כאן ל-`/10` של שאר הטונים (§ מצבי רקע חלשים).
+ */
 const BANNER_TONES: Record<BannerTone, string> = {
   success: "border-success/30 bg-success/10 text-success",
   warning: "border-warning/30 bg-warning/10 text-warning",
+  brand: "border-brand/30 bg-brand/10 text-brand",
 };
 
 /**

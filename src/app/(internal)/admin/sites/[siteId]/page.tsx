@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { AdminError, listSiteTree } from "@/lib/services/admin";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING } from "@/lib/ui";
+import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, CARD_LIST, ROW_LIST, RECORD_NAME} from "@/lib/ui";
 import { AdminAddForm } from "../../admin-add-form";
 import {
   createApartmentAction,
@@ -69,7 +69,7 @@ export default async function AdminSiteBuildingsPage(
       {buildings.length === 0 ? (
         <EmptyState>{he.admin.noBuildings}</EmptyState>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className={CARD_LIST}>
           {buildings.map((building) => (
             <li key={building.id} className={cardClasses("flex flex-col gap-2")}>
               {/*
@@ -108,13 +108,13 @@ export default async function AdminSiteBuildingsPage(
                 {building.apartments.length === 0 ? (
                   <p className="text-sm text-muted">{he.admin.noApartments}</p>
                 ) : (
-                  <ul className="flex flex-col gap-2">
+                  <ul className={ROW_LIST}>
                     {building.apartments.map((apartment) => (
                       <li
                         key={apartment.id}
                         className="flex flex-wrap items-center gap-x-3 gap-y-2"
                       >
-                        <span className="font-medium">
+                        <span className={RECORD_NAME}>
                           {he.directory.apartment} {apartment.number}
                         </span>
                         {apartment.residentName ? (

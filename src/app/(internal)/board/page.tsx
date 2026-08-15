@@ -18,6 +18,7 @@ import type { BoardSection } from "@/lib/ticket-status";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { BoardFilters } from "./board-filters";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Banner } from "@/components/ui/message";
 
 export const metadata = { title: `${he.board.title} — ${he.app.name}` };
 
@@ -137,14 +138,18 @@ export default async function BoardPage(props: PageProps<"/board">) {
 
       {focus && focusCards ? (
         <>
-          <div className="flex items-center justify-between gap-2 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2 text-sm">
-            <span className="font-medium">
-              {focus === "awaiting" ? he.board.focusAwaiting : he.board.focusStale}
-            </span>
-            <Link href={clearFocusHref} className="font-medium text-brand">
+          {/*
+           * פערים 33 ו-34: הבאנר נכתב ביד עם `bg-brand/5` — ערך שקיפות שאינו
+           * קיים בתקן — ובלי `role`, כלומר אילם לקורא מסך. השורש היה **וריאנט
+           * חסר**, ולכן נוסף `brand` ל-`Banner` במקום לחזור על המחלקות.
+           * ‏"הצג הכול" נצמד לטקסט ואינו נדחף לקצה הנגדי (§ Layout).
+           */}
+          <Banner tone="brand" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>{focus === "awaiting" ? he.board.focusAwaiting : he.board.focusStale}</span>
+            <Link href={clearFocusHref} className="underline">
               {he.board.showAll}
             </Link>
-          </div>
+          </Banner>
           {focusCards.length === 0 ? (
             <EmptyState>{he.board.empty}</EmptyState>
           ) : (

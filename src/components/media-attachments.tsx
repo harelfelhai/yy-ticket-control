@@ -1,5 +1,6 @@
 import { he } from "@/lib/he";
 import { type MediaView, mediaKind } from "@/lib/media-view";
+import { ROW_LIST } from "@/lib/ui";
 
 interface MediaAttachmentsProps {
   media: MediaView[];
@@ -21,7 +22,7 @@ export function MediaAttachments({ media }: MediaAttachmentsProps) {
   if (media.length === 0) return null;
 
   return (
-    <ul className="mt-2 flex flex-col gap-2">
+    <ul className={`mt-2 ${ROW_LIST}`}>
       {media.map((file) => (
         <li key={file.id} className="flex flex-col gap-1">
           {renderFile(file)}
