@@ -3,7 +3,15 @@ import { Suspense } from "react";
 import { TicketCard } from "@/components/ticket-card";
 import { TicketTable } from "@/components/ticket-table";
 import { requireUser } from "@/lib/auth";
-import { type BoardCard, groupForTour } from "@/lib/board-view";
+import {
+  type BoardCard,
+  type SortDirection,
+  type SortKey,
+  groupForTour,
+  isSortKey,
+  nextSort,
+  sortCards,
+} from "@/lib/board-view";
 import { he } from "@/lib/he";
 import { type BoardFilters as Filters, getBoard } from "@/lib/services/board";
 import type { BoardSection } from "@/lib/ticket-status";
@@ -57,6 +65,42 @@ export default async function BoardPage(props: PageProps<"/board">) {
    */
   const table = single(params.view) === "table";
 
+  /**
+   * מיון לפי עמודה (הכרעת 0.4, §7 שורה 30).
+   *
+   * ‏`isSortKey` ולא השמה ישירה: הערך מגיע מהכתובת, ומפתח לא מוכר צריך
+   * להיקרא כ"בלי מיון" ולא להפיל את המסך. וכיוון שאינו `desc` נקרא כ-`asc`,
+   * כי `?sort=domain` לבדו הוא קישור סביר שמישהו יכתוב ביד.
+   */
+  const sortKeyParam = single(params.sort);
+  const sort: { key: SortKey; direction: SortDirection } | null = isSortKey(sortKeyParam)
+    ? { key: sortKeyParam, direction: single(params.dir) === "desc" ? "desc" : "asc" }
+    : null;
+
+  /**
+   * הכתובת שאליה מובילה לחיצה על כותרת — המצב הבא במחזור.
+   *
+   * נבנית מהכתובת הנוכחית ולא מאפס, כדי שהמיון לא ימחק מסננים, מצב סיור
+   * או `view=table` עצמו. המצב השלישי **מסיר** את שני הפרמטרים, וזו החזרה
+   * לסדר המערכת.
+   */
+  const sortHref = (key: SortKey): string => {
+    const next = new URLSearchParams();
+    for (const [name, value] of Object.entries(params)) {
+      const one = single(value);
+      if (one && name !== "sort" && name !== "dir") next.set(name, one);
+    }
+
+    const target = nextSort(sort, key);
+    if (target) {
+      next.set("sort", target.key);
+      next.set("dir", target.direction);
+    }
+
+    const query = next.toString();
+    return query ? `/board?${query}` : "/board";
+  };
+
   // צלילה ממוקדת-מדד מתצוגת הבעלים (אפיון מסך 10): "ממתינות למנהל" מציג רק
   // את "דורש ממך", ו"ללא תנועה" רק את המוסלמות. מתעלמים מ-focus במצב סיור.
   const focusParam = single(params.focus);
@@ -104,7 +148,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
           {focusCards.length === 0 ? (
             <EmptyState>{he.board.empty}</EmptyState>
           ) : (
-            <CardList cards={focusCards} table={table} />
+            <CardList cards={focusCards} table={table} sort={sort} sortHref={sortHref} />
           )}
         </>
       ) : total === 0 ? (
@@ -113,12 +157,31 @@ export default async function BoardPage(props: PageProps<"/board">) {
         <TourView
           cards={[...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS]}
           table={table}
+          sort={sort}
+          sortHref={sortHref}
         />
       ) : (
         <>
-          <Section id="ACTION_REQUIRED" cards={board.sections.ACTION_REQUIRED} table={table} />
-          <Section id="WITH_RECIPIENTS" cards={board.sections.WITH_RECIPIENTS} table={table} />
-          <ArchiveSection cards={board.sections.ARCHIVE} table={table} />
+          <Section
+            id="ACTION_REQUIRED"
+            cards={board.sections.ACTION_REQUIRED}
+            table={table}
+            sort={sort}
+            sortHref={sortHref}
+          />
+          <Section
+            id="WITH_RECIPIENTS"
+            cards={board.sections.WITH_RECIPIENTS}
+            table={table}
+            sort={sort}
+            sortHref={sortHref}
+          />
+          <ArchiveSection
+            cards={board.sections.ARCHIVE}
+            table={table}
+            sort={sort}
+            sortHref={sortHref}
+          />
         </>
       )}
 
@@ -157,8 +220,26 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
  * נקודת ההחלפה **היחידה** בין שתי התצוגות. כותרות הקיבוץ, הארכיון המקופל
  * ומצב הסיור עוברים דרכה ולכן אינם יודעים על קיומה של הטבלה כלל.
  */
-function CardList({ cards, table }: { cards: BoardCard[]; table: boolean }) {
-  const asCards = cards.map((card) => <TicketCard key={card.id} card={card} />);
+interface SortProps {
+  sort: { key: SortKey; direction: SortDirection } | null;
+  sortHref: (key: SortKey) => string;
+}
+
+function CardList({
+  cards,
+  table,
+  sort,
+  sortHref,
+}: { cards: BoardCard[]; table: boolean } & SortProps) {
+  /*
+   * המיון חל על **שתי** התצוגות ולא על הטבלה בלבד.
+   *
+   * הפקד קיים רק בטבלה, אבל `?sort=` נגיש מקישור שנשמר — ובנייד הטבלה
+   * מוחלפת בכרטיסים. אילו הכרטיסים היו מתעלמים מהמיון, אותה כתובת הייתה
+   * מציגה שני סדרים שונים בלי לומר זאת. זו רשימה אחת, וסדר אחד.
+   */
+  const ordered = sortCards(cards, sort);
+  const asCards = ordered.map((card) => <TicketCard key={card.id} card={card} />);
   if (!table) return <>{asCards}</>;
 
   /*
@@ -175,7 +256,7 @@ function CardList({ cards, table }: { cards: BoardCard[]; table: boolean }) {
   return (
     <>
       <div className="hidden md:block">
-        <TicketTable cards={cards} />
+        <TicketTable cards={ordered} sort={sort} sortHref={sortHref} />
       </div>
       <div className="flex flex-col gap-3 md:hidden">{asCards}</div>
     </>
@@ -186,11 +267,13 @@ function Section({
   id,
   cards,
   table,
+  sort,
+  sortHref,
 }: {
   id: Exclude<BoardSection, "ARCHIVE">;
   cards: BoardCard[];
   table: boolean;
-}) {
+} & SortProps) {
   return (
     <section className="flex flex-col gap-3">
       {/* כותרת דביקה: בגלילה ארוכה המשתמש תמיד יודע באיזו קבוצה הוא נמצא. */}
@@ -200,13 +283,18 @@ function Section({
       {cards.length === 0 ? (
         <p className="px-1 text-sm text-muted">{he.board.emptySection}</p>
       ) : (
-        <CardList cards={cards} table={table} />
+        <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} />
       )}
     </section>
   );
 }
 
-function ArchiveSection({ cards, table }: { cards: BoardCard[]; table: boolean }) {
+function ArchiveSection({
+  cards,
+  table,
+  sort,
+  sortHref,
+}: { cards: BoardCard[]; table: boolean } & SortProps) {
   if (cards.length === 0) return null;
 
   return (
@@ -215,13 +303,18 @@ function ArchiveSection({ cards, table }: { cards: BoardCard[]; table: boolean }
         <SectionHeading label={he.boardSection.ARCHIVE} count={cards.length} />
       </summary>
       <div className="mt-2 flex flex-col gap-2">
-        <CardList cards={cards} table={table} />
+        <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} />
       </div>
     </details>
   );
 }
 
-function TourView({ cards, table }: { cards: BoardCard[]; table: boolean }) {
+function TourView({
+  cards,
+  table,
+  sort,
+  sortHref,
+}: { cards: BoardCard[]; table: boolean } & SortProps) {
   const { drafts, groups } = groupForTour(cards);
 
   return (
@@ -231,7 +324,7 @@ function TourView({ cards, table }: { cards: BoardCard[]; table: boolean }) {
           <h2 className={TITLE_DESCRIPTIVE}>
             <SectionHeading label={he.board.tourDrafts} count={drafts.length} />
           </h2>
-          <CardList cards={drafts} table={table} />
+          <CardList cards={drafts} table={table} sort={sort} sortHref={sortHref} />
         </section>
       ) : null}
 
@@ -240,7 +333,7 @@ function TourView({ cards, table }: { cards: BoardCard[]; table: boolean }) {
           <h2 className={`sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 ${TITLE_DESCRIPTIVE}`}>
             <SectionHeading label={group.label} count={group.cards.length} />
           </h2>
-          <CardList cards={group.cards} table={table} />
+          <CardList cards={group.cards} table={table} sort={sort} sortHref={sortHref} />
         </section>
       ))}
     </div>

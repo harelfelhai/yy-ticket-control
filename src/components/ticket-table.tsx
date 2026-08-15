@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { TicketStatusChip } from "@/components/status-chip";
-import type { BoardCard } from "@/lib/board-view";
+import type { BoardCard, SortDirection, SortKey } from "@/lib/board-view";
 import { he } from "@/lib/he";
 
 /**
@@ -26,23 +26,46 @@ import { he } from "@/lib/he";
  */
 const COLUMNS = "grid-cols-[3rem_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.4fr)_7rem_5rem]";
 
-export function TicketTable({ cards }: { cards: BoardCard[] }) {
+export interface SortState {
+  key: SortKey;
+  direction: SortDirection;
+}
+
+interface TicketTableProps {
+  cards: BoardCard[];
+  /** המיון הפעיל, או `null` כשהלוח בסדר המערכת */
+  sort: SortState | null;
+  /** הכתובת שאליה מובילה לחיצה על כותרת — המצב הבא במחזור */
+  sortHref: (key: SortKey) => string;
+}
+
+const HEADERS: { key: SortKey; label: string; numeric?: boolean }[] = [
+  { key: "seq", label: "#", numeric: true },
+  { key: "location", label: he.board.columnLocation },
+  { key: "domain", label: he.board.columnDomain },
+  { key: "reason", label: he.board.columnReason },
+  { key: "recipients", label: he.board.columnRecipients },
+  { key: "status", label: he.board.columnStatus },
+];
+
+export function TicketTable({ cards, sort, sortHref }: TicketTableProps) {
   return (
     <div className="flex flex-col">
-      {/* שורת הכותרות אינה קישור ואינה נסרקת כשורה — ולכן `aria-hidden`:
-          לקורא מסך כל קישור נושא ממילא את הטקסט המלא של השורה. */}
-      <div
-        aria-hidden
-        className={`grid ${COLUMNS} items-center gap-x-3 border-b border-border px-3 py-2 text-sm font-semibold text-muted`}
-      >
-        <span dir="ltr" className="text-end">
-          #
-        </span>
-        <span>{he.board.columnLocation}</span>
-        <span>{he.board.columnDomain}</span>
-        <span>{he.board.columnReason}</span>
-        <span>{he.board.columnRecipients}</span>
-        <span>{he.board.columnStatus}</span>
+      {/*
+       * שורת הכותרות **אינה `aria-hidden` יותר** (0.4). כל עוד היא הייתה
+       * תוויות בלבד היא הוסתרה מעץ הנגישות, כי כל שורה היא קישור שנושא
+       * ממילא את הטקסט המלא. מרגע שהיא ממיינת היא פקד — והסתרתה הייתה
+       * מוציאה יכולת שלמה ממשתמשי מקלדת וקורא מסך.
+       */}
+      <div className={`grid ${COLUMNS} items-center gap-x-3 border-b border-border px-3`}>
+        {HEADERS.map((header) => (
+          <SortHeader
+            key={header.key}
+            header={header}
+            state={sort?.key === header.key ? sort.direction : null}
+            href={sortHref(header.key)}
+          />
+        ))}
       </div>
 
       <ul className="flex flex-col">
@@ -53,6 +76,46 @@ export function TicketTable({ cards }: { cards: BoardCard[] }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * כותרת עמודה שממיינת — קישור, לא כפתור.
+ *
+ * המיון משנה את הכתובת, כלומר זו ניווט: הקישור שומר על הטבלה כרכיב שרת,
+ * עובד בלי JS, ותומך בפתיחה בלשונית ובכפתור "אחורה".
+ *
+ * **בלי `aria-sort`.** התכונה חוקית רק על `columnheader`, ולטבלה הזו אין
+ * תפקידי טבלה כלל — `role="row"` היה דורס את תפקיד הקישור בשורות. ‏`aria-sort`
+ * בלי `columnheader` הוא ARIA שמשקר, וזה גרוע מ-ARIA שחסר. המצב נמסר בטקסט
+ * ‏`sr-only`: מה שנכון עכשיו וגם מה שהלחיצה תעשה.
+ */
+function SortHeader({
+  header,
+  state,
+  href,
+}: {
+  header: (typeof HEADERS)[number];
+  state: SortDirection | null;
+  href: string;
+}) {
+  const caret = state === "asc" ? "▲" : state === "desc" ? "▼" : "";
+  const spoken =
+    state === "asc" ? he.board.sortedAsc : state === "desc" ? he.board.sortedDesc : he.board.sortNone;
+
+  return (
+    <Link
+      href={href}
+      // ‏`min-h-11` ככל דבר לחיץ. שורת הכותרות מתגבהת בהתאם, וזה נכון:
+      // היא הפכה לשורת פקדים ולא תוויות.
+      className={`flex min-h-11 items-center gap-1 text-sm font-semibold text-muted ${
+        header.numeric ? "justify-end" : ""
+      }`}
+    >
+      <span dir={header.numeric ? "ltr" : undefined}>{header.label}</span>
+      <span aria-hidden>{caret}</span>
+      <span className="sr-only">{spoken}</span>
+    </Link>
   );
 }
 

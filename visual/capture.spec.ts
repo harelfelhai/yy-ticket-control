@@ -135,6 +135,12 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toBeVisible();
   await shot(page, device, "03c-board-table");
 
+  // המצב הממוין (0.4) — החץ בכותרת הוא הרמז החזותי היחיד שהמיון פעיל,
+  // ובלי הצילום הזה איש אינו רואה אותו עד שמישהו לוחץ בשטח.
+  await page.goto("/board?view=table&sort=domain&dir=asc");
+  await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toBeVisible();
+  await shot(page, device, "03d-board-table-sorted");
+
   // הלוח המסונן — המצב היחיד שבו רצועת המסננים פרושה בנייד. בלי הצילום הזה
   // הפריסה של הרצועה הפתוחה אינה נראית לאיש עד שמשתמש נתקל בה.
   await page.goto("/board?direction=opened");

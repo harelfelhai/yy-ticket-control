@@ -224,4 +224,45 @@ test.describe("תצוגת טבלה", () => {
       page.getByRole("link").filter({ hasText: "נשלח, טרם נצפה" }).first(),
     ).toBeVisible();
   });
+
+  test("מיון לפי עמודה, ולחיצה שלישית מחזירה לסדר המערכת", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "הפקד קיים רק בטבלה, והיא דסקטופ בלבד");
+
+    await page.goto("/board?view=table");
+
+    // ‏`.first()`: לכל קבוצה שורת כותרות משלה — הטבלה מקובצת.
+    const header = page.getByRole("link", { name: /^תחום/ }).first();
+
+    await header.click();
+    await expect(page).toHaveURL(/sort=domain&dir=asc/);
+
+    await page.getByRole("link", { name: /^תחום/ }).first().click();
+    await expect(page).toHaveURL(/sort=domain&dir=desc/);
+
+    /*
+     * הלחיצה השלישית היא כל העניין: בלעדיה המיון הוא דלת חד-כיוונית
+     * שמבטלת את דירוג הדחיפות ואינה מציעה דרך חזרה (§7 שורה 30).
+     */
+    await page.getByRole("link", { name: /^תחום/ }).first().click();
+    await expect(page).not.toHaveURL(/sort=/);
+    // והתצוגה נשארת טבלה — המיון התאפס, לא המסך.
+    await expect(page).toHaveURL(/view=table/);
+  });
+
+  test("המיון אינו מוחק את שאר מצב הלוח", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "הפקד קיים רק בטבלה");
+
+    await page.goto("/board?view=table&direction=opened");
+    await page.getByRole("link", { name: /^מיקום/ }).first().click();
+
+    // מסנן שנמחק בלחיצה על כותרת נקרא כאובדן נתונים.
+    await expect(page).toHaveURL(/direction=opened/);
+    await expect(page).toHaveURL(/view=table/);
+  });
+
+  test("כתובת עם מיון לא מוכר נקראת כ'בלי מיון' ואינה מפילה את המסך", async ({ page }) => {
+    await page.goto("/board?view=table&sort=צבע&dir=desc");
+    await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toBeVisible();
+  });
 });
+
