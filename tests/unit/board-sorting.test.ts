@@ -51,8 +51,8 @@ describe("nextSort — המחזור התלת-מצבי", () => {
   it("לחיצה על עמודה אחרת מתחילה מחדש בעולה ואינה יורשת כיוון", () => {
     // ירידה שנגררת לעמודה חדשה נקראת כתקלה: המשתמש לחץ פעם אחת וקיבל
     // סדר הפוך בלי שביקש.
-    expect(nextSort({ key: "domain", direction: "desc" }, "status")).toEqual({
-      key: "status",
+    expect(nextSort({ key: "domain", direction: "desc" }, "location")).toEqual({
+      key: "location",
       direction: "asc",
     });
   });
@@ -65,15 +65,9 @@ describe("sortCards", () => {
   });
 
   it("אינו משנה את המערך המקורי", () => {
-    const cards = [card({ seq: 3 }), card({ seq: 1 })];
-    sortCards(cards, { key: "seq", direction: "asc" });
+    const cards = [card({ seq: 3, domainName: "ריצוף" }), card({ seq: 1, domainName: "חשמל" })];
+    sortCards(cards, { key: "domain", direction: "asc" });
     expect(seqs(cards)).toEqual([3, 1]);
-  });
-
-  it("ממיין לפי מספר פנייה בשני הכיוונים", () => {
-    const cards = [card({ seq: 3 }), card({ seq: 1 }), card({ seq: 2 })];
-    expect(seqs(sortCards(cards, { key: "seq", direction: "asc" }))).toEqual([1, 2, 3]);
-    expect(seqs(sortCards(cards, { key: "seq", direction: "desc" }))).toEqual([3, 2, 1]);
   });
 
   it("מיון מיקום הוא בניין ואז דירה, ודירה 10 באה אחרי דירה 2", () => {
@@ -83,18 +77,6 @@ describe("sortCards", () => {
       card({ seq: 3, buildingName: "אבן גבירול", apartmentNumber: "5" }),
     ];
     expect(seqs(sortCards(cards, { key: "location", direction: "asc" }))).toEqual([3, 2, 1]);
-  });
-
-  it("מיון סטטוס הוא לפי דחיפות ולא לפי אלפבית", () => {
-    // "ממתין לאישור" גובר על "נצפה" — אותה קדימות שבה `deriveTicketStatus`
-    // בודק, ולא סדר אלפביתי של שמות הסטטוסים.
-    const cards = [
-      card({ seq: 1, status: "CLOSED" }),
-      card({ seq: 2, status: "VIEWED" }),
-      card({ seq: 3, status: "AWAITING_OPENER_APPROVAL" }),
-      card({ seq: 4, status: "DRAFT" }),
-    ];
-    expect(seqs(sortCards(cards, { key: "status", direction: "asc" }))).toEqual([4, 3, 2, 1]);
   });
 
   it("ערך ריק יורד לסוף בשני הכיוונים", () => {
@@ -117,22 +99,46 @@ describe("sortCards", () => {
     expect(seqs(sortCards(cards, { key: "domain", direction: "asc" }))).toEqual([7, 3, 5]);
   });
 
-  it("ממיין לפי נמענים ולפי סיבה", () => {
+  it("ממיין לפי נמענים ולפי תיאור", () => {
     const byRecipients = [
       card({ seq: 1, recipientNames: ["רון"] }),
       card({ seq: 2, recipientNames: ["אבי", "בני"] }),
     ];
     expect(seqs(sortCards(byRecipients, { key: "recipients", direction: "asc" }))).toEqual([2, 1]);
 
-    const byReason = [card({ seq: 1, reason: "ללא תנועה" }), card({ seq: 2, reason: "דוד מטפל" })];
-    expect(seqs(sortCards(byReason, { key: "reason", direction: "asc" }))).toEqual([2, 1]);
+    const byDescription = [
+      card({ seq: 1, descriptionLine: "נזילה במטבח" }),
+      card({ seq: 2, descriptionLine: "אין חשמל בסלון" }),
+    ];
+    expect(seqs(sortCards(byDescription, { key: "description", direction: "asc" }))).toEqual([
+      2, 1,
+    ]);
+  });
+
+  it("פנייה בלי תיאור יורדת לסוף בשני הכיוונים", () => {
+    // המקרה השכיח הוא **טיוטה**: היא נשמרת לפני שנכתב תיאור, וסדר יורד
+    // שהיה מקפיץ אותה לראש היה ממלא את ראש הטבלה בשורות ריקות.
+    const cards = [
+      card({ seq: 1, descriptionLine: "" }),
+      card({ seq: 2, descriptionLine: "נזילה" }),
+      card({ seq: 3, descriptionLine: "אריח שבור" }),
+    ];
+    expect(seqs(sortCards(cards, { key: "description", direction: "asc" }))).toEqual([3, 2, 1]);
+    expect(seqs(sortCards(cards, { key: "description", direction: "desc" }))).toEqual([2, 3, 1]);
   });
 });
 
 describe("isSortKey — מה שמגיע מהכתובת אינו נאמן", () => {
   it("מקבל מפתח מוכר ודוחה כל דבר אחר", () => {
-    expect(isSortKey("status")).toBe(true);
+    expect(isSortKey("location")).toBe(true);
     expect(isSortKey("צבע")).toBe(false);
     expect(isSortKey(undefined)).toBe(false);
+  });
+
+  it("מפתח שירד ב-0.5 נקרא כ'בלי מיון' ולא מפיל את המסך", () => {
+    // קישור שנשמר לפני 0.5 עדיין נושא `?sort=seq` או `?sort=status`.
+    expect(isSortKey("seq")).toBe(false);
+    expect(isSortKey("status")).toBe(false);
+    expect(isSortKey("reason")).toBe(false);
   });
 });

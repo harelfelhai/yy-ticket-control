@@ -7,7 +7,6 @@ import {
   type BoardCard,
   type SortDirection,
   type SortKey,
-  groupForTour,
   isSortKey,
   nextSort,
   sortCards,
@@ -53,7 +52,6 @@ export default async function BoardPage(props: PageProps<"/board">) {
   };
 
   const board = await getBoard(user, filters, new Date());
-  const tour = single(params.tour) === "1";
 
   /**
    * תצוגת טבלה (אפיון מסך 1, הכרעת 0.3 §7 שורה 28).
@@ -81,8 +79,8 @@ export default async function BoardPage(props: PageProps<"/board">) {
   /**
    * הכתובת שאליה מובילה לחיצה על כותרת — המצב הבא במחזור.
    *
-   * נבנית מהכתובת הנוכחית ולא מאפס, כדי שהמיון לא ימחק מסננים, מצב סיור
-   * או `view=table` עצמו. המצב השלישי **מסיר** את שני הפרמטרים, וזו החזרה
+   * נבנית מהכתובת הנוכחית ולא מאפס, כדי שהמיון לא ימחק מסננים או את
+   * `view=table` עצמו. המצב השלישי **מסיר** את שני הפרמטרים, וזו החזרה
    * לסדר המערכת.
    */
   const sortHref = (key: SortKey): string => {
@@ -103,14 +101,9 @@ export default async function BoardPage(props: PageProps<"/board">) {
   };
 
   // צלילה ממוקדת-מדד מתצוגת הבעלים (אפיון מסך 10): "ממתינות למנהל" מציג רק
-  // את "דורש ממך", ו"ללא תנועה" רק את המוסלמות. מתעלמים מ-focus במצב סיור.
+  // את "דורש ממך", ו"ללא תנועה" רק את המוסלמות.
   const focusParam = single(params.focus);
-  const focus =
-    !tour && focusParam === "awaiting"
-      ? "awaiting"
-      : !tour && focusParam === "stale"
-        ? "stale"
-        : null;
+  const focus = focusParam === "awaiting" ? "awaiting" : focusParam === "stale" ? "stale" : null;
   const focusCards =
     focus === "awaiting"
       ? board.sections.ACTION_REQUIRED
@@ -158,13 +151,6 @@ export default async function BoardPage(props: PageProps<"/board">) {
         </>
       ) : total === 0 ? (
         <EmptyState>{he.board.empty}</EmptyState>
-      ) : tour ? (
-        <TourView
-          cards={[...board.sections.ACTION_REQUIRED, ...board.sections.WITH_RECIPIENTS]}
-          table={table}
-          sort={sort}
-          sortHref={sortHref}
-        />
       ) : (
         <>
           <Section
@@ -222,8 +208,8 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
 /**
  * רשימת הפניות בקבוצה אחת, בתצוגה שנבחרה.
  *
- * נקודת ההחלפה **היחידה** בין שתי התצוגות. כותרות הקיבוץ, הארכיון המקופל
- * ומצב הסיור עוברים דרכה ולכן אינם יודעים על קיומה של הטבלה כלל.
+ * נקודת ההחלפה **היחידה** בין שתי התצוגות. כותרות הקיבוץ והארכיון המקופל
+ * עוברים דרכה ולכן אינם יודעים על קיומה של הטבלה כלל.
  */
 interface SortProps {
   sort: { key: SortKey; direction: SortDirection } | null;
@@ -311,36 +297,5 @@ function ArchiveSection({
         <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} />
       </div>
     </details>
-  );
-}
-
-function TourView({
-  cards,
-  table,
-  sort,
-  sortHref,
-}: { cards: BoardCard[]; table: boolean } & SortProps) {
-  const { drafts, groups } = groupForTour(cards);
-
-  return (
-    <div className="flex flex-col gap-4">
-      {drafts.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h2 className={TITLE_DESCRIPTIVE}>
-            <SectionHeading label={he.board.tourDrafts} count={drafts.length} />
-          </h2>
-          <CardList cards={drafts} table={table} sort={sort} sortHref={sortHref} />
-        </section>
-      ) : null}
-
-      {groups.map((group) => (
-        <section key={group.key} className="flex flex-col gap-2">
-          <h2 className={`sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 ${TITLE_DESCRIPTIVE}`}>
-            <SectionHeading label={group.label} count={group.cards.length} />
-          </h2>
-          <CardList cards={group.cards} table={table} sort={sort} sortHref={sortHref} />
-        </section>
-      ))}
-    </div>
   );
 }

@@ -25,6 +25,16 @@ function pngFile(name: string) {
 }
 
 /**
+ * ‏WebM אודיו מינימלי — מספיק כדי שהשרת יסווג את הקובץ כאודיו.
+ *
+ * העתק של הקבוע ב-`conformance/specs/br-edge-cases.spec.ts`, ובכוונה: שתי
+ * חבילות הבדיקות אינן מייבאות זו מזו, וקובץ משותף ביניהן היה קושר את
+ * ההתאמה-לאפיון ל-E2E.
+ */
+const WEBM_BASE64 =
+  "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwEAAAAAAAHTEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHGTbuMU6uEElTDZ1OsggEXTbuMU6uEHFO7a1OsggG97AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+/**
  * שדה הקובץ מוסתר ומופעל מכפתור, ולכן אין לו שם נגיש לבחור לפיו.
  * הבחירה לפי `accept` מבדילה אותו משדה המצלמה שלצדו.
  */
@@ -233,6 +243,44 @@ test("קבלן מגיב בתמונה בלי לכתוב מילה", async ({ page 
   await page.goto("/board");
   await page.getByRole("link").filter({ hasText: description }).click();
   await expect(page.getByRole("img", { name: "fixed.png" })).toBeVisible();
+});
+
+/**
+ * הדיווח מהשטח: "שלחתי הקלטה, ובצ׳אט רואים שלוש נקודות".
+ *
+ * שלוש הנקודות הן כפתור ה-overflow של נגן Chrome — הפקד היחיד ששורד כשהנגן
+ * נדחס. הבועה מתכווצת לתוכן, ובהודעה בלי טקסט ובלי תמלול הילד הרחב ביותר בה
+ * הוא חותמת השעה; נגן ב-`w-full` נמתח ל-100% ממנה, כלומר ל-~45px.
+ *
+ * **נמדד רוחב ולא `toBeVisible()`.** נגן ברוחב 45px הוא "גלוי" לכל דבר, וזו
+ * בדיוק הסיבה ש-`br-edge-cases.spec.ts:216` עבר בירוק על הבאג הזה — ובנוסף
+ * הוא שולח את ההקלטה **יחד עם טקסט**, שמותח את הבועה ומסתיר את התופעה.
+ */
+test("הקלטה בלי טקסט נראית כהקלטה: תווית בעברית ונגן ברוחב מלא", async ({ page }) => {
+  const stamp = Date.now();
+
+  await loginAsManager(page);
+  await openTicketWithContractor(page, stamp);
+
+  await fileInput(page).setInputFiles({
+    name: "הקלטה קולית.webm",
+    mimeType: "audio/webm",
+    buffer: Buffer.from(WEBM_BASE64, "base64"),
+  });
+  await expect(page.getByText("מעלה…")).toHaveCount(0);
+
+  // שדה התגובה נשאר ריק — זה כל התרחיש.
+  await page.getByRole("button", { name: "שלח", exact: true }).click();
+
+  const thread = page.getByRole("region", { name: "שרשור" });
+  const player = thread.locator("audio");
+  await expect(player).toBeVisible();
+
+  // התווית על המסך, ולא רק בעץ הנגישות.
+  await expect(thread.getByText("הקלטה קולית", { exact: true })).toBeVisible();
+
+  const box = await player.boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThan(200);
 });
 
 test("קובץ בגודל אמיתי עובר במלואו", async ({ page }) => {

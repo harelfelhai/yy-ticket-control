@@ -15,7 +15,7 @@ import { FilterBar, FilterDate, FilterSelect } from "@/components/ui/filter-bar"
 
 function renderBar(activeCount = 0) {
   return render(
-    <FilterBar activeCount={activeCount} trailing={<button type="button">מצב סיור</button>}>
+    <FilterBar activeCount={activeCount} trailing={<button type="button">טבלה</button>}>
       <FilterSelect aria-label="בניין">
         <option value="">כל הבניינים</option>
       </FilterSelect>
@@ -87,7 +87,7 @@ describe("FilterBar", () => {
 
   it("‏trailing מרונדר פעם אחת בלבד — כפילות הייתה שוברת חיפוש לפי תפקיד", () => {
     renderBar(0);
-    expect(screen.getAllByRole("button", { name: "מצב סיור" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "טבלה" })).toHaveLength(1);
   });
 });
 

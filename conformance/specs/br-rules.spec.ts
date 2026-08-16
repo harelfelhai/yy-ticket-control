@@ -188,28 +188,9 @@ test.describe("§4 מסך 1 — הלוח מסביר את עצמו", () => {
     await expect(page.getByRole("navigation").getByRole("link", { name: "חיפוש" })).toBeVisible();
   });
 
-  test("S1-10/S1-12 — מצב סיור מקבץ לפי בניין ודירה, והטיוטות נשארות בראש", async ({
-    page,
-  }) => {
-    acceptDialogs(page);
-    await loginAs(page, "managerA");
-    const draftText = uniq("טיוטה-בסיור");
-    await createTicket(page, { description: draftText, saveAsDraft: true });
-
-    const ticketText = uniq("פנייה-בסיור");
-    await createTicket(page, {
-      building: "בניין א",
-      apartment: "1",
-      domain: "חשמל",
-      description: ticketText,
-      recipients: [PROS.full.name],
-    });
-
-    await page.goto("/board?tour=1");
-    await expect(page.getByRole("heading", { name: /^בניין א · דירה 1/ })).toBeVisible();
-    // הטיוטה אינה נכנסת לקיבוץ — אין לה בניין ודירה.
-    await expect(page.getByRole("heading", { name: /^טיוטות להשלמה/ })).toBeVisible();
-    await expect(boardCard(page, draftText)).toBeVisible();
-    await expect(boardCard(page, ticketText)).toBeVisible();
-  });
+  /*
+   * ‏S1-10/S1-11/S1-12 — "מצב סיור" — **בוטלו בהכרעת 0.5**, והבדיקה שאכפה
+   * אותם ישבה כאן. הפיצ'ר הוסר מהמוצר ומהאפיון גם יחד; ראו
+   * `conformance-matrix.md` ו-`ticket-control-pre-plan.md` שורה 206.
+   */
 });

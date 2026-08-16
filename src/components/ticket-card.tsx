@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { TicketStatusChip } from "@/components/status-chip";
 import type { BoardCard } from "@/lib/board-view";
 import { cardClasses } from "@/components/ui/card";
 import { he } from "@/lib/he";
@@ -29,20 +28,17 @@ export function TicketCard({ card }: { card: BoardCard }) {
       className={cardClasses("flex flex-col gap-2", { tone: isDraft ? "dangerOutline" : "default" })}
     >
       {/*
-        התג צמוד לכותרת ולא נדחף לקצה הנגדי.
-        עם `justify-between` הוא נצמד לשוליים, וברוחב דסקטופ נותר מאות פיקסלים
-        מהכותרת שהוא מתאר — העין אינה קושרת ביניהם. `flex-wrap` שומר עליו צמוד
-        בכל רוחב, ומעביר אותו לשורה משלו רק כשהכותרת באמת ארוכה מדי.
+        צ׳יפ הסטטוס ירד מכאן ב-0.5, יחד עם עמודת הסטטוס בטבלה: שלוש כותרות
+        הקיבוץ של הלוח כבר מבטאות את אותה חלוקה, ושורת הסיבה שמתחת אומרת
+        במילים את מה שהצ׳יפ אמר בצבע. הוא נשאר במסך הפנייה, שם הוא המידע
+        ולא חזרה עליו.
       */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="font-semibold">
-          {location || he.ticket.noLocation}
-          {card.domainName ? (
-            <span className="font-normal text-muted"> · {card.domainName}</span>
-          ) : null}
-        </span>
-        <TicketStatusChip status={card.status} />
-      </div>
+      <span className="font-semibold">
+        {location || he.ticket.noLocation}
+        {card.domainName ? (
+          <span className="font-normal text-muted"> · {card.domainName}</span>
+        ) : null}
+      </span>
 
       {card.descriptionLine ? (
         <p className="truncate text-sm">{card.descriptionLine}</p>

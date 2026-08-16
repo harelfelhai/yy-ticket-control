@@ -6,7 +6,7 @@ import { openFilters } from "./helpers";
  * הלוח הראשי — המסך שמנהל העבודה פותח בבוקר.
  *
  * הבדיקות מתמקדות במה שהאפיון מדגיש: רשימה אחת עם כותרות קיבוץ ולא טאבים,
- * טקסט סיבה על כל כרטיס, ומצב סיור שמקבץ לפי דירה.
+ * וטקסט סיבה על כל כרטיס.
  */
 
 async function login(page: Page) {
@@ -91,17 +91,6 @@ test.describe("הלוח הראשי", () => {
     await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
   });
 
-  test("מצב סיור מקבץ לפי בניין ודירה", async ({ page }) => {
-    await createTicket(page, "1");
-    await createTicket(page, "2");
-
-    await page.goto("/board");
-    await page.getByRole("checkbox", { name: "מצב סיור" }).check();
-
-    await expect(page.getByRole("heading", { name: /בניין א · דירה 1/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /בניין א · דירה 2/ })).toBeVisible();
-  });
-
   test("מצב הסינון נשמר בכתובת, כך שחזרה למסך משמרת אותו", async ({ page }) => {
     await page.goto("/board");
     await openFilters(page);
@@ -125,7 +114,13 @@ test.describe("הלוח הראשי", () => {
       // שישה בוררים גלויים תפסו כשליש מהמסך הראשון של הלוח.
       await expect(toggle).toBeVisible();
       await expect(filter).toBeHidden();
-      await expect(page.getByRole("checkbox", { name: "מצב סיור" })).toBeVisible();
+      /*
+       * עד 0.5 ישבה כאן גם הטענה ש"מצב סיור" נשאר גלוי — הפקד היחיד
+       * ב-`trailing` שהיה גלוי בנייד תמיד. עם הסרתו `trailing` בנייד ריק
+       * ברוב הזמן (מתג הטבלה מוסתר מתחת ל-`md`, ו"נקה מסננים" מותנה
+       * במסנן פעיל), ולכן הכלל "מה שאינו מסנן אינו מתקפל" נאכף מעכשיו
+       * ב-`tests/unit/filter-bar.test.tsx` בלבד.
+       */
     } else {
       await expect(toggle).toBeHidden();
       await expect(filter).toBeVisible();
@@ -177,7 +172,12 @@ test.describe("תצוגת טבלה", () => {
     // כותרות העמודות מוצגות. `.first()` בכוונה: לכל קבוצה שורת כותרות
     // משלה — הטבלה מקובצת, ואינה טבלה אחת עם כותרת אחת בראש המסך.
     await expect(page.getByText("מיקום", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("סיבה", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("תיאור", { exact: true }).first()).toBeVisible();
+
+    // ושתי העמודות שירדו ב-0.5 אינן חוזרות בשקט: "#" הוא מזהה במסד שאינו
+    // אומר דבר בסריקה, והסטטוס הוא חזרה על כותרת הקיבוץ שמעל.
+    await expect(page.getByText("#", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("סטטוס", { exact: true })).toHaveCount(0);
 
     // השורה היא קישור אחד לפנייה — ולא תא בתוך טבלה.
     const row = page.getByRole("link").filter({ hasText: "בניין א · דירה 1" }).first();

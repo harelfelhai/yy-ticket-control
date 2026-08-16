@@ -18,11 +18,11 @@ interface BoardFiltersProps {
   tags: Option[];
 }
 
-/** הפרמטרים שנחשבים סינון. `tour` ו-`focus` הם מצב תצוגה ולא נספרים כאן. */
+/** הפרמטרים שנחשבים סינון. `view` ו-`focus` הם מצב תצוגה ולא נספרים כאן. */
 const FILTER_PARAMS = ["direction", "site", "building", "domain", "recipient", "tag"];
 
 /**
- * רצועת המסננים ומתג "מצב סיור".
+ * רצועת המסננים של הלוח.
  *
  * המצב נשמר ב-URL ולא ב-state מקומי, משלוש סיבות מעשיות: כניסה חוזרת
  * למסך אחרי צפייה בפנייה משמרת את התצוגה, אפשר לשלוח קישור למסונן, וכפתור
@@ -45,13 +45,12 @@ export function BoardFilters({ sites, buildings, domains, recipients, tags }: Bo
    * ‏defaultValue יחד עם key, ולא value מבוקר.
    *
    * הפקדים נשלטים על ידי ה-URL, והניווט אינו מיידי. פקד מבוקר היה נשאר
-   * במצב הישן עד שהשרת מחזיר תשובה — המשתמש לוחץ על "מצב סיור" ורואה את
-   * התיבה נשארת ריקה. עם defaultValue הדפדפן משנה את המצב מיד, וה-key
+   * במצב הישן עד שהשרת מחזיר תשובה — המשתמש בוחר בניין ורואה את הבורר
+   * חוזר לערך הקודם. עם defaultValue הדפדפן משנה את המצב מיד, וה-key
    * מאלץ סנכרון מחדש כשהכתובת באמת מתעדכנת (למשל בלחיצה על "נקה מסננים").
    */
   const syncKey = params.toString();
 
-  const tour = params.get("tour") === "1";
   const table = params.get("view") === "table";
   const activeCount = FILTER_PARAMS.filter((key) => params.get(key)).length;
 
@@ -76,17 +75,6 @@ export function BoardFilters({ sites, buildings, domains, recipients, tags }: Bo
           >
             {table ? he.board.viewCards : he.board.viewTable}
           </Button>
-
-          <label className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm">
-            <input
-              key={`tour-${syncKey}`}
-              type="checkbox"
-              defaultChecked={tour}
-              onChange={(e) => update("tour", e.target.checked ? "1" : "")}
-              className="size-5"
-            />
-            {he.board.tourMode}
-          </label>
 
           {activeCount > 0 ? (
             <Button variant="quiet" size="compact" onClick={() => router.replace(pathname)}>

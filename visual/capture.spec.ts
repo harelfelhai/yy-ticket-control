@@ -16,6 +16,17 @@ import { E2E_ADMIN } from "../e2e/global-setup";
 
 const OUT = ".visual";
 
+/**
+ * ‏WebM אודיו מינימלי — מספיק כדי שהשרת יסווג את הקובץ כאודיו.
+ *
+ * בלי הקלטה בשרשור, סבב הצילום לא כלל ולו תמונה אחת של נגן אודיו — ולכן
+ * גם סוכן ה-design-review לא היה יכול לראות את הליקוי שדווח מהשטח (הנגן
+ * שהתכווץ לכפתור ⋮). ‏`setInputFiles` ולא `MediaRecorder`: הקלטה אמיתית
+ * דורשת מיקרופון.
+ */
+const WEBM_BASE64 =
+  "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwEAAAAAAAHTEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHGTbuMU6uEElTDZ1OsggEXTbuMU6uEHFO7a1OsggG97AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
 /** תרחישים לצילום: פנייה לכל שילוב שהאפיון מבחין ביניהם. */
 const TICKETS = [
   { building: "בניין א", apartment: "1", domain: "חשמל", text: "אין חשמל בממ״ד, הפאזה קופצת" },
@@ -109,6 +120,19 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
     await createSentTicket(page, spec, index);
   }
   const lastTicketPath = new URL(page.url()).pathname;
+
+  // הודעת הקלטה **בלי טקסט** — המקרה שבו הבועה מתכווצת לתוכן, ולכן המצב
+  // היחיד שבו כדאי לראות את הנגן בצילום.
+  await page
+    .locator('input[type="file"][accept="image/*,application/pdf,video/*"]')
+    .setInputFiles({
+      name: "הקלטה קולית.webm",
+      mimeType: "audio/webm",
+      buffer: Buffer.from(WEBM_BASE64, "base64"),
+    });
+  await expect(page.getByText("מעלה…")).toHaveCount(0);
+  await page.getByRole("button", { name: "שלח", exact: true }).click();
+  await expect(page.getByRole("region", { name: "שרשור" }).locator("audio")).toBeVisible();
 
   // טיוטה: בניין ודירה בלבד. מוצגת בלוח במסגרת אדומה, וזה ההבדל הוויזואלי
   // החד ביותר במערכת — שווה לראות אותו לצד פניות רגילות.

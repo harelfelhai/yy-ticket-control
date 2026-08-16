@@ -4,9 +4,9 @@ import type { BoardSection, DerivedTicketStatus } from "./ticket-status";
 /**
  * צורת הנתונים של הלוח וההיגיון הטהור שפועל עליה.
  *
- * מופרד מ-`services/board.ts` (שמדבר עם ה-DB) בכוונה: הקיבוץ למצב סיור
- * הוא חישוב טהור, ובלי ההפרדה בדיקת יחידה עליו הייתה דורשת חיבור לבסיס
- * נתונים — כלומר לא בדיקת יחידה.
+ * מופרד מ-`services/board.ts` (שמדבר עם ה-DB) בכוונה: המיון הוא חישוב טהור,
+ * ובלי ההפרדה בדיקת יחידה עליו הייתה דורשת חיבור לבסיס נתונים — כלומר לא
+ * בדיקת יחידה.
  */
 
 /** כרטיס פנייה כפי שהוא מוצג ברשימת הלוח */
@@ -30,55 +30,6 @@ export interface BoardCard {
   createdAt: Date;
 }
 
-export interface TourGroup {
-  key: string;
-  label: string;
-  cards: BoardCard[];
-}
-
-/**
- * "מצב סיור": קיבוץ לפי בניין ודירה, למנהל שנמצא פיזית באתר ורוצה לסגור
- * כמה פניות בסיבוב אחד.
- *
- * טיוטות ופניות בלי מיקום מלא נשארות מוצמדות לראש ואינן נכנסות לקיבוץ:
- * הצגתן תחת "ללא מיקום" הייתה קוברת בדיוק את מה שדורש השלמה.
- */
-export function groupForTour(cards: readonly BoardCard[]): {
-  drafts: BoardCard[];
-  groups: TourGroup[];
-} {
-  const drafts: BoardCard[] = [];
-  const byLocation = new Map<string, TourGroup>();
-
-  for (const card of cards) {
-    if (!card.buildingName || !card.apartmentNumber) {
-      drafts.push(card);
-      continue;
-    }
-
-    const key = `${card.buildingName}|${card.apartmentNumber}`;
-    const group = byLocation.get(key);
-    if (group) {
-      group.cards.push(card);
-    } else {
-      byLocation.set(key, {
-        key,
-        label: `${card.buildingName} · דירה ${card.apartmentNumber}`,
-        cards: [card],
-      });
-    }
-  }
-
-  // מיון לפי שם הבניין ואז לפי מספר הדירה, כדי שהסדר יתאים למסלול הפיזי
-  // של מי שמסתובב באתר ולא לסדר שבו הפניות נפתחו. `numeric` נדרש כדי
-  // שדירה 10 תבוא אחרי דירה 2 ולא לפניה.
-  const groups = [...byLocation.values()].sort((a, b) =>
-    a.label.localeCompare(b.label, "he", { numeric: true }),
-  );
-
-  return { drafts, groups };
-}
-
 // ────────────────────────── מיון לפי עמודה (0.4) ──────────────────────────
 
 /**
@@ -87,30 +38,13 @@ export function groupForTour(cards: readonly BoardCard[]): {
  * המפתחות נשמרים בכתובת (`?sort=`), ולכן הם שמות יציבים ולא אינדקסים:
  * הוספת עמודה באמצע לא תשנה את משמעותו של קישור שנשמר.
  */
-export const SORT_KEYS = ["seq", "location", "domain", "reason", "recipients", "status"] as const;
+export const SORT_KEYS = ["location", "domain", "description", "recipients"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export type SortDirection = "asc" | "desc";
 
 export function isSortKey(value: string | undefined): value is SortKey {
   return value !== undefined && (SORT_KEYS as readonly string[]).includes(value);
 }
-
-/**
- * סדר הסטטוסים למיון — לפי **דחיפות**, לא לפי אלפבית.
- *
- * מיון אלפביתי על שם הסטטוס היה מסדר "נצפה" לפני "ממתין לאישור" בלי שום
- * היגיון תפעולי. הסדר כאן הוא אותו סדר שבו `deriveTicketStatus` בודק את
- * המצבים, וזה מכוון: שם הוא מבטא קדימות, וכאן אותה קדימות בדיוק היא מה
- * שהמנהל מצפה לראות בראש.
- */
-const STATUS_ORDER: Record<DerivedTicketStatus, number> = {
-  DRAFT: 0,
-  AWAITING_OPENER_APPROVAL: 1,
-  PARTIAL: 2,
-  NEW: 3,
-  VIEWED: 4,
-  CLOSED: 5,
-};
 
 /** השוואת מחרוזות בעברית. הריקות מטופלת ב-`emptyRank`, לא כאן. */
 function compareText(a: string, b: string): number {
@@ -132,33 +66,25 @@ function emptyRank(key: SortKey, card: BoardCard): number {
       return card.domainName ? 0 : 1;
     case "recipients":
       return card.recipientNames.length > 0 ? 0 : 1;
-    case "reason":
-      return card.reason ? 0 : 1;
-    // ‏seq ו-status קיימים תמיד.
-    default:
-      return 0;
+    case "description":
+      return card.descriptionLine ? 0 : 1;
   }
 }
 
 function compareBy(key: SortKey, a: BoardCard, b: BoardCard): number {
   switch (key) {
-    case "seq":
-      return a.seq - b.seq;
     case "location":
-      // בניין ואז דירה, ו-`numeric` כדי שדירה 10 תבוא אחרי 2 — אותו
-      // שיקול בדיוק כמו בקיבוץ מצב הסיור.
+      // בניין ואז דירה, ו-`numeric` כדי שדירה 10 תבוא אחרי 2 ולא לפניה.
       return (
         compareText(a.buildingName ?? "", b.buildingName ?? "") ||
         compareText(a.apartmentNumber ?? "", b.apartmentNumber ?? "")
       );
     case "domain":
       return compareText(a.domainName ?? "", b.domainName ?? "");
-    case "reason":
-      return compareText(a.reason, b.reason);
+    case "description":
+      return compareText(a.descriptionLine, b.descriptionLine);
     case "recipients":
       return compareText(a.recipientNames.join(", "), b.recipientNames.join(", "));
-    case "status":
-      return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
   }
 }
 

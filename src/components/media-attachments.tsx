@@ -66,14 +66,36 @@ function renderFile(file: MediaView) {
         </video>
       );
 
-    case "audio":
-      // ‏controls ולא נגן משלנו: נגן הדפדפן נגיש, מוכר, ועובד גם כשה-JS
-      // של האפליקציה עוד לא נטען.
+    case "audio": {
+      /*
+       * ‏controls ולא נגן משלנו: נגן הדפדפן נגיש, מוכר, ועובד גם כשה-JS
+       * של האפליקציה עוד לא נטען.
+       *
+       * ‏`w-72` ולא `w-full` — DESIGN.md § מדיה בבועה. רוחב באחוזים אינו תורם
+       * למדידת ה-max-content של בועה שמתכווצת לתוכן, ובהודעה שיש בה הקלטה
+       * בלבד הנגן נדחס לרוחב חותמת השעה עד שנשאר ממנו כפתור ה-⋮ לבדו.
+       *
+       * התווית **נראית**, כי `aria-label` לבדו משאיר על המסך מלבן אפור בלי
+       * מילה שאומרת מה זה. ‏`aria-labelledby` מקשר אותה לנגן; `aria-label`
+       * לצידה היה מקריא את אותו טקסט פעמיים.
+       */
+      const labelId = `audio-label-${file.id}`;
       return (
-        <audio controls preload="metadata" aria-label={he.media.audioLabel} className="w-full">
-          <source src={file.url} type={file.mimeType.split(";")[0]} />
-        </audio>
+        <div className="flex flex-col gap-1">
+          <span id={labelId} className="text-xs font-medium text-muted">
+            {he.media.audioLabel}
+          </span>
+          <audio
+            controls
+            preload="metadata"
+            aria-labelledby={labelId}
+            className="w-72 max-w-full"
+          >
+            <source src={file.url} type={file.mimeType.split(";")[0]} />
+          </audio>
+        </div>
       );
+    }
 
     default:
       return (

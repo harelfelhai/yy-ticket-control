@@ -18,7 +18,6 @@ export const BOARD = {
   actionRequired: "דורש ממך",
   withRecipients: "אצל הנמענים",
   archive: "ארכיון",
-  tourToggle: "מצב סיור",
   newTicket: "+ פנייה חדשה",
 } as const;
 

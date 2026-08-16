@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { TicketStatusChip } from "@/components/status-chip";
 import type { BoardCard, SortDirection, SortKey } from "@/lib/board-view";
 import { he } from "@/lib/he";
 
@@ -17,14 +16,19 @@ import { he } from "@/lib/he";
  *
  * **הטבלה אינה מוסיפה מידע.** העמודות הן בדיוק מה שהכרטיס כבר מציג; מה
  * שהיא קונה הוא סריקה של עשרים שורות במבט אחד במקום חמש.
+ *
+ * **ארבע עמודות ולא שש (0.5).** "#" הציג את `Ticket.seq` — מזהה גלובלי במסד
+ * שאינו רציף ואינו אומר דבר למי שסורק; "סטטוס" נגזר מאותה חלוקה לשלוש
+ * קבוצות שכותרות הלוח כבר מבטאות; ו"סיבה" הוחלפה ב"תיאור", כי בטבלה השאלה
+ * היא **מה** התקלה. שורת הסיבה נשארת על הכרטיס, שם האפיון מחייב אותה.
  */
 
 /*
  * העמודות ב-`minmax(0,1fr)` ולא ברוחב קבוע: `rtl-mobile.spec.ts` מודד גלישה
  * אופקית בסטייה של עד 2px, ורשת עם עמודות קבועות ושם בניין ארוך היא בדיוק
- * מה שמפיל אותה. שלוש העמודות הגמישות הן היחידות שתוכנן חופשי.
+ * מה שמפיל אותה. התיאור מקבל את החלק הרחב — הוא המשפט היחיד כאן.
  */
-const COLUMNS = "grid-cols-[3rem_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.4fr)_7rem_5rem]";
+const COLUMNS = "grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,1fr)]";
 
 export interface SortState {
   key: SortKey;
@@ -39,13 +43,11 @@ interface TicketTableProps {
   sortHref: (key: SortKey) => string;
 }
 
-const HEADERS: { key: SortKey; label: string; numeric?: boolean }[] = [
-  { key: "seq", label: "#", numeric: true },
+const HEADERS: { key: SortKey; label: string }[] = [
   { key: "location", label: he.board.columnLocation },
   { key: "domain", label: he.board.columnDomain },
-  { key: "reason", label: he.board.columnReason },
+  { key: "description", label: he.board.columnDescription },
   { key: "recipients", label: he.board.columnRecipients },
-  { key: "status", label: he.board.columnStatus },
 ];
 
 export function TicketTable({ cards, sort, sortHref }: TicketTableProps) {
@@ -108,11 +110,9 @@ function SortHeader({
       href={href}
       // ‏`min-h-11` ככל דבר לחיץ. שורת הכותרות מתגבהת בהתאם, וזה נכון:
       // היא הפכה לשורת פקדים ולא תוויות.
-      className={`flex min-h-11 items-center gap-1 text-sm font-semibold text-muted ${
-        header.numeric ? "justify-end" : ""
-      }`}
+      className="flex min-h-11 items-center gap-1 text-sm font-semibold text-muted"
     >
-      <span dir={header.numeric ? "ltr" : undefined}>{header.label}</span>
+      <span>{header.label}</span>
       <span aria-hidden>{caret}</span>
       <span className="sr-only">{spoken}</span>
     </Link>
@@ -128,27 +128,26 @@ function TicketRow({ card }: { card: BoardCard }) {
       href={`/tickets/${card.id}`}
       // ‏`min-h-12` (48px) ולא 44: שורה בטבלה נסרקת בעין ולא רק נלחצת,
       // וצפיפות של 44 הופכת עשרים שורות לגוש (DESIGN.md § טבלה / רשימה).
-      className={`grid ${COLUMNS} min-h-12 items-center gap-x-3 border-b border-border px-3 py-2 text-sm`}
+      //
+      // הקו האדום בהתחלה הוא המקבילה הטבלאית ל-`dangerOutline` של הכרטיס:
+      // עד 0.5 הטיוטה זוהתה בטבלה דרך שורת הסיבה האדומה, ובלי תחליף היא
+      // הייתה הופכת לשורה כמעט ריקה (לטיוטה לרוב אין עדיין תיאור) — כלומר
+      // המצב היחיד שדורש טיפול היה הופך לבלתי-נראה.
+      //
+      // ‏`border-b-border` ולא `border-border`: הצבע הכללי היה קובע גם את
+      // צבע ההתחלה, ואז הקו של הטיוטה תלוי בסדר שבו Tailwind פולט את שתי
+      // המחלקות — כלומר אדום שעלול לצאת אפור בלי שאיש יבחין.
+      className={`grid ${COLUMNS} min-h-12 items-center gap-x-3 border-b border-b-border px-3 py-2 text-sm ${
+        isDraft ? "border-s-2 border-s-danger" : ""
+      }`}
     >
-      <span dir="ltr" className="text-end tabular-nums text-muted">
-        {card.seq}
-      </span>
-
       <span className="truncate font-medium">{location || he.ticket.noLocation}</span>
 
       <span className="truncate text-muted">{card.domainName ?? ""}</span>
 
-      {/* הסיבה ולא התיאור: זה מה שמסביר למה הפנייה נמצאת בקבוצה הזו, וזו
-          הסיבה שהאפיון מחייב אותה גם בכרטיס. */}
-      <span className={`truncate font-medium ${isDraft ? "text-danger" : "text-brand"}`}>
-        {card.reason}
-      </span>
+      <span className="truncate">{card.descriptionLine}</span>
 
       <span className="truncate text-muted">{card.recipientNames.join(", ")}</span>
-
-      <span className="flex items-center gap-2">
-        <TicketStatusChip status={card.status} />
-      </span>
     </Link>
   );
 }
