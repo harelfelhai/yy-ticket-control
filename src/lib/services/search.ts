@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { BoardCard } from "@/lib/board-view";
 import { db } from "@/lib/db";
+import { firstLine } from "@/lib/format";
 import { normalizeName } from "@/lib/normalize";
 import type { SessionUser } from "@/lib/session";
 import {
@@ -231,7 +232,3 @@ function endOfDay(value: Date): Date {
   return end;
 }
 
-function firstLine(text: string): string {
-  const line = text.split("\n")[0]?.trim() ?? "";
-  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
-}

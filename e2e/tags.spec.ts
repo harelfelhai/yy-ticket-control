@@ -77,7 +77,12 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
 
   await expect(page.getByText("1 פתוחות · 0 סגורות")).toBeVisible();
   await expect(page.getByText("פניות בתגית")).toBeVisible();
-  await expect(page.getByRole("link").filter({ hasText: "בניין א" })).toBeVisible();
+  const ticketRow = page.getByRole("link").filter({ hasText: "בניין א" });
+  await expect(ticketRow).toBeVisible();
+
+  // מספר הפנייה ירד מהרשימה ב-0.5, כפי שירד מטבלת הלוח: הוא מזהה גלובלי
+  // במסד ואינו אומר דבר בסריקה. הוא נשאר בכותרת מסך הפנייה בלבד.
+  await expect(ticketRow).not.toContainText("#");
 
   await page.getByLabel("תגובה").fill(managerMessage);
   await page.getByRole("button", { name: "שלח", exact: true }).click();

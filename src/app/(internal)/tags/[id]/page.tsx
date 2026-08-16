@@ -63,15 +63,30 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
                   href={`/tickets/${ticket.id}`}
                   className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-bg p-3 text-sm"
                 >
-                  <span>
+                  {/*
+                   * מספר הפנייה ירד מכאן ב-0.5, כפי שירד מטבלת הלוח: הוא
+                   * מזהה גלובלי במסד ואינו אומר דבר למי שסורק רשימה, והוא
+                   * נשאר בכותרת מסך הפנייה בלבד.
+                   *
+                   * **ובמקומו התיאור, לא כלום.** תגית מקבצת את ליקויי אותה
+                   * דירה, ולכן מיקום ותחום חוזרים על עצמם — הצילום הראה
+                   * ארבע שורות "בניין א · דירה 1 · חשמל" זהות לחלוטין. עד
+                   * כה המספר היה ההבדל היחיד ביניהן, וזה בדיוק מה שהוא
+                   * החזיק במקום המידע.
+                   */}
+                  <span className="font-medium">
                     {he.ticket.location(ticket.buildingName, ticket.apartmentNumber) ||
                       he.ticket.noLocation}
-                    {ticket.domainName ? ` · ${ticket.domainName}` : ""}
+                    {ticket.domainName ? (
+                      <span className="font-normal text-muted"> · {ticket.domainName}</span>
+                    ) : null}
                   </span>
-                  <span className="shrink-0 text-xs text-muted" dir="ltr">
-                    #{ticket.seq}
-                    {ticket.closed ? ` · ${he.ticketStatus.CLOSED}` : ""}
-                  </span>
+                  {ticket.descriptionLine ? (
+                    <span className="text-muted">{ticket.descriptionLine}</span>
+                  ) : null}
+                  {ticket.closed ? (
+                    <span className="shrink-0 text-xs text-muted">{he.ticketStatus.CLOSED}</span>
+                  ) : null}
                 </Link>
               </li>
             ))}

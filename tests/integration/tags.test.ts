@@ -197,6 +197,35 @@ describe("getTagDetail — רשימת הפניות ממודרת", () => {
   it("תגית שאינה קיימת מחזירה null", async () => {
     expect(await getTagDetail(adminUser, "no-such-id")).toBeNull();
   });
+
+  it("כל פנייה נושאת את שורת התיאור — היא מה שמבדיל בין השורות", async () => {
+    /*
+     * ‏0.5: מספר הפנייה ירד מהרשימה. תגית מקבצת בדרך כלל את ליקויי אותה
+     * דירה, ולכן מיקום ותחום זהים בין השורות — והמספר היה ההבדל היחיד.
+     * בלי התיאור, מסך התגית מציג ארבע שורות זהות לחלוטין.
+     */
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    const first = await db.ticket.create({
+      data: {
+        siteId: siteAId,
+        createdById: adminId,
+        channel: "SELF",
+        description: "אין חשמל בסלון\nהמפסק קופץ כל בוקר",
+      },
+    });
+    const second = await makeTicket(siteAId, adminId);
+    await db.ticketTag.create({ data: { ticketId: first.id, tagId: tag.id } });
+    await db.ticketTag.create({ data: { ticketId: second.id, tagId: tag.id } });
+
+    const detail = await getTagDetail(adminUser, tag.id);
+    const lines = detail?.tickets.map((t) => t.descriptionLine);
+
+    // השורה הראשונה בלבד, בלי ההמשך.
+    expect(lines).toContain("אין חשמל בסלון");
+    expect(lines?.join(" ")).not.toContain("המפסק קופץ");
+    // ושתי השורות אכן נבדלות זו מזו.
+    expect(new Set(lines).size).toBe(2);
+  });
 });
 
 describe("צ׳אט התגית", () => {

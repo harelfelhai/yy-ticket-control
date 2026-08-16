@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
+import { firstLine } from "@/lib/format";
 import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
 import {
@@ -221,10 +222,17 @@ export interface TagDetail {
   tag: { id: string; name: string };
   tickets: {
     id: string;
-    seq: number;
     buildingName: string | null;
     apartmentNumber: string | null;
     domainName: string | null;
+    /**
+     * השורה הראשונה מהתיאור — **מה שמבדיל בין השורות**.
+     *
+     * תגית מקבצת בדרך כלל את ליקויי אותה דירה, ולכן מיקום ותחום חוזרים על
+     * עצמם: ברשימה של ארבע פניות מבדק בית, כולן "בניין א · דירה 1 · חשמל".
+     * עד 0.5 המספר היה ההבדל היחיד, וכשהוא ירד נשארו ארבע שורות זהות.
+     */
+    descriptionLine: string;
     closed: boolean;
   }[];
   openCount: number;
@@ -254,8 +262,8 @@ export async function getTagDetail(
         ticket: {
           select: {
             id: true,
-            seq: true,
             siteId: true,
+            description: true,
             closedAt: true,
             building: { select: { name: true } },
             apartment: { select: { number: true } },
@@ -263,6 +271,8 @@ export async function getTagDetail(
           },
         },
       },
+      // ‏`seq` נשאר כמפתח מיון אף שאינו מוצג יותר (0.5): הוא סדר היצירה,
+      // וזה הסדר הנכון לרשימת פניות של תגית אחת.
       orderBy: { ticket: { seq: "asc" } },
     }),
     db.tagAccess.findMany({
@@ -279,10 +289,10 @@ export async function getTagDetail(
     tag,
     tickets: visible.map((t) => ({
       id: t.ticket.id,
-      seq: t.ticket.seq,
       buildingName: t.ticket.building?.name ?? null,
       apartmentNumber: t.ticket.apartment?.number ?? null,
       domainName: t.ticket.domain?.name ?? null,
+      descriptionLine: firstLine(t.ticket.description),
       closed: t.ticket.closedAt !== null,
     })),
     openCount: visible.filter((t) => t.ticket.closedAt === null).length,
