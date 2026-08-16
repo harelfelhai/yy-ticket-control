@@ -56,5 +56,14 @@ export interface EmailMessage {
 export interface EmailTransport {
   /** לזיהוי בלוגים ובבדיקות: מה בפועל שלח את ההודעה */
   readonly name: string;
+  /**
+   * הערוץ מדמה שליחה ואינו מוציא דואר לאיש.
+   *
+   * הדגל קיים כדי ש**שכבת השליחה תדע** שלא יצא כלום, ולא רק שהקריאה לא
+   * זרקה. בלעדיו `sendNotification` סימנה `notifiedAt` גם על ערוץ הקונסולה,
+   * והמסך הכריז "נשלח ב-…" על מייל שמעולם לא נשלח — בדיוק התקלה השקטה
+   * שהמערכת הזו נבנתה כדי למנוע.
+   */
+  readonly simulated?: boolean;
   send(message: EmailMessage): Promise<void>;
 }

@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openDetails } from "./ticket-screen";
+import { openDetails, recipientRow } from "./ticket-screen";
 
 /**
  * הפעולות על פנייה קיימת, דרך הממשק האמיתי.
@@ -144,5 +144,54 @@ test.describe("פעולות על פנייה", () => {
   test("השרשור מציג אירועי מערכת בעברית", async ({ page }) => {
     await createTicket(page);
     await expect(page.getByText(/שויך לפנייה$/)).toBeVisible();
+  });
+
+  /**
+   * שורת מצב השליחה — הדיווח מהשטח שהוליד את התיקון.
+   *
+   * מנהל הוסיף נמען עם מייל, שום דבר לא הגיע אליו, והמסך הצהיר "נשלח מייל".
+   * השורש: בלי `RESEND_API_KEY` נבחר ערוץ הקונסולה, שמקיים את חוזה השליחה
+   * בלי לזרוק — ולכן נראה לשכבה שמעליו כשליחה שהצליחה, וסימן `notifiedAt`.
+   *
+   * סביבת ה-E2E היא בדיוק סביבה כזו (אין מפתח), ולכן היא המקום הנכון לאמת
+   * את זה מקצה לקצה. עד היום אף בדיקת דפדפן לא נגעה בשורה הזו כלל — וזו
+   * הסיבה שהשקר שרד.
+   */
+  test("נמען עם מייל בסביבה בלי ערוץ — המסך אומר שלא נשלח", async ({ page }) => {
+    const stamp = Date.now();
+    const name = `קבלן מייל ${stamp}`;
+
+    await page.goto("/tickets/new");
+    await pick(page, "בניין", "בניין א");
+    await pick(page, "דירה", "1");
+    await pick(page, "תחום", "חשמל");
+    await page.getByLabel("תיאור").fill(`תקלת מייל ${stamp}`);
+
+    await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
+    await page.getByLabel("שם").fill(name);
+    // ‏exact: התיאור למעלה מכיל את המילה "מייל", ובלי זה הלוקטור תופס גם אותו.
+    await page.getByLabel("מייל", { exact: true }).fill(`c${stamp}@example.com`);
+    await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
+    await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(name);
+
+    await page.getByRole("button", { name: "שלח לנמענים" }).click();
+    await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
+
+    await openDetails(page);
+    const row = recipientRow(page, name);
+
+    /*
+     * ‏`toPass`: השליחה עוברת דרך התור, והעובד סוקר אותו כל שתי שניות.
+     * מיד אחרי השיגור השורה אומרת "בתור לשליחה" בצדק — מה שנבדק כאן הוא
+     * המצב **אחרי** שהג'וב רץ, ושם בדיוק היה השקר.
+     */
+    await expect(async () => {
+      await page.reload();
+      await openDetails(page);
+      await expect(row).toContainText("לא נשלח — ערוץ המייל אינו מוגדר");
+    }).toPass({ timeout: 30_000 });
+
+    // הטענה השלילית היא העיקר: זו המחרוזת שהוצגה קודם, על מייל שלא יצא.
+    await expect(row).not.toContainText("נשלח מייל");
   });
 });

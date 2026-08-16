@@ -163,6 +163,33 @@ describe("sendNotification", () => {
     expect(updated.notifiedAt).not.toBeNull();
   });
 
+  /**
+   * התקלה שדווחה מהשטח: פנייה נפתחה, נמען עם מייל נוסף, ושום דבר לא הגיע —
+   * בעוד שמסך הפנייה הצהיר "נשלח מייל 16:45".
+   *
+   * השורש היה שערוץ הקונסולה (הנבחר כשאין `RESEND_API_KEY`) מקיים את חוזה
+   * ה-`send` בלי לזרוק, ולכן נראה לשכבה שמעליו כמו שליחה שהצליחה. הבדיקה
+   * הזו היא מה שמונע נסיגה חזרה לשקר.
+   */
+  it("ערוץ מדומה אינו מסמן שנשלח — אחרת המסך משקר", async () => {
+    const ticket = await makeTicket([electrician]);
+    const assignment = await assignmentOf(ticket.id, electrician);
+    const { transport, sent } = fakeTransport();
+
+    const outcome = await sendNotification(
+      { event: "ASSIGNED", assignmentId: assignment.id },
+      { ...transport, simulated: true },
+    );
+
+    // ההודעה כן מנוסחת ומגיעה לערוץ — כך רואים בפיתוח מה היה נשלח.
+    expect(sent).toHaveLength(1);
+    // אבל היא לא נחשבת כיוצאת.
+    expect(outcome).toEqual({ status: "skipped", reason: "no-transport" });
+
+    const updated = await db.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+    expect(updated.notifiedAt).toBeNull();
+  });
+
   it("קבלן בלי מייל מדולג — ולא נחשב לכישלון", async () => {
     // הוא יקבל את הפנייה בוואטסאפ. כישלון כאן היה מייצר ג'וב אדום קבוע.
     const ticket = await makeTicket([plumber]);

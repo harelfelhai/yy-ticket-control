@@ -16,10 +16,22 @@ export interface DeliveryFacts {
   notifiedAt: Date | null;
   hasEmail: boolean;
   hasPhone: boolean;
+  /** האם בכלל קיים ערוץ מייל בסביבה הזו (`isEmailConfigured`) */
+  emailConfigured: boolean;
 }
 
 export function deliveryNote(facts: DeliveryFacts, formatTime: (value: Date) => string): string {
   if (facts.notifiedAt) return he.ticket.notifiedAt(formatTime(facts.notifiedAt));
+
+  /**
+   * אין ערוץ מייל כלל — נבדק **לפני** "ממתין לשליחה".
+   *
+   * בלי הענף הזה השורה הייתה אומרת "ההודעה תישלח בקרוב" על מערכת שאין לה
+   * דרך לשלוח, כלומר הבטחה שלעולם לא תתקיים. מנהל שקורא אותה אינו מרים
+   * טלפון, והקבלן לא יוצא לעבודה. כאן ההודעה קוראת לפעולה — הכפתור
+   * לוואטסאפ שלצד השורה הוא המסלול שכן עובד.
+   */
+  if (!facts.emailConfigured) return he.ticket.notifyNotConfigured;
 
   // יש כתובת אך טרם יצאה הודעה: הג'וב ממתין בתור או נכשל ויחזור. בשני
   // המקרים אין מה לעשות, ולכן הנוסח מתאר ואינו קורא לפעולה.

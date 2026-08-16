@@ -54,6 +54,9 @@ export function resendTransport(apiKey: string, from: string): EmailTransport {
 export function consoleTransport(): EmailTransport {
   return {
     name: "console",
+    // ראה `EmailTransport.simulated`: הדגל הוא מה שמונע מהמערכת להצהיר
+    // "נשלח" על הודעה שרק נכתבה ללוג.
+    simulated: true,
     async send(message) {
       console.info(
         `[notifier] מייל (לא נשלח — אין RESEND_API_KEY)\nאל: ${message.to}\nנושא: ${message.subject}\n${message.text}\n`,
@@ -69,6 +72,18 @@ export function consoleTransport(): EmailTransport {
  * שנראית עובדת ובשקט אינה מודיעה לאיש היא בדיוק הכישלון שהמערכת הזו
  * נבנתה כדי למנוע.
  */
+/**
+ * האם יש ערוץ מייל אמיתי בסביבה הזו.
+ *
+ * נפרד מ-`selectEmailTransport` כדי שהממשק יוכל **לשאול בלי לבחור ערוץ**:
+ * מסך הפנייה צריך לדעת אם להסביר למנהל שלא יצא מייל, ובניית ערוץ שליחה רק
+ * כדי לבדוק תנאי היא תופעת לוואי מיותרת במסלול רינדור. שני הקוראים נשענים
+ * על אותו תנאי אחד — אחרת הממשק והשליחה היו יכולים לחלוק על עצם קיומו.
+ */
+export function isEmailConfigured(): boolean {
+  return Boolean(env.resendApiKey() && env.notifyFromEmail());
+}
+
 export function selectEmailTransport(): EmailTransport {
   const apiKey = env.resendApiKey();
   const from = env.notifyFromEmail();

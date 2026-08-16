@@ -31,7 +31,10 @@ export function notificationTarget(event: NotificationEvent): NotificationTarget
 /** למה לא יצאה הודעה — מידע שנשמר בלוג ומוצג למנהל */
 export type DeliveryOutcome =
   | { status: "sent"; to: string; via: string }
-  | { status: "skipped"; reason: "no-address" | "assignment-removed" | "missing" };
+  | {
+      status: "skipped";
+      reason: "no-address" | "assignment-removed" | "missing" | "no-transport";
+    };
 
 export interface NotifyInput {
   event: NotificationEvent;
@@ -122,6 +125,27 @@ export async function sendNotification(
     text: message.body,
     html: renderEmailHtml(message),
   });
+
+  /**
+   * ערוץ מדומה — ההודעה נכתבה ללוג ואיש לא קיבל אותה.
+   *
+   * היציאה כאן היא **לפני** עדכון `notifiedAt`, וזה כל העניין: קודם לכן
+   * ערוץ הקונסולה סימן את השיוך כמיודע, והמסך הצהיר "נשלח ב-…" על מייל
+   * שלא יצא. מנהל שסמך על השורה הזו האמין שהקבלן יודע — וזו תקלה גרועה
+   * יותר מהיעדר שליחה, כי היא מונעת ממנו להרים טלפון.
+   *
+   * הג'וב מסתיים כהצלחה ולא כשגיאה: אין כאן תקלה לתקן בסביבה שבה ממילא
+   * לא הוגדר ערוץ. מה שנדרש הוא שהממשק יאמר זאת — ראה `deliveryNote`.
+   */
+  if (transport.simulated) {
+    logWarn("notify.simulated", {
+      assignmentId: assignment.id,
+      ticketId: assignment.ticketId,
+      to: address,
+      event: input.event,
+    });
+    return { status: "skipped", reason: "no-transport" };
+  }
 
   if (target === "recipient") {
     // המייל כבר יצא. אם עדכון notifiedAt נכשל — **אסור לזרוק**: אחרת הג'וב

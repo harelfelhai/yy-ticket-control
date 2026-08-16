@@ -1,6 +1,7 @@
 import { deliveryNote } from "@/lib/delivery";
 import { formatDateTime } from "@/lib/format";
 import { composeNotification } from "@/lib/notifier/compose";
+import { isEmailConfigured } from "@/lib/notifier/email";
 import { waShareUrl } from "@/lib/notifier/wa-share";
 import type { TicketSummary } from "@/lib/notifier/types";
 import { readPortalLink } from "./portal";
@@ -49,6 +50,7 @@ export async function describeDelivery(
       // החיווי נוגע לשליחה החוצה.
       hasEmail: Boolean(email) || assignment.userId !== null,
       hasPhone: Boolean(phone),
+      emailConfigured: isEmailConfigured(),
     },
     formatDateTime,
   );
