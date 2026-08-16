@@ -85,7 +85,7 @@ describe("canViewTicket", () => {
 });
 
 describe("hasActiveAssignment", () => {
-  it.each(["SENT", "VIEWED", "DONE", "QUESTION"] as const)("%s נחשב שיוך פעיל", (status) => {
+  it.each(["SENT", "VIEWED", "DONE"] as const)("%s נחשב שיוך פעיל", (status) => {
     expect(hasActiveAssignment(contractor, [assignedTo(contractor, status)])).toBe(true);
   });
 

@@ -18,7 +18,6 @@ import { he } from "./he";
 export type DerivedTicketStatus =
   | "CLOSED"
   | "DRAFT"
-  | "AWAITING_OPENER_QUESTION"
   | "AWAITING_OPENER_APPROVAL"
   | "PARTIAL"
   | "VIEWED"
@@ -30,7 +29,7 @@ export type BoardSection = "ACTION_REQUIRED" | "WITH_RECIPIENTS" | "ARCHIVE";
 /** המידע המינימלי על שיוך שנדרש כדי לגזור מצב ולנסח סיבה */
 export interface AssignmentView {
   status: AssignmentStatus;
-  /** שם הנמען, לשימוש בטקסט הסיבה ("יוסי שאל שאלה") */
+  /** שם הנמען, לשימוש בטקסט הסיבה ("2 מתוך 3 סיימו", "דוד מטפל") */
   recipientName: string;
 }
 
@@ -135,9 +134,14 @@ export function deriveTicketStatus(
 
   const active = activeAssignments(assignments);
 
-  // "שאלה" גובר על הכול למעט סגירה: נמען חסום עוצר עבודה בשטח.
-  if (active.some((a) => a.status === "QUESTION")) return "AWAITING_OPENER_QUESTION";
-
+  /*
+   * ‏`AWAITING_OPENER_QUESTION` הוסר ב-0.4 יחד עם הכפתור שייצר אותו.
+   *
+   * נמען חסום עדיין המצב הדחוף במערכת — מה שהשתנה הוא **איפה זה נרשם**.
+   * הוא כותב בשרשור, ו-`deriveAwaitingReply` מזיז את הפנייה ל"דורש ממך".
+   * ההפרדה מכוונת: סטטוס הפנייה מתאר את התקדמות העבודה, ו"אצל מי הכדור"
+   * הוא שאלה אחרת — כך שאלה אינה משנה עוד את מצב העבודה המדווח.
+   */
   const done = active.filter((a) => a.status === "DONE").length;
   if (active.length > 0 && done === active.length) return "AWAITING_OPENER_APPROVAL";
   if (done > 0) return "PARTIAL";
@@ -150,8 +154,8 @@ export function deriveTicketStatus(
 }
 
 /**
- * הפנייה נכנסת ל"דורש ממך" כשהכדור אצל צוות החברה: טיוטה להשלמה, שאלה
- * שמחכה לתשובה, אישור סגירה, או הסלמה על היעדר תנועה.
+ * הפנייה נכנסת ל"דורש ממך" כשהכדור אצל צוות החברה: טיוטה להשלמה, הודעה
+ * מנמען שממתינה למענה, אישור סגירה, או הסלמה על היעדר תנועה.
  *
  * הפונקציה אינה תלויה בזהות הצופה, בכוונה: לפי §5.ז מנהל עבודה רואה ופועל
  * על **כל** הפניות באתר שלו ולא רק על שלו, ולכן "הכדור אצלנו" הוא מצב של
@@ -163,13 +167,7 @@ export function deriveBoardSection(
   awaitingReply = false,
 ): BoardSection {
   if (status === "CLOSED") return "ARCHIVE";
-  if (
-    status === "DRAFT" ||
-    status === "AWAITING_OPENER_QUESTION" ||
-    status === "AWAITING_OPENER_APPROVAL"
-  ) {
-    return "ACTION_REQUIRED";
-  }
+  if (status === "DRAFT" || status === "AWAITING_OPENER_APPROVAL") return "ACTION_REQUIRED";
   // הודעה מנמען שממתינה למענה היא הכדור אצלנו לכל דבר. בלי השורה הזו קבלן
   // היה כותב "צריך מפתח לחדר החשמל", והפנייה הייתה נשארת ב"אצל הנמענים" —
   // כלומר במקום שמנהל אינו סורק, כי לכאורה מישהו אחר מטפל בה.
@@ -192,8 +190,8 @@ export function isStale(ticket: TicketView, now: Date): boolean {
  *
  * הסדר נגזר משאלה אחת — מה גרם לפנייה להיות במקום שבו היא נמצאת. הסלמה
  * נבדקת אחרי המצבים שממילא מכניסים ל"דורש ממך", כי רק כשהמצב עצמו לא
- * מסביר את המיקום, ההסלמה היא ההסבר. בלי הסדר הזה פנייה עם שאלה פתוחה
- * הייתה מציגה "ללא תנועה 9 ימים" במקום את השאלה שממתינה לתשובה.
+ * מסביר את המיקום, ההסלמה היא ההסבר. בלי הסדר הזה פנייה שקבלן כתב בה
+ * הייתה מציגה "ללא תנועה 9 ימים" במקום את ההודעה שממתינה למענה.
  */
 export function reasonText(
   ticket: TicketView,
@@ -205,15 +203,6 @@ export function reasonText(
 
   if (status === "CLOSED") return he.reason.closed;
   if (status === "DRAFT") return he.reason.draft;
-
-  if (status === "AWAITING_OPENER_QUESTION") {
-    const askers = active.filter((a) => a.status === "QUESTION");
-    const [first, ...rest] = askers;
-    const name = first?.recipientName ?? "";
-    return rest.length === 0
-      ? he.reason.questionOne(name)
-      : he.reason.questionMany(name, rest.length);
-  }
 
   if (status === "AWAITING_OPENER_APPROVAL") return he.reason.allDone;
 

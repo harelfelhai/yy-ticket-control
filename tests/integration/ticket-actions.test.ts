@@ -364,13 +364,20 @@ describe("setAssignmentStatus", () => {
     expect(await statusOf(ticket.id)).toBe("PARTIAL");
   });
 
-  it("שאלה של נמען אחד גוברת על טופל של השני", async () => {
+  /**
+   * ‏"שאלה" ירדה מטבלת הסטטוסים ב-0.4.
+   *
+   * קבלן שחסום כותב בשרשור, וההודעה אינה נוגעת בסטטוס העבודה — היא מזיזה
+   * את הפנייה בלוח דרך `deriveAwaitingReply`. הטענה כאן שומרת על ההפרדה:
+   * מי שסיים עדיין מדווח כמי שסיים.
+   */
+  it("הודעה של נמען אינה משנה את סטטוס הפנייה", async () => {
     const ticket = await makeTicket([electrician, plumber]);
-    const [first, second] = await db.assignment.findMany({ where: { ticketId: ticket.id } });
+    const [first] = await db.assignment.findMany({ where: { ticketId: ticket.id } });
     await setAssignmentStatus(first!.id, "DONE");
-    await setAssignmentStatus(second!.id, "QUESTION");
+    await addMessage({ kind: "professional", id: plumber }, ticket.id, "צריך מפתח");
 
-    expect(await statusOf(ticket.id)).toBe("AWAITING_OPENER_QUESTION");
+    expect(await statusOf(ticket.id)).toBe("PARTIAL");
   });
 
   it("צפייה אינה נחשבת תנועה לעניין ההסלמה", async () => {
@@ -432,17 +439,17 @@ describe("setAssignmentStatus", () => {
   it("רושם אירוע בשרשור עם שם הנמען", async () => {
     const ticket = await makeTicket();
     const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
-    await setAssignmentStatus(assignment.id, "QUESTION");
+    await setAssignmentStatus(assignment.id, "DONE");
 
     const event = await db.message.findFirstOrThrow({
-      where: { ticketId: ticket.id, eventType: "QUESTION" },
+      where: { ticketId: ticket.id, eventType: "DONE" },
     });
     expect(event.eventMeta).toMatchObject({ recipientName: "יוסי" });
   });
 });
 
 describe("מחזור חיים מלא", () => {
-  it("יצירה → שניים משויכים → אחד סיים ואחד שאל → מענה → סגירה → פתיחה מחדש", async () => {
+  it("יצירה → שניים משויכים → אחד סיים ואחד כתב → מענה → סגירה → פתיחה מחדש", async () => {
     const ticket = await makeTicket([electrician, plumber]);
     expect(await statusOf(ticket.id)).toBe("NEW");
 
@@ -454,8 +461,9 @@ describe("מחזור חיים מלא", () => {
     await setAssignmentStatus(a!.id, "DONE");
     expect(await statusOf(ticket.id)).toBe("PARTIAL");
 
-    await setAssignmentStatus(b!.id, "QUESTION");
-    expect(await statusOf(ticket.id)).toBe("AWAITING_OPENER_QUESTION");
+    await addMessage({ kind: "professional", id: plumber }, ticket.id, "צריך מפתח לחדר החשמל");
+    // ההודעה אינה נוגעת בסטטוס — היא מזיזה את הפנייה בלוח (ראה board.test).
+    expect(await statusOf(ticket.id)).toBe("PARTIAL");
 
     await addMessage(asUser(opener), ticket.id, "תיאום להיום ב-14:00");
     await setAssignmentStatus(b!.id, "DONE");

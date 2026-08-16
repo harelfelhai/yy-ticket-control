@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openDetails, recipientRow, showLink } from "./ticket-screen";
+import { openDetails, recipientRow, showLink, shownText } from "./ticket-screen";
 
 /**
  * התרחיש המרכזי של M1, מקצה לקצה ודרך הממשק בלבד:
@@ -44,7 +44,7 @@ async function addProfessional(page: Page, name: string, phone: string) {
 }
 
 
-test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מענה, סגירה ופתיחה מחדש", async ({
+test("מחזור חיים מלא: יצירה, שני קבלנים, הודעה מהשטח, מענה, סגירה ופתיחה מחדש", async ({
   page,
 }) => {
   const stamp = Date.now();
@@ -95,37 +95,32 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, שאלה, מ�
   await done.click();
   await expect(page.getByText("תודה. הפנייה הועברה לאישור מנהל ראשי.")).toBeVisible();
 
-  // ── 3. הקבלן השני שואל שאלה ───────────────────────────────────────
+  // ── 3. הקבלן השני שואל — כהודעה רגילה, ולא בכפתור ייעודי ─────────
   await page.goto(plumberLink);
   await page.getByRole("link").filter({ hasText: description }).click();
 
   /*
-   * לחיצה על "יש לי שאלה" בלי טקסט **מסבירה מה חסר**.
+   * ‏"יש לי שאלה" הוסר ב-0.4 (§7 שורה 31).
    *
-   * קודם הכפתור היה `disabled` עד שהוקלד משהו, כלומר לחיצה לא עשתה כלום
-   * ולא נאמר דבר — הקבלן בשטח דיווח עליו כ"כפתור שבור". הדרישה עצמה
-   * נשארה; מה שנוסף הוא שהיא נאמרת.
+   * הכפתור דרש מהקבלן לסווג את עצמו לפני שכתב, ויצר שני מסלולים לאותה
+   * פעולה — שאלה שנכתבה בתיבה בלי ללחוץ עליו לא הגיעה לאיש. מה שמחליף
+   * אותו הוא שכל הודעה מנמען מיידעת את הפותח ומסמנת את הפנייה בלוח.
    */
-  const ask = page.getByRole("button", { name: "יש לי שאלה" });
-  await expect(ask).toBeEnabled();
-  await ask.click();
-  // ‏`main` ולא `getByRole("alert")` לבדו: ל-route announcer של Next יש
-  // גם הוא `role="alert"`, והבורר הרחב נופל על ריבוי התאמות.
-  await expect(page.getByRole("main").getByRole("alert")).toContainText("כתוב את השאלה");
+  await expect(page.getByRole("button", { name: "יש לי שאלה" })).toHaveCount(0);
 
   await page.getByLabel("תגובה").fill("איפה הכניסה לדירה?");
-  await ask.click();
-  await expect(page.getByText("השאלה נשלחה למנהל ראשי.")).toBeVisible();
+  await page.getByRole("button", { name: "שלח", exact: true }).click();
+  await expect(shownText(page, "איפה הכניסה לדירה?")).toBeVisible();
 
-  // ── 4. אצל המנהל: הפנייה ב"דורש ממך", והסיבה היא השאלה ───────────
+  // ── 4. אצל המנהל: הפנייה ב"דורש ממך", והסיבה היא ההודעה ──────────
   await loginAsManager(page);
   await page.goto("/board");
   const card = page.getByRole("link").filter({ hasText: description });
-  await expect(card).toContainText(`${plumber} שאל שאלה`);
+  await expect(card).toContainText(`${plumber} כתב הודעה`);
 
   await card.click();
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
-  await expect(page.getByText("איפה הכניסה לדירה?")).toBeVisible();
+  await expect(shownText(page, "איפה הכניסה לדירה?")).toBeVisible();
 
   // ── 5. המנהל עונה, והקבלן השני מסמן שסיים ─────────────────────────
   await page.getByLabel("תגובה").fill("הכניסה מהחניון, קוד 1234");

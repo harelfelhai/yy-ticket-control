@@ -24,7 +24,9 @@ export const BOARD = {
 
 /** ארבעת נוסחי טקסט-הסיבה המחייבים — מסך 1, שורות 199–202 */
 export const REASON_EXAMPLES = {
-  question: (name: string) => `${name} שאל שאלה`,
+  // ‏"יוסי שאל שאלה" עד 0.4. הכפתור הוסר, והנוסח ירש את מקומו ואת צורתו:
+  // מבחינת המנהל זו אותה פעולה — מישהו בשטח פנה אליו וממתין.
+  message: (name: string) => `${name} כתב הודעה`,
   partial: (done: number, total: number) => `${done} מתוך ${total} סיימו`,
   stale: (days: number) => `ללא תנועה ${days} ימים`,
   handler: (name: string) => `${name} מטפל`,
@@ -35,7 +37,6 @@ export const ASSIGNMENT_STATUS = {
   sent: "נשלח",
   viewed: "נצפה",
   done: "טופל",
-  question: "שאלה",
   removed: "הוסר",
 } as const;
 
@@ -43,7 +44,6 @@ export const ASSIGNMENT_STATUS = {
 export const TICKET_STATUS = {
   closed: "סגור",
   draft: "טיוטה",
-  awaitingQuestion: "ממתין לפותח (שאלה)",
   awaitingApproval: "טופל — ממתין לאישור סופי",
   partial: "בטיפול חלקי",
   viewed: "נצפה",
@@ -127,9 +127,7 @@ export const DRAFT_SCREEN = {
 /** מסך 8 — פורטל הקבלן, שורות 319–329 */
 export const PORTAL = {
   markDone: "סיימתי — טופל",
-  askQuestion: "יש לי שאלה",
   doneNotice: (opener: string) => `תודה. הפנייה הועברה לאישור ${opener}.`,
-  questionNotice: (opener: string) => `השאלה נשלחה ל${opener}.`,
   /**
    * שורה 329 — משפט אחד. המימוש מפצל אותו לכותרת ולפסקה ומשמיט את הנקודה
    * הראשונה (`expired-link.tsx:19-20`), ולכן חיפוש המשפט השלם ככתבו אינו

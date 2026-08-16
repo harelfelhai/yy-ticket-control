@@ -14,7 +14,7 @@ import { resetDb } from "../helpers/reset-db";
 
 const NOW = new Date("2026-07-24T09:00:00Z");
 const TICKET_COUNT = 60;
-const STATUSES: AssignmentStatus[] = ["SENT", "VIEWED", "DONE", "QUESTION"];
+const STATUSES: AssignmentStatus[] = ["SENT", "VIEWED", "DONE"];
 
 /** זורע 60 פניות מפוזרות על בניינים, סטטוסים, הסלמות וסגירות — מצב מציאותי */
 async function seedLoad(): Promise<SessionUser> {

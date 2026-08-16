@@ -1,16 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { loginAs } from "../fixtures/roles";
 import { CAST, SITE_A, SITE_B } from "../fixtures/cast";
-import { CREATE_SCREEN, PORTAL } from "../fixtures/spec-text";
-import {
-  acceptDialogs,
-  createTicket,
-  openPortalTicket,
-  pick,
-  showLink,
-  uniq,
-  uniqPhone,
-} from "../fixtures/world";
+import { CREATE_SCREEN } from "../fixtures/spec-text";
+import { acceptDialogs, pick } from "../fixtures/world";
 
 /**
  * הכרעות המימוש של גרסה 0.3 (§7 #19–22).
@@ -98,39 +90,12 @@ test.describe("V03 — צילום וצירוף קובץ הן שתי פעולות
   });
 });
 
-test.describe("V03 — 'יש לי שאלה' מסביר במקום להשבית (§7 #22)", () => {
-  test("V03-04 — הכפתור לחיץ בלי טקסט, ואומר מה חסר", async ({ page }) => {
-    acceptDialogs(page);
-    await loginAs(page, "managerA");
-
-    // בניית ההקשר: פנייה עם קבלן, וקישור הפורטל שלו.
-    const contractor = uniq("קבלן-שאלה");
-    const description = uniq("תקלה-שאלה");
-    await createTicket(page, {
-      building: "בניין א",
-      apartment: "1",
-      domain: "חשמל",
-      description,
-      newProfessional: { name: contractor, phone: uniqPhone() },
-    });
-    const link = await showLink(page, contractor);
-    await openPortalTicket(page, link, description);
-
-    const ask = page.getByRole("button", { name: PORTAL.askQuestion });
-    // הכפתור **לחיץ**: כפתור עמום שאינו מגיב נקרא כתקלה במערכת ולא כשדה
-    // שלא מולא — וכך הוא דווח בפועל.
-    await expect(ask).toBeEnabled();
-    await ask.click();
-
-    // ‏`main` ולא `getByRole("alert")` לבדו: ל-route announcer של Next יש
-    // גם הוא `role="alert"`.
-    await expect(page.getByRole("main").getByRole("alert")).toContainText(
-      "כתוב את השאלה בתיבת התגובה",
-    );
-
-    // והדרישה עצמה נשארת: עם טקסט, השאלה נשלחת.
-    await page.getByLabel("תגובה").fill("איפה הכניסה?");
-    await ask.click();
-    await expect(page.getByText(PORTAL.questionNotice(CAST.managerA.name))).toBeVisible();
-  });
-});
+/**
+ * ‏V03-04 הוסר ב-0.4.
+ *
+ * הוא אימת את הכרעת 0.3 — ש"יש לי שאלה" נשאר לחיץ ומסביר מה חסר במקום
+ * להיות מושבת. ב-0.4 הכפתור עצמו ירד (§7 שורה 31), ולכן אין מה לאמת:
+ * בדיקה על התנהגות של רכיב שאינו קיים היא בדיקה שתמיד תיכשל, או גרוע
+ * מכך — שתשוכתב כדי לעבור. **האיסור** שהחליף אותה נבדק ב-PROH-01/03/12
+ * (`prohibitions.spec.ts`): הכפתור חייב להיעדר מהפורטל.
+ */

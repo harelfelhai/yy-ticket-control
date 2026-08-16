@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { CAST } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
-import { ASSIGNMENT_STATUS, PORTAL, TICKET_SCREEN } from "../fixtures/spec-text";
+import { PORTAL, REASON_EXAMPLES, TICKET_SCREEN } from "../fixtures/spec-text";
 import {
   acceptDialogs,
+  boardCard,
   expectExpiredLink,
   createTicket,
-  openDetails,
   openPortalTicket,
   recipientRow,
   showLink,
@@ -125,7 +125,12 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
     );
   });
 
-  test("S8-09/S8-14 — 'יש לי שאלה' נשלחת לפותח, בנוסח האפיון", async ({ page }) => {
+  /**
+   * ‏S8-09/S8-14 תיארו את "יש לי שאלה" ואת הנוסח "השאלה נשלחה ל…". שניהם
+   * הוסרו ב-0.4: שאלה נשלחת כהודעה רגילה בתיבת התגובה, וההודעה עצמה היא
+   * שמחזירה את הפנייה לפותח. מה שנבדק כאן הוא שהמסלול הזה אכן עובד.
+   */
+  test("S8-09/S8-14 — שאלה נשלחת כהודעה רגילה ומחזירה את הפנייה לפותח", async ({ page }) => {
     acceptDialogs(page);
     await loginAs(page, "managerA");
     const contractor = uniq("קבלן-שאלה");
@@ -141,17 +146,18 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
 
     await openPortalTicket(page, link, description);
     await page.getByLabel("תגובה").fill("צריך אישור לפני שאני מתחיל");
-    await page.getByRole("button", { name: PORTAL.askQuestion }).click();
-    await expect(page.getByRole("status")).toContainText(
-      PORTAL.questionNotice(CAST.managerA.name),
-    );
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
+    await expect(shownText(page, "צריך אישור לפני שאני מתחיל")).toBeVisible();
 
     await loginAs(page, "managerA");
     await page.goto("/board");
+    // הכדור חזר לפותח, והלוח אומר למה.
+    await expect(boardCard(page, description)).toContainText(
+      REASON_EXAMPLES.message(contractor),
+    );
     await page.getByRole("link").filter({ hasText: description }).first().click();
-    // הנמענים ירדו לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
-    await openDetails(page);
-    await expect(recipientRow(page, contractor)).toContainText(ASSIGNMENT_STATUS.question);
+    // השאלה עצמה יושבת בשרשור כהודעה, ולא כסטטוס נפרד.
+    await expect(shownText(page, "צריך אישור לפני שאני מתחיל")).toBeVisible();
   });
 
   test("S8-15 — קישור שאינו קיים מציג את נוסח האפיון", async ({ page }) => {

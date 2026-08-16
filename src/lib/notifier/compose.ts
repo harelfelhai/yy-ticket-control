@@ -24,7 +24,7 @@ export function composeNotification(input: ComposeInput): ComposedMessage {
   const { subject, opening } = headline(input, location, ref, actor);
 
   // הרכבה משורות ולא ממחרוזת אחת: חלק מהחלקים אופציונליים (תיאור ריק,
-  // שאלה בלי טקסט), והשמטה שלהם לא אמורה להשאיר שורות ריקות באמצע.
+  // הודעה שהיא תמונה בלבד), והשמטתם לא אמורה להשאיר שורות ריקות באמצע.
   const paragraphs = [opening, input.note?.trim(), body(input), he.notify.linkLine(input.link)];
 
   return {
@@ -50,11 +50,6 @@ function headline(
         subject: he.notify.reopenedSubject(location),
         opening: he.notify.reopened(input.toName, location),
       };
-    case "QUESTION":
-      return {
-        subject: he.notify.questionSubject(actor, location),
-        opening: he.notify.question(actor, ref, location),
-      };
     case "DONE":
       return {
         subject: he.notify.doneSubject(actor, location),
@@ -78,9 +73,7 @@ function headline(
 function body(input: ComposeInput): string | undefined {
   // ‏MESSAGE נכלל: ההודעה שנכתבה כבר מצורפת כ-`note`, וצירוף התיאור מתחתיה
   // היה מציג לצד השני טקסט ישן שהוא מכיר במקום את מה שנכתב עכשיו.
-  if (input.event === "QUESTION" || input.event === "DONE" || input.event === "MESSAGE") {
-    return undefined;
-  }
+  if (input.event === "DONE" || input.event === "MESSAGE") return undefined;
   return input.ticket.description.trim() || undefined;
 }
 

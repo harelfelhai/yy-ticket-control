@@ -22,6 +22,7 @@ import {
   recipientRow,
   runJob,
   showLink,
+  shownText,
   ticketIdFromPath,
   uniq,
   uniqPhone,
@@ -137,7 +138,12 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     await expect(boardSection(page, BOARD.actionRequired)).toContainText(description);
   });
 
-  test("DM-D03/DM-D08 — שאלה גוברת על טופל", async ({ page }) => {
+  /**
+   * ‏DM-D03/DM-D08 נכתבו כשה"שאלה" הייתה סטטוס שגובר על הכול. ב-0.4 היא
+   * ירדה מהטבלה, והטענה התהפכה: ההודעה **אינה** נוגעת בסטטוס העבודה —
+   * מי שסיים עדיין מדווח כמי שסיים — והיא מזיזה את הפנייה בלוח בלבד.
+   */
+  test("DM-D03/DM-D08 — הודעה מזיזה בלוח ואינה דורסת את 'טופל'", async ({ page }) => {
     acceptDialogs(page);
     const asker = uniq("קבלן-שואל");
     const finisher = uniq("קבלן-מסיים");
@@ -165,16 +171,18 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
 
     await openPortalTicket(page, askerLink, description);
     await page.getByLabel("תגובה").fill("איפה שעון המים?");
-    await page.getByRole("button", { name: PORTAL.askQuestion }).click();
-    await expect(page.getByRole("status")).toBeVisible();
+    await page.getByRole("button", { name: TICKET_SCREEN.send, exact: true }).click();
+    await expect(shownText(page, "איפה שעון המים?")).toBeVisible();
 
     await loginAs(page, "managerA");
     await page.goto(path);
-    // אחד סיים ואחד שאל — "שאלה גובר על הכול (למעט סגירה)".
-    await expect(page.getByText(TICKET_STATUS.awaitingQuestion, { exact: true })).toBeVisible();
+    // אחד סיים ואחד כתב — הסטטוס ממשיך לתאר את העבודה: חלק סיימו.
+    await expect(page.getByText(TICKET_STATUS.partial, { exact: true })).toBeVisible();
 
     await page.goto("/board");
-    await expect(boardCard(page, description)).toContainText(REASON_EXAMPLES.question(asker));
+    // ...אבל הכדור אצל המנהל, והלוח אומר מי כתב.
+    await expect(boardSection(page, BOARD.actionRequired)).toContainText(description);
+    await expect(boardCard(page, description)).toContainText(REASON_EXAMPLES.message(asker));
   });
 
   test("DM-D02 — חסרים שדות חובה ⇒ טיוטה", async ({ page }) => {

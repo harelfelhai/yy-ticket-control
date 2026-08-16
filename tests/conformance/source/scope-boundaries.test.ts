@@ -87,10 +87,13 @@ describe("§6 — מה שנדחה במפורש אינו קיים במערכת", 
     expect(SCHEMA).not.toMatch(/urgency|priority|severity/i);
   });
 
-  it("SC-OUT-08/A4-09 — לנמען חמישה סטטוסים בלבד, ואין 'בטיפול' או 'לא יכול לקחת'", () => {
+  it("SC-OUT-08/A4-09 — לנמען ארבעה סטטוסים בלבד, ואין 'בטיפול' או 'לא יכול לקחת'", () => {
     const enumBlock = SCHEMA.match(/enum AssignmentStatus \{([^}]+)\}/)?.[1] ?? "";
     const values = enumBlock.split(/\s+/).filter(Boolean);
-    expect(values).toEqual(["SENT", "VIEWED", "DONE", "QUESTION", "REMOVED"]);
+    // ‏QUESTION ירד ב-0.4 (אפיון §3.4): שאלה אינה סטטוס אלא הודעה בשרשור.
+    // הרשימה נעולה בכוונה — ערך שנוסף בלי החלטה הוא בדיוק איך "בטיפול"
+    // ו"לא יכול לקחת" היו מתגנבים פנימה.
+    expect(values).toEqual(["SENT", "VIEWED", "DONE", "REMOVED"]);
     expect(SCHEMA).not.toMatch(/IN_PROGRESS|CANNOT_TAKE|REJECTED/);
   });
 

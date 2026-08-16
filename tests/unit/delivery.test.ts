@@ -86,6 +86,29 @@ describe("deliveryNote", () => {
       expect(note).toBe(he.ticket.notifyNotConfigured);
     });
 
+    /**
+     * הטענה הזו נוספה אחרי שבדיקת E2E תפסה נסיגה אמיתית.
+     *
+     * בגרסה הראשונה הענף ישב לפני בדיקת הכתובת, וקבלן שאין לו מייל בכלל
+     * קיבל "ערוץ המייל אינו מוגדר". שתי האמירות נכונות, אבל רק אחת היא
+     * **הסיבה** — ומי שקורא את השנייה מחפש הגדרה שחסרה במקום להשלים כתובת.
+     */
+    it("קבלן בלי מייל שומע שאין לו מייל, ולא שהערוץ אינו מוגדר", () => {
+      const note = deliveryNote(
+        { ...unconfigured, notifiedAt: null, hasEmail: false, hasPhone: true },
+        at,
+      );
+      expect(note).toBe(he.ticket.notifyNoEmail);
+    });
+
+    it("בלי מייל ובלי טלפון — עדיין 'אין דרך ליצור קשר'", () => {
+      const note = deliveryNote(
+        { ...unconfigured, notifiedAt: null, hasEmail: false, hasPhone: false },
+        at,
+      );
+      expect(note).toBe(he.notices.cannotSendNoContact);
+    });
+
     it("אינו מוחק היסטוריה: מייל שיצא בעבר עדיין מדווח", () => {
       // ‏`notifiedAt` הוא עובדה שקרתה. גם אם הערוץ הוסר מאז, ההודעה יצאה.
       const note = deliveryNote(

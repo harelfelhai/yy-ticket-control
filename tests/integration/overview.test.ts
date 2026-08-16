@@ -14,7 +14,7 @@ async function ticket(siteId: string, extra: Record<string, unknown> = {}) {
   });
 }
 
-async function assign(ticketId: string, status: "SENT" | "QUESTION" | "DONE") {
+async function assign(ticketId: string, status: "SENT" | "VIEWED" | "DONE") {
   await db.assignment.create({ data: { ticketId, professionalId, status } });
 }
 
@@ -36,15 +36,16 @@ afterAll(async () => {
 
 describe("getOwnerOverview", () => {
   it("סופר לכל אתר: פתוחות, ממתינות למנהל, וללא תנועה", async () => {
-    // אתר א: אחת חדשה (אצל הנמען), אחת מוסלמת, אחת עם שאלה, ואחת סגורה.
+    // אתר א: אחת חדשה (אצל הנמען), אחת מוסלמת, אחת שהושלמה וממתינה
+    // לאישור, ואחת סגורה.
     const fresh = await ticket(siteAId);
     await assign(fresh.id, "SENT");
 
     const stale = await ticket(siteAId, { escalated: true });
     await assign(stale.id, "SENT");
 
-    const question = await ticket(siteAId);
-    await assign(question.id, "QUESTION");
+    const done = await ticket(siteAId);
+    await assign(done.id, "DONE");
 
     const closed = await ticket(siteAId, { closedAt: new Date() });
     await assign(closed.id, "DONE");

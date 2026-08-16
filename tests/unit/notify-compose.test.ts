@@ -82,22 +82,22 @@ describe("שאלה מהנמען", () => {
   it("נושא את שם השואל ואת מספר הפנייה, ומצרף את השאלה", () => {
     const message = composeNotification(
       input({
-        event: "QUESTION",
+        event: "MESSAGE",
         toName: "דוד",
         actorName: "יוסי",
         note: "איפה הכניסה לדירה?",
       }),
     );
 
-    expect(message.subject).toBe("יוסי שאל שאלה — בניין א דירה 3, חשמל");
+    expect(message.subject).toBe("יוסי כתב הודעה — בניין א דירה 3, חשמל");
     expect(message.body).toContain("פנייה #47");
     expect(message.body).toContain("איפה הכניסה לדירה?");
   });
 
   it("אינו מצרף את תיאור הפנייה לפותח", () => {
-    // הוא כתב אותו בעצמו; חזרה עליו רק מרחיקה את השאלה מתחילת ההודעה.
+    // הוא כתב אותו בעצמו; חזרה עליו רק מרחיקה את ההודעה מתחילת המייל.
     const message = composeNotification(
-      input({ event: "QUESTION", actorName: "יוסי", note: "שאלה" }),
+      input({ event: "MESSAGE", actorName: "יוסי", note: "שאלה" }),
     );
     expect(message.body).not.toContain("אין חשמל בסלון");
   });

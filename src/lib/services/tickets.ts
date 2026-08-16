@@ -853,16 +853,17 @@ export async function deleteDraft(viewer: Viewer, ticketId: string) {
 }
 
 /**
- * מעדכן את סטטוס השיוך של נמען (נצפה / טופל / שאלה).
+ * מעדכן את סטטוס השיוך של נמען (נצפה / טופל).
  *
  * זהו המפלס שבו נרשמת המציאות: כל נמען מתקדם בקצב שלו, וסטטוס הפנייה
  * נגזר מהם. הנמען לעולם אינו סוגר — "טופל" ממנו הוא דיווח, לא אימות.
+ *
+ * ‏`QUESTION` הוסר ב-0.4 (אפיון §7 שורה 31): שאלה אינה עוד סטטוס אלא הודעה
+ * רגילה בשרשור, ומה שמסמן אותה למנהל הוא `deriveAwaitingReply`.
  */
 export async function setAssignmentStatus(
   assignmentId: string,
-  status: Extract<AssignmentStatus, "VIEWED" | "DONE" | "QUESTION">,
-  /** טקסט השאלה, כדי שהפותח יראה אותה בהודעה ולא רק "יש שאלה" */
-  note?: string,
+  status: Extract<AssignmentStatus, "VIEWED" | "DONE">,
 ) {
   const assignment = await db.assignment.findUnique({
     where: { id: assignmentId },
@@ -893,12 +894,11 @@ export async function setAssignmentStatus(
     });
 
     // צפייה בלבד אינה "תנועה" לעניין ההסלמה — זו בדיוק הנקודה שבגללה
-    // הכלל שונה מהאפיון המקורי. סימון טופל או שאלה כן.
+    // הכלל שונה מהאפיון המקורי. סימון "טופל" כן.
     if (status !== "VIEWED") {
       await tx.ticket.update({ where: { id: assignment.ticket.id }, data: touchData() });
-      // הכדור חזר לפותח, והוא אינו יושב מול המסך. בלי ההודעה הזו שאלה של
-      // קבלן ממתינה עד שמישהו במקרה ייכנס לפנייה.
-      await enqueueNotification(tx, { event: status, assignmentId, note });
+      // הכדור חזר לפותח, והוא אינו יושב מול המסך.
+      await enqueueNotification(tx, { event: status, assignmentId });
     }
 
     await recordEvent(tx, assignment.ticket.id, status, { recipientName: name });

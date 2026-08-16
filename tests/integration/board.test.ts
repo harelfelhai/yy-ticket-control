@@ -76,17 +76,6 @@ describe("getBoard — קיבוץ לפי אצל מי הכדור", () => {
     expect(board.sections.ACTION_REQUIRED).toHaveLength(0);
   });
 
-  it("שאלה של נמען מעבירה את הפנייה ל'דורש ממך' עם הסיבה", async () => {
-    const ticket = await makeTicket(manager);
-    const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
-    await setAssignmentStatus(assignment.id, "QUESTION");
-
-    const board = await getBoard(asUser(manager), {}, NOW);
-
-    expect(board.sections.ACTION_REQUIRED).toHaveLength(1);
-    expect(board.sections.ACTION_REQUIRED[0]?.reason).toBe("יוסי שאל שאלה");
-  });
-
   /**
    * המסלול שהחליף את "יש לי שאלה".
    *
@@ -138,17 +127,18 @@ describe("getBoard — קיבוץ לפי אצל מי הכדור", () => {
   });
 
   it("טיוטות מוצמדות לראש 'דורש ממך', לפני פניות אחרות שדורשות טיפול", async () => {
-    // קודם פנייה שתעבור ל"דורש ממך" (שאלה), ואז טיוטה — הטיוטה חייבת לקפוץ לראש.
+    // קודם פנייה שתעבור ל"דורש ממך" (כולם סיימו), ואז טיוטה — הטיוטה
+    // חייבת לקפוץ לראש.
     const ticket = await makeTicket(manager);
     const assignment = await db.assignment.findFirstOrThrow({ where: { ticketId: ticket.id } });
-    await setAssignmentStatus(assignment.id, "QUESTION");
+    await setAssignmentStatus(assignment.id, "DONE");
     await makeTicket(manager, { saveAsDraft: true });
 
     const board = await getBoard(asUser(manager), {}, NOW);
     expect(board.sections.ACTION_REQUIRED).toHaveLength(2);
     // הטיוטה ראשונה, למרות שנוצרה אחרי — היא לא נדחפת אל מחוץ למסך.
     expect(board.sections.ACTION_REQUIRED[0]?.status).toBe("DRAFT");
-    expect(board.sections.ACTION_REQUIRED[1]?.status).toBe("AWAITING_OPENER_QUESTION");
+    expect(board.sections.ACTION_REQUIRED[1]?.status).toBe("AWAITING_OPENER_APPROVAL");
   });
 
   it("פנייה סגורה עוברת לארכיון", async () => {

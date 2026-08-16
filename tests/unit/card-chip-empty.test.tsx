@@ -97,8 +97,10 @@ describe("תגי סטטוס", () => {
   });
 
   it("סטטוס חוסם נקרא כאדום, וסיום כירוק", () => {
-    const { rerender } = render(<TicketStatusChip status="AWAITING_OPENER_QUESTION" />);
-    expect(screen.getByText(/שאלה|ממתין/).className).toContain("danger");
+    // טיוטה היא "עבודה בשטח עצורה" (§ Colors). היא תפסה את מקומו של
+    // ‏"ממתין לפותח (שאלה)" כשהסטטוס הזה בוטל ב-0.4.
+    const { rerender } = render(<TicketStatusChip status="DRAFT" />);
+    expect(screen.getByText("טיוטה").className).toContain("danger");
 
     rerender(<TicketStatusChip status="AWAITING_OPENER_APPROVAL" />);
     expect(screen.getByText(/אישור|ממתין/).className).toContain("success");

@@ -86,11 +86,12 @@ describe("sortCards", () => {
   });
 
   it("מיון סטטוס הוא לפי דחיפות ולא לפי אלפבית", () => {
-    // "שאלה" גוברת על "נצפה" — אותה קדימות שבה `deriveTicketStatus` בודק.
+    // "ממתין לאישור" גובר על "נצפה" — אותה קדימות שבה `deriveTicketStatus`
+    // בודק, ולא סדר אלפביתי של שמות הסטטוסים.
     const cards = [
       card({ seq: 1, status: "CLOSED" }),
       card({ seq: 2, status: "VIEWED" }),
-      card({ seq: 3, status: "AWAITING_OPENER_QUESTION" }),
+      card({ seq: 3, status: "AWAITING_OPENER_APPROVAL" }),
       card({ seq: 4, status: "DRAFT" }),
     ];
     expect(seqs(sortCards(cards, { key: "status", direction: "asc" }))).toEqual([4, 3, 2, 1]);

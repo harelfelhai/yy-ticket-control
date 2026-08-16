@@ -54,7 +54,6 @@ test.describe("§5.ו — מקרי הקצה", () => {
     await openPortalTicket(page, link, description, ticketIdFromPath(path));
     await expect(page.getByText(EDGE_CASES.closedTicketBlocked)).toBeVisible();
     await expect(page.getByRole("button", { name: PORTAL.markDone })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: PORTAL.askQuestion })).toHaveCount(0);
   });
 
   test("BR-33 — נמען שהוסר: הפנייה אינה ברשימתו ואין לו הרשאת כתיבה", async ({ page }) => {

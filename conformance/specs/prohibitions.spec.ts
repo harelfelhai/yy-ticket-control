@@ -47,7 +47,9 @@ test.describe("PROH — הנמען אינו סוגר", () => {
     await openPortalTicket(page, link, description);
 
     await expect(page.getByRole("button", { name: PORTAL.markDone })).toBeVisible();
-    await expect(page.getByRole("button", { name: PORTAL.askQuestion })).toBeVisible();
+    // ‏"יש לי שאלה" הוסר ב-0.4 (§7 שורה 31). הטענה התהפכה: לא רק שהכפתור
+    // אינו נדרש — קיומו מחדש יהיה נסיגה. שאלה נכתבת בתיבת התגובה.
+    await expect(page.getByRole("button", { name: "יש לי שאלה" })).toHaveCount(0);
     // §4 מסך 8 שורה 323: "אין בפורטל כפתור סגירה. זה מכוון."
     await expect(page.getByRole("button", { name: TICKET_SCREEN.close })).toHaveCount(0);
     await expect(page.getByRole("button", { name: TICKET_SCREEN.reopen })).toHaveCount(0);

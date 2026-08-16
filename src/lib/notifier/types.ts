@@ -13,7 +13,7 @@
  * `notificationTarget`. הוא נוסף כשהשרשור הפך לערוץ התקשורת היחיד: עד אז
  * הודעה בשרשור לא יידעה איש, והצד השני גילה אותה רק אם נכנס במקרה.
  */
-export type NotificationEvent = "ASSIGNED" | "REOPENED" | "QUESTION" | "DONE" | "MESSAGE";
+export type NotificationEvent = "ASSIGNED" | "REOPENED" | "DONE" | "MESSAGE";
 
 /** מה שצריך לדעת על הפנייה כדי לנסח הודעה עליה */
 export interface TicketSummary {

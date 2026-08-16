@@ -6,7 +6,7 @@ import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
-import { askQuestionAction, markDoneAction, replyAction } from "./actions";
+import { markDoneAction, replyAction } from "./actions";
 import { cardClasses } from "@/components/ui/card";
 import { Banner, FormError } from "@/components/ui/message";
 import { ReplyField } from "@/components/reply-field";
@@ -21,14 +21,17 @@ interface PortalActionsProps {
 }
 
 /**
- * הפעולות שהנמען רשאי לבצע: תגובה, "סיימתי — טופל", ו"יש לי שאלה".
+ * הפעולות שהנמען רשאי לבצע: תגובה ו"סיימתי — טופל".
  *
  * **הנמען אינו סוגר** (אפיון §5.א). "טופל" ממנו הוא דיווח, לא אימות, ולכן
  * הכפתור אומר "סיימתי — טופל" ולא "סגור", וההודעה שאחריו מבהירה שהמנהל
  * הוא זה שסוגר. הבהרה כאן חוסכת טלפון של "סגרתי, למה זה עדיין פתוח?".
  *
- * "יש לי שאלה" דורש טקסט: שאלה בלי תוכן היא רק דגל אדום שמנהל העבודה לא
- * יודע מה לעשות איתו.
+ * **"יש לי שאלה" הוסר ב-0.4** (אפיון §7 שורה 31). שאלה נשלחת כהודעה רגילה
+ * בתיבת התגובה, וההודעה עצמה היא שמחזירה את הפנייה לפותח ומסמנת אותה
+ * בלוח כממתינה למענה. הכפתור דרש מהקבלן לסווג את עצמו לפני שכתב, יצר שני
+ * מסלולים לאותה פעולה — ובאחד מהם, כתיבה בתיבה בלי ללחוץ עליו, ההודעה לא
+ * הגיעה לאיש — והיה הערוץ היחיד שדרכו הודעה מהשטח נראתה בכלל.
  */
 export function PortalActions({
   token,
@@ -39,7 +42,7 @@ export function PortalActions({
 }: PortalActionsProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
-  const { busy, error, setError, run } = useAction();
+  const { busy, error, run } = useAction();
 
   // תגובה יכולה להיות תמונה בלבד — וזה המקרה השכיח כאן: קבלן מצלם את מה
   // שתיקן במקום לתאר אותו במילים.
@@ -63,9 +66,6 @@ export function PortalActions({
       {status === "DONE" ? (
         <Banner tone="success">{he.portal.doneNotice(openerName)}</Banner>
       ) : null}
-      {status === "QUESTION" ? (
-        <Banner tone="warning">{he.portal.questionNotice(openerName)}</Banner>
-      ) : null}
 
       <ReplyField value={text} onChange={setText} />
 
@@ -80,7 +80,7 @@ export function PortalActions({
       <div className="flex flex-col gap-2">
         {/* `Button` ולא `<button>`: זהו `secondary` רגיל, והכתיבה-מהזיכרון
             כאן כבר סטתה — `px-4` (הריפוד של `compact`) על גובה `default`.
-            ההחרגה של הקובץ נועדה לשני הכפתורים שמתחת, לא לו. */}
+            ההחרגה של הקובץ ב-`primitives.test.ts` נועדה לכפתור שמתחת, לא לו. */}
         <Button
           variant="secondary"
           className="w-full"
@@ -94,33 +94,6 @@ export function PortalActions({
         >
           {he.ticket.send}
         </Button>
-
-        <button
-          type="button"
-          /*
-           * **הכפתור לחיץ תמיד, והדרישה נאמרת במילים.**
-           *
-           * שאלה עדיין מחייבת טקסט גם כשמצורפת תמונה — תמונה בלי מילים
-           * אינה שאלה שמנהל העבודה יודע לענות עליה. מה שהשתנה הוא איך זה
-           * נאמר: קודם הכפתור היה `disabled` עד שהוקלד משהו, כלומר קבלן
-           * שלחץ עליו לא קיבל שום תגובה ולא היה לו רמז מה חסר. `opacity-60`
-           * נראה כמו כפתור מעוצב שאינו עובד, לא כמו דרישה שלא מולאה.
-           */
-          disabled={busy}
-          onClick={() => {
-            if (text.trim().length === 0) {
-              setError(he.portal.questionNeedsText);
-              return;
-            }
-            run(
-              () => askQuestionAction(token, ticketId, text, files.map((f) => f.mediaId)),
-              clear,
-            );
-          }}
-          className="min-h-12 rounded-xl border border-warning bg-warning/10 px-4 font-semibold text-warning disabled:opacity-60"
-        >
-          {he.portal.askQuestion}
-        </button>
 
         <button
           type="button"

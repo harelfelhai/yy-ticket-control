@@ -21,7 +21,6 @@ const ASSIGNMENT_TONES: Record<AssignmentStatus, ChipTone> = {
   // לא `neutral`: "נצפה" אומר שהקבלן באמת פתח, וזה שונה מ"שלחתי".
   VIEWED: "neutralStrong",
   DONE: "success",
-  QUESTION: "danger",
   REMOVED: "neutral",
 };
 
@@ -31,7 +30,6 @@ const TICKET_TONES: Record<DerivedTicketStatus, ChipTone> = {
   // עצורה", והכרטיס עצמו כבר נושא מסגרת `danger`. צ׳יפ כתום על כרטיס אדום
   // שידר שני מצבים שונים על אותו אובייקט. נמצא בסבב הביקורת הראשון.
   DRAFT: "danger",
-  AWAITING_OPENER_QUESTION: "danger",
   AWAITING_OPENER_APPROVAL: "success",
   PARTIAL: "warning",
   VIEWED: "neutralStrong",

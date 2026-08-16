@@ -16,7 +16,6 @@ const STATUS_OPTIONS: DerivedTicketStatus[] = [
   "NEW",
   "VIEWED",
   "PARTIAL",
-  "AWAITING_OPENER_QUESTION",
   "AWAITING_OPENER_APPROVAL",
   "CLOSED",
 ];

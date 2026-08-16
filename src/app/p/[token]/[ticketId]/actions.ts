@@ -61,39 +61,6 @@ export async function markDoneAction(
 
 const mediaIdsSchema = z.array(z.string().min(1)).max(20).optional();
 
-export async function askQuestionAction(
-  token: string,
-  ticketId: string,
-  text: string,
-  mediaIds?: string[],
-): Promise<ActionResult> {
-  return guard(async () => {
-    const parsed = inputSchema.parse({ token, ticketId });
-    const files = mediaIdsSchema.parse(mediaIds) ?? [];
-    const { identity, assignment } = await requireActiveAssignment(parsed.token, parsed.ticketId);
-
-    // ההודעה נשמרת לפני שינוי הסטטוס: שאלה בלי תוכן היא רק דגל אדום
-    // שמנהל העבודה לא יודע מה לעשות איתו.
-    await addMessage(
-      { kind: "professional", id: identity.professionalId },
-      parsed.ticketId,
-      text,
-      files,
-    );
-    // הטקסט מועבר גם לסטטוס, כדי שההודעה לפותח תכיל את השאלה עצמה. מייל
-    // שאומר רק "יש שאלה" מאלץ אותו להיכנס למערכת כדי לדעת על מה מדובר.
-    await setAssignmentStatus(assignment.id, "QUESTION", text);
-
-    logInfo("portal.action", {
-      action: "question",
-      ticketId: parsed.ticketId,
-      professionalId: identity.professionalId,
-    });
-    revalidatePath(`/p/${parsed.token}/${parsed.ticketId}`);
-    revalidatePath(`/p/${parsed.token}`);
-  });
-}
-
 export async function replyAction(
   token: string,
   ticketId: string,

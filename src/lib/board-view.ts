@@ -98,19 +98,18 @@ export function isSortKey(value: string | undefined): value is SortKey {
 /**
  * סדר הסטטוסים למיון — לפי **דחיפות**, לא לפי אלפבית.
  *
- * מיון אלפביתי על שם הסטטוס היה מסדר "נצפה" לפני "שאלה" בלי שום היגיון
- * תפעולי. הסדר כאן הוא אותו סדר שבו `deriveTicketStatus` בודק את המצבים,
- * וזה מכוון: שם הוא מבטא קדימות ("שאלה גוברת על הכול למעט סגירה"), וכאן
- * אותה קדימות בדיוק היא מה שהמנהל מצפה לראות בראש.
+ * מיון אלפביתי על שם הסטטוס היה מסדר "נצפה" לפני "ממתין לאישור" בלי שום
+ * היגיון תפעולי. הסדר כאן הוא אותו סדר שבו `deriveTicketStatus` בודק את
+ * המצבים, וזה מכוון: שם הוא מבטא קדימות, וכאן אותה קדימות בדיוק היא מה
+ * שהמנהל מצפה לראות בראש.
  */
 const STATUS_ORDER: Record<DerivedTicketStatus, number> = {
   DRAFT: 0,
-  AWAITING_OPENER_QUESTION: 1,
-  AWAITING_OPENER_APPROVAL: 2,
-  PARTIAL: 3,
-  NEW: 4,
-  VIEWED: 5,
-  CLOSED: 6,
+  AWAITING_OPENER_APPROVAL: 1,
+  PARTIAL: 2,
+  NEW: 3,
+  VIEWED: 4,
+  CLOSED: 5,
 };
 
 /** השוואת מחרוזות בעברית. הריקות מטופלת ב-`emptyRank`, לא כאן. */

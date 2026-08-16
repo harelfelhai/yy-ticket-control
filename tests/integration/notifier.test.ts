@@ -106,11 +106,10 @@ function managerViewer(): Viewer {
 }
 
 describe("notificationTarget", () => {
-  it("שיוך ופתיחה מחדש הולכים לנמען, שאלה וטופל חוזרים לפותח", () => {
-    // ‏Gate G3: שאלה נשלחת לפותח בלבד. מנהלי האתר רואים אותה בלוח ממילא.
+  it("שיוך ופתיחה מחדש הולכים לנמען, וסימון טופל חוזר לפותח", () => {
+    // ‏Gate G3: מה שחוזר לפותח נשלח אליו בלבד. מנהלי האתר רואים אותו בלוח.
     expect(notificationTarget("ASSIGNED")).toBe("recipient");
     expect(notificationTarget("REOPENED")).toBe("recipient");
-    expect(notificationTarget("QUESTION")).toBe("opener");
     expect(notificationTarget("DONE")).toBe("opener");
   });
 
@@ -246,12 +245,17 @@ describe("sendNotification", () => {
     const { transport, sent } = fakeTransport();
 
     await sendNotification(
-      { event: "QUESTION", assignmentId: assignment.id, note: "איפה הכניסה לדירה?" },
+      {
+        event: "MESSAGE",
+        assignmentId: assignment.id,
+        target: "opener",
+        note: "איפה הכניסה לדירה?",
+      },
       transport,
     );
 
     expect(sent[0]?.to).toBe("david@example.com");
-    expect(sent[0]?.subject).toContain("יוסי שאל שאלה");
+    expect(sent[0]?.subject).toContain("יוסי כתב הודעה");
     expect(sent[0]?.text).toContain("איפה הכניסה לדירה?");
     // לפותח נשלח קישור לפנייה במערכת, לא קישור קסם — הוא נכנס עם סיסמה.
     expect(sent[0]?.text).toContain(`/tickets/${ticket.id}`);
@@ -358,12 +362,11 @@ describe("המסלול המלא דרך התור", () => {
     expect(sent[0]?.to).toBe("yossi@example.com");
   });
 
-  it("שאלה מהקבלן מגיעה לפותח דרך התור", async () => {
+  it("הודעה מהקבלן מגיעה לפותח דרך התור", async () => {
     const ticket = await makeTicket([electrician]);
-    const assignment = await assignmentOf(ticket.id, electrician);
     await drainJobs({ transport: fakeTransport().transport });
 
-    await setAssignmentStatus(assignment.id, "QUESTION", "צריך מפתח לחדר החשמל");
+    await addMessage({ kind: "professional", id: electrician }, ticket.id, "צריך מפתח לחדר החשמל");
 
     const { transport, sent } = fakeTransport();
     await drainJobs({ transport });

@@ -12,7 +12,7 @@ import { db } from "../src/lib/db";
  * תזהם נתונים קיימים. אין למחוק — זו סביבת בדיקה שנועדה להצטבר.
  */
 
-const STATUSES: AssignmentStatus[] = ["SENT", "VIEWED", "DONE", "QUESTION"];
+const STATUSES: AssignmentStatus[] = ["SENT", "VIEWED", "DONE"];
 
 async function seedLoad(count: number, stamp: number): Promise<void> {
   const now = new Date();
