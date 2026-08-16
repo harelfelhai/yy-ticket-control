@@ -5,10 +5,12 @@ import {
   type TicketView,
   activeAssignments,
   daysWithoutActivity,
+  deriveAwaitingReply,
   deriveBoardSection,
   deriveTicketStatus,
   isStale,
   reasonText,
+  toLastMessageView,
 } from "@/lib/ticket-status";
 
 const NOW = new Date("2026-03-15T09:00:00Z");
@@ -142,6 +144,25 @@ describe("deriveBoardSection — אצל מי הכדור", () => {
       expect(deriveBoardSection(status, true)).toBe("ACTION_REQUIRED");
     },
   );
+
+  /**
+   * הודעה שממתינה למענה, הדגל שהחליף את "יש לי שאלה".
+   *
+   * בלעדיו קבלן היה כותב "צריך מפתח לחדר החשמל", והפנייה הייתה נשארת
+   * ב"אצל הנמענים" — המקום שמנהל אינו סורק, כי לכאורה מישהו אחר מטפל בה.
+   */
+  it.each(["PARTIAL", "VIEWED", "NEW"] as const)(
+    "%s עובר ל'דורש ממך' כשהודעה ממתינה למענה",
+    (status) => {
+      expect(deriveBoardSection(status, false, true)).toBe("ACTION_REQUIRED");
+    },
+  );
+
+  it("פנייה סגורה נשארת בארכיון גם כשההודעה האחרונה מנמען", () => {
+    // סגירה גוברת על הכול. פנייה סגורה שקופצת חזרה ללוח היא בדיוק
+    // ההתנהגות ששוחקת את האמון במיון.
+    expect(deriveBoardSection("CLOSED", false, true)).toBe("ARCHIVE");
+  });
 });
 
 describe("היעדר תנועה", () => {
@@ -163,6 +184,91 @@ describe("היעדר תנועה", () => {
 
   it("טיוטה אינה מוסלמת — היא ממילא כבר ב'דורש ממך'", () => {
     expect(isStale(ticket({ lastActivityAt: daysAgo(30), isDraft: true }), NOW)).toBe(false);
+  });
+});
+
+/**
+ * מי "מחזיק את הכדור" לפי ההודעה האחרונה בשרשור.
+ *
+ * הפונקציה הזו החליפה את סטטוס `QUESTION`: אין עוד כפתור "יש לי שאלה",
+ * ולכן שאלה של קבלן מגיעה כהודעה רגילה — ומה שמסמן אותה למנהל הוא העובדה
+ * שהכותב האחרון הוא נמען שאיש לא ענה לו.
+ */
+describe("deriveAwaitingReply — האם ההודעה האחרונה ממתינה למענה", () => {
+  const contractor = { authorUserId: null, authorProfessionalId: "p1", authorName: "יוסי" };
+
+  it("הודעה מנמען פעיל ממתינה למענה", () => {
+    expect(deriveAwaitingReply(contractor, ["p1"])).toEqual({ recipientName: "יוסי" });
+  });
+
+  it("פנייה בלי שרשור אינה ממתינה לדבר", () => {
+    expect(deriveAwaitingReply(null, ["p1"])).toBeNull();
+  });
+
+  it("אירוע מערכת אינו הודעה של אדם", () => {
+    // "שויך לרונית" נכתב בידי המערכת. בלי התנאי הזה כל שיוך היה מסמן את
+    // הפנייה כממתינה למענה, וכל פנייה חדשה הייתה נוחתת ב"דורש ממך".
+    const event = { authorUserId: null, authorProfessionalId: null, authorName: "" };
+    expect(deriveAwaitingReply(event, ["p1"])).toBeNull();
+  });
+
+  it("מנהל שכתב אחרון אינו ממתין לעצמו", () => {
+    const manager = { authorUserId: "u9", authorProfessionalId: null, authorName: "דוד" };
+    expect(deriveAwaitingReply(manager, ["p1"])).toBeNull();
+  });
+
+  it("נמען שהוסר אחרי שכתב אינו מחזיק את הכדור", () => {
+    // הוא כבר לא בתמונה, ואין למי לענות.
+    expect(deriveAwaitingReply(contractor, [])).toBeNull();
+  });
+
+  it("נמען פנימי נספר כנמען לכל דבר", () => {
+    // עובד חברה שמשויך לפנייה הוא נמען, לא "צוות" — §5.ז מקנה לו את אותן
+    // פעולות בדיוק, והשאלה היחידה היא אם יש לו שיוך פעיל.
+    const internal = { authorUserId: "u5", authorProfessionalId: null, authorName: "רונית" };
+    expect(deriveAwaitingReply(internal, ["u5"])).toEqual({ recipientName: "רונית" });
+  });
+
+  it("המענה מנקה את הדגל בלי שדה שמור", () => {
+    // ברגע שמנהל כותב, ההודעה האחרונה היא שלו — והדגל נופל מעצמו. אין
+    // "סימון כנקרא" שמישהו צריך לזכור לבצע.
+    const managerReplied = { authorUserId: "u9", authorProfessionalId: null, authorName: "דוד" };
+    expect(deriveAwaitingReply(contractor, ["p1"])).not.toBeNull();
+    expect(deriveAwaitingReply(managerReplied, ["p1"])).toBeNull();
+  });
+});
+
+describe("toLastMessageView — מהשאילתה לגזירה", () => {
+  it("מערך ריק הוא 'אין הודעה', ולא קריסה", () => {
+    // שלושת הקוראים שולפים take:1. הפונקציה מקבלת מערך בדיוק כדי שאיש
+    // מהם לא יכתוב messages[0] בעצמו וישכח את המקרה הריק.
+    expect(toLastMessageView([])).toBeNull();
+  });
+
+  it("שולף את שם הכותב משני סוגי הכותבים", () => {
+    const fromPro = toLastMessageView([
+      {
+        authorUserId: null,
+        authorProfessionalId: "p1",
+        authorUser: null,
+        authorProfessional: { name: "יוסי" },
+      },
+    ]);
+    expect(fromPro).toEqual({
+      authorUserId: null,
+      authorProfessionalId: "p1",
+      authorName: "יוסי",
+    });
+
+    const fromUser = toLastMessageView([
+      {
+        authorUserId: "u1",
+        authorProfessionalId: null,
+        authorUser: { name: "דוד" },
+        authorProfessional: null,
+      },
+    ]);
+    expect(fromUser?.authorName).toBe("דוד");
   });
 });
 
@@ -209,6 +315,34 @@ describe("reasonText — למה הפנייה נמצאת כאן", () => {
   it("מציג מי מטפל כשאין סיבה דחופה יותר", () => {
     const withHandler = ticket({ handlerName: "דוד" });
     expect(reasonText(withHandler, [to("VIEWED")], NOW)).toBe("דוד מטפל");
+  });
+
+  it("הודעה שממתינה למענה מציגה את שם הכותב", () => {
+    const waiting = ticket({ awaitingReply: { recipientName: "יוסי" } });
+    expect(reasonText(waiting, [to("VIEWED", "יוסי")], NOW)).toBe("יוסי כתב הודעה");
+  });
+
+  it("הודעה שממתינה למענה גוברת על הסלמה", () => {
+    // הודעה טרייה מסבירה את מיקום הפנייה טוב יותר מ"ללא תנועה 9 ימים".
+    const stale = ticket({
+      escalated: true,
+      lastActivityAt: daysAgo(9),
+      awaitingReply: { recipientName: "יוסי" },
+    });
+    expect(reasonText(stale, [to("SENT", "יוסי")], NOW)).toBe("יוסי כתב הודעה");
+  });
+
+  it("הודעה שממתינה למענה גוברת על 'מי מטפל'", () => {
+    // "דוד מטפל" מרגיע, וזו בדיוק ההרגעה השגויה כשמישהו בשטח ממתין לתשובה.
+    const waiting = ticket({ handlerName: "דוד", awaitingReply: { recipientName: "יוסי" } });
+    expect(reasonText(waiting, [to("VIEWED", "יוסי")], NOW)).toBe("יוסי כתב הודעה");
+  });
+
+  it("'כולם סיימו' גובר על הודעה שממתינה למענה", () => {
+    // סדר מכוון: כשכולם סיימו, מה שנדרש מהמנהל הוא אישור וסגירה — וזו
+    // פעולה קונקרטית יותר מ"מישהו כתב". ההודעה עצמה ממתינה לו בשרשור.
+    const waiting = ticket({ awaitingReply: { recipientName: "יוסי" } });
+    expect(reasonText(waiting, [to("DONE", "יוסי")], NOW)).toBe(he.reason.allDone);
   });
 
   it("טיוטה מוסברת כטיוטה", () => {

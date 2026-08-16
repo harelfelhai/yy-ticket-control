@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openDetails, recipientRow } from "./ticket-screen";
+import { openDetails, recipientRow, showLink, shownText } from "./ticket-screen";
 
 /**
  * הפעולות על פנייה קיימת, דרך הממשק האמיתי.
@@ -10,11 +10,21 @@ import { openDetails, recipientRow } from "./ticket-screen";
  * ונעלמים לפי ההרשאה, ושהשרשור מציג את אירועי המערכת בעברית.
  */
 
+/**
+ * מתחבר כמנהל, ואידמפוטנטי בכוונה.
+ *
+ * ביקור בקישור הפורטל אינו מנתק את הסשן הפנימי — הפורטל נשען על טוקן
+ * בכתובת ולא על עוגייה. לכן `goto("/login")` אחרי ביקור כזה מפנה מיד
+ * ל-`/board`, וטופס ההתחברות אינו קיים בעמוד. הבדיקה נכשלה כך בהמתנה
+ * לשדה שלעולם לא יופיע.
+ */
 async function login(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("טלפון או מייל").fill(E2E_ADMIN.phone);
-  await page.getByLabel("סיסמה").fill(E2E_ADMIN.password);
-  await page.getByRole("button", { name: "כניסה" }).click();
+  await page.goto("/board");
+  if (new URL(page.url()).pathname === "/login") {
+    await page.getByLabel("טלפון או מייל").fill(E2E_ADMIN.phone);
+    await page.getByLabel("סיסמה").fill(E2E_ADMIN.password);
+    await page.getByRole("button", { name: "כניסה" }).click();
+  }
   await expect(page).toHaveURL(/\/board$/);
 }
 
@@ -23,10 +33,16 @@ async function pick(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-/** יוצר פנייה משוגרת ומחזיר את התיאור הייחודי שלה */
-async function createTicket(page: Page): Promise<string> {
+/**
+ * יוצר פנייה משוגרת ומחזיר את התיאור הייחודי שלה.
+ *
+ * ‏`contractorName` נמסר כשהבדיקה צריכה לזהות את הקבלן אחר כך — למשל כדי
+ * לשלוף את קישור הפורטל שלו או לטעון על שמו בשורת הסיבה.
+ */
+async function createTicket(page: Page, contractorName?: string): Promise<string> {
   const stamp = Date.now();
   const description = `תקלה ${stamp}`;
+  const contractor = contractorName ?? `קבלן ${stamp}`;
 
   await page.goto("/tickets/new");
   await pick(page, "בניין", "בניין א");
@@ -35,15 +51,13 @@ async function createTicket(page: Page): Promise<string> {
   await page.getByLabel("תיאור").fill(description);
 
   await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
-  await page.getByLabel("שם").fill(`קבלן ${stamp}`);
+  await page.getByLabel("שם").fill(contractor);
   await page.getByLabel("טלפון").fill(`050-${String(stamp).slice(-7)}`);
   await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
 
   // ההמתנה חיונית: יצירת איש המקצוע אסינכרונית, ושיגור לפניה היה שומר
   // את הפנייה כטיוטה בלי נמענים — בדיוק כפי שהמערכת אמורה להתנהג.
-  await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(
-    `קבלן ${stamp}`,
-  );
+  await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(contractor);
 
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page).toHaveURL(/\/tickets\/[a-z0-9]+$/);
@@ -144,6 +158,51 @@ test.describe("פעולות על פנייה", () => {
   test("השרשור מציג אירועי מערכת בעברית", async ({ page }) => {
     await createTicket(page);
     await expect(page.getByText(/שויך לפנייה$/)).toBeVisible();
+  });
+
+  /**
+   * הודעה מקבלן מזיזה את הפנייה בלוח.
+   *
+   * זהו המסלול שהחליף את "יש לי שאלה": שאלה מגיעה כהודעה רגילה, ומה שמסמן
+   * אותה למנהל הוא שהכותב האחרון הוא נמען שאיש לא ענה לו. בלי זה הפנייה
+   * הייתה נשארת ב"אצל הנמענים" — המקום שמנהל אינו סורק, כי לכאורה מישהו
+   * אחר מטפל בה — והשאלה הייתה יושבת עד שמישהו נכנס לפנייה במקרה.
+   */
+  test("הודעה מקבלן מעבירה את הפנייה ל'דורש ממך' עם שמו", async ({ page }) => {
+    const stamp = Date.now();
+    const contractor = `קבלן ${stamp}`;
+    const description = await createTicket(page, contractor);
+
+    const link = await showLink(page, contractor);
+
+    // ── הקבלן כותב הודעה מהפורטל ──────────────────────────────────────
+    await page.goto(link);
+    await page.getByRole("link").filter({ hasText: description }).click();
+    await page.getByLabel("תגובה").fill("צריך מפתח לחדר החשמל");
+    await page.getByRole("button", { name: "שלח", exact: true }).click();
+    await expect(shownText(page, "צריך מפתח לחדר החשמל")).toBeVisible();
+
+    // ── אצל המנהל: הפנייה קפצה, והסיבה אומרת מי כתב ──────────────────
+    await login(page);
+    await page.goto("/board");
+
+    const card = page.getByRole("link").filter({ hasText: description });
+    await expect(card).toContainText(`${contractor} כתב הודעה`);
+
+    // ── והתשובה מחזירה אותה ─────────────────────────────────────────
+    // הדגל נגזר מההודעה האחרונה ואינו שדה שמור, ולכן אין "סימון כנקרא".
+    await card.click();
+    await page.getByLabel("תגובה").fill("המפתח אצל השומר");
+    await page.getByRole("button", { name: "שלח", exact: true }).click();
+    // ‏`shownText` ולא `getByText`: האחרון מתאים גם את ה-`textarea` שזה עתה
+    // מולא, ולכן היה נפתר מיד עם ההקלדה — לפני שהשרת קלט את התגובה — והמעבר
+    // ללוח היה מתחרה בכתיבה שטרם נחתה.
+    await expect(shownText(page, "המפתח אצל השומר")).toBeVisible();
+
+    await page.goto("/board");
+    await expect(page.getByRole("link").filter({ hasText: description })).not.toContainText(
+      "כתב הודעה",
+    );
   });
 
   /**

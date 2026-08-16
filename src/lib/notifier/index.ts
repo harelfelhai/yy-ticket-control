@@ -23,8 +23,17 @@ export type NotificationTarget = "recipient" | "opener";
 /**
  * שיוך ופתיחה מחדש נשלחים לנמען — הוא זה שצריך לצאת לעבודה.
  * שאלה וסימון טופל חוזרים לפותח, כי אצלו הכדור (Gate G3: לפותח בלבד).
+ *
+ * ‏`MESSAGE` הוא החריג היחיד, ובהכרח: הודעה בשרשור הולכת **לצד השני**, ומי
+ * הצד השני תלוי במי כתב. הקורא מוסר את היעד במפורש במקום שהפונקציה תנחש
+ * מתוך האירוע — וזה נשאר כלל אחד במקום אחד, כי אף קורא אינו מחליט לבדו על
+ * ארבעת האירועים האחרים.
  */
-export function notificationTarget(event: NotificationEvent): NotificationTarget {
+export function notificationTarget(
+  event: NotificationEvent,
+  explicit?: NotificationTarget,
+): NotificationTarget {
+  if (explicit) return explicit;
   return event === "ASSIGNED" || event === "REOPENED" ? "recipient" : "opener";
 }
 
@@ -39,8 +48,12 @@ export type DeliveryOutcome =
 export interface NotifyInput {
   event: NotificationEvent;
   assignmentId: string;
-  /** תוכן נלווה — טקסט השאלה שנשאלה */
+  /** תוכן נלווה — טקסט השאלה שנשאלה, או ההודעה שנכתבה בשרשור */
   note?: string;
+  /** נמסר ל-`MESSAGE` בלבד, שיעדו תלוי בכותב ולא באירוע */
+  target?: NotificationTarget;
+  /** מזהה המשתמש הפנימי שכתב, כשההודעה יוצאת לנמענים. השם נקרא כאן. */
+  actorUserId?: string;
 }
 
 /**
@@ -82,7 +95,7 @@ export async function sendNotification(
     return { status: "skipped", reason: "assignment-removed" };
   }
 
-  const target = notificationTarget(input.event);
+  const target = notificationTarget(input.event, input.target);
   const recipientName = assignment.professional?.name ?? assignment.user?.name ?? "";
 
   const toName =
@@ -99,10 +112,23 @@ export async function sendNotification(
       ? await ensurePortalLink(assignment.professional.id)
       : `${env.appBaseUrl().replace(/\/+$/, "")}/tickets/${assignment.ticketId}`;
 
+  /*
+   * מי "עשה" את הדבר שעליו מודיעים.
+   *
+   * בארבעת האירועים הוותיקים זה תמיד הנמען שבשיוך. בהודעה שמנהל כותב
+   * לנמענים זה המנהל — ובלי החריג הזה ההודעה שנשלחת ליוסי הייתה נפתחת
+   * ב"יוסי כתב הודעה". השם נקרא כאן ולא נשמר בג'וב, לפי הכלל ב-`jobs/types`:
+   * מטען הג'וב מחזיק מזהים, והמצב נקרא בזמן השליחה.
+   */
+  const actorName = input.actorUserId
+    ? ((await db.user.findUnique({ where: { id: input.actorUserId }, select: { name: true } }))
+        ?.name ?? "")
+    : recipientName;
+
   const message = composeNotification({
     event: input.event,
     toName,
-    actorName: recipientName,
+    actorName,
     ticket: toTicketSummary(assignment.ticket),
     link,
     note: input.note,

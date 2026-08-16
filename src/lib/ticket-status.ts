@@ -43,6 +43,73 @@ export interface TicketView {
   lastActivityAt: Date;
   /** שם המנהל שסימן "אני מטפל", אם יש */
   handlerName?: string | null;
+  /**
+   * ההודעה האחרונה בשרשור נכתבה בידי **נמען**, ואיש מהצוות לא הגיב אחריה.
+   *
+   * דגל סקציה ולא סטטוס, בדיוק כמו `escalated`. סטטוס הפנייה מתאר את
+   * התקדמות השיוכים ("כמה סיימו"), בעוד ש"אצל מי הכדור" הוא בדיוק מה
+   * ש-`BoardSection` אומר — ולכן הודעה שממתינה למענה מזיזה את הפנייה בלי
+   * לשקר על מצב העבודה. השם הוא של הכותב, לשורת הסיבה.
+   */
+  awaitingReply?: { recipientName: string } | null;
+}
+
+/** ההודעה האחרונה בשרשור, בשדות שנדרשים כדי לדעת מי כתב אותה */
+export interface LastMessageView {
+  authorUserId: string | null;
+  authorProfessionalId: string | null;
+  authorName: string;
+}
+
+/**
+ * ההודעה האחרונה כפי שהיא חוזרת מהשאילתה, בצורה שהגזירה מכירה.
+ *
+ * מקבל מערך ולא איבר, מפני ששלושת הקוראים שולפים `take: 1` — מערך ריק
+ * או בן איבר אחד. כך אף קורא אינו כותב `messages[0]` בעצמו ומסתכן בשכחת
+ * המקרה הריק.
+ */
+export function toLastMessageView(
+  messages: readonly {
+    authorUserId: string | null;
+    authorProfessionalId: string | null;
+    authorUser: { name: string } | null;
+    authorProfessional: { name: string } | null;
+  }[],
+): LastMessageView | null {
+  const last = messages[0];
+  if (!last) return null;
+
+  return {
+    authorUserId: last.authorUserId,
+    authorProfessionalId: last.authorProfessionalId,
+    authorName: last.authorProfessional?.name ?? last.authorUser?.name ?? "",
+  };
+}
+
+/**
+ * האם הפנייה ממתינה למענה של הצוות.
+ *
+ * טהורה ומשותפת לשלושה קוראים (הלוח, מסך הפנייה, החיפוש), כדי שהכלל
+ * "הכדור אצלנו" יהיה זהה בכל מקום. שלושה תנאים, וכל אחד מהם מוציא מצב
+ * שנראה דומה אך אינו:
+ *
+ * 1. **יש הודעה אחרונה.** פנייה בלי שרשור אינה ממתינה לדבר.
+ * 2. **יש לה כותב.** אירוע מערכת (`שויך לרונית`) אינו הודעה של אדם.
+ * 3. **הכותב הוא נמען פעיל.** מנהל שכתב אחרון אינו ממתין לעצמו — וזה
+ *    גם מה שמנקה את הדגל ברגע שמישהו מהצוות עונה, בלי שדה שמור ובלי
+ *    פעולת "סימון כנקרא" שמישהו צריך לזכור לבצע.
+ */
+export function deriveAwaitingReply(
+  lastMessage: LastMessageView | null,
+  activeRecipientIds: readonly string[],
+): { recipientName: string } | null {
+  if (!lastMessage) return null;
+
+  const authorId = lastMessage.authorProfessionalId ?? lastMessage.authorUserId;
+  if (!authorId) return null;
+  if (!activeRecipientIds.includes(authorId)) return null;
+
+  return { recipientName: lastMessage.authorName };
 }
 
 /** מספר הימים ללא תנועה שאחריו פנייה פעילה מוסלמת (אפיון §5.ג) */
@@ -93,6 +160,7 @@ export function deriveTicketStatus(
 export function deriveBoardSection(
   status: DerivedTicketStatus,
   escalated: boolean,
+  awaitingReply = false,
 ): BoardSection {
   if (status === "CLOSED") return "ARCHIVE";
   if (
@@ -102,7 +170,10 @@ export function deriveBoardSection(
   ) {
     return "ACTION_REQUIRED";
   }
-  return escalated ? "ACTION_REQUIRED" : "WITH_RECIPIENTS";
+  // הודעה מנמען שממתינה למענה היא הכדור אצלנו לכל דבר. בלי השורה הזו קבלן
+  // היה כותב "צריך מפתח לחדר החשמל", והפנייה הייתה נשארת ב"אצל הנמענים" —
+  // כלומר במקום שמנהל אינו סורק, כי לכאורה מישהו אחר מטפל בה.
+  return escalated || awaitingReply ? "ACTION_REQUIRED" : "WITH_RECIPIENTS";
 }
 
 /** מספר ימים שלמים שחלפו מאז התנועה האחרונה */
@@ -145,6 +216,13 @@ export function reasonText(
   }
 
   if (status === "AWAITING_OPENER_APPROVAL") return he.reason.allDone;
+
+  /*
+   * לפני ההסלמה, ובכוונה: הודעה טרייה מסבירה את מיקום הפנייה טוב יותר
+   * מ"ללא תנועה 9 ימים" — ובפועל הודעה חדשה מאפסת את מד התנועה ממילא,
+   * כך שהסדר הזה נכון גם כשהשתיים מתנגשות.
+   */
+  if (ticket.awaitingReply) return he.reason.messageFrom(ticket.awaitingReply.recipientName);
 
   if (ticket.escalated) return he.reason.stale(daysWithoutActivity(ticket, now));
 

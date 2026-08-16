@@ -4,9 +4,11 @@ import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/session";
 import {
   type BoardSection,
+  deriveAwaitingReply,
   deriveBoardSection,
   deriveTicketStatus,
   reasonText,
+  toLastMessageView,
 } from "@/lib/ticket-status";
 
 /**
@@ -110,6 +112,26 @@ export async function getBoard(
           user: { select: { name: true } },
         },
       },
+      /*
+       * ההודעה האחרונה בלבד — לחישוב "ממתין למענה" (`deriveAwaitingReply`).
+       *
+       * ‏`take: 1` ולא שליפת השרשור: הלוח מציג עשרות פניות, וטעינת כל
+       * ההודעות שלהן רק כדי לקרוא את האחרונה הייתה מכפילה את המשקל של
+       * המסך הנפתח ביותר במערכת. אירועי מערכת מסוננים כאן ולא אחר כך —
+       * ‏"שויך לרונית" אינו הודעה של אדם, ואילו נכלל היה כל שיוך מסמן
+       * את הפנייה כממתינה למענה.
+       */
+      messages: {
+        where: { kind: { not: "EVENT" } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          authorUserId: true,
+          authorProfessionalId: true,
+          authorUser: { select: { name: true } },
+          authorProfessional: { select: { name: true } },
+        },
+      },
     },
   });
 
@@ -124,10 +146,21 @@ export async function getBoard(
       status: a.status,
       recipientName: a.professional?.name ?? a.user?.name ?? "",
     }));
-    const view = { ...ticket, handlerName: ticket.handler?.name ?? null };
-    const status = deriveTicketStatus(view, assignmentViews);
+    const activeRecipientIds = ticket.assignments
+      .filter((a) => a.status !== "REMOVED")
+      .map((a) => a.professionalId ?? a.userId)
+      .filter((id): id is string => id !== null);
 
-    sections[deriveBoardSection(status, ticket.escalated)].push({
+    const awaitingReply = deriveAwaitingReply(
+      toLastMessageView(ticket.messages),
+      activeRecipientIds,
+    );
+
+    const view = { ...ticket, handlerName: ticket.handler?.name ?? null, awaitingReply };
+    const status = deriveTicketStatus(view, assignmentViews);
+    const section = deriveBoardSection(status, ticket.escalated, Boolean(awaitingReply));
+
+    sections[section].push({
       id: ticket.id,
       seq: ticket.seq,
       buildingName: ticket.building?.name ?? null,
@@ -139,7 +172,7 @@ export async function getBoard(
         .filter((a) => a.status !== "REMOVED")
         .map((a) => a.recipientName),
       status,
-      section: deriveBoardSection(status, ticket.escalated),
+      section,
       reason: reasonText(view, assignmentViews, now),
       ageDays: Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY),
       reopened: ticket.reopenCount > 0,

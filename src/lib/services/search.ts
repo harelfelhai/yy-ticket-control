@@ -5,9 +5,11 @@ import { normalizeName } from "@/lib/normalize";
 import type { SessionUser } from "@/lib/session";
 import {
   type DerivedTicketStatus,
+  deriveAwaitingReply,
   deriveBoardSection,
   deriveTicketStatus,
   reasonText,
+  toLastMessageView,
 } from "@/lib/ticket-status";
 import { tagChatTextMatch } from "./tags";
 
@@ -86,6 +88,20 @@ export async function searchTickets(
           user: { select: { name: true } },
         },
       },
+      // ההודעה האחרונה בלבד, לחישוב "ממתין למענה" — כמו בלוח. תוצאות
+      // החיפוש מציגות את אותו כרטיס, וכרטיס שאומר דבר אחר משהלוח אומר על
+      // אותה פנייה הוא בדיוק מה ששוחק את האמון במיון.
+      messages: {
+        where: { kind: { not: "EVENT" } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          authorUserId: true,
+          authorProfessionalId: true,
+          authorUser: { select: { name: true } },
+          authorProfessional: { select: { name: true } },
+        },
+      },
     },
   });
 
@@ -96,7 +112,15 @@ export async function searchTickets(
       status: a.status,
       recipientName: a.professional?.name ?? a.user?.name ?? "",
     }));
-    const view = { ...ticket, handlerName: ticket.handler?.name ?? null };
+    const awaitingReply = deriveAwaitingReply(
+      toLastMessageView(ticket.messages),
+      ticket.assignments
+        .filter((a) => a.status !== "REMOVED")
+        .map((a) => a.professionalId ?? a.userId)
+        .filter((assignedId): assignedId is string => assignedId !== null),
+    );
+
+    const view = { ...ticket, handlerName: ticket.handler?.name ?? null, awaitingReply };
     const status = deriveTicketStatus(view, assignmentViews);
 
     if (filters.status && status !== filters.status) continue;
@@ -113,7 +137,7 @@ export async function searchTickets(
         .filter((a) => a.status !== "REMOVED")
         .map((a) => a.recipientName),
       status,
-      section: deriveBoardSection(status, ticket.escalated),
+      section: deriveBoardSection(status, ticket.escalated, Boolean(awaitingReply)),
       reason: reasonText(view, assignmentViews, now),
       ageDays: Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY),
       reopened: ticket.reopenCount > 0,

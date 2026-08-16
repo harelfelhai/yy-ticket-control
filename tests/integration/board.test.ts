@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { getBoard } from "@/lib/services/board";
 import {
+  addMessage,
   closeTicket,
   createTicket,
   setAssignmentStatus,
@@ -84,6 +85,49 @@ describe("getBoard — קיבוץ לפי אצל מי הכדור", () => {
 
     expect(board.sections.ACTION_REQUIRED).toHaveLength(1);
     expect(board.sections.ACTION_REQUIRED[0]?.reason).toBe("יוסי שאל שאלה");
+  });
+
+  /**
+   * המסלול שהחליף את "יש לי שאלה".
+   *
+   * שאלה מגיעה מעתה כהודעה רגילה בשרשור, ולכן הלוח חייב לזהות אותה לבד —
+   * אחרת קבלן היה כותב "צריך מפתח לחדר החשמל" והפנייה הייתה נשארת ב"אצל
+   * הנמענים", המקום שמנהל אינו סורק כי לכאורה מישהו אחר מטפל בה.
+   */
+  it("הודעה של נמען מעבירה את הפנייה ל'דורש ממך' עם שמו", async () => {
+    const ticket = await makeTicket(manager);
+    await addMessage(
+      { kind: "professional", id: electrician },
+      ticket.id,
+      "צריך מפתח לחדר החשמל",
+    );
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+
+    expect(board.sections.ACTION_REQUIRED).toHaveLength(1);
+    expect(board.sections.ACTION_REQUIRED[0]?.reason).toBe("יוסי כתב הודעה");
+  });
+
+  it("תשובת המנהל מחזירה את הפנייה לנמענים", async () => {
+    // הדגל נגזר מההודעה האחרונה ואינו שדה שמור, ולכן הוא נופל מעצמו ברגע
+    // שמישהו מהצוות עונה — בלי "סימון כנקרא" שצריך לזכור לבצע.
+    const ticket = await makeTicket(manager);
+    await addMessage({ kind: "professional", id: electrician }, ticket.id, "צריך מפתח");
+    await addMessage({ kind: "user", ...manager }, ticket.id, "המפתח אצל השומר");
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+
+    expect(board.sections.ACTION_REQUIRED).toHaveLength(0);
+    expect(board.sections.WITH_RECIPIENTS).toHaveLength(1);
+  });
+
+  it("שיוך אינו נחשב להודעה שממתינה למענה", async () => {
+    // "שויך ליוסי" הוא אירוע מערכת. בלי הסינון כל פנייה חדשה הייתה נוחתת
+    // מיד ב"דורש ממך", וההבחנה בין שתי הקבוצות הייתה מתאיינת.
+    await makeTicket(manager);
+    const board = await getBoard(asUser(manager), {}, NOW);
+
+    expect(board.sections.ACTION_REQUIRED).toHaveLength(0);
   });
 
   it("טיוטה נמצאת ב'דורש ממך'", async () => {

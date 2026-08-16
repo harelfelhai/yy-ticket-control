@@ -487,6 +487,61 @@ export async function updateResidentName(viewer: Viewer, ticketId: string, rawNa
 }
 
 /**
+ * מיידע את הצד השני על הודעה חדשה בשרשור.
+ *
+ * **למה זה קיים בכלל.** עד לגרסה הזו `addMessage` לא ייצרה שום התראה: רק
+ * שיוך, פתיחה מחדש, שאלה וסימון טופל שלחו דואר. כלומר השרשור — הערוץ שבו
+ * מתנהלת העבודה בפועל — היה היחיד שאיש לא ידע שקרה בו משהו. זה עבד כל עוד
+ * לקבלן היה כפתור "יש לי שאלה" נפרד; כשהוא ירד, הודעה ממנו הייתה נשארת
+ * ללא מענה עד שמישהו נכנס לפנייה במקרה.
+ *
+ * **מי מקבל מה.** הודעה הולכת לצד השני, ולכן היעד תלוי בכותב: קבלן כותב →
+ * הפותח מקבל; מנהל כותב → כל הנמענים הפעילים מקבלים. הכותב עצמו לעולם
+ * אינו מקבל הודעה על מה שהוא כתב.
+ *
+ * **למה דרך שיוך ולא ישירות.** ‏`sendNotification` נשענת על `assignmentId`
+ * כדי לשלוף כתובת, שם וקישור גישה. להודעה מקבלן אין "שיוך של הפותח", ולכן
+ * נמסר השיוך של הכותב עם `target: "opener"` — אותו שיוך מוביל לפנייה
+ * ולפותח שלה, וזה גם מה שמבטיח שהסרת הנמען תבטל את ההודעה בדרך.
+ */
+async function notifyOtherSide(
+  tx: Tx,
+  viewer: Viewer,
+  ticket: { id: string; assignments: { id: string; status: AssignmentStatus; userId: string | null; professionalId: string | null }[] },
+  text: string,
+): Promise<void> {
+  const active = ticket.assignments.filter((a) => a.status !== "REMOVED");
+
+  const authorAssignment = active.find((a) =>
+    viewer.kind === "professional" ? a.professionalId === viewer.id : a.userId === viewer.id,
+  );
+
+  // הכותב הוא נמען של הפנייה — ההודעה חוזרת לפותח. אין צורך למסור את שמו:
+  // הוא בעל השיוך, והשליחה שולפת אותו ממנו ממילא.
+  if (authorAssignment) {
+    await enqueueNotification(tx, {
+      event: "MESSAGE",
+      assignmentId: authorAssignment.id,
+      target: "opener",
+      note: text || undefined,
+    });
+    return;
+  }
+
+  // הכותב הוא צוות פנימי שאינו נמען — ההודעה יוצאת לכל הנמענים הפעילים.
+  if (!isUser(viewer)) return;
+  for (const assignment of active) {
+    await enqueueNotification(tx, {
+      event: "MESSAGE",
+      assignmentId: assignment.id,
+      target: "recipient",
+      actorUserId: viewer.id,
+      note: text || undefined,
+    });
+  }
+}
+
+/**
  * מוסיף תגובה לשרשור.
  *
  * מנהל שכותב מסומן אוטומטית כמטפל (אפיון §5.ד): בתור משותף לשני מנהלי
@@ -541,6 +596,8 @@ export async function addMessage(
       const user = await tx.user.findUnique({ where: { id: viewer.id }, select: { name: true } });
       await recordEvent(tx, ticketId, "HANDLER_SET", { userName: user?.name ?? "" });
     }
+
+    await notifyOtherSide(tx, viewer, ticket, text);
 
     return message;
   });

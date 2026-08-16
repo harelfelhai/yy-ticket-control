@@ -339,6 +339,12 @@ export const he = {
     questionOne: (name: string) => `${name} שאל שאלה`,
     questionMany: (name: string, others: number) => `${name} ועוד ${others} שאלו שאלה`,
     allDone: "כולם סיימו — ממתין לאישור",
+    /**
+     * הודעה מנמען שממתינה למענה. באותה צורה של `questionOne` ("יוסי שאל
+     * שאלה") ובכוונה: מבחינת המנהל זו אותה פעולה בדיוק — מישהו בשטח פנה
+     * אליו וממתין. מה שהשתנה הוא שאין עוד ערוץ נפרד לשאלות.
+     */
+    messageFrom: (name: string) => `${name} כתב הודעה`,
     partial: (done: number, total: number) => `${done} מתוך ${total} סיימו`,
     stale: (days: number) => `ללא תנועה ${days} ימים`,
     handler: (name: string) => `${name} מטפל`,
@@ -749,6 +755,17 @@ export const he = {
     doneSubject: (actor: string, location: string) => `${actor} סימן שטופל — ${location}`,
     done: (actor: string, ref: string, location: string) =>
       `${actor} סימן שטופל ב${ref} — ${location}. הפנייה ממתינה לאישור שלך ולסגירה.`,
+
+    /**
+     * הודעה חדשה בשרשור.
+     *
+     * ההודעה עצמה מצורפת כ-`note`, ולכן הנוסח כאן קצר בכוונה: הוא מסגרת
+     * ולא תוכן. שאלה של קבלן מגיעה דרך המסלול הזה בדיוק כמו כל הודעה
+     * אחרת — אין ערוץ נפרד לשאלות.
+     */
+    messageSubject: (actor: string, location: string) => `${actor} כתב הודעה — ${location}`,
+    message: (actor: string, ref: string, location: string) =>
+      `${actor} כתב הודעה ב${ref} — ${location}.`,
 
     /** שורת הסיום עם הקישור. נפרדת כדי שתמיד תופיע אחרונה ובאותו נוסח. */
     linkLine: (link: string) => `לצפייה וטיפול: ${link}`,

@@ -60,6 +60,11 @@ function headline(
         subject: he.notify.doneSubject(actor, location),
         opening: he.notify.done(actor, ref, location),
       };
+    case "MESSAGE":
+      return {
+        subject: he.notify.messageSubject(actor, location),
+        opening: he.notify.message(actor, ref, location),
+      };
   }
 }
 
@@ -71,7 +76,11 @@ function headline(
  * אותו עכשיו" — והוא קורא את זה בוואטסאפ לפני שהוא פותח קישור כלשהו.
  */
 function body(input: ComposeInput): string | undefined {
-  if (input.event === "QUESTION" || input.event === "DONE") return undefined;
+  // ‏MESSAGE נכלל: ההודעה שנכתבה כבר מצורפת כ-`note`, וצירוף התיאור מתחתיה
+  // היה מציג לצד השני טקסט ישן שהוא מכיר במקום את מה שנכתב עכשיו.
+  if (input.event === "QUESTION" || input.event === "DONE" || input.event === "MESSAGE") {
+    return undefined;
+  }
   return input.ticket.description.trim() || undefined;
 }
 

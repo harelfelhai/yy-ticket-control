@@ -21,7 +21,12 @@ import { listSiteDirectory } from "@/lib/services/directory";
 import { listTags, listTicketTags } from "@/lib/services/tags";
 import { getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { canTagTicket } from "@/lib/permissions";
-import { deriveTicketStatus, reasonText } from "@/lib/ticket-status";
+import {
+  deriveAwaitingReply,
+  deriveTicketStatus,
+  reasonText,
+  toLastMessageView,
+} from "@/lib/ticket-status";
 import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
@@ -55,8 +60,25 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   }));
   const status = deriveTicketStatus(ticket, assignmentViews);
   const now = new Date();
+
+  /*
+   * "ממתין למענה" — אותו חישוב שהלוח עושה, ומאותו מקור.
+   *
+   * כאן השרשור כבר טעון במלואו ובסדר עולה, ולכן ההודעה האחרונה נלקחת
+   * מהסוף. הסינון של `EVENT` חוזר גם כאן: `שויך לרונית` אינו הודעה של
+   * אדם, ובלעדיו כל שיוך היה מסמן את הפנייה כממתינה למענה.
+   */
+  const lastMessages = ticket.messages.filter((m) => m.kind !== "EVENT").slice(-1);
+  const awaitingReply = deriveAwaitingReply(
+    toLastMessageView(lastMessages),
+    ticket.assignments
+      .filter((a) => a.status !== "REMOVED")
+      .map((a) => a.professionalId ?? a.userId)
+      .filter((assignedId): assignedId is string => assignedId !== null),
+  );
+
   const reason = reasonText(
-    { ...ticket, handlerName: ticket.handler?.name ?? null },
+    { ...ticket, handlerName: ticket.handler?.name ?? null, awaitingReply },
     assignmentViews,
     now,
   );

@@ -6,8 +6,14 @@
  * (SMS, WhatsApp Business API) לא נוגעת בקוד שקורא לה.
  */
 
-/** האירועים שמצדיקים הודעה יוצאת. לא כל אירוע בשרשור שולח הודעה. */
-export type NotificationEvent = "ASSIGNED" | "REOPENED" | "QUESTION" | "DONE";
+/**
+ * האירועים שמצדיקים הודעה יוצאת. לא כל אירוע בשרשור שולח הודעה.
+ *
+ * ‏`MESSAGE` הוא היחיד שיעדו אינו נגזר מהאירוע אלא **מזהות הכותב** — ראה
+ * `notificationTarget`. הוא נוסף כשהשרשור הפך לערוץ התקשורת היחיד: עד אז
+ * הודעה בשרשור לא יידעה איש, והצד השני גילה אותה רק אם נכנס במקרה.
+ */
+export type NotificationEvent = "ASSIGNED" | "REOPENED" | "QUESTION" | "DONE" | "MESSAGE";
 
 /** מה שצריך לדעת על הפנייה כדי לנסח הודעה עליה */
 export interface TicketSummary {

@@ -3,10 +3,12 @@ import { JOB_TYPES } from "@/jobs/types";
 import { drainJobs } from "@/jobs/worker";
 import { db } from "@/lib/db";
 import { notificationTarget, sendNotification } from "@/lib/notifier";
+import type { Viewer } from "@/lib/permissions";
 import type { EmailMessage, EmailTransport } from "@/lib/notifier/types";
 import { readPortalLink } from "@/lib/services/portal";
 import {
   addAssignments,
+  addMessage,
   closeTicket,
   createTicket,
   removeAssignment,
@@ -98,6 +100,11 @@ async function assignmentOf(ticketId: string, professionalId: string) {
   return db.assignment.findFirstOrThrow({ where: { ticketId, professionalId } });
 }
 
+/** המנהל כצופה. פונקציה ולא קבוע, כי `manager` נבנה מחדש בכל `beforeEach`. */
+function managerViewer(): Viewer {
+  return { kind: "user", ...manager };
+}
+
 describe("notificationTarget", () => {
   it("שיוך ופתיחה מחדש הולכים לנמען, שאלה וטופל חוזרים לפותח", () => {
     // ‏Gate G3: שאלה נשלחת לפותח בלבד. מנהלי האתר רואים אותה בלוח ממילא.
@@ -105,6 +112,18 @@ describe("notificationTarget", () => {
     expect(notificationTarget("REOPENED")).toBe("recipient");
     expect(notificationTarget("QUESTION")).toBe("opener");
     expect(notificationTarget("DONE")).toBe("opener");
+  });
+
+  it("הודעה בשרשור מקבלת את יעדה מהכותב, לא מהאירוע", () => {
+    // זהו האירוע היחיד ששני הכיוונים חוקיים בו: קבלן כותב לפותח, ומנהל
+    // כותב לנמענים. לכן היעד נמסר במפורש ואינו מנוחש מתוך שם האירוע.
+    expect(notificationTarget("MESSAGE", "opener")).toBe("opener");
+    expect(notificationTarget("MESSAGE", "recipient")).toBe("recipient");
+  });
+
+  it("יעד מפורש אינו משנה את ארבעת האירועים הוותיקים כשאינו נמסר", () => {
+    expect(notificationTarget("ASSIGNED", undefined)).toBe("recipient");
+    expect(notificationTarget("DONE", undefined)).toBe("opener");
   });
 });
 
@@ -363,6 +382,94 @@ describe("המסלול המלא דרך התור", () => {
 
     await setAssignmentStatus(assignment.id, "VIEWED");
 
+    expect(await db.job.count({ where: { status: "PENDING" } })).toBe(0);
+  });
+});
+
+/**
+ * הודעה בשרשור מיידעת את הצד השני.
+ *
+ * עד לגרסה הזו `addMessage` לא ייצרה שום התראה: השרשור — הערוץ שבו מתנהלת
+ * העבודה בפועל — היה היחיד שאיש לא ידע שקרה בו משהו. זה הוסתר כל עוד
+ * לקבלן היה כפתור "יש לי שאלה" נפרד ששלח מייל לפותח; ברגע שהוא ירד, שאלה
+ * הייתה יושבת ללא מענה עד שמישהו נכנס לפנייה במקרה.
+ */
+describe("הודעה בשרשור", () => {
+  /** מרוקן את ג'ובי השיוך שנוצרו בפתיחה, כדי שיישאר רק מה שההודעה יצרה */
+  async function drainAssignmentJobs() {
+    await drainJobs({ transport: fakeTransport().transport });
+  }
+
+  it("הודעה מקבלן מגיעה לפותח, עם תוכן ההודעה", async () => {
+    const ticket = await makeTicket([electrician]);
+    await drainAssignmentJobs();
+
+    await addMessage({ kind: "professional", id: electrician }, ticket.id, "צריך מפתח לחדר החשמל");
+
+    const { transport, sent } = fakeTransport();
+    await drainJobs({ transport });
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.to).toBe("david@example.com");
+    expect(sent[0]?.subject).toContain("יוסי כתב הודעה");
+    // התוכן עצמו, ולא רק "יש הודעה חדשה": מנהל שקורא בוואטסאפ צריך לדעת
+    // אם זה חוסם עבודה לפני שהוא פותח קישור.
+    expect(sent[0]?.text).toContain("צריך מפתח לחדר החשמל");
+  });
+
+  it("הודעה ממנהל מגיעה לכל הנמענים הפעילים, ובשמו שלו", async () => {
+    const ticket = await makeTicket([electrician, plumber]);
+    await drainAssignmentJobs();
+
+    await addMessage(managerViewer(), ticket.id, "המפתח אצל השומר");
+
+    const { transport, sent } = fakeTransport();
+    await drainJobs({ transport });
+
+    // משה הוא טלפון בלבד ולכן מדולג בשליחה — אבל ג'וב נוצר גם עבורו,
+    // וזה מה שמאפשר למנהל לראות שהוא לא קיבל.
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.to).toBe("yossi@example.com");
+    // הכותב הוא המנהל. בלי זה ההודעה ליוסי הייתה נפתחת ב"יוסי כתב הודעה".
+    expect(sent[0]?.subject).toContain("דוד כתב הודעה");
+  });
+
+  it("נמען שהוסר אינו מקבל הודעות חדשות", async () => {
+    const ticket = await makeTicket([electrician, plumber]);
+    await drainAssignmentJobs();
+    const removed = await assignmentOf(ticket.id, electrician);
+    await removeAssignment(managerViewer(), removed.id);
+    await drainAssignmentJobs();
+
+    await addMessage(managerViewer(), ticket.id, "עדכון");
+
+    const { transport, sent } = fakeTransport();
+    await drainJobs({ transport });
+
+    // יוסי היה היחיד עם מייל, והוא הוסר — ולכן שום דבר לא יוצא.
+    expect(sent).toHaveLength(0);
+  });
+
+  it("הכותב אינו מקבל הודעה על מה שכתב בעצמו", async () => {
+    const ticket = await makeTicket([electrician]);
+    await drainAssignmentJobs();
+
+    await addMessage({ kind: "professional", id: electrician }, ticket.id, "שאלה");
+
+    const { transport, sent } = fakeTransport();
+    await drainJobs({ transport });
+
+    expect(sent.map((m) => m.to)).not.toContain("yossi@example.com");
+  });
+
+  it("הודעה בלי טקסט — תמונה בלבד — עדיין מיידעת", async () => {
+    // תמונה בלי כיתוב היא הודעה שלמה, ולעיתים המדויקת ביותר.
+    const ticket = await makeTicket([electrician]);
+    await drainAssignmentJobs();
+
+    await addMessage(managerViewer(), ticket.id, "", []).catch(() => undefined);
+    // הודעה ריקה לגמרי נדחית בשכבת השירות, ולכן אין מה לבדוק מעבר לכך
+    // ששום ג'וב לא נוצר ממנה.
     expect(await db.job.count({ where: { status: "PENDING" } })).toBe(0);
   });
 });

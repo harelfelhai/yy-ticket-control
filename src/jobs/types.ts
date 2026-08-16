@@ -1,3 +1,4 @@
+import type { NotificationTarget } from "@/lib/notifier";
 import type { NotificationEvent } from "@/lib/notifier/types";
 
 /**
@@ -32,6 +33,19 @@ export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];
 export interface NotifyJobPayload {
   event: NotificationEvent;
   assignmentId: string;
-  /** טקסט השאלה שנשאלה, כשהאירוע הוא שאלה */
+  /** טקסט השאלה שנשאלה, או ההודעה שנכתבה בשרשור */
   note?: string;
+  /**
+   * יעד מפורש, ל-`MESSAGE` בלבד — הודעה בשרשור הולכת לצד השני, ומי הצד
+   * השני תלוי בכותב ולא באירוע.
+   */
+  target?: NotificationTarget;
+  /**
+   * מזהה המשתמש הפנימי שכתב, כשההודעה יוצאת **לנמענים**.
+   *
+   * מזהה ולא שם, לפי הכלל שלמעלה: השם נקרא בזמן השליחה. בכיוון ההפוך —
+   * הודעה מנמען לפותח — אין צורך בשדה כלל, כי הכותב הוא בעל השיוך והשם
+   * שלו נשלף ממנו ממילא.
+   */
+  actorUserId?: string;
 }
