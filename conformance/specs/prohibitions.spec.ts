@@ -235,6 +235,7 @@ test.describe("PROH — הפנייה חוזרת לפותח", () => {
       recipients: [PROS.full.name],
     });
     await page.getByRole("button", { name: TICKET_SCREEN.markHandler }).click();
+    await openDetails(page);
     await expect(recipientRow(page, PROS.full.name)).toBeVisible();
 
     // מנהל אחר באותו אתר עדיין רשאי לפעול: להגיב, ולקחת את הסימון במפורש.

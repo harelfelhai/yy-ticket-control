@@ -27,12 +27,13 @@ import {
   reasonText,
   toLastMessageView,
 } from "@/lib/ticket-status";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
+import { CARD_LIST, CONTENT_WIDTH, TITLE_IDENTIFYING } from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
 import { RecipientEditor } from "./recipient-editor";
 import { ResidentName } from "./resident-name";
 import { TicketActions } from "./ticket-actions";
+import { TicketDetailsDialog } from "./ticket-details-dialog";
 import { TicketTags } from "./ticket-tags";
 import { ThreadEvent } from "./thread-event";
 import { cardClasses } from "@/components/ui/card";
@@ -201,7 +202,8 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
        * פס עליון קבוע (אפיון מסך 2 אזור א׳, הכרעת 0.3).
        *
        * מחזיק את מה שצריך להיות גלוי **בלי לגלול ובלי לפתוח**: איפה, באיזה
-       * מצב, ולמה. שאר המטא-דאטה יורדת לפאנל "פרטים" מתחתיו.
+       * מצב, ולמה. שאר המטא-דאטה עברה ב-0.4 לדיאלוג "פרטים" שנפתח מכאן,
+       * ואינה יושבת עוד בין הכותרת לשרשור.
        *
        * ‏`top-14` תלוי ב-`h-14` של סרגל הניווט; `-mx-4 px-4` מותח את הרצועה
        * לקצה המסך, אחרת התוכן הגולל זולג בצדדים. ראו DESIGN.md § אלמנט דביק.
@@ -217,6 +219,56 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           {ticket.reopenCount > 0 ? (
             <span className={chipClasses("warning")}>{he.ticket.reopenedBadge}</span>
           ) : null}
+
+          {/*
+           * ‏`ms-auto` דוחף לקצה השורה: הכפתור הוא מוצא ולא חלק מזהות
+           * הפנייה. בטיוטה הוא אינו מוצג — שם הכול פרוש על המסך ממילא.
+           */}
+          {ticket.isDraft ? null : (
+            <span className="ms-auto">
+              <TicketDetailsDialog>
+                {ticket.apartmentId ? (
+                  <p className="text-sm text-muted">
+                    <ResidentName
+                      ticketId={ticket.id}
+                      initial={ticket.apartment?.residentName ?? null}
+                      canEdit={canEdit}
+                    />
+                  </p>
+                ) : null}
+
+                <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <span>
+                    {he.ticket.openedBy}: {ticket.createdBy.name}
+                  </span>
+                  <span>· {he.channel[ticket.channel]}</span>
+                  <span>· {he.board.ageDays(ageDays)}</span>
+                  {ticket.handler ? (
+                    <span>· {he.ticket.handledBy(ticket.handler.name)}</span>
+                  ) : null}
+                </p>
+
+                <RecipientEditor
+                  ticketId={ticket.id}
+                  siteId={ticket.siteId}
+                  assignments={assignmentRows}
+                  available={available}
+                  canEdit={canEdit}
+                />
+
+                <TicketTags
+                  ticketId={ticket.id}
+                  initial={ticketTags.map((t) => ({ id: t.id, label: t.name }))}
+                  all={allTags.map((t) => ({ id: t.id, label: t.name }))}
+                  canEdit={canTag}
+                />
+
+                {/* מחיקה — למנהל מערכת בלבד, בתחתית הפאנל והרחק מפעולות
+                    היום-יום. בטיוטה היא נעשית דרך "מחק טיוטה" במסך ההשלמה. */}
+                {canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
+              </TicketDetailsDialog>
+            </span>
+          )}
         </div>
         <p className="text-sm text-muted">
           {ticket.domain?.name ?? he.ticket.noDomain}
@@ -233,96 +285,57 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       </header>
 
       {/*
-       * פאנל "פרטים" (אפיון מסך 2 אזור ב׳).
+       * **טיוטה נשארת פרושה על המסך** (אפיון מסך 7).
        *
-       * ‏`<details>` נייטיב ולא רכיב לקוח: עובד בלי JavaScript, נשאר מרונדר
-       * בשרת, ואינו הופך את העמוד לעמוד לקוח רק כדי לקפל אזור.
-       *
-       * ‏`open` בטיוטה מגיע **מהשרת** ולא מ-`useEffect`: הצביעה הראשונה
-       * הייתה מסתירה את `DraftCompletion` ואז חושפת אותו, והבדיקות היו
-       * מהבהבות. בטיוטה הפאנל מחזיק בדיוק את מה שחסר לשיגור.
+       * מסך ההשלמה הוא כל תכליתה של טיוטה — היא קיימת כדי שמישהו ישלים
+       * אותה וישגר. הסתרתו מאחורי כפתור הייתה מחזירה בדיוק את התקלה
+       * שהמעבר לדיאלוג בא לתקן, רק בכיוון ההפוך.
        */}
-      <details open={ticket.isDraft} className={cardClasses("flex flex-col gap-3")}>
-        <summary className={`flex min-h-11 cursor-pointer items-center ${TITLE_DESCRIPTIVE}`}>
-          {he.ticket.detailsPanel}
-        </summary>
-
-        {/* שם הדייר — מקושר לדירה. מוצג רק כשיש דירה לשייך אליה. */}
-        {ticket.apartmentId ? (
-          <p className="text-sm text-muted">
-            <ResidentName
+      {ticket.isDraft ? (
+        <div className={cardClasses("flex flex-col gap-3")}>
+          {canEdit && draftDirectory ? (
+            <DraftCompletion
+              // key יציב: מונע re-mount של הרכיב (ואיפוס המצב המקומי — למשל
+              // נמען שנוצר תוך כדי השלמה) כשהעמוד מתרנדר מחדש אחרי Server Action.
+              key={ticket.id}
               ticketId={ticket.id}
-              initial={ticket.apartment?.residentName ?? null}
-              canEdit={canEdit}
+              siteId={ticket.siteId}
+              buildings={draftDirectory.buildings.map((b) => ({
+                id: b.id,
+                label: b.name,
+                apartments: b.apartments.map((a) => ({ id: a.id, label: a.number })),
+              }))}
+              domains={draftDirectory.domains.map((d) => ({ id: d.id, label: d.name }))}
+              recipientOptions={available}
+              initial={{
+                buildingId: ticket.buildingId,
+                apartmentId: ticket.apartmentId,
+                domainId: ticket.domainId,
+                recipients: draftRecipientOptions,
+              }}
+              missing={{
+                building: !ticket.buildingId,
+                apartment: !ticket.apartmentId,
+                domain: !ticket.domainId,
+                description: ticket.description.trim().length === 0,
+                recipients: draftRecipientOptions.length === 0,
+              }}
             />
-          </p>
-        ) : null}
+          ) : (
+            // בעלים שאינו הפותח רואה טיוטה אך אינו רשאי להשלים אותה.
+            <p className={cardClasses("text-sm font-semibold text-danger", { tone: "danger" })}>
+              {he.notices.draftBanner}
+            </p>
+          )}
 
-        <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span>
-            {he.ticket.openedBy}: {ticket.createdBy.name}
-          </span>
-          <span>· {he.channel[ticket.channel]}</span>
-          <span>· {he.board.ageDays(ageDays)}</span>
-          {ticket.handler ? <span>· {he.ticket.handledBy(ticket.handler.name)}</span> : null}
-        </p>
-
-        {ticket.isDraft ? (
-        canEdit && draftDirectory ? (
-          <DraftCompletion
-            // key יציב: מונע re-mount של הרכיב (ואיפוס המצב המקומי — למשל
-            // נמען שנוצר תוך כדי השלמה) כשהעמוד מתרנדר מחדש אחרי Server Action.
-            key={ticket.id}
+          <TicketTags
             ticketId={ticket.id}
-            siteId={ticket.siteId}
-            buildings={draftDirectory.buildings.map((b) => ({
-              id: b.id,
-              label: b.name,
-              apartments: b.apartments.map((a) => ({ id: a.id, label: a.number })),
-            }))}
-            domains={draftDirectory.domains.map((d) => ({ id: d.id, label: d.name }))}
-            recipientOptions={available}
-            initial={{
-              buildingId: ticket.buildingId,
-              apartmentId: ticket.apartmentId,
-              domainId: ticket.domainId,
-              recipients: draftRecipientOptions,
-            }}
-            missing={{
-              building: !ticket.buildingId,
-              apartment: !ticket.apartmentId,
-              domain: !ticket.domainId,
-              description: ticket.description.trim().length === 0,
-              recipients: draftRecipientOptions.length === 0,
-            }}
+            initial={ticketTags.map((t) => ({ id: t.id, label: t.name }))}
+            all={allTags.map((t) => ({ id: t.id, label: t.name }))}
+            canEdit={canTag}
           />
-        ) : (
-          // בעלים שאינו הפותח רואה טיוטה אך אינו רשאי להשלים אותה.
-          <p className={cardClasses("text-sm font-semibold text-danger", { tone: "danger" })}>
-            {he.notices.draftBanner}
-          </p>
-        )
-        ) : (
-          <RecipientEditor
-            ticketId={ticket.id}
-            siteId={ticket.siteId}
-            assignments={assignmentRows}
-            available={available}
-            canEdit={canEdit}
-          />
-        )}
-
-        <TicketTags
-          ticketId={ticket.id}
-          initial={ticketTags.map((t) => ({ id: t.id, label: t.name }))}
-          all={allTags.map((t) => ({ id: t.id, label: t.name }))}
-          canEdit={canTag}
-        />
-
-        {/* מחיקה — למנהל מערכת בלבד, בתחתית הפאנל והרחק מפעולות היום-יום.
-            בטיוטה המחיקה נעשית דרך "מחק טיוטה" במסך ההשלמה, לא כאן. */}
-        {!ticket.isDraft && canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
-      </details>
+        </div>
+      ) : null}
 
       {/*
        * השרשור — גוף המסך (אפיון מסך 2 אזור ג׳).

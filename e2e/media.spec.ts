@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openDetails } from "./ticket-screen";
+import { showLink } from "./ticket-screen";
 
 /**
  * צירוף קבצים — מהבחירה ועד להצגה בשרשור, אצל שני הצדדים.
@@ -65,18 +65,14 @@ async function openTicketWithContractor(page: Page, stamp: number) {
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
-  await openDetails(page);
-  await page
-    .getByRole("list", { name: "נמענים", exact: true })
-    .getByRole("listitem")
-    .filter({ hasText: contractor })
-    .getByRole("button", { name: `קישור גישה ${contractor}` })
-    .click();
-  await expect(page.getByText(`קישור עבור ${contractor}`)).toBeVisible();
-
-  const link = (
-    await page.getByRole("textbox", { name: "קישור גישה", exact: true }).inputValue()
-  ).replace(/^https?:\/\/[^/]+/, "");
+  /*
+   * ‏`showLink` המשותף ולא עותק מקומי. העותק שישב כאן שרד כל עוד "פרטים"
+   * היה `<details>` פתוח שאינו חוסם דבר; ברגע שהוא הפך לדיאלוג, העותק
+   * השאיר את הכיסוי פרוש והבדיקות נתקעו על
+   * `overlay intercepts pointer events` — בעוד שהקוראים דרך המשותף עברו.
+   * זו בדיוק העלות של כפילות: היא אינה שגויה, היא רק אינה מתעדכנת.
+   */
+  const link = await showLink(page, contractor);
 
   return { description, contractor, link };
 }

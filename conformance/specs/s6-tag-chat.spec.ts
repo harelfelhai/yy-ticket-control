@@ -9,6 +9,7 @@ import {
   shownText,
   uniq,
   uniqPhone,
+  openDetails,
 } from "../fixtures/world";
 
 /**
@@ -29,6 +30,8 @@ async function tagTicket(page: import("@playwright/test").Page, tagName: string)
     newProfessional: { name: contractor, phone: uniqPhone() },
   });
 
+  // התגיות יושבות בדיאלוג "פרטים" מ-0.4, ו-`createTicket` אינו פותח אותו.
+  await openDetails(page);
   await page.getByRole("button", { name: /^הוסף תגית/ }).first().click();
   await page.getByRole("textbox", { name: /חיפוש/ }).fill(tagName);
   await page.getByRole("button", { name: new RegExp(`צור חדש`) }).click();

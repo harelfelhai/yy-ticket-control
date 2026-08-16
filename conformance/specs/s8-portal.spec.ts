@@ -7,6 +7,7 @@ import {
   boardCard,
   expectExpiredLink,
   createTicket,
+  openDetails,
   openPortalTicket,
   recipientRow,
   showLink,
@@ -91,6 +92,8 @@ test.describe("מסך 8 — פורטל הקבלן", () => {
     // ‏shownText: `getByText` היה נפתר על תיבת הכתיבה ולא ממתין לשרת.
     await expect(shownText(page, early)).toBeVisible();
 
+    // בורר הנמענים יושב בדיאלוג "פרטים" מ-0.4, ולכן פותחים לפני ההוספה.
+    await openDetails(page);
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(late);
     await page.getByLabel("טלפון").fill(uniqPhone());

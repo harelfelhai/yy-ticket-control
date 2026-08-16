@@ -73,6 +73,8 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
       newProfessional: { name: first, phone: uniqPhone() },
     });
 
+    // בורר הנמענים יושב בדיאלוג "פרטים" מ-0.4, ולכן פותחים לפני ההוספה.
+    await openDetails(page);
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(second);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -98,6 +100,7 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
 
     await expect(page.getByText(THREAD_EVENTS.assigned(contractor)).first()).toBeVisible();
 
+    await openDetails(page);
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();
@@ -156,6 +159,7 @@ test.describe("מסך 3 — עריכת נמענים", () => {
     });
     await page.getByRole("button", { name: /^הוסף נמען/ }).first().click();
     await page.getByRole("option", { name: new RegExp(`^${PROS.second.name}`) }).first().click();
+    await openDetails(page);
     await expect(recipientRow(page, PROS.second.name)).toBeVisible();
 
     expect(messages).toContain(RECIPIENTS_SCREEN.confirmAdd);
@@ -177,6 +181,7 @@ test.describe("מסך 3 — עריכת נמענים", () => {
       messages.push(dialog.message());
       void dialog.accept();
     });
+    await openDetails(page);
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();

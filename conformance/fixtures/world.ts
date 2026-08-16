@@ -126,9 +126,19 @@ export async function createTicket(page: Page, input: TicketDraftInput = {}): Pr
   await page.getByRole("button", { name: button }).click();
   await expect(page).toHaveURL(TICKET_URL);
 
-  // הפאנל נפתח מיד אחרי הנחיתה: כמעט כל בדיקה שממשיכה מכאן נוגעת בנמענים
-  // או בתגיות, ושתיהן יושבות בתוכו מגרסה 0.3.
-  await openDetails(page);
+  /*
+   * **הפאנל אינו נפתח כאן, ומ-0.4 זו ההתנהגות הנכונה.**
+   *
+   * כל עוד "פרטים" היה `<details>`, השארתו פתוח הייתה נוחות בלי מחיר —
+   * הוא אינו חוסם דבר. הדיאלוג שהחליף אותו לוכד את המשתמש בכוונה, ולכן
+   * מסך שנשאר עם פאנל פתוח הוא מסך שאי אפשר לפעול בו: כל בדיקה שהמשיכה
+   * לקומפוזר או ל"סגור פנייה" הייתה נתקעת על
+   * `overlay intercepts pointer events`.
+   *
+   * ברירת המחדל הבטוחה היא **סגור**, ומי שצריך את הנמענים או את התגיות
+   * קורא ל-`openDetails` במפורש. זה גם קריא יותר: התלות בפאנל נראית
+   * בבדיקה עצמה ולא מוסתרת בבונה.
+   */
   return new URL(page.url()).pathname;
 }
 
@@ -221,30 +231,70 @@ export async function expectExpiredLink(page: Page): Promise<void> {
 }
 
 /**
- * פותח את פאנל "פרטים" במסך הפנייה, אם הוא סגור.
+ * פותח את דיאלוג "פרטים" במסך הפנייה, אם אינו כבר פתוח.
  *
- * **למה זה נדרש בכלל.** מגרסה 0.3 המטא-דאטה של הפנייה — הנמענים, התגיות,
- * שם הדייר והמחיקה — יושבת בפאנל `<details>` מקופל. הדפדפן מסיר תוכן של
- * ‏`<details>` סגור מעץ הנגישות, ולכן `getByRole` תחתיו נפתר ל**אפס**
- * אלמנטים: לא רק ש-`click` נכשל, גם `toHaveCount(0)` הופך ירוק-שקר.
+ * **למה זה נדרש בכלל.** המטא-דאטה של הפנייה — הנמענים, התגיות, שם הדייר
+ * והמחיקה — אינה על המסך הראשי: מגרסה 0.3 היא ישבה בפאנל `<details>`
+ * מקופל, ומ-0.4 בדיאלוג צף. השרשור הוא גוף המסך, והשאר מאחורי מוצא אחד.
  *
- * אידמפוטנטי בכוונה: בטיוטה הפאנל פתוח מהשרת, ולחיצה הייתה סוגרת אותו.
+ * **המעבר לדיאלוג הקל דווקא על הבדיקות.** תוכן של `<details>` סגור מוסר
+ * מעץ הנגישות, כלומר `getByRole` תחתיו נפתר לאפס אלמנטים — לא רק ש-`click`
+ * נכשל, גם `toHaveCount(0)` הפך ירוק-שקר. דיאלוג סגור **אינו מרונדר**,
+ * וההבחנה בין "לא קיים" ל"קיים ומוסתר" חוזרת להיות אמיתית.
+ *
+ * **בטיוטה אין דיאלוג ואין כפתור** — מסך ההשלמה פרוש על המסך וכל מה
+ * שהבדיקה מחפשת כבר גלוי, ולכן הפונקציה יוצאת בשקט.
  */
 export async function openDetails(page: Page): Promise<void> {
-  const summary = page.locator("summary", { hasText: "פרטים" });
-  const details = page.locator("details", { has: summary });
-  await expect(details).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: "פרטים" });
+  if (await dialog.isVisible()) return;
 
   /*
-   * ‏`toPass` ולא בדיקה חד-פעמית: `open` נגזר מ-`isDraft` **בשרת**, ולכן
-   * שיגור טיוטה סוגר את הפאנל בזמן ה-re-render. בדיקה שרצה רגע לפני
-   * הסגירה הייתה רואה אותו פתוח, חוזרת, ומשאירה אותו סגור בפועל.
+   * **קודם ממתינים שמסך הפנייה ירונדר, ורק אז שואלים אם יש כפתור.**
+   *
+   * ‏`count() === 0` אחרי ניווט פירושו לרוב "העמוד עוד לא כאן", ולא "אין
+   * כפתור". בלי ההמתנה הזו הפונקציה יצאה בשקט, הבדיקה המשיכה למסך סגור,
+   * ונפלה 60 שניות מאוחר יותר על כפתור שיושב בתוך הפאנל. זו בדיוק המחלה
+   * ש-`harness-guards` נכתב בגללה: תנאי מגודר שמדלג בלי לומר.
+   *
+   * ‏`region "שרשור"` הוא העוגן: הוא קיים בכל מסך פנייה, גם בטיוטה.
+   */
+  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible({ timeout: 30_000 });
+
+  const trigger = page.getByRole("button", { name: "פרטים", exact: true });
+  // רק עכשיו ההיעדר משמעותי: בטיוטה אין כפתור, והתוכן פרוש על המסך.
+  if ((await trigger.count()) === 0) return;
+
+  /*
+   * ‏`toPass` ולא לחיצה אחת, וזה **הבדל אמיתי מ-`<details>`**.
+   *
+   * הפאנל הקודם היה HTML נייטיב: הוא נפתח גם לפני שה-JavaScript נטען.
+   * הדיאלוג הוא רכיב לקוח, ולחיצה שמגיעה לפני ה-hydration פוגעת בכפתור
+   * שעדיין אין לו מאזין — כלומר "נלחצת" ולא קורה דבר. הבדיקה נפלה בדיוק
+   * כך אחרי ניווט, והצילום הראה את המסך עם הכפתור ובלי הדיאלוג.
    */
   await expect(async () => {
-    const isOpen = () => details.evaluate((el) => (el as HTMLDetailsElement).open);
-    if (!(await isOpen())) await summary.click();
-    expect(await isOpen()).toBe(true);
-  }).toPass({ timeout: 15_000 });
+    if (!(await dialog.isVisible())) await trigger.click();
+    await expect(dialog).toBeVisible({ timeout: 2_000 });
+
+    /*
+     * **ונשאר פתוח.** הפתיחה לבדה אינה מספיקה: מצב הדיאלוג חי ברכיב
+     * לקוח, ותגובת RSC שנוחתת אחרי הניווט מרכיבה אותו מחדש ומאפסת אותו —
+     * כלומר הפאנל נסגר מעצמו רגע אחרי שנפתח. ההמתנה הקצרה נותנת לעמוד
+     * להתייצב, והטענה השנייה מחזירה את הלולאה לפתיחה נוספת אם נסגר.
+     */
+    await page.waitForTimeout(300);
+    await expect(dialog).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 20_000 });
+}
+
+/** סוגר את הדיאלוג, כדי לגשת למה שמאחוריו — הכיסוי לוכד את המשתמש. */
+export async function closeDetails(page: Page): Promise<void> {
+  const dialog = page.getByRole("dialog", { name: "פרטים" });
+  if (!(await dialog.isVisible())) return;
+
+  await dialog.getByRole("button", { name: "סגור", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 }
 
 /** שורת נמען ברצועת הנמענים במסך הפנייה */
@@ -269,7 +319,15 @@ export async function showLink(page: Page, contractorName: string): Promise<stri
     timeout: 45_000,
   });
   const field = page.getByRole("textbox", { name: "קישור גישה", exact: true });
-  return (await field.inputValue()).replace(/^https?:\/\/[^/]+/, "");
+  const link = (await field.inputValue()).replace(/^https?:\/\/[^/]+/, "");
+
+  /*
+   * **הדיאלוג נסגר לפני החזרה.** עד 0.4 ישב כאן `<details>` פתוח, שאינו
+   * חוסם דבר; דיאלוג לוכד את המשתמש בכוונה, ולכן כל קורא שהמשיך לפעולות
+   * המסך אחרי `showLink` נתקע על `overlay intercepts pointer events`.
+   */
+  await closeDetails(page);
+  return link;
 }
 
 /**

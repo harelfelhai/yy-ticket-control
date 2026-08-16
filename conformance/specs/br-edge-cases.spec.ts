@@ -72,6 +72,8 @@ test.describe("§5.ו — מקרי הקצה", () => {
 
     // נמען שני, כדי שהטוקן של הראשון לא יבוטל בהסרה האחרונה — כך נבדק
     // המצב שהאפיון מתאר: קישור **תקף** שהפנייה נעלמה ממנו.
+    // בורר הנמענים יושב בדיאלוג "פרטים" מ-0.4, ולכן פותחים לפני ההוספה.
+    await openDetails(page);
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(stay);
     await page.getByLabel("טלפון").fill(uniqPhone());

@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useCallback, useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
@@ -89,7 +90,25 @@ export function Dialog({ title, onClose, width = PANEL_WIDTH, children }: Dialog
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [close]);
 
-  return (
+  /**
+   * הפאנל נתלה על `<body>` ולא במקום שבו נכתב — וזו אינה נוחות.
+   *
+   * ‏`z-20` של הכיסוי (§ אלמנט דביק, סולם ה-z) מבטיח "מעל הכול" רק כל עוד
+   * הוא נמדד מול אותו שורש. אלמנט אב עם `z-[1]` — למשל הפס העליון הדביק
+   * של מסך הפנייה — יוצר **הקשר ערימה** חדש, וכל מה שבתוכו נלכד בו: הדיאלוג
+   * צויר מתחת לרצועה התחתונה, וכפתור "מחק פנייה" שבתוכו לא היה לחיץ. בדיקת
+   * E2E תפסה זאת כ-"subtree intercepts pointer events".
+   *
+   * ‏Portal מוציא את הפאנל מכל הקשר ערימה של אבותיו, ולכן הסולם המתועד
+   * הופך לנכון בפועל ולא רק בכוונה. המיקום ב-React tree אינו משתנה, ולכן
+   * ה-`children` וההקשרים ממשיכים לעבוד כרגיל.
+   *
+   * ‏`document` נבדק כי הרכיב עשוי להיטען בשרת; בפועל הוא מרונדר רק אחרי
+   * אינטראקציה, ולכן הענף הזה אינו נתפס בשום מסלול קיים.
+   */
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     // הכיסוי סוגר בלחיצה, אבל **רק כשהלחיצה עליו עצמו** ולא על ילד שלו —
     // אחרת גרירת בחירה שמסתיימת מחוץ לפאנל הייתה סוגרת אותו.
     <div
@@ -122,6 +141,7 @@ export function Dialog({ title, onClose, width = PANEL_WIDTH, children }: Dialog
 
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

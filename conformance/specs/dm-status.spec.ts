@@ -100,6 +100,8 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     });
 
     // הנמען השני מתווסף אחרי היצירה — זהו מסלול המשנה WF-S02.
+    // בורר הנמענים יושב בדיאלוג "פרטים" מ-0.4, ולכן פותחים לפני ההוספה.
+    await openDetails(page);
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(second);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -156,6 +158,8 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
       newProfessional: { name: finisher, phone: uniqPhone() },
     });
 
+    // בורר הנמענים יושב בדיאלוג "פרטים" מ-0.4, ולכן פותחים לפני ההוספה.
+    await openDetails(page);
     await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
     await page.getByLabel("שם").fill(asker);
     await page.getByLabel("טלפון").fill(uniqPhone());
@@ -225,6 +229,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     acceptDialogs(page);
     const { path, contractor } = await ticketWithContractor(page, "הוסרו");
 
+    await openDetails(page);
     await recipientRow(page, contractor)
       .getByRole("button", { name: /^הסר/ })
       .click();

@@ -7,6 +7,7 @@ import {
   activeTokenCount,
   createTicket,
   openPortalTicket,
+  openDetails,
   recipientRow,
   showLink,
   uniq,
@@ -55,7 +56,10 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
     await page.goto("/board");
     await page.getByRole("link").filter({ hasText: description }).first().click();
     // הניווט סגר את תיבת הקישור; "צור קישור חדש" חי בתוכה, ולכן פותחים שוב.
+    // ‏`openDetails` אחרי `showLink`: האחרון סוגר את הדיאלוג בסיומו, כדי
+    // שהכיסוי לא יחסום את שאר המסך — והפעולה הזו יושבת בתוכו.
     await showLink(page, contractor);
+    await openDetails(page);
     await recipientRow(page, contractor)
       .getByRole("button", { name: "צור קישור חדש" })
       .click();
@@ -84,6 +88,7 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
       newProfessional: { name: contractor, phone: uniqPhone() },
     });
 
+    await openDetails(page);
     const link = recipientRow(page, contractor).getByRole("link", {
       name: TICKET_SCREEN.sendWhatsApp,
     });
@@ -115,6 +120,7 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
       },
     });
 
+    await openDetails(page);
     const row = recipientRow(page, contractor);
     const resend = row.getByRole("button", { name: TICKET_SCREEN.resendEmail });
     await expect(resend).toBeVisible();

@@ -188,6 +188,10 @@ test("הקישור יציב בין שליחות, ו'צור קישור חדש' מ
   expect(await showLink(page, contractor)).toBe(firstLink);
 
   // "צור קישור חדש" הוא המענה לקישור שדלף, ולכן הוא הורג את הקודם.
+  //
+  // ‏`keepOpen`: הכפתור יושב **בתוך תיבת הקישור** ש-`showLink` חשף. סגירת
+  // הדיאלוג ופתיחתו מחדש היו מאפסות את החשיפה, והכפתור לא היה נמצא.
+  await showLink(page, contractor, { keepOpen: true });
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "צור קישור חדש" }).click();
   await expect(page.getByText("הקישור הקודם בוטל. שלח לנמען את החדש.")).toBeVisible();
