@@ -306,7 +306,18 @@ export function recipientRow(page: Page, name: string) {
 }
 
 /** מציג את קישור הפורטל של קבלן ומחזיר אותו כנתיב יחסי */
-export async function showLink(page: Page, contractorName: string): Promise<string> {
+export async function showLink(
+  page: Page,
+  contractorName: string,
+  /**
+   * להשאיר את הדיאלוג פתוח.
+   *
+   * נדרש למי שממשיך **בתוך** הפאנל — "צור קישור חדש" ו"שלח שוב במייל"
+   * יושבים בתוך תיבת הקישור שנחשפה כאן. סגירה ופתיחה מחדש היו מאפסות את
+   * החשיפה, והכפתור לא היה נמצא.
+   */
+  options: { keepOpen?: boolean } = {},
+): Promise<string> {
   await openDetails(page);
   await recipientRow(page, contractorName)
     .getByRole("button", { name: `קישור גישה ${contractorName}` })
@@ -326,7 +337,7 @@ export async function showLink(page: Page, contractorName: string): Promise<stri
    * חוסם דבר; דיאלוג לוכד את המשתמש בכוונה, ולכן כל קורא שהמשיך לפעולות
    * המסך אחרי `showLink` נתקע על `overlay intercepts pointer events`.
    */
-  await closeDetails(page);
+  if (!options.keepOpen) await closeDetails(page);
   return link;
 }
 

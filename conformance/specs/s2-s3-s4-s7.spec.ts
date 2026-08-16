@@ -118,10 +118,18 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
       recipients: [PROS.full.name],
     });
 
+    /*
+     * שלוש הפעולות האלה **גלויות בלי לפתוח דבר**, וזו הדרישה עצמה
+     * (§מסך 2 אזור ד׳): סגירת פנייה היא התוצאה של המסך ולא פרט מנהלי,
+     * ולכן היא אינה נכנסת לא לפאנל ולא לדיאלוג.
+     */
     await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.markHandler })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.close })).toBeVisible();
     await expect(page.getByLabel("תגובה")).toBeEditable();
+
+    // עריכת הנמענים היא פרט מנהלי, ומ-0.4 היא יושבת בדיאלוג "פרטים".
+    await openDetails(page);
     await expect(page.getByRole("button", { name: "+ איש מקצוע חדש" })).toBeVisible();
   });
 });
@@ -157,9 +165,9 @@ test.describe("מסך 3 — עריכת נמענים", () => {
       messages.push(dialog.message());
       void dialog.accept();
     });
+    await openDetails(page);
     await page.getByRole("button", { name: /^הוסף נמען/ }).first().click();
     await page.getByRole("option", { name: new RegExp(`^${PROS.second.name}`) }).first().click();
-    await openDetails(page);
     await expect(recipientRow(page, PROS.second.name)).toBeVisible();
 
     expect(messages).toContain(RECIPIENTS_SCREEN.confirmAdd);
@@ -294,6 +302,9 @@ test.describe("§1 — מי פתח את הפנייה", () => {
       description: uniq("פותח"),
       recipients: [PROS.full.name],
     });
+    // "נפתחה על ידי" יושב בדיאלוג "פרטים" — מי פתח נקרא פעם אחת, בעוד
+    // שהשרשור הוא העבודה החוזרת.
+    await openDetails(page);
     await expect(page.getByText(`נפתחה על ידי: ${CAST.managerA2.name}`)).toBeVisible();
   });
 });

@@ -58,8 +58,9 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
     // הניווט סגר את תיבת הקישור; "צור קישור חדש" חי בתוכה, ולכן פותחים שוב.
     // ‏`openDetails` אחרי `showLink`: האחרון סוגר את הדיאלוג בסיומו, כדי
     // שהכיסוי לא יחסום את שאר המסך — והפעולה הזו יושבת בתוכו.
-    await showLink(page, contractor);
-    await openDetails(page);
+    // ‏`keepOpen`: הכפתור יושב **בתוך תיבת הקישור** ש-`showLink` חשף.
+    // סגירת הדיאלוג ופתיחתו מחדש היו מאפסות את החשיפה, והוא לא היה נמצא.
+    await showLink(page, contractor, { keepOpen: true });
     await recipientRow(page, contractor)
       .getByRole("button", { name: "צור קישור חדש" })
       .click();
