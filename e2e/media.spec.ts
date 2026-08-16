@@ -135,6 +135,47 @@ test("מנהל מצרף תמונה לתגובה, והקבלן רואה אותה 
     .toBeGreaterThan(0);
 });
 
+/**
+ * הדיווח מהשטח: "חיפשתי משהו שהקלטתי וזה לא מצא".
+ *
+ * העיבוד אכן לא רץ — בסביבה הזו אין `ANTHROPIC_API_KEY` ואין `OPENAI_API_KEY`
+ * — אבל עד לתיקון הזה הקובץ סומן `SKIPPED` בלי סיבה, `aiNote` החזיר `null`,
+ * והמסך שתק. המשתמש ראה קובץ תקין לחלוטין ולא ידע שהוא לא ייכנס לחיפוש.
+ *
+ * הבדיקה רצה על מסלול חילוץ הטקסט ולא על התמלול, משום ששדה הקובץ אינו מקבל
+ * אודיו — הקלטה מגיעה מ-`MediaRecorder` וזקוקה למיקרופון. **זהו אותו קוד
+ * בדיוק** (`markSkipped(id,"no-engine")` → `aiNote`), ומה שנבדק כאן הוא
+ * המסלול המלא דרך דפדפן אמיתי: העלאה, עובד התור, ורינדור. בחירת המחרוזת
+ * בין אודיו לקובץ מכוסה ב-`tests/unit/media-view.test.ts`.
+ */
+test("קובץ שלא עובד עליו מנוע AI אומר זאת, ולא נראה כאילו הכול תקין", async ({ page }) => {
+  const stamp = Date.now();
+
+  await loginAsManager(page);
+  await openTicketWithContractor(page, stamp);
+
+  await fileInput(page).setInputFiles(pngFile("report.png"));
+  await expect(page.getByText("מעלה…")).toHaveCount(0);
+  await page.getByRole("button", { name: "שלח", exact: true }).click();
+
+  const thread = page.getByRole("region", { name: "שרשור" });
+  await expect(thread.getByRole("img", { name: "report.png" })).toBeVisible();
+
+  /*
+   * ‏`toPass` עם רענון: העיבוד עובר בתור, והעובד סוקר אותו כל שתי שניות.
+   * מיד אחרי השליחה הסטטוס עדיין PENDING והמסך אומר "קורא את הטקסט…" —
+   * בצדק. מה שנבדק כאן הוא המצב **אחרי** שהג'וב רץ, ושם הייתה השתיקה.
+   */
+  await expect(async () => {
+    await page.reload();
+    await expect(thread).toContainText("שירות הקריאה אינו מוגדר");
+  }).toPass({ timeout: 30_000 });
+
+  // ההבטחה שלא תתקיים חייבת להיעלם: "קורא את הטקסט…" לנצח הוא בדיוק
+  // הדפוס שהמערכת נכוותה בו כבר פעם אחת (ראו סימון וידאו כמדולג).
+  await expect(thread).not.toContainText("קורא את הטקסט…");
+});
+
 test("מנהל מצלם לפני שהפנייה קיימת, והתמונה נכנסת איתה", async ({ page }) => {
   // המסלול העיקרי בשטח: עומדים מול הדירה, מצלמים, וממלאים אחר כך.
   const stamp = Date.now();

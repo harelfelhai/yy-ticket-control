@@ -39,7 +39,7 @@ export async function runTranscription(
   if (!media) return { status: "skipped", reason: "missing" };
 
   if (!engines.transcriber) {
-    await markSkipped(media.id);
+    await markSkipped(media.id, "no-engine");
     return { status: "skipped", reason: "no-engine" };
   }
 
@@ -66,11 +66,11 @@ export async function runTextExtraction(
   if (!media) return { status: "skipped", reason: "missing" };
 
   if (!canExtractText(media.mimeType)) {
-    await markSkipped(media.id);
+    await markSkipped(media.id, "unsupported");
     return { status: "skipped", reason: "unsupported" };
   }
   if (!engines.extractor) {
-    await markSkipped(media.id);
+    await markSkipped(media.id, "no-engine");
     return { status: "skipped", reason: "no-engine" };
   }
 
@@ -111,12 +111,24 @@ async function mark(mediaId: string, aiStatus: AiStatus): Promise<void> {
   await db.mediaFile.update({ where: { id: mediaId }, data: { aiStatus } });
 }
 
-async function markSkipped(mediaId: string): Promise<void> {
-  // ‏SKIPPED ולא FAILED: אין כאן תקלה, פשוט אין מה לעשות. הממשק אינו מציג
-  // עליו דבר, כי אין למשתמש מה לעשות עם המידע הזה.
+/**
+ * שתי סיבות שונות לגמרי לאותו סטטוס — ולכן הן נשמרות.
+ *
+ * ‏`unsupported` הוא "אין מה לעבד כאן" (וידאו, סוג קובץ שאינו נתמך). למשתמש
+ * אין מה לעשות עם המידע, והממשק שותק.
+ *
+ * ‏`no-engine` הוא "יש מה לעבד, ואין במה". קודם לכן שתיהן נשמרו כ-`SKIPPED`
+ * בלי סיבה, והממשק שתק בשתיהן — כלומר המנהל הקליט הקלטה, ראה נגן, ולא קיבל
+ * שום רמז לכך שהתמלול לא קרה, שהחיפוש לא ימצא אותה, ושהתיאור לא התמלא. זה
+ * ההבדל שהופך תקלה שקטה לתקלה גלויה.
+ */
+export type SkipReason = "no-engine" | "unsupported";
+
+async function markSkipped(mediaId: string, reason: SkipReason): Promise<void> {
+  // ‏SKIPPED ולא FAILED: אין כאן תקלה שתיפתר בניסיון חוזר.
   await db.mediaFile.update({
     where: { id: mediaId },
-    data: { aiStatus: "SKIPPED", aiError: null },
+    data: { aiStatus: "SKIPPED", aiError: reason },
   });
 }
 

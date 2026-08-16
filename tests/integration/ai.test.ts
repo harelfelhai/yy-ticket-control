@@ -3,6 +3,8 @@ import { JOB_TYPES } from "@/jobs/types";
 import { drainJobs } from "@/jobs/worker";
 import type { TextExtractor, Transcriber } from "@/lib/ai/types";
 import { db } from "@/lib/db";
+import { he } from "@/lib/he";
+import { toMediaView } from "@/lib/media-view";
 import type { Viewer } from "@/lib/permissions";
 import { confirmUpload, registerMedia } from "@/lib/services/media";
 import { addMessage, createTicket } from "@/lib/services/tickets";
@@ -124,6 +126,10 @@ describe("אישור העלאה מכניס את העיבוד הנכון לתור
     expect(await db.job.count()).toBe(1); // רק ג'וב השליחה של הפנייה
     const media = await db.mediaFile.findUniqueOrThrow({ where: { id: mediaId } });
     expect(media.aiStatus).toBe("SKIPPED");
+
+    // ...ובשקט: אין מה לתמלל בווידאו, ואין למשתמש מה לעשות עם ההודעה.
+    // זו ההבחנה מול הדילוג מחוסר מנוע, שם דווקא חייבים לומר.
+    expect(toMediaView(media).aiNote).toBeNull();
   });
 
   it("אישור כפול אינו מייצר עיבוד כפול", async () => {
@@ -183,6 +189,14 @@ describe("תמלול", () => {
     const media = await db.mediaFile.findUniqueOrThrow({ where: { id: mediaId } });
     expect(media.aiStatus).toBe("SKIPPED");
     expect(await db.job.count({ where: { status: "FAILED" } })).toBe(0);
+
+    /*
+     * הסיבה נשמרת, ובלעדיה הדילוג הזה היה נראה בדיוק כמו דילוג של וידאו —
+     * שני מצבים שונים לגמרי שהממשק שתק בשניהם. זה מה שאיפשר לתמלול להיעלם
+     * בלי שאיש ידע, עד שהמשתמש חיפש הקלטה ולא מצא אותה.
+     */
+    expect(media.aiError).toBe("no-engine");
+    expect(toMediaView(media).aiNote).toBe(he.ai.transcriptionNoEngine);
   });
 
   it("כשל זמני חוזר לתור ואינו מסומן ככשל בממשק", async () => {

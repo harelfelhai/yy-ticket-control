@@ -39,6 +39,11 @@ export interface MediaRecord {
   transcription: string | null;
   extractedText: string | null;
   aiStatus: AiStatus;
+  /**
+   * ב-`FAILED` — הודעת השגיאה. ב-`SKIPPED` — **סיבת הדילוג**
+   * (`no-engine` / `unsupported`), שבלעדיה שני מצבים שונים לגמרי נראים זהים.
+   */
+  aiError: string | null;
 }
 
 /**
@@ -79,8 +84,19 @@ function aiNote(file: MediaRecord): string | null {
       return isAudio ? he.ai.transcriptionPending : he.ai.extractionPending;
     case "FAILED":
       return isAudio ? he.ai.transcriptionFailed : he.ai.extractionFailed;
+    case "SKIPPED":
+      /**
+       * ‏`no-engine` בלבד. וידאו וסוגי קובץ שאינם נתמכים מדולגים גם הם, ושם
+       * השתיקה נכונה — אין מה לעבד ואין למשתמש מה לעשות.
+       *
+       * כאן, לעומת זאת, **יש** מה לתמלל ואין במה. עד לתיקון הזה שני המצבים
+       * נראו זהים והממשק שתק בשניהם: המנהל הקליט, ראה נגן, ולא ידע שהתמלול
+       * לא קרה, שהחיפוש לא ימצא את ההקלטה, ושהתיאור לא יתמלא ממנה.
+       */
+      if (file.aiError !== "no-engine") return null;
+      return isAudio ? he.ai.transcriptionNoEngine : he.ai.extractionNoEngine;
     default:
-      // ‏DONE בלי טקסט (תמונה בלי כיתוב) או SKIPPED — אין מה לומר.
+      // ‏DONE בלי טקסט — תמונה בלי כיתוב. אין מה לומר.
       return null;
   }
 }
