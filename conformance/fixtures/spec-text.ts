@@ -44,7 +44,7 @@ export const TICKET_STATUS = {
   closed: "סגור",
   draft: "טיוטה",
   awaitingQuestion: "ממתין לפותח (שאלה)",
-  awaitingApproval: "ממתין לפותח (אישור)",
+  awaitingApproval: "טופל — ממתין לאישור סופי",
   partial: "בטיפול חלקי",
   viewed: "נצפה",
   fresh: "חדש",

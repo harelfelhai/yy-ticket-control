@@ -108,7 +108,7 @@ test.describe("PROH — פנייה אינה נסגרת ואינה נמחקת מ�
 
     await loginAs(page, "managerA");
     await page.goto(path);
-    // §3.5 כלל 4 — "ממתין לפותח (אישור)", ובשום אופן לא "סגור".
+    // §3.5 כלל 4 — "טופל — ממתין לאישור סופי", ובשום אופן לא "סגור".
     await expect(page.getByText(TICKET_STATUS.closed, { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: TICKET_SCREEN.close })).toBeVisible();
 

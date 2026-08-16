@@ -118,7 +118,7 @@ test.describe("§3.5 — גזירת סטטוס הפנייה", () => {
     await expect(boardCard(page, description)).toContainText(REASON_EXAMPLES.partial(1, 2));
   });
 
-  test("DM-D04 — כל הנמענים סיימו ⇒ ממתין לפותח (אישור), והפנייה ב'דורש ממך'", async ({
+  test("DM-D04 — כל הנמענים סיימו ⇒ טופל, ממתין לאישור סופי, והפנייה ב'דורש ממך'", async ({
     page,
   }) => {
     acceptDialogs(page);
