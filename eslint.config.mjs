@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // פלט וכלים של design-sync (ראו .design-sync/NOTES.md). `ds-bundle/`
+    // מכיל את React מקומפל כ-`_vendor/react.js`, שמפר את חוקי ה-hooks —
+    // צפוי בקוד מקומפל, ואינו קוד של הפרויקט. ‏`.ds-sync/` הוא סקריפטים
+    // מועתקים של הסקיל. שניהם ב-gitignore, אבל ESLint אינו קורא אותו.
+    "ds-bundle/**",
+    ".ds-sync/**",
   ]),
 ]);
 

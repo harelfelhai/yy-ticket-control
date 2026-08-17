@@ -1,0 +1,71 @@
+/*
+ * גיליון הסגנון שנשלח ל-claude.ai/design.
+ *
+ * **למה קובץ נפרד ולא `src/app/globals.css` ישירות.** globals.css הוא מקור
+ * (‏`@import "tailwindcss"` + `@theme`), לא CSS מקומפל — הוא חסר תועלת מחוץ
+ * לצינור הבנייה של Next. הקובץ הזה מייבא אותו כמות שהוא, ולכן הטוקנים
+ * נשארים במקור אמת אחד, ומוסיף רק את שני הדברים שהאפליקציה מספקת בעצמה
+ * ואינם קיימים בסביבת עיצוב עצמאית.
+ *
+ * הפלט המקומפל נבנה על ידי `cfg.buildCmd` אל `.design-sync/.cache/`, ומשם
+ * `cfg.cssEntry` מצביע אליו.
+ */
+
+@import "../src/app/globals.css";
+
+/*
+ * ‏**safelist.** Tailwind v4 פולט רק מחלקות שהוא מצא בסריקת המקור, ולכן
+ * גיליון שנבנה מהריפו הזה מכיל בדיוק את מה שהאפליקציה כבר כותבת — ולא יותר.
+ * זה נכון לאפליקציה ושגוי כאן: סוכן העיצוב ב-Claude Design בונה מסכים
+ * **חדשים**, ומחלקה לגיטימית שהריפו לא במקרה השתמש בה (`me-2`, `pe-3`,
+ * `end-0`) הייתה נכשלת אצלו **בשקט** — בלי שגיאה ובלי שאיש יבחין.
+ *
+ * הרשימה מכוונת לאוצר המילים של המערכת ולא ל-Tailwind כולו: הטוקנים
+ * הסמנטיים, סקאלת ה-4px, וכל המחלקות בגרסתן ה**לוגית** בלבד (‏ms/me, ps/pe,
+ * start/end) — הפיזיות שבורות ב-RTL וממילא אסורות (‏AGENTS.md § Layout).
+ */
+@source inline("{bg,text,border,fill,stroke}-{bg,surface,border,fg,muted,brand,brand-fg,danger,success,warning}");
+@source inline("{bg,border}-{brand,danger,success,warning,fg,muted}/{5,10,20,30,40,50}");
+@source inline("{p,px,py,ps,pe,pt,pb,m,mx,my,ms,me,mt,mb,gap,gap-x,gap-y,space-x,space-y}-{0,0.5,1,1.5,2,2.5,3,4,5,6,8,10,12,16}");
+@source inline("{ms,me}-auto");
+@source inline("{w,h,min-w,min-h,max-w}-{0,4,8,11,12,16,20,24,32,40,44,48,56,64,72,96,full,fit,screen}");
+@source inline("max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl,none,prose}");
+@source inline("text-{xs,sm,base,lg,xl,2xl,3xl}");
+@source inline("font-{normal,medium,semibold,bold}");
+@source inline("{rounded,rounded-s,rounded-e,rounded-t,rounded-b}-{none,sm,md,lg,xl,2xl,3xl,full}");
+@source inline("{border,border-s,border-e,border-t,border-b}-{0,2,4}");
+@source inline("text-{start,end,center}");
+@source inline("{start,end,top,bottom,inset}-0");
+@source inline("{flex,inline-flex,grid,inline-grid,block,inline-block,hidden,contents}");
+@source inline("flex-{row,col,wrap,nowrap,1,auto,initial,none}");
+@source inline("{items,justify,self,content}-{start,end,center,between,around,stretch,baseline}");
+@source inline("grid-cols-{1,2,3,4,5,6,12}");
+@source inline("col-span-{1,2,3,4,5,6,full}");
+@source inline("{truncate,relative,absolute,fixed,sticky,static}");
+@source inline("overflow-{auto,hidden,x-auto,y-auto,visible}");
+@source inline("{opacity,z}-{0,10,20,30,40,50,60,70,80,90,100}");
+@source inline("{sr-only,not-sr-only,whitespace-pre-wrap,whitespace-nowrap,tabular-nums,line-through,underline,uppercase}");
+/* וריאנטים: התחביר דורש את הווריאנט **בתוך** הסוגריים עם חלופה ריקה. */
+@source inline("{sm:,md:,lg:,}{flex,grid,hidden,block,flex-row,flex-col}");
+@source inline("{sm:,md:,lg:,}grid-cols-{1,2,3,4,6}");
+@source inline("{hover:,focus:,focus-visible:,disabled:,}{bg,text,border}-{brand,surface,bg,fg,muted,danger,success,warning}");
+
+/*
+ * ‏`--font-heebo` מוזרק באפליקציה על ידי `next/font` (ראו src/app/layout.tsx).
+ * בלעדיו `--font-sans: var(--font-heebo), …` הוא הצהרה לא תקינה וכל הטקסט
+ * נופל לפונט ברירת המחדל של הדפדפן. קובצי ה-woff2 עצמם נשלחים דרך
+ * `cfg.extraFonts` → `.design-sync/fonts/heebo.css`.
+ */
+:root {
+  --font-heebo: "Heebo";
+}
+
+/*
+ * ‏`dir="rtl"` נקבע באפליקציה על תגית ה-html (‏AGENTS.md: הממשק RTL בלבד).
+ * עיצוב שנבנה ב-Claude Design מקבל רק את גיליון הסגנון הזה ולא את ה-layout,
+ * ולכן הכיווניות חייבת להגיע מכאן — אחרת כל מחלקה לוגית (‏ms/me, ps/pe,
+ * text-start) תתפרש הפוך וכל מסך ייבנה מראה-תמונה.
+ */
+html {
+  direction: rtl;
+}

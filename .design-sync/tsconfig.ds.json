@@ -1,0 +1,11 @@
+{
+  "_why": "tsconfig ייעודי ל-design-sync בלבד. מרחיב את זה של האפליקציה ומוסיף מיפוי אחד: next/link → shim מקומי. מיפוי כזה ב-tsconfig.json הראשי היה משנה גם את הבנייה של האפליקציה, וזה בדיוק מה שאסור. הממיר קורא מכאן את compilerOptions.paths ומזין אותם ל-esbuild.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./src/*"],
+      "next/link": ["./.design-sync/shims/next-link.tsx"]
+    }
+  }
+}
