@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo } from "next/font/google";
+import { Assistant } from "next/font/google";
 import "./globals.css";
 import { BRAND_COLOR } from "@/lib/brand";
 import { he } from "@/lib/he";
 
 /** פונט עברי יחיד לכל המערכת. `display: swap` כדי שטקסט יופיע מיד גם ברשת סלולרית איטית. */
-const heebo = Heebo({
-  variable: "--font-heebo",
+const assistant = Assistant({
+  variable: "--font-assistant",
   subsets: ["hebrew", "latin"],
   display: "swap",
 });
@@ -33,7 +33,7 @@ export default function RootLayout({
     <html
       lang="he"
       dir="rtl"
-      className={`${heebo.variable} h-full antialiased`}
+      className={`${assistant.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">{children}</body>
     </html>

@@ -8,7 +8,7 @@
   "srcDir": "src/components",
   "buildCmd": "node .ds-sync/node_modules/@tailwindcss/cli/dist/index.mjs -i .design-sync/ds-styles.css -o .design-sync/.cache/ds-compiled.css",
   "cssEntry": ".design-sync/.cache/ds-compiled.css",
-  "extraFonts": [".design-sync/fonts/heebo.css"],
+  "extraFonts": [".design-sync/fonts/assistant.css"],
   "guidelinesGlob": ["docs/DESIGN.md"],
   "readmeHeader": ".design-sync/conventions.md",
   "overrides": {

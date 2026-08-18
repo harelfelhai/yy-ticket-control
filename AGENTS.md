@@ -24,7 +24,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **מקור אמת עיצובי:** `docs/DESIGN.md`. **לפני כתיבת קוד שנוגע ב-UI — לקרוא אותו.**
   ערך שאינו מופיע שם אינו מומצא בקוד: מוסיפים אותו למסמך קודם.
 - **כל מחרוזת שמוצגת למשתמש עוברת דרך `src/lib/he.ts`.** אין עברית מפוזרת בקומפוננטות.
-- הממשק RTL בלבד (`<html lang="he" dir="rtl">`), פונט Heebo, ערכת צבע בהירה בלבד.
+- הממשק RTL בלבד (`<html lang="he" dir="rtl">`), פונט Assistant, ערכת צבע בהירה בלבד.
   **חובה מחלקות לוגיות ולא פיזיות** — `ms/me`, `ps/pe`, `text-start/end`, `border-s/e`,
   `start-*/end-*`. `ml-`, `pr-`, `text-left`, `border-l` ודומיהן שבורות ב-RTL. פירוט
   והחריגים ב-`docs/DESIGN.md` § Layout.

@@ -7,7 +7,7 @@
  * ממנו חוסכת תחזוקה של שתי ערכות צבע לכל רכיב סטטוס.
  */
 @theme {
-  --font-sans: var(--font-heebo), system-ui, sans-serif;
+  --font-sans: var(--font-assistant), system-ui, sans-serif;
 
   /*
    * גובה שורה נדיב לטקסט הגוף. עברית צפופה יותר מלטינית — אין לה אותיות

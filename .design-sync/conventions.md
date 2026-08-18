@@ -19,7 +19,7 @@ inherited automatically — **but physical utility classes are still wrong and f
 - Hebrew text with a Latin/numeric run (a phone number, a time) needs `dir="ltr"` on that
   element, or `16:45` renders as `45:16`.
 
-The font is **Heebo**, already wired through `styles.css`. Don't set `font-family`.
+The font is **Assistant**, already wired through `styles.css`. Don't set `font-family`.
 
 ## The styling idiom: Tailwind v4 with semantic tokens
 

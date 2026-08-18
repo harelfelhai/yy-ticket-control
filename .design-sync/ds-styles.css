@@ -51,13 +51,13 @@
 @source inline("{hover:,focus:,focus-visible:,disabled:,}{bg,text,border}-{brand,surface,bg,fg,muted,danger,success,warning}");
 
 /*
- * ‏`--font-heebo` מוזרק באפליקציה על ידי `next/font` (ראו src/app/layout.tsx).
- * בלעדיו `--font-sans: var(--font-heebo), …` הוא הצהרה לא תקינה וכל הטקסט
+ * ‏`--font-assistant` מוזרק באפליקציה על ידי `next/font` (ראו src/app/layout.tsx).
+ * בלעדיו `--font-sans: var(--font-assistant), …` הוא הצהרה לא תקינה וכל הטקסט
  * נופל לפונט ברירת המחדל של הדפדפן. קובצי ה-woff2 עצמם נשלחים דרך
- * `cfg.extraFonts` → `.design-sync/fonts/heebo.css`.
+ * `cfg.extraFonts` → `.design-sync/fonts/assistant.css`.
  */
 :root {
-  --font-heebo: "Heebo";
+  --font-assistant: "Assistant";
 }
 
 /*

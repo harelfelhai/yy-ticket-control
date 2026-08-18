@@ -28,6 +28,6 @@ test.describe("שלד המערכת", () => {
     const fontFamily = await page
       .getByRole("heading", { level: 1 })
       .evaluate((el) => getComputedStyle(el).fontFamily);
-    expect(fontFamily).toContain("Heebo");
+    expect(fontFamily).toContain("Assistant");
   });
 });

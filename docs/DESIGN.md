@@ -22,32 +22,32 @@ colors:
 
 typography:
   pageTitle:
-    fontFamily: Heebo
+    fontFamily: Assistant
     fontSize: 24px
     fontWeight: 700
     lineHeight: 1.25
   sectionTitle:
-    fontFamily: Heebo
+    fontFamily: Assistant
     fontSize: 20px
     fontWeight: 600
     lineHeight: 1.3
   body:
-    fontFamily: Heebo
+    fontFamily: Assistant
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.6
   bodyStrong:
-    fontFamily: Heebo
+    fontFamily: Assistant
     fontSize: 16px
     fontWeight: 600
     lineHeight: 1.6
   label:
-    fontFamily: Heebo
+    fontFamily: Assistant
     fontSize: 14px
     fontWeight: 500
     lineHeight: 1.5
   caption:
-    fontFamily: Heebo
+    fontFamily: Assistant
     fontSize: 12px
     fontWeight: 500
     lineHeight: 1.4
@@ -285,7 +285,7 @@ AAA גם הוא. לפניו `success` ו-`warning` נתנו 5.02 בלבד בשנ
 
 ## Typography
 
-גופן יחיד: **Heebo**, נטען דרך `next/font/google` עם `display: swap`.
+גופן יחיד: **Assistant**, נטען דרך `next/font/google` עם `display: swap`.
 
 ### למה גופן אחד ולמה דווקא הוא
 
@@ -293,6 +293,12 @@ AAA גם הוא. לפניו `success` ו-`warning` נתנו 5.02 בלבד בשנ
 כלומר **היררכיה טיפוגרפית בעברית נשענת כמעט כולה על גודל ומשקל**, לא על צורה. זו הסיבה
 שהסקאלה למטה מחייבת, ושזיווג גופנים "מעניין" אינו רלוונטי כאן: הוא היה פוגע בקריאוּת בלי
 להוסיף היררכיה.
+
+**ולמה Assistant.** הוא גופן ממשק ולא גופן תצוגה: אותיות פתוחות, גובה x גדול, וצורות
+שנשארות מובחנות במידות קטנות — וזה בדיוק מה שנדרש מ-`caption` בן 12px שנקרא בשמש. הוא
+מכסה את ששת המשקלים של הסקאלה בטווח משתנה של 200–800, כלומר כל רמה מתקבלת מקובץ אחד
+ולא מווריאנט נפרד. הוא **החליף את Heebo** בסבב הזה; ההחלטה היא החלפה של גופן יחיד בגופן
+יחיד, ואינה נוגעת בכלל שאוסר גופן שני.
 
 ### הסקאלה
 
@@ -1168,7 +1174,7 @@ grid ... [שורת כותרות]
 ### ❌ לא
 
 - **לא** גרדיאנטים, לא glassmorphism, לא `backdrop-blur`, לא צללים דקורטיביים.
-- **לא** גופן שני. לא לזווג Heebo עם "גופן כותרות".
+- **לא** גופן שני. לא לזווג Assistant עם "גופן כותרות".
 - **לא** טיפוגרפיה דרמטית (משקל 200 מול 800, קפיצות פי 3). זה כלי, לא עמוד שער.
 - **לא** אסימטריה מכוונת, שבירת גריד, או "רכיב חתימה". עקביות > ייחודיות.
 - **לא** להוריד צפיפות מידע לטובת "נשימה". פחות על המסך = יותר גלילה = יותר זמן בשמש.
