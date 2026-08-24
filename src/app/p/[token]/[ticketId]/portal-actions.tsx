@@ -62,7 +62,7 @@ export function PortalActions({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {status === "DONE" ? (
         <Banner tone="success">{he.portal.doneNotice(openerName)}</Banner>
       ) : null}
@@ -79,8 +79,7 @@ export function PortalActions({
 
       <div className="flex flex-col gap-2">
         {/* `Button` ולא `<button>`: זהו `secondary` רגיל, והכתיבה-מהזיכרון
-            כאן כבר סטתה — `px-4` (הריפוד של `compact`) על גובה `default`.
-            ההחרגה של הקובץ ב-`primitives.test.ts` נועדה לכפתור שמתחת, לא לו. */}
+            כאן כבר סטתה — `px-4` (הריפוד של `compact`) על גובה `default`. */}
         <Button
           variant="secondary"
           className="w-full"
@@ -95,14 +94,30 @@ export function PortalActions({
           {he.ticket.send}
         </Button>
 
-        <button
-          type="button"
+        {/*
+         * **הכפתור הירוק בן 56px עבר ל-`Button` ב-`primary`**, וההחרגה שלו
+         * ב-`primitives.test.ts` נמחקה. שלוש סיבות, לפי סדר החומרה:
+         *
+         * ‏1. ‏`success` הוא **צבע מצב ולא צבע פעולה** (§ Colors: "לא `success`
+         *    לאישור ויזואלי"). הכפתור אמר "טופל" לפני שהקבלן לחץ עליו — כלומר
+         *    צבע ירוק על פעולה שטרם קרתה, בדיוק המידע השקרי שהסעיף אוסר.
+         *    את בשורת ההצלחה נושא ה-`Banner` שמעליו, אחרי הלחיצה.
+         * ‏2. **שפה אחת לשני הצדדים** (§ Overview: "קבלן שרואה ממשק זר חושד
+         *    בו"). הפעולה המקבילה בצד הפנימי — "סגור פנייה" ב-`ticket-actions`
+         *    — היא `Button` רגיל; אחרי סבב הצפיפות זה היה הכפתור היחיד במוצר
+         *    בגובה 56px ובעיגול 12px, ובידוד כזה נקרא כמסך אחר ולא כהדגשה.
+         * ‏3. ההיררכיה לא אבדה אלא נעשתה מפורשת: `primary` מול ה-`secondary`
+         *    של "שלח" הוא בדיוק "זו הפעולה הראשית של המסך". `w-full` נשאר —
+         *    זו פריסה, לא מראה, ורוחב מלא בטלפון הוא מה שהופך אותו למטרה
+         *    שאי אפשר לפספס. ‏44px במגע מגיעים מ-`touch:` שבפרימיטיב.
+         */}
+        <Button
+          className="w-full"
           disabled={busy}
           onClick={() => run(() => markDoneAction(token, ticketId))}
-          className="min-h-14 rounded-xl bg-success px-4 text-base font-semibold text-brand-fg disabled:opacity-60"
         >
           {he.portal.markDone}
-        </button>
+        </Button>
       </div>
 
       {error ? (

@@ -19,7 +19,13 @@ import {
   createProfessionalAction,
 } from "../new/actions";
 import { createBatchAction } from "./actions";
-import { PANEL_WIDTH, TITLE_DESCRIPTIVE, WIDE_WIDTH } from "@/lib/ui";
+import {
+  FULL_WIDTH,
+  PAGE_X,
+  PANEL_WIDTH,
+  STICKY_UNDER_HEADER,
+  TITLE_DESCRIPTIVE,
+} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { FormError } from "@/components/ui/message";
 
@@ -126,7 +132,13 @@ export function BatchForm({
   }
 
   return (
-    <div className={`flex flex-col gap-4 p-4 ${WIDE_WIDTH}`}>
+    /*
+     * **זה המסך שהכי רוצה רוחב, ולכן `FULL_WIDTH`.** מזינים בו עשרות ליקויים
+     * מדוח בדק בית: ההקשר המשותף בצד, השורות בטור שלצדו, ושתי העמודות זו לצד
+     * זו הן כל היתרון של המסך הזה על פני פתיחת פנייה אחר פנייה. הריפוד מגיע
+     * מ-`PAGE_X` ולא מ-`p-4` כתוב ביד, כמו בכל שאר המסכים.
+     */
+    <div className={`flex flex-col gap-3 py-3 ${PAGE_X} ${FULL_WIDTH}`}>
       <div>
         <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
         <p className="text-sm text-muted">
@@ -134,9 +146,34 @@ export function BatchForm({
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-        {/* אזור המקור וההקשר המשותף — נשאר גלוי בגלילה בדסקטופ */}
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-16 lg:self-start">
+      {/*
+       * שתי העמודות, ו**התקרה יושבת על הרכיב ולא על העמוד** (ראו `FULL_WIDTH`
+       * ב-`src/lib/ui.ts`). ‏`1fr` בלי תקרה היה נכון כל עוד ה-`<main>` הגביל
+       * ל-1024px; מרגע שהוא חדל, טור ההזנה קיבל את כל מה שנשאר — שדה "תיאור"
+       * בן 1500px לשורת ליקוי אחת, כלומר בדיוק מה ש-`CONTENT_WIDTH` קיים כדי
+       * למנוע. ‏`minmax(0,64rem)` נותן לו עד 1024px ומשאיר את העודף ריק.
+       *
+       * ‏`minmax(0,…)` ולא `64rem` יבש: רצועת ברירת המחדל היא `minmax(auto,…)`,
+       * ו-`auto` פירושו שהעמודה אינה מצטמצמת מתחת לרוחב המינימלי של תוכנה —
+       * כלומר בורר נמענים ארוך היה מרחיב את הגריד ומייצר גלילה אופקית.
+       *
+       * ‏320px לצד `rem` ולא מתוך רשלנות: זהו אותו רוחב של `FORM_PANEL_WIDTH`
+       * — הרוחב שבו טופס נשאר טופס לצד התוכן שהוא מוסיף אליו.
+       */}
+      <div className="grid gap-3 lg:grid-cols-[320px_minmax(0,64rem)]">
+        {/*
+         * אזור המקור וההקשר המשותף — נשאר גלוי בגלילה בדסקטופ.
+         *
+         * ההיסט מגיע מ-`STICKY_UNDER_HEADER` ולא מ-`lg:top-16` כתוב ביד: הוא
+         * חייב להיות בדיוק גובה סרגל הניווט, וכשהסרגל ירד ל-44px בסבב הצפיפות
+         * הפאנל נשאר תלוי 20px מתחת למקומו.
+         *
+         * הקבוע נכתב **בלי תחילית `lg:`** אף שהדביקות עצמה מותנית בה, ובכוונה:
+         * ‏Tailwind סורק את הקוד כטקסט, ו-`lg:${...}` לא היה מייצר מחלקה כלל —
+         * המחרוזת `lg:top-11` אינה מופיעה בשום קובץ. ‏`top` על אלמנט `static`
+         * הוא ממילא חסר משמעות, ולכן במסך צר הוא פשוט אינו עושה דבר.
+         */}
+        <aside className={`flex flex-col gap-3 ${STICKY_UNDER_HEADER} lg:sticky lg:self-start`}>
           <section className={cardClasses("flex flex-col gap-3")}>
             <h2 className={TITLE_DESCRIPTIVE}>{he.batch.contextHeading}</h2>
 
@@ -297,6 +334,16 @@ export function BatchForm({
             </FormError>
           ) : null}
 
+          {/*
+           * רצועת הפעולות — דביקה, אך **בלי בליטה**, בשונה מהקומפוזר במסך
+           * הפנייה ומרצועת "שלח" במסך היצירה.
+           *
+           * שם הרצועה נמתחת לקצה המסך ב-`PAGE_BLEED` מפני שהיא באמת יושבת
+           * ברוחב העמוד. כאן היא ילדה של טור ההזנה בתוך גריד: `-mx-3` היה
+           * מוציא אותה אל תוך המרווח שבין הטורים, ובמסך רחב גם אל מתחת
+           * לפאנל ההקשר. קו ההפרדה שנעצר בגבול הטור הוא הקריאה הנכונה —
+           * הפעולות שייכות לטור, לא לעמוד.
+           */}
           <div className="sticky bottom-0 flex gap-2 border-t border-border bg-bg py-3">
             <Button onClick={() => submit(true)} disabled={busy} className="flex-1">
               {he.batch.dispatch}
@@ -322,7 +369,9 @@ function Summary({ summary, onReset }: { summary: BatchResult; onReset: () => vo
   }
 
   return (
-    <div className={`flex flex-col gap-4 p-6 ${PANEL_WIDTH}`}>
+    // מסך הסיכום הוא פאנל יחיד ממורכז ולא המשך של מסך ההזנה הרחב, ולכן
+    // ‏`PANEL_WIDTH`. הריפוד מגיע מ-`PAGE_X` כמו בכל עמוד אחר.
+    <div className={`flex flex-col gap-3 py-3 ${PAGE_X} ${PANEL_WIDTH}`}>
       <h1 className={TITLE_DESCRIPTIVE}>{he.batch.title}</h1>
       <div className={cardClasses("flex flex-col gap-2", { tone: "success" })}>
         {lines.map((line) => (

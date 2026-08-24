@@ -8,7 +8,7 @@ import { buildThreadItems } from "@/lib/thread-items";
 import { type ThreadMessageView, toThreadMessageView } from "@/lib/thread-view";
 import { ExpiredLink } from "../expired-link";
 import { PortalActions } from "./portal-actions";
-import { CONTENT_WIDTH, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
+import { CONTENT_WIDTH, LINK, PAGE_X, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 /**
@@ -77,8 +77,10 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
   });
 
   return (
-    <main className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
-      <Link href={`/p/${token}`} className="text-sm font-medium text-brand">
+    <main className={`flex flex-col gap-3 py-3 ${PAGE_X} ${CONTENT_WIDTH}`}>
+      {/* קו תחתון ולא `text-brand`: בגרפיט צבע המותג הוא בפועל צבע הטקסט,
+          וקישור החזרה היה נעלם בתוך שאר העמוד (`LINK` ב-ui.ts). */}
+      <Link href={`/p/${token}`} className={`text-sm font-medium text-fg ${LINK}`}>
         ← {he.portal.back}
       </Link>
 
@@ -106,7 +108,7 @@ export default async function PortalTicketPage(props: PageProps<"/p/[token]/[tic
        *
        * תיאור הפנייה הוא ההודעה הראשונה גם כאן, ולא פסקה בכותרת.
        */}
-      <section aria-label={he.ticket.thread} className="flex flex-col gap-3">
+      <section aria-label={he.ticket.thread} className="flex flex-col gap-2">
         <ul className={CARD_LIST}>
           {threadItems.map((item) =>
             item.kind === "day" ? (

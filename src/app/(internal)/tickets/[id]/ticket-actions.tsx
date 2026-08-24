@@ -6,6 +6,7 @@ import type { ActionResult } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
+import { PAGE_BLEED, PAGE_X } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import {
   closeTicketAction,
@@ -65,13 +66,20 @@ export function TicketActions({
      * צמוד לתחתית (אפיון מסך 2 אזור ד׳, DESIGN.md § אלמנט דביק).
      *
      * בשרשור ארוך התיבה הייתה נופלת מתחת לקיפול, והמשתמש נאלץ לגלול לסוף
-     * כדי לענות — בדיוק ההפך ממה שצ׳אט אמור לעשות. `-mx-4 px-4` מותח את
-     * הרצועה לקצה המסך, אחרת ההודעות זולגות בצדדים מתחתיה.
+     * כדי לענות — בדיוק ההפך ממה שצ׳אט אמור לעשות. ‏`PAGE_BLEED` + `PAGE_X`
+     * מותחים את הרצועה לקצה המסך, אחרת ההודעות זולגות בצדדים מתחתיה.
+     *
+     * **הבליטה מגיעה מהקבוע ולא מ-`-mx-4` כתוב ביד**, ומאותה סיבה שהכותרת
+     * הדביקה במסך הפנייה עברה אליו: שתי הרצועות חייבות להסכים עם ריפוד
+     * העמוד, ומספר שנכתב פעמיים כבר סטה כאן פעם אחת (הריפוד ירד ל-12px
+     * והבליטה נשארה 16px, כלומר 4px שהתוכן זולג דרכם משני הצדדים).
      *
      * **פעולות הפנייה נשארות ברצועה ולא בפאנל**: תוכן של `<details>` סגור
      * מוסר מעץ הנגישות, וסגירת פנייה אינה פרט מנהלי אלא התוצאה של המסך.
      */
-    <div className="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-3 border-t border-border bg-bg px-4 py-3">
+    <div
+      className={`sticky bottom-0 z-[1] ${PAGE_BLEED} flex flex-col gap-3 border-t border-border bg-bg ${PAGE_X} py-3`}
+    >
       {/* פעולות הפנייה **מעל** הקומפוזר: הן על הפנייה כולה, בעוד שהקומפוזר
           מוסיף לה הודעה. הסמיכות לתיבת הכתיבה הייתה קוראת אותן כחלק ממנה. */}
       <div className="flex flex-wrap gap-2">

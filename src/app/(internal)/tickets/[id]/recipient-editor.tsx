@@ -11,7 +11,7 @@ import { unwrapOrThrow } from "@/lib/action-result";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
 import { createProfessionalAction } from "../new/actions";
-import { TITLE_DESCRIPTIVE, CARD_LIST} from "@/lib/ui";
+import { CARD_LIST, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import {
   addRecipientsAction,
@@ -222,7 +222,18 @@ export function RecipientEditor({
               ) : null}
 
               {link !== null && link.forId === assignment.professionalId ? (
-                <div className="flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 p-3">
+                /*
+                 * הפאנל שנפתח עם קישור הקסם — כרטיס מקונן, מהפרימיטיב.
+                 *
+                 * היה כאן `border-brand/30 bg-brand/5` בכתיבה ידנית, ושתי
+                 * בעיות נפגשו בו: `/5` אינו ערך שהתקן מתיר (‏`/10` לרקע,
+                 * ‏`/30` למסגרת), ובפלטת הגרפיט הגוון ממילא נקרא כאפור —
+                 * כלומר הצביעה לא קנתה דבר. הפאנל אינו מצב ואינו התראה אלא
+                 * **מידע שנחשף לבקשה**, ולכן משטח נייטרלי הוא הקריאה הנכונה
+                 * שלו; `cardClasses` נותן גם את `rounded-md` שהחליף את
+                 * ה-`rounded-xl` בסקאלת הצורות החדשה.
+                 */
+                <div className={cardClasses("flex flex-col gap-2")}>
                   <p className="text-sm font-medium">{he.ticket.linkFor(assignment.name)}</p>
                   <p className="text-xs text-muted">
                     {link.rotated ? he.ticket.linkRotated : he.ticket.linkStable}

@@ -3,7 +3,7 @@ import { he } from "@/lib/he";
 import { getPortalBoard, resolveToken } from "@/lib/services/portal";
 import { listPortalTagChats } from "@/lib/services/tags";
 import { ExpiredLink } from "./expired-link";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
+import { CONTENT_WIDTH, PAGE_X, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, CARD_LIST} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -28,8 +28,10 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
     listPortalTagChats(identity.professionalId),
   ]);
 
+  // ‏`CONTENT_WIDTH` ולא רוחב מלא, בשונה ממסכי הניהול: הפורטל נפתח כמעט תמיד
+  // בטלפון, והוא תצוגה של תוכן שקוראים — לא לוח שסורקים ממנו עשרות שורות.
   return (
-    <main className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    <main className={`flex flex-col gap-3 py-3 ${PAGE_X} ${CONTENT_WIDTH}`}>
       <header>
         <h1 className={TITLE_IDENTIFYING}>{he.portal.greeting(identity.name)}</h1>
         <p className="text-sm text-muted">{he.portal.activeTitle}</p>
@@ -82,7 +84,21 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
 
       {archived.length > 0 ? (
         <details>
-          <summary className="cursor-pointer py-2 text-sm font-bold">
+          {/*
+           * שני תיקונים באותה שורה, ושניהם על הכותרת המתקפלת:
+           *
+           * ‏1. **אזור מגע.** ‏`py-2` על `text-sm` נותן 36px — מספיק בעכבר,
+           *    לא באצבע. הזוג `min-h-9` + `touch:min-h-11` הוא
+           *    הניסוח שהתקן דורש (§ אזורי מגע), והפורטל נפתח בטלפון.
+           *    בלי `flex`, בכוונה: `display:flex` על `<summary>` מוחק את
+           *    משולש הפתיחה הנייטיב, וזה הרמז היחיד שהאזור נפתח.
+           * ‏2. **טיפוגרפיה.** ‏14px/700 אינו זוג בסקאלה (§ Typography מזווג
+           *    14px ל-500), וארכיון הלוח הפנימי כבר יושב על `TITLE_DESCRIPTIVE`.
+           *    אותה כותרת בשני הצדדים — קבלן שרואה ממשק זר חושד בו.
+           */}
+          <summary
+            className={`min-h-9 cursor-pointer py-2 touch:min-h-11 ${TITLE_DESCRIPTIVE}`}
+          >
             {he.portal.archiveTitle} · {archived.length}
           </summary>
           <ul className={`mt-2 ${CARD_LIST}`}>

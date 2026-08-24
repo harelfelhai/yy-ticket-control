@@ -1,5 +1,5 @@
 import { he } from "@/lib/he";
-import { PANEL_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { PAGE_X, PANEL_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 
 /**
@@ -13,8 +13,10 @@ import { cardClasses } from "@/components/ui/card";
  * לחסוך.
  */
 export function ExpiredLink() {
+  // ריפוד העמוד מגיע מ-`PAGE_X` כמו בכל מסך אחר; המרחב שהפאנל צריך יושב
+  // בריפוד `roomy` שלו עצמו, ולא בריפוד של העמוד שמאחוריו.
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
+    <main className={`flex flex-1 items-center justify-center py-3 ${PAGE_X}`}>
       <div className={cardClasses(`text-center ${PANEL_WIDTH}`, { padding: "roomy" })}>
         <h1 className={TITLE_DESCRIPTIVE}>{he.portal.expired}</h1>
         <p className="mt-2 text-muted">{he.portal.expiredHelp}</p>

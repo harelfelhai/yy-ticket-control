@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
+import { LINK } from "@/lib/ui";
 import { updateResidentNameAction } from "./actions";
 import { FormError } from "@/components/ui/message";
 
@@ -48,11 +49,18 @@ export function ResidentName({ ticketId, initial, canEdit }: ResidentNameProps) 
         <span>{name ? `${he.ticket.residentLabel}: ${name}` : he.ticket.residentLabel}</span>
         {/* "ערוך" הוא קישור-בשורה בתוך משפט ולא כפתור עצמאי: `Button` היה
             מקבל 44px ושובר את שורת הכותרת שהוא יושב בתוכה. אזור הלחיצה
-            מורחב בריפוד אנכי במקום בגובה מינימלי. */}
+            מורחב בריפוד אנכי במקום בגובה מינימלי, וזהו חריג מתועד
+            (‏`conformance/specs/rtl-mobile.spec.ts` ‏SANCTIONED, לפי הטקסט
+            "ערוך" עצמו — ולכן אין לשנות את המחרוזת).
+
+            **הסימון הוא קו תחתון ולא צבע** (`LINK`): הוא נצבע ב-`text-brand`,
+            שבפלטת הגרפיט זהה למעשה לצבע הטקסט שסביבו — כלומר האפשרות לערוך
+            הפכה לבלתי-נראית בדיוק במקום שבו אין גם מסגרת ואין גובה כפתור
+            שירמזו עליה. */}
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="rounded px-1 py-2 font-medium text-brand"
+          className={`rounded-sm px-1 py-2 font-medium ${LINK}`}
         >
           {he.common.edit}
         </button>

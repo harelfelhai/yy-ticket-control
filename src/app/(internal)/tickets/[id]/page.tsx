@@ -27,7 +27,14 @@ import {
   reasonText,
   toLastMessageView,
 } from "@/lib/ticket-status";
-import { CARD_LIST, CONTENT_WIDTH, TITLE_IDENTIFYING } from "@/lib/ui";
+import {
+  CARD_LIST,
+  CONTENT_WIDTH,
+  PAGE_BLEED,
+  PAGE_X,
+  STICKY_UNDER_HEADER,
+  TITLE_IDENTIFYING,
+} from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
 import { RecipientEditor } from "./recipient-editor";
@@ -197,7 +204,15 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   });
 
   return (
-    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    /*
+     * ‏`CONTENT_WIDTH` נשאר, וזה המסך שהכי מצדיק אותו: תוכנו הוא פסקאות
+     * עברית שנקראות ברצף. שרשור שנפרש על 1920px נותן שורות של מאתיים תווים,
+     * והעין מאבדת את תחילת השורה הבאה. הריפוד עובר ל-`PAGE_X` (ולא `p-4`
+     * כתוב ביד) מפני ש**שתי רצועות דביקות במסך הזה נמתחות לקצה** ב-`PAGE_BLEED`
+     * — הכותרת כאן והקומפוזר ב-`ticket-actions` — ובליטה שאינה בדיוק הריפוד
+     * משאירה פס ריק שהתוכן זולג דרכו.
+     */
+    <div className={`flex flex-col gap-3 py-3 ${PAGE_X} ${CONTENT_WIDTH}`}>
       {/*
        * פס עליון קבוע (אפיון מסך 2 אזור א׳, הכרעת 0.3).
        *
@@ -205,10 +220,14 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
        * מצב, ולמה. שאר המטא-דאטה עברה ב-0.4 לדיאלוג "פרטים" שנפתח מכאן,
        * ואינה יושבת עוד בין הכותרת לשרשור.
        *
-       * ‏`top-14` תלוי ב-`h-14` של סרגל הניווט; `-mx-4 px-4` מותח את הרצועה
+       * ההיסט והבליטה מגיעים מקבועים (`STICKY_UNDER_HEADER`, `PAGE_BLEED`)
+       * ולא ממספרים כתובים: הראשון תלוי בגובה סרגל הניווט, השני חייב להיות
+       * בדיוק ריפוד העמוד. `-mx + px` מותח את הרצועה
        * לקצה המסך, אחרת התוכן הגולל זולג בצדדים. ראו DESIGN.md § אלמנט דביק.
        */}
-      <header className="sticky top-14 z-[1] -mx-4 flex flex-col gap-1 border-b border-border bg-bg px-4 py-2">
+      <header
+        className={`sticky ${STICKY_UNDER_HEADER} z-[1] ${PAGE_BLEED} flex flex-col gap-1 border-b border-border bg-bg ${PAGE_X} py-1`}
+      >
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h1 className={TITLE_IDENTIFYING}>{location || he.ticket.noLocation}</h1>
           <TicketStatusChip status={status} />
@@ -278,8 +297,18 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
          * שורת הסיבה נשארת גלויה תמיד ואינה נכנסת לפאנל: בלעדיה פנייה קופצת
          * בין קבוצות הלוח בלי הסבר, וזה שוחק את האמון במיון (אפיון §5.ב).
          * אותו עיצוב כמו בכרטיס הלוח — זה אותו מידע בדיוק.
+         *
+         * **הצבע נגזר מהמצב ולא מהמותג**, בדיוק כמו ב-`ticket-card`: עד
+         * המעבר לגרפיט השורה נצבעה ב-`text-brand`, וכיום אותו טוקן הוא
+         * כמעט-שחור ובלתי-מובחן מטקסט גוף — כלומר ההדגשה הייתה נמחקת בשקט.
+         * ‏`danger` שמור לשני המצבים שבהם העבודה עצורה — טיוטה שחוסמת שיגור
+         * ופנייה שהוסלמה — וכל השאר נשאר טקסט רגיל.
          */}
-        <p className={`text-sm font-medium ${status === "DRAFT" ? "text-danger" : "text-brand"}`}>
+        <p
+          className={`text-sm font-medium ${
+            status === "DRAFT" || ticket.escalated ? "text-danger" : "text-fg"
+          }`}
+        >
           {reason}
         </p>
       </header>
