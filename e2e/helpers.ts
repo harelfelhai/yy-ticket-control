@@ -1,4 +1,4 @@
-import { type Page, expect } from "@playwright/test";
+import { type Locator, type Page, expect } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
 
 /**
@@ -20,43 +20,64 @@ export async function loginAsManager(page: Page): Promise<void> {
 }
 
 /**
- * פותח את רצועת המסננים אם היא מקופלת.
+ * בוחר ערך ברצועת המסננים, וממתין עד שהוא באמת הגיע לכתובת.
  *
- * מתחת ל-`md` הרצועה מוסתרת מאחורי מתג, ומעליו היא גלויה ואין מתג. התנאי
- * כאן הוא **נראות המתג** ולא שם הפרויקט — כך הבדיקה מתארת את ההתנהגות
- * האמיתית של המסך, ולא את הגדרות ההרצה.
+ * **הפונקציה הזו החליפה את `openFilters`.** הרצועה אינה מקופלת עוד — מאז
+ * סבב הצפיפות היא שורה אחת גלויה בכל רוחב, ואין מתג "מסננים" לפתוח.
  *
- * ‏`/^מסננים/` ולא `"מסננים"`: התאמת מחרוזת ב-Playwright היא הכלה, ולכן
- * "נקה מסננים" נתפס גם הוא — והלוקטור מפר את מצב ה-strict.
+ * אבל מה ש-`openFilters` נתן **בדרך אגב** נשאר נדרש: ההמתנה שלו
+ * ל-`aria-expanded` שימשה בפועל כמחסום הידרציה. הפקדים מנווטים
+ * ב-`onChange` → `router.replace`, ולכן `selectOption` לפני שה-hydration
+ * חיברה את המטפלים **נבלע בשקט** — הערך משתנה בדפדפן, הכתובת אינה משתנה,
+ * והבדיקה נכשלת על "לא סוננה". זה גם מה שהפך בעבר את בדיקת המסננים
+ * ל-flaky בדסקטופ בלבד, שם לא היה מתג ולא הייתה המתנה.
+ *
+ * לכן הבחירה חוזרת על עצמה עד שהכתובת מכילה את הפרמטר. זו אותה תבנית
+ * שהוכיחה את עצמה במסנן התאריכים שהיה, והיא ההמתנה **וגם** הפעולה: אין
+ * דרך לוודא ש"הפקד מחובר" בלי לבדוק את התוצאה שהוא אמור לייצר.
  */
-export async function openFilters(page: Page): Promise<void> {
-  const toggle = page.getByRole("button", { name: /^מסננים/ });
+export async function applyFilter(
+  page: Page,
+  label: string,
+  option: Parameters<Locator["selectOption"]>[0],
+  param: string,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        await page.getByLabel(label, { exact: true }).selectOption(option);
+        return new URL(page.url()).search;
+      },
+      { timeout: 15_000, message: `המסנן ${label} לא הגיע לכתובת` },
+    )
+    .toContain(`${param}=`);
+}
 
-  /**
-   * ההמתנה כאן אינה קוסמטית, ושתי דרכים מתבקשות אליה שגויות.
-   *
-   * רצועת המסננים יושבת בתוך גבול `Suspense`, ולכן היא מגיעה בזרימה שנייה
-   * אחרי אירוע ה-load שעליו `goto` ממתין. ל-`isVisible` אין המתנה מובנית,
-   * ולכן לבדו הוא החזיר "לא נראה" על אלמנט שטרם הגיע — הפונקציה חזרה בלי
-   * לפתוח, והבדיקה נכשלה על בורר מוסתר.
-   *
-   * ‏`waitFor` על המתג לבדו שגוי בכיוון ההפוך: במסך רחב הוא `display:none`
-   * ולכן **אינו בעץ הנגישות כלל**, ו-`getByRole` לא ימצא אותו לעולם —
-   * ההמתנה נתקעת עד ל-timeout במקום לדלג.
-   *
-   * לכן ההמתנה היא ל**רצועה**, דרך שני הביטויים שלה: המתג בנייד, או מסנן
-   * הכיוון במסך רחב. `or` נפתר ברגע שאחד מהם נראה, ונכשל בקול אם אף אחד
-   * מהם לא הגיע — בניגוד ל-timeout שנבלע.
-   */
-  const directionFilter = page.getByLabel("הפניתי");
-  await toggle.or(directionFilter).first().waitFor();
-  if (!(await toggle.isVisible())) return;
-
-  // ‏toHaveAttribute חוזר על עצמו עד שהוא מצליח, ולכן הוא גם ההמתנה
-  // להידרציה — לחיצה לפניה לא הייתה מפעילה כלום.
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+/**
+ * מחפש בלוח, וחוזר על הפעולה עד שהמונח באמת הגיע לכתובת.
+ *
+ * זהו אותו מחסום הידרציה שמתועד ב-`applyFilter`, ובגרסה חריפה יותר: שדה
+ * החיפוש יושב ב-`<form>` שהשיגור שלו נעצר ב-`preventDefault` של React.
+ * לחיצה **לפני** שההידרציה חיברה את המטפל אינה נבלעת בשקט אלא מפעילה שיגור
+ * נייטיב — ולשדה אין `name`, ולכן הדפדפן מנווט ל-`/board` **נקי**. זהו
+ * הכשל המסוכן מבין השניים: המסך שמתקבל הוא הלוח המלא, וטענה על "הפנייה
+ * מוצגת" מרוצה ממנו — ירוק שלא בדק דבר.
+ *
+ * ההשוואה היא ל-`searchParams.get("q")` ולא למחרוזת בכתובת: מונחי חיפוש
+ * מכילים רווחים, `URLSearchParams` מקודד אותם כ-`+` ו-`encodeURIComponent`
+ * כ-`%20`, ושתי הצורות תקינות. הערך המפוענח הוא מה שנבדק.
+ */
+export async function searchBoard(page: Page, term: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        await page.getByRole("searchbox", { name: "חיפוש" }).fill(term);
+        await page.getByRole("button", { name: "חפש" }).click();
+        return new URL(page.url()).searchParams.get("q");
+      },
+      { timeout: 15_000, message: `מונח החיפוש "${term}" לא הגיע לכתובת` },
+    )
+    .toBe(term);
 }
 
 /** בוחר אפשרות קיימת מתוך LearnedSelect לפי תווית השדה ושם האפשרות */

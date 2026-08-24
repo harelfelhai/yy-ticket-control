@@ -2,11 +2,16 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { type Page, expect } from "@playwright/test";
-import { openFilters, pick } from "../../e2e/helpers";
+import { applyFilter, pick, searchBoard } from "../../e2e/helpers";
 import { SITE_A } from "./cast";
 import { query } from "./db";
 
-export { openFilters, pick };
+/**
+ * ‏`openFilters` ירד מכאן יחד עם המתג שהוא פתח: רצועת המסננים גלויה בכל
+ * רוחב מאז סבב הצפיפות. ‏`applyFilter` יורש ממנו את מה שהיה חשוב בו באמת —
+ * ההמתנה להידרציה לפני `selectOption` (ראו את ההסבר בגוף הפונקציה).
+ */
+export { applyFilter, pick, searchBoard };
 
 /**
  * בוני-תרחיש לחבילת ההתאמה.

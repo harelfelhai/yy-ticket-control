@@ -1,159 +1,89 @@
 import { type Page, expect, test } from "@playwright/test";
-import { E2E_ADMIN } from "./global-setup";
-import { openFilters } from "./helpers";
+import { addProfessional, loginAsManager, pick, searchBoard } from "./helpers";
 import { shownText } from "./ticket-screen";
 
 /**
- * מסך החיפוש (מסך 9).
+ * החיפוש (מסך 9) — **בתוך הלוח, ולא במסך משלו.**
+ *
+ * מאז סבב הצפיפות אין `/search`: החיפוש הוא שדה ברצועת המסננים של הלוח,
+ * והתוצאות מחליפות את שלוש הקבוצות ברשימה שטוחה. הסיבה מתועדת ב-
+ * `board/page.tsx`: הקיבוץ עונה על "אצל מי הכדור", ובחיפוש השאלה היא
+ * "איפה ראיתי את זה" — ופנייה סגורה שתואמת הייתה נוחתת בארכיון המקופל,
+ * כלומר המשתמש מחפש, יש התאמה, והוא רואה מסך ריק.
  *
  * הבדיקה מתמקדת במה שהמנהל עושה בפועל: הוא זוכר מילה מתוך הפנייה, לא את
  * מספרה. לכן החיפוש חייב למצוא גם לפי מה שנכתב בשרשור ולא רק לפי התיאור.
+ *
+ * **מה שהיה כאן ואינו כאן.** בקובץ ישבה בדיקת מסנן התאריכים — הבדיקה
+ * הראשונה אי-פעם על רצועת המסננים. פקדי התאריך ירדו יחד עם המסך הנפרד
+ * (§3.6 מונה חמישה מסננים, ותאריכים מעולם לא היו בהם), אבל **הטענה**
+ * שאותה בדיקה החזיקה — שהערך שנבחר בפקד מגיע לכתובת ומשם לשאילתה בשרת —
+ * אינה תלויה בשדה מסוים, והיא חיה כעת ב-`board.spec.ts`
+ * ("מסנן הבניין משמיט פניות שאינן שלו"). היא הועברה, לא נמחקה.
  */
 
-async function login(page: Page) {
-  await page.goto("/board");
-  if (new URL(page.url()).pathname === "/login") {
-    await page.getByLabel("טלפון או מייל").fill(E2E_ADMIN.phone);
-    await page.getByLabel("סיסמה").fill(E2E_ADMIN.password);
-    await page.getByRole("button", { name: "כניסה" }).click();
-  }
-  await expect(page).toHaveURL(/\/board$/);
-}
-
-async function pick(page: Page, label: string, option: string) {
-  await page.getByRole("button", { name: new RegExp(`^${label}`) }).first().click();
-  await page.getByRole("option", { name: option, exact: true }).click();
-}
-
-test("חיפוש מוצא פנייה לפי התיאור ולפי מה שנכתב בשרשור", async ({ page }) => {
+/** יוצר פנייה משוגרת עם נמען חדש, ומחזיר את התיאור הייחודי שלה */
+async function createSentTicket(page: Page, text: string, prefix: string): Promise<string> {
   const stamp = Date.now();
-  const description = `רטיבות בממ״ד ${stamp}`;
-  const reply = `הצנרת מאחורי הקיר ${stamp}`;
-
-  await login(page);
+  const description = `${text} ${stamp}`;
 
   await page.goto("/tickets/new");
   await pick(page, "בניין", "בניין א");
   await pick(page, "דירה", "1");
   await pick(page, "תחום", "חשמל");
   await page.getByLabel("תיאור").fill(description);
-  await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
-  await page.getByLabel("שם").fill(`קבלן ${stamp}`);
-  await page.getByLabel("טלפון").fill(`056-${String(stamp).slice(-7)}`);
-  await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
-  await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(
-    `קבלן ${stamp}`,
-  );
+  await addProfessional(page, `${prefix} ${stamp}`, `05${prefix.length}-${String(stamp).slice(-7)}`);
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
+
+  return description;
+}
+
+test("חיפוש בלוח מוצא פנייה לפי התיאור ולפי מה שנכתב בשרשור", async ({ page }) => {
+  await loginAsManager(page);
+  const description = await createSentTicket(page, "רטיבות בממ״ד", "קבלן");
+  const reply = `הצנרת מאחורי הקיר ${Date.now()}`;
 
   await page.getByLabel("תגובה").fill(reply);
   await page.getByRole("button", { name: "שלח", exact: true }).click();
   // ‏shownText: `getByText` היה נפתר על תיבת הכתיבה ולא ממתין לשרת.
   await expect(shownText(page, reply)).toBeVisible();
 
-  // ── הגעה למסך מהתפריט, לא מהכתובת ─────────────────────────────────
-  await page.getByRole("link", { name: "חיפוש" }).click();
-  await expect(page).toHaveURL(/\/search/);
+  // ── השדה יושב בלוח, ואין אליו יעד ניווט נפרד ──────────────────────
+  await page.goto("/board");
+  await expect(page.getByRole("searchbox", { name: "חיפוש" })).toBeVisible();
+  // הטענה השלילית היא מה ששומר על האיחוד: חיפוש שיחזור להיות מסך משלו
+  // יחזיר גם את הקבוצות שהתוצאות נועדו להחליף.
+  await expect(page.getByRole("navigation").getByRole("link", { name: "חיפוש" })).toHaveCount(0);
 
-  // בלי מונח ובלי מסננים אין מה להציג — רשימה של הכול היא הלוח.
-  await expect(page.getByText("הקלד מה לחפש")).toBeVisible();
+  // בלי מונח הלוח הוא הלוח — שלוש קבוצות, לא רשימת תוצאות.
+  await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toBeVisible();
 
   // ── חיפוש לפי התיאור ──────────────────────────────────────────────
-  await page.getByLabel("חיפוש", { exact: true }).fill(description);
-  await page.getByRole("button", { name: "חפש" }).click();
+  await searchBoard(page, description);
   await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
+  // מונה התוצאות אינו קישוט: רשימה שטוחה בלי מספר אינה אומרת אם זו כל
+  // התשובה או תחילתה.
+  await expect(page.getByText(/\d+ תוצאות/)).toBeVisible();
+  // והקיבוץ נעלם — התוצאות **מחליפות** את הלוח ולא נדחפות מעליו.
+  await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toHaveCount(0);
 
   // ── חיפוש לפי מה שנכתב בשרשור ─────────────────────────────────────
-  await page.getByLabel("חיפוש", { exact: true }).fill(reply);
-  await page.getByRole("button", { name: "חפש" }).click();
+  await searchBoard(page, reply);
   await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
 
   // ── מונח שאינו קיים ───────────────────────────────────────────────
-  await page.getByLabel("חיפוש", { exact: true }).fill(`אלומיניום ${stamp}`);
-  await page.getByRole("button", { name: "חפש" }).click();
+  await searchBoard(page, `אלומיניום ${Date.now()}`);
   await expect(page.getByText("לא נמצאו פניות")).toBeVisible();
-});
-
-/**
- * מסנן התאריכים — **הבדיקה הראשונה אי-פעם על רצועת המסננים.**
- *
- * הרצועה נבנתה בפער 12 ומעולם לא נבדקה מקצה לקצה, וזו הסיבה שסבב הביקורת
- * הראשון מצא בה סטיות שאיש לא ראה. הבדיקה מכסה את מה ששום בדיקת יחידה אינה
- * יכולה: שהערך שנבחר בפקד הנייטיב באמת מגיע לכתובת, ומשם לשאילתה בשרת.
- */
-test("מסנן התאריכים מסנן בפועל ונשמר בכתובת", async ({ page }) => {
-  const stamp = Date.now();
-  const description = `תריס תקוע ${stamp}`;
-
-  await login(page);
-  await page.goto("/tickets/new");
-  await pick(page, "בניין", "בניין א");
-  await pick(page, "דירה", "1");
-  await pick(page, "תחום", "חשמל");
-  await page.getByLabel("תיאור").fill(description);
-  await page.getByRole("button", { name: "שמור כטיוטה" }).click();
-  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
-
-  await page.goto("/search");
-  await openFilters(page);
-
-  /**
-   * המילוי חוזר על עצמו עד שהכתובת מתעדכנת, וזה אינו קישוט.
-   *
-   * פקדי הרצועה מנווטים ב-`onChange` → `router.replace`, ולכן מילוי **לפני**
-   * ה-hydration נבלע בשקט — האירוע נורה כשאין לו עדיין מטפל. במובייל
-   * `openFilters` ממתין ל-`aria-expanded` וזה משמש גם כהמתנה ל-hydration;
-   * בדסקטופ אין מתג, הפונקציה חוזרת מיד, ואין שום מחסום. זה מה שהפך את
-   * הבדיקה ל-flaky בדסקטופ בלבד.
-   */
-  async function filterByDate(label: string, value: string, param: string) {
-    await expect
-      .poll(
-        async () => {
-          await page.getByLabel(label).fill(value);
-          return new URL(page.url()).search;
-        },
-        { timeout: 15_000 },
-      )
-      .toContain(`${param}=`);
-  }
-
-  // ── טווח שמכיל את היום: הפנייה שנוצרה עכשיו חייבת להימצא ──────────
-  const today = new Date().toISOString().slice(0, 10);
-  await filterByDate("מתאריך", today, "from");
-  await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
-
-  // ── טווח שנגמר אתמול: אותה פנייה חייבת להיעלם ─────────────────────
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  await filterByDate("עד תאריך", yesterday, "to");
-  await expect(page.getByRole("link").filter({ hasText: description })).toHaveCount(0);
 });
 
 test("החיפוש נשמר בכתובת ושורד חזרה מפנייה", async ({ page }) => {
   // מנהל שמצא פנייה, נכנס אליה וחזר, חייב למצוא את התוצאות במקומן.
-  const stamp = Date.now();
-  const description = `דלת לא נסגרת ${stamp}`;
+  await loginAsManager(page);
+  const description = await createSentTicket(page, "דלת לא נסגרת", "נגר");
 
-  await login(page);
-  await page.goto("/tickets/new");
-  await pick(page, "בניין", "בניין א");
-  await pick(page, "דירה", "1");
-  await pick(page, "תחום", "חשמל");
-  await page.getByLabel("תיאור").fill(description);
-  await page.getByRole("button", { name: "+ איש מקצוע חדש" }).click();
-  await page.getByLabel("שם").fill(`נגר ${stamp}`);
-  await page.getByLabel("טלפון").fill(`057-${String(stamp).slice(-7)}`);
-  await page.getByRole("button", { name: "שמור איש מקצוע" }).click();
-  await expect(page.getByRole("list", { name: "נמענים", exact: true })).toContainText(
-    `נגר ${stamp}`,
-  );
-  await page.getByRole("button", { name: "שלח לנמענים" }).click();
-  await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
-
-  await page.goto("/search");
-  await page.getByLabel("חיפוש", { exact: true }).fill(description);
-  await page.getByRole("button", { name: "חפש" }).click();
+  await page.goto("/board");
+  await searchBoard(page, description);
 
   const card = page.getByRole("link").filter({ hasText: description });
   await expect(card).toBeVisible();
@@ -164,4 +94,28 @@ test("החיפוש נשמר בכתובת ושורד חזרה מפנייה", asyn
 
   await page.goBack();
   await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
+  /*
+   * והשדה עצמו מציג שוב את המונח. זו טענה נפרדת מהתוצאות: הסנכרון של
+   * ‏`BoardSearch` לכתובת נעשה ברינדור בדיוק בשביל המסלול הזה — שדה ריק
+   * מעל רשימה מסוננת קורא כאילו הרשימה היא הלוח המלא.
+   */
+  await expect(page.getByRole("searchbox", { name: "חיפוש" })).toHaveValue(description);
+});
+
+test("הכתובת /search הישנה מגיעה ללוח עם אותו מונח", async ({ page }) => {
+  /*
+   * ‏`/search` הפך לבדל הפניה ולא נמחק, כי הכתובת יצאה החוצה: קישורים
+   * שנשלחו בוואטסאפ וסימניות של מנהלים. הבדיקה כאן שומרת על ההבטחה הזו —
+   * ‏404 במקומה נקרא כשבירה ולא כמעבר.
+   */
+  await loginAsManager(page);
+  const term = `מחט ${Date.now()}`;
+
+  await page.goto(`/search?q=${encodeURIComponent(term)}`);
+  await expect(page).toHaveURL(/\/board\?/);
+  expect(new URL(page.url()).searchParams.get("q")).toBe(term);
+
+  // וגם בלי מונח — הבדל מגיע ללוח נקי ולא ל-404.
+  await page.goto("/search");
+  await expect(page).toHaveURL(/\/board$/);
 });

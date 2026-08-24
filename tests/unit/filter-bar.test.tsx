@@ -1,21 +1,21 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { FilterBar, FilterDate, FilterSelect } from "@/components/ui/filter-bar";
 
 /**
- * מה שנשמר כאן הוא החיווט: מי מקופל, מי נשאר גלוי, ומה נמסר לקורא המסך.
+ * מה שנשמר כאן הוא החיווט של הרצועה: מה גלוי, ומה נשאר בסוף השורה.
  *
- * **הנראות עצמה אינה נבדקת כאן.** הקיפול נעשה במחלקות `hidden`/`md:flex`,
- * ו-jsdom אינו מריץ את גיליון הסגנון של Tailwind — `toBeVisible` היה מחזיר
- * "גלוי" גם לפקד מקופל. הנראות בפועל, בשני רוחבי המסך, נבדקת ב-E2E
- * (`e2e/board.spec.ts`), ומה שנבדק כאן הוא ההצהרה הנגישה `aria-expanded`
- * שהיא ממילא מקור האמת עבור קורא מסך.
+ * **שמונה בדיקות ירדו כאן יחד עם מתג הגילוי** (`aria-expanded`, פתיחה
+ * מאליה בכתובת מסוננת, תג המונה, והמשפט לקורא המסך). הן לא נמחקו מפני
+ * שהתקלקלו אלא מפני שהתנהגות שהן שמרו עליה כבר אינה קיימת: הרצועה גלויה
+ * תמיד, ולכן אין מה לפתוח ואין מה לספור על מתג. הכלל שהמתג שירת — "לוח
+ * שהתרוקן בגלל מסנן חייב להסביר את עצמו" — מתקיים עכשיו מעצם זה שהמסנן
+ * הפעיל נראה על המסך.
  */
 
-function renderBar(activeCount = 0) {
+function renderBar() {
   return render(
-    <FilterBar activeCount={activeCount} trailing={<button type="button">טבלה</button>}>
+    <FilterBar trailing={<button type="button">טבלה</button>}>
       <FilterSelect aria-label="בניין">
         <option value="">כל הבניינים</option>
       </FilterSelect>
@@ -24,70 +24,49 @@ function renderBar(activeCount = 0) {
 }
 
 describe("FilterBar", () => {
-  it("מקופלת כברירת מחדל כשאין מסנן פעיל", () => {
-    renderBar(0);
-    expect(screen.getByRole("button", { name: "מסננים" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+  it("אין מתג גילוי — הרצועה אינה נפתחת ואינה נסגרת", () => {
+    renderBar();
+    expect(screen.queryByRole("button", { name: /מסננים/ })).toBeNull();
   });
 
-  it("נפתחת מאליה בכתובת מסוננת — לוח מסונן ללא הסבר נקרא כאובדן נתונים", () => {
-    renderBar(2);
-    expect(screen.getByRole("button", { name: /מסננים/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+  it("המסננים מרונדרים ישירות, בלי פאנל שמסתיר אותם", () => {
+    renderBar();
+    expect(screen.getByLabelText("בניין")).toBeInTheDocument();
   });
 
-  it("המתג פותח וסוגר", async () => {
-    renderBar(0);
-    const toggle = screen.getByRole("button", { name: "מסננים" });
+  it("הרצועה פותחת במסנן — החיפוש אינו פריט בתוכה", () => {
+    /**
+     * הבדיקה הזו החליפה בדיקה הפוכה, שדרשה ש-`leading` (שדה החיפוש) יהיה
+     * הפריט הראשון. הסיבה להיפוך נמדדה ולא הוערכה: החיפוש תפס 334px מתוך
+     * 1561, ודחף את מסנן "עד תאריך" אל מחוץ למסך ברוחב 1600px — כלומר
+     * הרצועה שאמורה להיות גלויה תמיד דרשה גלילה כדי להגיע למסנן שלה.
+     *
+     * מה שנשמר כאן הוא לא סדר אלא **גבול**: הרצועה מחזיקה מסננים בלבד.
+     * מי שיחזיר לכאן פקד חיפוש יישבר על השורה הזו.
+     */
+    const { container } = renderBar();
+    const row = container.firstElementChild as HTMLElement;
+    const first = row.firstElementChild as HTMLElement;
 
-    await userEvent.click(toggle);
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-
-    await userEvent.click(toggle);
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("המתג מצביע על הפאנל שהוא שולט בו", () => {
-    renderBar(0);
-    const controls = screen.getByRole("button", { name: "מסננים" }).getAttribute("aria-controls");
-
-    expect(controls).toBeTruthy();
-    expect(document.getElementById(controls as string)).toContainElement(
-      screen.getByLabelText("בניין"),
-    );
-  });
-
-  it("המספר על המתג נמסר לקורא המסך כמשפט, לא כספרה בודדת", () => {
-    renderBar(3);
-    // השם הנגיש המלא: "מסננים 3 פעילים" — התג עצמו `aria-hidden`.
-    expect(screen.getByRole("button", { name: "מסננים 3 פעילים" })).toBeInTheDocument();
-  });
-
-  it("המתג ו״נקה מסננים״ אינם מתנגשים בחיפוש לפי שם", () => {
-    render(
-      <FilterBar activeCount={1} trailing={<button type="button">נקה מסננים</button>}>
-        <FilterSelect aria-label="בניין" />
-      </FilterBar>,
-    );
-
-    // התאמת מחרוזת ב-Playwright היא הכלה, ולכן `"מסננים"` תופס את שניהם.
-    // העוגן `^` הוא מה שמפריד ביניהם — ראו `openFilters` ב-`e2e/helpers.ts`.
-    expect(screen.getAllByRole("button", { name: /מסננים/ })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: /^מסננים/ })).toHaveLength(1);
-  });
-
-  it("בלי מסננים פעילים אין תג מספר", () => {
-    renderBar(0);
-    expect(screen.getByRole("button", { name: "מסננים" })).toHaveTextContent(/^מסננים$/);
+    expect(first.getAttribute("aria-label")).toBe("בניין");
+    expect(row.querySelector('input[type="search"]')).toBeNull();
   });
 
   it("‏trailing מרונדר פעם אחת בלבד — כפילות הייתה שוברת חיפוש לפי תפקיד", () => {
-    renderBar(0);
+    renderBar();
     expect(screen.getAllByRole("button", { name: "טבלה" })).toHaveLength(1);
+  });
+
+  it("השורה גוללת ואינה נשברת — גובה הרצועה קבוע בכל רוחב", () => {
+    /**
+     * ‏`flex-wrap` היה משנה את גובה הרצועה לפי הרוחב, כלומר מזיז את הלוח
+     * שמתחתיה. ‏`overflow-x-auto` שומר שורה אחת ומגליל את העודף.
+     */
+    const { container } = renderBar();
+    const row = container.firstElementChild as HTMLElement;
+
+    expect(row.className).toContain("overflow-x-auto");
+    expect(row.className).not.toContain("flex-wrap");
   });
 });
 

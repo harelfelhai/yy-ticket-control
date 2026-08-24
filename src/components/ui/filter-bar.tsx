@@ -1,91 +1,57 @@
 "use client";
 
-import { type ReactNode, useId, useState } from "react";
+import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
-import { chipClasses } from "@/components/ui/chip";
-import { Input, type InputProps, Select, type SelectProps } from "@/components/ui/field";
-import { he } from "@/lib/he";
+import {
+  Input,
+  type InputProps,
+  Select,
+  type SelectProps,
+} from "@/components/ui/field";
 
 /**
  * רצועת מסננים — מקור אמת אחד ללוח ולחיפוש.
  *
- * הרצועה פתרה שתי בעיות שהצטברו:
+ * **שורה אחת, גלויה תמיד.** עד סבב הצפיפות הרצועה הייתה מקופלת מאחורי מתג
+ * "מסננים" בנייד, ופרושה עם `flex-wrap` בדסקטופ. שתי ההחלטות נפלו יחד:
  *
- * **1. עלות המסך בנייד.** שישה בוררים ברצועה גלויה תפסו כשליש מהמסך הראשון
- * של הלוח — המסך שמנהל העבודה פותח בבוקר ושבו הוא רוצה לראות פניות, לא
- * פקדים. בנייד הרצועה מקופלת מאחורי מתג, ובמסך רחב היא נשארת גלויה כי שם
- * אין מחסור בגובה.
+ * - **הקיפול** נועד לחסוך גובה בטלפון, ושילם בכך שהפקד הנפוץ ביותר במסך
+ *   דרש לחיצה כדי להתקיים. מה שהחליף אותו הוא הצפיפות עצמה: פקדים בגובה
+ *   32px בשורה אחת תופסים פחות ממה שתפס המתג פלוס הרצועה הפתוחה.
+ * - **‏`flex-wrap`** הפך שישה בוררים לשתיים-שלוש שורות ברגע שהמסך הצטמצם,
+ *   וגובה הרצועה השתנה לפי הרוחב — כלומר התוכן שמתחתיה קפץ. `overflow-x`
+ *   שומר על שורה אחת בגובה קבוע ומגליל את מה שלא נכנס, בדיוק כמו סרגל
+ *   הניווט.
  *
- * **2. קיפול אינו הסתרה.** מסנן פעיל משנה את מה שהמשתמש רואה, ואם המתג
- * נראה סתום — לוח חסר נקרא כאובדן נתונים. לכן `activeCount` מוצג על המתג,
- * והרצועה **נפתחת מאליה** כשמגיעים למסך מסונן (למשל דרך קישור שמישהו שלח).
+ * ‏`activeCount` ירד יחד עם המתג שהוא הוצג עליו. הכלל שהוא שירת — "לוח
+ * שהתרוקן בגלל מסנן חייב להסביר את עצמו" — עבר לרצועה עצמה: כשהמסננים
+ * גלויים, המסנן הפעיל **הוא** ההסבר.
+ *
+ * **החיפוש אינו בתוך הרצועה, וזו תיקון של טעות.** בסבב הראשון הוא נכנס
+ * כפריט ראשון דרך prop בשם `leading`, והתוצאה נמדדה: 334px מתוך 1561 —
+ * כלומר החיפוש לבדו דחף את "עד תאריך" אל מחוץ למסך ברוחב 1600px, והרצועה
+ * שאמורה להיות "שורה אחת גלויה תמיד" נעשתה שורה אחת **שצריך לגלול אליה**.
+ *
+ * ההפרדה אינה רק חשבון רוחב. חיפוש ומסנן הם שתי פעולות שונות: מסנן מצמצם
+ * את הלוח הקיים ומצטבר עם שכניו, וחיפוש **מחליף** את תוכן המסך בתוצאות.
+ * שורה אחת שמחזיקה את שניהם מציגה אותם כשווי מעמד, והם אינם. החיפוש יושב
+ * מעל הרצועה כשורה משל עצמו, והרצועה מחזיקה מסננים בלבד.
  */
 interface FilterBarProps {
   /**
-   * מספר המסננים הפעילים כרגע. הקורא גוזר אותו מהכתובת — הוא היחיד שיודע
-   * אילו פרמטרים הם מסננים ואילו הם מצב תצוגה (`view`, `focus`).
-   */
-  activeCount: number;
-  /**
-   * פקדים שנשארים גלויים גם כשהרצועה מקופלת. שם מקומם של דברים שאינם
-   * מסננים — מתג התצוגה (טבלה/כרטיסים) הוא מצב תצוגה ולא סינון, וכך גם
-   * "נקה מסננים", שהוא פעולה על הרצועה ולא פריט בתוכה.
+   * פקדים שאינם מסננים ונשארים בסוף השורה: מתג התצוגה (טבלה/כרטיסים) הוא
+   * מצב תצוגה, ו"נקה מסננים" הוא פעולה על הרצועה ולא פריט בתוכה.
    */
   trailing?: ReactNode;
   children: ReactNode;
 }
 
-export function FilterBar({ activeCount, trailing, children }: FilterBarProps) {
-  /**
-   * ‏`useState` ולא `useSearchParams` ישירות: אחרי הטעינה הראשונה המצב שייך
-   * למשתמש. אילו הוא היה נגזר מהכתובת בכל רינדור, ניקוי המסנן האחרון היה
-   * סוגר את הרצועה בזמן שהמשתמש עובד בתוכה.
-   */
-  const [open, setOpen] = useState(activeCount > 0);
-  const panelId = useId();
-
+export function FilterBar({ trailing, children }: FilterBarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls={panelId}
-        className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium md:hidden"
-      >
-        {he.board.filters}
-        {activeCount > 0 ? (
-          <>
-            {/* המספר לבדו קריא בעין אך חסר-משמעות באוזן, ולכן הוא מוסתר
-                מהקורא והמשפט המלא נמסר לו בנפרד. */}
-            {/* ‏`min-w-5` + `px-1` הופכים את הצ׳יפ לעיגול מונה: ספרה בודדת
-                אינה אמורה להימתח לרוחב של מילה. */}
-            <span aria-hidden className={chipClasses("brand", "solid", "default", "min-w-5 justify-center px-1")}>
-              {activeCount}
-            </span>
-            {/* ‏`{" "}` מפורש: `gap-2` מפריד את הפקדים בעין, אבל השם הנגיש
-                נבנה משרשור טקסט — ובלי הרווח הוא יוצא "מסננים2 פעילים". */}{" "}
-            <span className="sr-only">{he.board.activeFilters(activeCount)}</span>
-          </>
-        ) : null}
-      </button>
-
-      {/*
-        ‏`order-last` בנייד בלבד: כשהרצועה פתוחה היא יורדת לשורה משלה
-        (`w-full`), ובלעדיו היא הייתה דוחפת את פקדי ה-`trailing` אל מתחתיה
-        ומרחיקה אותם ממתג המסננים. במסך רחב הפאנל חוזר לסדר ה-DOM ומשתלב
-        באותה שורה עם שאר הפקדים.
-      */}
-      <div
-        id={panelId}
-        className={twMerge(
-          "order-last w-full flex-wrap items-center gap-2 md:order-none md:flex md:w-auto",
-          open ? "flex" : "hidden",
-        )}
-      >
-        {children}
-      </div>
-
+    // ‏`items-center` ולא `items-stretch`: שדה התאריך נושא תווית גלויה
+    // ולכן גבוה משכניו, וללא היישור הוא היה מותח את כל השורה.
+    <div className="flex items-center gap-1 overflow-x-auto">
+      {children}
       {trailing}
     </div>
   );
@@ -98,12 +64,24 @@ export function FilterBar({ activeCount, trailing, children }: FilterBarProps) {
  * ברצועה `w-full` הופך כל בורר לשורה שלמה — שישה בוררים נערמו זה תחת זה
  * במקום להצטופף בשורה. הרוחב כאן נגזר מהאפשרות הארוכה ביותר, וחסום
  * ב-176px כדי ששם ספק ארוך לא ימתח בורר יחיד על פני כל הרצועה.
+ *
+ * ‏`shrink-0` נוסף עם המעבר לשורה אחת: בלעדיו flex היה מכווץ את הבוררים עד
+ * שהטקסט בתוכם נחתך, במקום לתת לשורה לגלול.
  */
 export function FilterSelect({ className, ...rest }: SelectProps) {
-  return <Select size="compact" className={twMerge("w-auto max-w-44", className)} {...rest} />;
+  return (
+    <Select
+      size="compact"
+      className={twMerge("w-auto max-w-44 shrink-0", className)}
+      {...rest}
+    />
+  );
 }
 
-export type FilterDateProps = { label: ReactNode } & Omit<InputProps, "type" | "size">;
+export type FilterDateProps = { label: ReactNode } & Omit<
+  InputProps,
+  "type" | "size"
+>;
 
 /**
  * שדה תאריך ברצועת המסננים.
@@ -129,7 +107,7 @@ export type FilterDateProps = { label: ReactNode } & Omit<InputProps, "type" | "
  */
 export function FilterDate({ label, className, ...rest }: FilterDateProps) {
   return (
-    <label className="flex items-center gap-1 text-sm">
+    <label className="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm">
       {label}
       <Input
         type="date"

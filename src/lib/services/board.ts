@@ -3,6 +3,9 @@ import type { BoardCard } from "@/lib/board-view";
 import { db } from "@/lib/db";
 import { firstLine } from "@/lib/format";
 import type { SessionUser } from "@/lib/session";
+import { compareApartmentNumbers } from "@/lib/normalize";
+import { tagChatTextMatch } from "@/lib/services/tags";
+import type { DerivedTicketStatus } from "@/lib/ticket-status";
 import {
   type BoardSection,
   deriveAwaitingReply,
@@ -22,22 +25,51 @@ import {
  */
 
 export interface BoardFilters {
+  /**
+   * טקסט חופשי. כשהוא קיים הלוח עובר למצב תוצאות: רשימה שטוחה במקום שלוש
+   * הקבוצות. ראו `BoardData.search`.
+   */
+  query?: string;
   /** "הפניתי" מול "קיבלתי" — החיתוך המרכזי באפיון §3.6 */
   direction?: "opened" | "received";
   /** סינון לאתר — רלוונטי רק למי שרואה יותר מאחד (בעלים, מנהל מערכת) */
   siteId?: string;
   buildingId?: string;
+  apartmentId?: string;
   domainId?: string;
   /** מזהה איש מקצוע או משתמש פנימי */
   recipientId?: string;
   tagId?: string;
+  /**
+   * מצב הפנייה כפי שהוא **נגזר** מהשיוכים.
+   *
+   * מסונן בזיכרון ולא ב-SQL, ואין ברירה: הסטטוס אינו עמודה אלא תוצאה של
+   * `deriveTicketStatus`, והחלופה — לשמור אותו בטבלה — הייתה מייצרת שדה
+   * שיכול לסתור את השיוכים שהוא נגזר מהם.
+   */
+  status?: DerivedTicketStatus;
+  /** טווח תאריכי פתיחה, כולל */
+  from?: Date;
+  to?: Date;
 }
 
 export interface BoardData {
   sections: Record<BoardSection, BoardCard[]>;
+  /**
+   * תוצאות חיפוש — קיים רק כשנמסר `query`, ואז הוא מה שהמסך מציג.
+   *
+   * **למה רשימה שטוחה ולא הקבוצות הרגילות.** הקיבוץ של הלוח עונה על "אצל
+   * מי הכדור", ובחיפוש השאלה אחרת לגמרי — "איפה ראיתי את זה". פנייה סגורה
+   * שתואמת את החיפוש הייתה נוחתת בארכיון, שמקופל כברירת מחדל: המשתמש מחפש,
+   * מקבל התאמה, ורואה מסך ריק עם "אין כאן כלום". זה בדיוק הכשל שהמסך הנפרד
+   * לא סבל ממנו, ואין סיבה לרשת אותו יחד עם האיחוד.
+   */
+  search: { cards: BoardCard[]; truncated: boolean } | null;
   /** האתרים שהצופה רשאי לסנן לפיהם — ריק למנהל עבודה (מקובע לאתרו) */
   sites: { id: string; name: string }[];
   buildings: { id: string; name: string }[];
+  /** דירות הבניין שנבחר — ריק כשלא נבחר בניין */
+  apartments: { id: string; name: string }[];
   domains: { id: string; name: string }[];
   recipients: { id: string; name: string }[];
   tags: { id: string; name: string }[];
@@ -49,8 +81,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 function emptyBoard(): BoardData {
   return {
     sections: { ACTION_REQUIRED: [], WITH_RECIPIENTS: [], ARCHIVE: [] },
+    search: null,
     sites: [],
     buildings: [],
+    apartments: [],
     domains: [],
     recipients: [],
     tags: [],
@@ -81,7 +115,17 @@ export async function getBoard(
     conditions.push({ assignments: { some: { userId: user.id, status: { not: "REMOVED" } } } });
   }
   if (filters.buildingId) conditions.push({ buildingId: filters.buildingId });
+  if (filters.apartmentId) conditions.push({ apartmentId: filters.apartmentId });
   if (filters.domainId) conditions.push({ domainId: filters.domainId });
+  if (filters.from || filters.to) {
+    conditions.push({
+      createdAt: {
+        ...(filters.from ? { gte: filters.from } : {}),
+        // עד סוף היום שנבחר: "עד 22.7" מתכוון לכלול את כל אותו יום.
+        ...(filters.to ? { lte: endOfDay(filters.to) } : {}),
+      },
+    });
+  }
   if (filters.recipientId) {
     conditions.push({
       assignments: {
@@ -94,9 +138,30 @@ export async function getBoard(
   }
   if (filters.tagId) conditions.push({ tags: { some: { tagId: filters.tagId } } });
 
+  /**
+   * הטקסט החופשי נכנס כתנאי נוסף באותו `AND`, ולא כמסלול שאילתה נפרד.
+   *
+   * זה מה שאפשר לאחד את מסך החיפוש לתוך הלוח: ההרשאה, המידור לפי אתר וכל
+   * ששת המסננים כבר בנויים כאן, ומסך החיפוש שכפל אותם שורה בשורה. מה שהיה
+   * ייחודי לו הוא `textMatch` בלבד — ארבעה מקורות טקסט ועוד צ׳אט התגית.
+   */
+  const query = filters.query?.trim();
+  if (query) conditions.push(textMatch(query));
+
   const tickets = await db.ticket.findMany({
     where: { AND: conditions },
     orderBy: { lastActivityAt: "desc" },
+    /**
+     * תקרה **רק** כשיש חיפוש טקסט.
+     *
+     * הלוח עצמו נשאר בלי `take`: הוא מקובץ לפי "אצל מי הכדור", וקטיעה שלו
+     * הייתה מסתירה פניות שדורשות טיפול בלי שאיש ידע. חיפוש טקסט, לעומת
+     * זאת, סורק `contains` על ארבעה מקורות טקסט **בלי אינדקסי trigram**
+     * (הם נמחקו במיגרציה `20260724054950` ולא שוחזרו) — כלומר סריקה
+     * סדרתית. התקרה שומרת על המסך הזה שמיש, והקטיעה נאמרת למשתמש במפורש
+     * במקום להיבלע.
+     */
+    ...(query ? { take: SEARCH_CANDIDATE_LIMIT } : {}),
     include: {
       building: { select: { name: true } },
       apartment: { select: { number: true } },
@@ -154,6 +219,8 @@ export async function getBoard(
 
     const view = { ...ticket, handlerName: ticket.handler?.name ?? null, awaitingReply };
     const status = deriveTicketStatus(view, assignmentViews);
+    // סינון הסטטוס כאן ולא ב-SQL — ראו `BoardFilters.status`.
+    if (filters.status && status !== filters.status) continue;
     const section = deriveBoardSection(status, ticket.escalated, Boolean(awaitingReply));
 
     sections[section].push({
@@ -177,6 +244,14 @@ export async function getBoard(
     });
   }
 
+  // במצב חיפוש הסדר הוא סדר ה-DB (תנועה אחרונה) ולא הקיבוץ, ולכן הרשימה
+  // השטוחה נבנית מהפניות עצמן ולא משרשור שלוש הקבוצות.
+  const searchCards = query
+    ? [...sections.ACTION_REQUIRED, ...sections.WITH_RECIPIENTS, ...sections.ARCHIVE].sort(
+        (a, b) => tickets.findIndex((t) => t.id === a.id) - tickets.findIndex((t) => t.id === b.id),
+      )
+    : null;
+
   // טיוטות מוצמדות לראש "דורש ממך": הן דורשות השלמה ידנית לפני שאפשר לשגר,
   // ואסור שפניות אחרות ידחפו אותן אל מחוץ למסך (אפיון מסך 7). המיון יציב,
   // ולכן הסדר לפי lastActivityAt נשמר בתוך כל קבוצה.
@@ -184,7 +259,7 @@ export async function getBoard(
     (a, b) => (a.status === "DRAFT" ? 0 : 1) - (b.status === "DRAFT" ? 0 : 1),
   );
 
-  const [sites, buildings, domains, professionals, tags] = await Promise.all([
+  const [sites, buildings, apartments, domains, professionals, tags] = await Promise.all([
     // רשימת האתרים לבורר — ריקה למנהל עבודה, שכן אין לו מה לסנן.
     user.siteId
       ? Promise.resolve([] as { id: string; name: string }[])
@@ -194,11 +269,94 @@ export async function getBoard(
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    /**
+     * הדירות של הבניין שנבחר בלבד.
+     *
+     * בורר דירה שמציג את כל הדירות בכל האתרים הוא רשימה של מאה פריטים בלי
+     * הקשר — ובאתר אמיתי, מאות. הוא מופיע רק אחרי בחירת בניין, וזה גם הסדר
+     * שבו מנהל עבודה חושב: קודם איפה, אחר כך איזו.
+     */
+    filters.buildingId
+      ? db.apartment.findMany({
+          where: { buildingId: filters.buildingId },
+          select: { id: true, number: true },
+        })
+      : Promise.resolve([] as { id: string; number: string }[]),
     db.domain.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.professional.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.tag.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
-  return { sections, sites, buildings, domains, recipients: professionals, tags };
+  return {
+    sections,
+    search: searchCards
+      ? {
+          cards: searchCards.slice(0, SEARCH_RESULT_LIMIT),
+          truncated:
+            searchCards.length > SEARCH_RESULT_LIMIT || tickets.length === SEARCH_CANDIDATE_LIMIT,
+        }
+      : null,
+    sites,
+    buildings,
+    apartments: sortApartments(apartments),
+    domains,
+    recipients: professionals,
+    tags,
+  };
+}
+
+/**
+ * סוף היום שנבחר: "עד 22.7" מתכוון לכלול את כל אותו יום, ולא את חצות שלו.
+ */
+/**
+ * סדר טבעי למספרי דירה: 2 לפני 10. הבורר משתמש באותה השוואה שמסך הניהול
+ * משתמש בה — בבניין עם 50 דירות, רשימה שמציגה 1, 10, 11, 2 מאלצת לחפש כל
+ * בחירה מחדש.
+ */
+function sortApartments(rows: { id: string; number: string }[]) {
+  return [...rows]
+    .sort((a, b) => compareApartmentNumbers(a.number, b.number))
+    .map((row) => ({ id: row.id, name: row.number }));
+}
+
+function endOfDay(value: Date): Date {
+  const end = new Date(value);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+/**
+ * תקרת המועמדים שנשלפים לחיפוש טקסט, וכמה מהם מוצגים.
+ *
+ * שני ערכים ולא אחד: הקטיעה שהמשתמש רואה ("יש עוד") חייבת להיות מובחנת
+ * מהקטיעה של השאילתה. אם `tickets.length` הגיע לתקרת המועמדים, ייתכן שיש
+ * התאמות שכלל לא נשלפו — וזה מידע אחר מ"נשלפו 120 ומוצגות 50".
+ */
+const SEARCH_CANDIDATE_LIMIT = 300;
+const SEARCH_RESULT_LIMIT = 50;
+
+/**
+ * המקומות שבהם טקסט שקשור לפנייה יכול לחיות.
+ *
+ * ‏`insensitive` נדרש גם בעברית: העברית אינה מבחינה ברישיות, אבל השאילתה
+ * חוצה גם טקסט באנגלית — שמות מוצרים, קודים, ומה שחולץ מדוח.
+ *
+ * הענף האחרון חוצה את **צ׳אט התגית**: דוח בדק בית שהועלה בהזנה המרוכזת
+ * יושב כהודעה בצ׳אט התגית המשותפת (מסך 5, אזור א׳), והטקסט שחולץ ממנו
+ * חייב להיות "זמין לחיפוש" (האפיון). כך חיפוש מילה מהדוח מעלה את כל פניות
+ * הבדק בית של אותה דירה, ולא רק את זו שבמקרה כתובה בתיאורה.
+ */
+function textMatch(query: string): Prisma.TicketWhereInput {
+  const contains = { contains: query, mode: "insensitive" as const };
+
+  return {
+    OR: [
+      { description: contains },
+      { messages: { some: { text: contains } } },
+      { messages: { some: { media: { some: { transcription: contains } } } } },
+      { messages: { some: { media: { some: { extractedText: contains } } } } },
+      tagChatTextMatch(query),
+    ],
+  };
 }
 

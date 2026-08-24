@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openFilters } from "./helpers";
+import { applyFilter } from "./helpers";
 
 /**
  * הלוח הראשי — המסך שמנהל העבודה פותח בבוקר.
@@ -93,48 +93,64 @@ test.describe("הלוח הראשי", () => {
 
   test("מצב הסינון נשמר בכתובת, כך שחזרה למסך משמרת אותו", async ({ page }) => {
     await page.goto("/board");
-    await openFilters(page);
-    await page.getByLabel("הפניתי").selectOption("opened");
+    await applyFilter(page, "הפניתי", "opened", "direction");
 
     await expect(page).toHaveURL(/direction=opened/);
 
-    // חזרה מהפנייה למסך אינה מאבדת את הסינון. הרצועה נפתחת מאליה, כי
-    // הכתובת מסוננת — ולכן אין צורך לפתוח אותה שוב.
+    // חזרה מהפנייה למסך אינה מאבדת את הסינון — הכתובת היא מצב הרצועה.
     await page.reload();
     await expect(page.getByLabel("הפניתי")).toHaveValue("opened");
   });
 
-  test("בנייד הרצועה מקופלת, ובמסך רחב היא גלויה", async ({ page }, testInfo) => {
+  /**
+   * מסנן שמסנן בפועל — הטענה עברה לכאן ממסנן התאריכים שהיה ב-`search.spec`.
+   *
+   * המסננים שם ירדו יחד עם המסך הנפרד (§3.6 מונה חמישה: הפניתי/קיבלתי,
+   * נמען, בניין, תחום ותגית — ותאריכים מעולם לא היו בהם), אבל **הטענה**
+   * שאותה בדיקה החזיקה אינה תלויה בשדה מסוים: שהערך שנבחר בפקד מגיע
+   * לכתובת, ומשם לשאילתה בשרת. הבדיקה שמעליה מוכיחה את חצי הדרך הראשון
+   * בלבד; רק כאן נבדק שהתוצאה על המסך באמת השתנתה.
+   */
+  test("מסנן הבניין משמיט פניות שאינן שלו", async ({ page }) => {
+    const description = await createTicket(page, "1"); // בניין א
     await page.goto("/board");
+    await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
 
-    const toggle = page.getByRole("button", { name: /^מסננים/ });
-    const filter = page.getByLabel("הפניתי");
+    // ‏`{ label: … }`: מזהי הבניינים נוצרים ב-seed ואינם ידועים לבדיקה.
+    await applyFilter(page, "בניין", { label: "בניין ב" }, "building");
+    await expect(page.getByRole("link").filter({ hasText: description })).toHaveCount(0);
 
-    if (testInfo.project.name === "mobile") {
-      // שישה בוררים גלויים תפסו כשליש מהמסך הראשון של הלוח.
-      await expect(toggle).toBeVisible();
-      await expect(filter).toBeHidden();
-      /*
-       * עד 0.5 ישבה כאן גם הטענה ש"מצב סיור" נשאר גלוי — הפקד היחיד
-       * ב-`trailing` שהיה גלוי בנייד תמיד. עם הסרתו `trailing` בנייד ריק
-       * ברוב הזמן (מתג הטבלה מוסתר מתחת ל-`md`, ו"נקה מסננים" מותנה
-       * במסנן פעיל), ולכן הכלל "מה שאינו מסנן אינו מתקפל" נאכף מעכשיו
-       * ב-`tests/unit/filter-bar.test.tsx` בלבד.
-       */
-    } else {
-      await expect(toggle).toBeHidden();
-      await expect(filter).toBeVisible();
-    }
+    await applyFilter(page, "בניין", { label: "בניין א" }, "building");
+    await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
   });
 
-  test("כתובת מסוננת פותחת את הרצועה מאליה", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "mobile", "הקיפול קיים רק מתחת ל-md");
+  test("רצועת המסננים גלויה בכל רוחב, ואין מתג שמקפל אותה", async ({ page }) => {
+    await page.goto("/board");
 
-    // בלי זה, לוח שהתרוקן בגלל מסנן שהגיע בקישור נקרא כאובדן נתונים.
+    /*
+     * עד סבב הצפיפות הרצועה הייתה מקופלת מאחורי מתג "מסננים" מתחת ל-`md`,
+     * וכאן ישבו שני ענפים — נייד ודסקטופ. הצפיפות עצמה החליפה את הקיפול:
+     * פקדים בגובה 32px בשורה אחת נגללת תופסים פחות ממה שתפס המתג פלוס
+     * הרצועה הפתוחה. לכן הטענה אחת, ובלי תלות בפרויקט.
+     */
+    await expect(page.getByLabel("הפניתי")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^מסננים/ })).toHaveCount(0);
+  });
+
+  test("לוח שהגיע מסונן בקישור מציג את המסנן הפעיל", async ({ page }) => {
+    /*
+     * הטענה שהחזיקה קודם "כתובת מסוננת פותחת את הרצועה מאליה", ואותו
+     * נימוק בדיוק: לוח שהתרוקן בגלל מסנן שהגיע בקישור ואינו מסביר את עצמו
+     * נקרא כאובדן נתונים. מה שהשתנה הוא **היכן** ההסבר יושב — לא במונה על
+     * מתג שצריך לפתוח, אלא ברצועה הגלויה עצמה: הבורר מציג את הערך הפעיל.
+     */
     await page.goto("/board?direction=opened");
 
-    await expect(page.getByLabel("הפניתי")).toBeVisible();
-    await expect(page.getByRole("button", { name: /^מסננים/ })).toContainText("1");
+    const filter = page.getByLabel("הפניתי");
+    await expect(filter).toBeVisible();
+    await expect(filter).toHaveValue("opened");
+    // ‏"נקה מסננים" מוצג רק כשיש מסנן פעיל — הדרך החוצה נראית יחד עם הסיבה.
+    await expect(page.getByRole("button", { name: "נקה מסננים" })).toBeVisible();
   });
 
   test("כפתור פנייה חדשה מוביל למסך היצירה", async ({ page }) => {
@@ -198,7 +214,8 @@ test.describe("תצוגת טבלה", () => {
     test.skip(testInfo.project.name !== "mobile", "הטענה היא על הנייד");
 
     await page.goto("/board");
-    await openFilters(page);
+    // אין כאן פתיחת רצועה: היא גלויה בכל רוחב מאז סבב הצפיפות, ומתג
+    // התצוגה יושב ממילא ב-`trailing` שלה ולא בתוך המסננים.
     // ‏hidden ולא count(0): הכפתור קיים ב-DOM ומוסתר ב-`md:` — מה שנבדק
     // הוא שהמשתמש אינו יכול ללחוץ עליו ולא לראות שינוי.
     await expect(page.getByRole("button", { name: "טבלה" })).toBeHidden();

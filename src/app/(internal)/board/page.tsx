@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { TicketCard } from "@/components/ticket-card";
+import { ButtonLink } from "@/components/ui/button";
 import { TicketTable } from "@/components/ticket-table";
 import { requireUser } from "@/lib/auth";
 import {
@@ -13,8 +14,8 @@ import {
 } from "@/lib/board-view";
 import { he } from "@/lib/he";
 import { type BoardFilters as Filters, getBoard } from "@/lib/services/board";
-import type { BoardSection } from "@/lib/ticket-status";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import type { BoardSection, DerivedTicketStatus } from "@/lib/ticket-status";
+import { FULL_WIDTH, PAGE_BLEED, PAGE_X, STICKY_UNDER_HEADER, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { BoardFilters } from "./board-filters";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Banner } from "@/components/ui/message";
@@ -31,6 +32,35 @@ export const metadata = { title: `${he.board.title} — ${he.app.name}` };
  * הארכיון מקופל כברירת מחדל (`<details>`), כדי שפניות סגורות לא ידחפו את
  * מה שדורש טיפול אל מחוץ למסך.
  */
+/**
+ * מצב מהכתובת, מאומת מול הרשימה הסגורה.
+ *
+ * ‏`?status=NONSENSE` צריך להיקרא כ"בלי סינון סטטוס" ולא להפיל את המסך —
+ * אותו כלל בדיוק שכבר חל על `?sort=` (`isSortKey`).
+ */
+const STATUSES: DerivedTicketStatus[] = [
+  "NEW",
+  "VIEWED",
+  "PARTIAL",
+  "AWAITING_OPENER_APPROVAL",
+  "CLOSED",
+  "DRAFT",
+];
+
+function asStatus(value: string | undefined): DerivedTicketStatus | undefined {
+  return STATUSES.find((status) => status === value);
+}
+
+/**
+ * ‏`yyyy-mm-dd` מ-`<input type="date">`. תאריך לא-תקין נקרא כ"בלי סינון",
+ * מאותו נימוק — הכתובת היא קלט חיצוני.
+ */
+function asDate(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 export default async function BoardPage(props: PageProps<"/board">) {
   const user = await requireUser();
   const params = await props.searchParams;
@@ -39,6 +69,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
     typeof value === "string" && value ? value : undefined;
 
   const filters: Filters = {
+    query: single(params.q),
     direction: single(params.direction) === "opened"
       ? "opened"
       : single(params.direction) === "received"
@@ -46,9 +77,13 @@ export default async function BoardPage(props: PageProps<"/board">) {
         : undefined,
     siteId: single(params.site),
     buildingId: single(params.building),
+    apartmentId: single(params.apartment),
     domainId: single(params.domain),
     recipientId: single(params.recipient),
     tagId: single(params.tag),
+    status: asStatus(single(params.status)),
+    from: asDate(single(params.from)),
+    to: asDate(single(params.to)),
   };
 
   const board = await getBoard(user, filters, new Date());
@@ -118,18 +153,21 @@ export default async function BoardPage(props: PageProps<"/board">) {
     board.sections.ARCHIVE.length;
 
   return (
-    <div className={`flex flex-col gap-4 p-4 pb-24 ${CONTENT_WIDTH}`}>
+    <div className={`flex flex-col gap-3 py-3 pb-24 ${PAGE_X} ${FULL_WIDTH}`}>
       <Suspense>
         <BoardFilters
           sites={board.sites}
           buildings={board.buildings}
+          apartments={board.apartments}
           domains={board.domains}
           recipients={board.recipients}
           tags={board.tags}
         />
       </Suspense>
 
-      {focus && focusCards ? (
+      {board.search ? (
+        <SearchResults cards={board.search.cards} truncated={board.search.truncated} table={table} sort={sort} sortHref={sortHref} />
+      ) : focus && focusCards ? (
         <>
           {/*
            * פערים 33 ו-34: הבאנר נכתב ביד עם `bg-brand/5` — ערך שקיפות שאינו
@@ -137,7 +175,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
            * חסר**, ולכן נוסף `brand` ל-`Banner` במקום לחזור על המחלקות.
            * ‏"הצג הכול" נצמד לטקסט ואינו נדחף לקצה הנגדי (§ Layout).
            */}
-          <Banner tone="brand" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Banner tone="info" className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>{focus === "awaiting" ? he.board.focusAwaiting : he.board.focusStale}</span>
             <Link href={clearFocusHref} className="underline">
               {he.board.showAll}
@@ -176,14 +214,18 @@ export default async function BoardPage(props: PageProps<"/board">) {
         </>
       )}
 
-      {/* כפתור צף: יצירת פנייה היא הפעולה השכיחה ביותר בשטח, והיא חייבת
-          להיות בהישג אגודל בלי גלילה. */}
-      <Link
-        href="/tickets/new"
-        className="fixed bottom-4 end-4 flex min-h-14 items-center rounded-full bg-brand px-6 text-base font-semibold text-brand-fg shadow-lg"
-      >
+      {/*
+        כפתור צף: יצירת פנייה היא הפעולה השכיחה ביותר בשטח, והיא חייבת
+        להיות בהישג אגודל בלי גלילה.
+
+        **עובר דרך `ButtonLink` ולא נבנה ביד.** קודם הוא היה עותק ידני של
+        הכפתור הראשי (`bg-brand`, `text-brand-fg`, `px-6`), ולכן החמיץ כל
+        שינוי בפרימיטיב — כולל את הפלטה החדשה ואת הצפיפות. `shadow-lg`
+        וההצמדה נשארים כאן: הם תפקידו כאלמנט צף, לא צורתו ככפתור.
+      */}
+      <ButtonLink href="/tickets/new" className="fixed bottom-3 end-3 shadow-lg">
         {he.ticket.newTicket}
-      </Link>
+      </ButtonLink>
     </div>
   );
 }
@@ -201,6 +243,33 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
   return (
     <>
       {label} <span className="font-normal text-muted">· {count}</span>
+    </>
+  );
+}
+
+/**
+ * תוצאות חיפוש — רשימה שטוחה שמחליפה את הלוח כל עוד יש מונח חיפוש.
+ *
+ * **בלי הקיבוץ לשלוש קבוצות, ובכוונה.** הקיבוץ עונה על "אצל מי הכדור",
+ * ובחיפוש השאלה היא "איפה ראיתי את זה". פנייה סגורה שתואמת הייתה נוחתת
+ * בארכיון המקופל — כלומר המשתמש מחפש, יש התאמה, והוא רואה מסך ריק.
+ *
+ * הקטיעה נאמרת במפורש: רשימה חתוכה שנראית מלאה היא הטעיה.
+ */
+function SearchResults({
+  cards,
+  truncated,
+  table,
+  sort,
+  sortHref,
+}: { cards: BoardCard[]; truncated: boolean; table: boolean } & SortProps) {
+  if (cards.length === 0) return <EmptyState>{he.search.empty}</EmptyState>;
+
+  return (
+    <>
+      <p className="text-sm text-muted">{he.search.results(cards.length)}</p>
+      {truncated ? <Banner tone="warning">{he.search.truncated}</Banner> : null}
+      <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} />
     </>
   );
 }
@@ -230,8 +299,23 @@ function CardList({
    * מציגה שני סדרים שונים בלי לומר זאת. זו רשימה אחת, וסדר אחד.
    */
   const ordered = sortCards(cards, sort);
-  const asCards = ordered.map((card) => <TicketCard key={card.id} card={card} />);
-  if (!table) return <>{asCards}</>;
+  const asCards = (
+    /**
+     * **הריסון של הרוחב יושב כאן, ולא על העמוד.**
+     *
+     * זו התשובה לנימוק שבגללו הייתה תקרה על `<main>`: כרטיס פנייה מחזיק שתי
+     * שורות טקסט, וברוחב 1600px התיאור והמצב מתרחקים עד שהעין אינה קושרת
+     * ביניהם. ‏`auto-fill` פותר את זה בלי לוותר על המסך — עמודה חסומה
+     * ב-360px, וכל מה שנשאר הופך לעמודה נוספת. מסך רחב קונה **עוד כרטיסים
+     * בשורה**, לא כרטיס מתוח אחד.
+     */
+    <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(360px,100%),1fr))]">
+      {ordered.map((card) => (
+        <TicketCard key={card.id} card={card} />
+      ))}
+    </div>
+  );
+  if (!table) return asCards;
 
   /*
    * **בנייד כרטיסים תמיד, גם כש-`?view=table` מבוקש במפורש.**
@@ -249,7 +333,7 @@ function CardList({
       <div className="hidden md:block">
         <TicketTable cards={ordered} sort={sort} sortHref={sortHref} />
       </div>
-      <div className="flex flex-col gap-3 md:hidden">{asCards}</div>
+      <div className="md:hidden">{asCards}</div>
     </>
   );
 }
@@ -268,7 +352,9 @@ function Section({
   return (
     <section className="flex flex-col gap-3">
       {/* כותרת דביקה: בגלילה ארוכה המשתמש תמיד יודע באיזו קבוצה הוא נמצא. */}
-      <h2 className={`sticky top-14 z-[1] -mx-4 bg-bg px-4 py-2 ${TITLE_DESCRIPTIVE}`}>
+      <h2
+        className={`sticky ${STICKY_UNDER_HEADER} z-[1] ${PAGE_BLEED} bg-bg ${PAGE_X} py-1 ${TITLE_DESCRIPTIVE}`}
+      >
         <SectionHeading label={he.boardSection[id]} count={cards.length} />
       </h2>
       {cards.length === 0 ? (

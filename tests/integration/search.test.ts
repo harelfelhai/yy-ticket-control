@@ -1,21 +1,58 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import type { BoardCard } from "@/lib/board-view";
 import type { Viewer } from "@/lib/permissions";
 import { confirmUpload, registerMedia } from "@/lib/services/media";
 import { writeLocalObject } from "@/lib/storage/local";
-import { RESULT_LIMIT, searchTickets } from "@/lib/services/search";
+import { getBoard } from "@/lib/services/board";
 import { addTagMessage, addTagToTicket, findOrCreateTag } from "@/lib/services/tags";
 import { addMessage, closeTicket, createTicket } from "@/lib/services/tickets";
 import type { SessionUser } from "@/lib/session";
 import { resetDb } from "../helpers/reset-db";
 
 /**
- * החיפוש (מסך 9).
+ * החיפוש (אפיון מסך 9), שמאז סבב הצפיפות הוא **מצב של הלוח** ולא מסך נפרד.
  *
  * מה שנבדק כאן במיוחד: שהחיפוש באמת חוצה **את התמלול ואת הטקסט המחולץ**
  * (אפיון §3.6). זו הסיבה שעיבוד ה-AI קיים — הקלטה שאי אפשר לחפש בה היא
  * קובץ שמישהו צריך לזכור שהוא קיים.
+ *
+ * הבדיקות נכתבו מול `searchTickets` שהיה שירות בפני עצמו. הן הועברו
+ * ל-`getBoard` **בלי לשנות אף טענה**: זה בדיוק מה שהופך את האיחוד לניתן
+ * לאימות — אותן ציפיות בדיוק, מול המימוש החדש.
  */
+
+/**
+ * עוטף את הלוח בממשק שהבדיקות כאן נכתבו מולו.
+ *
+ * **שני מצבים, וההבחנה ביניהם היא בדיוק ההכרעה של האיחוד.** עם מונח טקסט
+ * הלוח מחזיר רשימה שטוחה (`search`), מפני שהשאלה היא "איפה ראיתי את זה";
+ * בסינון בלבד הוא נשאר מקובץ לפי "אצל מי הכדור" — וזה הלוח, לא תוצאות.
+ *
+ * הבדיקות כאן שואלות **אילו פניות עונות לקריטריון**, וזו שאלה שאינה תלויה
+ * בקיבוץ. לכן במצב השני שלוש הקבוצות משורשרות, ולא נטען שהמסך מציג רשימה
+ * שטוחה כשהוא אינו מציג.
+ */
+async function searchTickets(
+  user: SessionUser,
+  filters: Parameters<typeof getBoard>[1],
+): Promise<{ cards: BoardCard[]; truncated: boolean }> {
+  const board = await getBoard(user, filters, new Date());
+  if (board.search) return board.search;
+
+  return {
+    cards: [
+      ...board.sections.ACTION_REQUIRED,
+      ...board.sections.WITH_RECIPIENTS,
+      ...board.sections.ARCHIVE,
+    ],
+    // הלוח המקובץ אינו נחתך — אין לו `take`, בכוונה (ראו services/board.ts).
+    truncated: false,
+  };
+}
+
+/** התקרה שהלוח מציג במצב חיפוש (`SEARCH_RESULT_LIMIT` ב-services/board.ts) */
+const RESULT_LIMIT = 50;
 
 let admin: SessionUser;
 let manager: SessionUser;
