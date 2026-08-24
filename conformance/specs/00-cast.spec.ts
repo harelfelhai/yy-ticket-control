@@ -19,15 +19,30 @@ test.describe("צוות ההתאמה", () => {
     });
   }
 
-  test("קישור הניהול מוצג למנהל המערכת בלבד (§4 שורה 345)", async ({ page }) => {
+  /**
+   * **הטענה התהפכה עבור הבעלים, וזה תיקון ולא ויתור.**
+   *
+   * ‏§4 שורה 345 ("מסכים 11–15: מנהל מערכת ראשי בלבד") נשמר במלואו — הוא
+   * חל על **תוכן** מסכי הניהול, וזה נבדק ב-A2-08. מה שהשתנה הוא מה שיושב
+   * מאחורי הקישור: מאז סבב הצפיפות **סקירת האתרים (מסך 10) עברה לראש
+   * `/admin`**, ולבעלים היא המסך היחיד שנבנה עבורו (§5.ז — "רואה את כל
+   * האתרים"). קישור חסום היה מסתיר ממנו בדיוק אותו.
+   *
+   * מנהל העבודה נשאר בחוץ: אין לו תצוגה חוצת-אתרים כלל.
+   */
+  test("קישור הניהול מוצג למנהל המערכת ולבעלים, ולא למנהל עבודה (§4 שורה 345 + מסך 10)", async ({
+    page,
+  }) => {
+    const navLink = () => page.getByRole("navigation").getByRole("link", { name: "ניהול" });
+
     await loginAs(page, "admin");
-    await expect(page.getByRole("navigation").getByRole("link", { name: "ניהול" })).toBeVisible();
+    await expect(navLink()).toBeVisible();
 
     await loginAs(page, "owner");
-    await expect(page.getByRole("navigation").getByRole("link", { name: "ניהול" })).toHaveCount(0);
+    await expect(navLink()).toBeVisible();
 
     await loginAs(page, "managerA");
-    await expect(page.getByRole("navigation").getByRole("link", { name: "ניהול" })).toHaveCount(0);
+    await expect(navLink()).toHaveCount(0);
   });
 
   test("שני האתרים קיימים והמנהלים משויכים נכון", async ({ page }) => {

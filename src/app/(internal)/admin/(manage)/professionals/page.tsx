@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listProfessionalsForAdmin } from "@/lib/services/admin";
 import { ProfessionalsManager } from "./professionals-manager";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { FULL_WIDTH, LINK, PAGE_X, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: `${he.admin.professionals} — ${he.app.name}` };
@@ -14,9 +14,10 @@ export default async function AdminProfessionalsPage() {
   const professionals = await listProfessionalsForAdmin(actor);
 
   return (
-    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    <div className={`flex flex-col gap-3 py-3 ${PAGE_X} ${FULL_WIDTH}`}>
       <div>
-        <Link href="/admin" className="text-sm text-brand">
+        {/* קו תחתון ולא `text-brand` — ראו `LINK` ב-`src/lib/ui.ts`. */}
+        <Link href="/admin" className={`text-sm ${LINK}`}>
           ← {he.admin.title}
         </Link>
         <h1 className={TITLE_DESCRIPTIVE}>{he.admin.professionals}</h1>

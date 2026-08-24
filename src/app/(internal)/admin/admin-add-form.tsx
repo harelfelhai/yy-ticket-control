@@ -7,6 +7,7 @@ import type { ActionResult } from "@/lib/action-result";
 import { useAction } from "@/lib/use-action";
 import { cardClasses } from "@/components/ui/card";
 import { FormError } from "@/components/ui/message";
+import { FORM_PANEL_WIDTH } from "@/lib/ui";
 
 interface AdminAddFormProps {
   label: string;
@@ -46,7 +47,18 @@ export function AdminAddForm({
     );
   }
 
-  const layout = "flex flex-col gap-2";
+  /**
+   * ‏`FORM_PANEL_WIDTH` כאן, בטופס עצמו, ולא בכל עמוד בנפרד.
+   *
+   * מסכי הניהול עברו לרוחב מלא, ובלעדיו שדה "שם אתר" נמתח על 1400px כדי
+   * לקלוט מילה אחת — ומעליו, בטלפון, הוא דוחק את הרשימה שהוא מוסיף אליה
+   * מתחת לקו הקיפול. הרוחב הוא תכונה של הטופס ("פאנל הזנה"), ולכן חמשת
+   * העמודים שמרנדרים אותו מקבלים אותו ממנו ולא חוזרים עליו.
+   *
+   * ‏`lg:shrink-0` משלים אותו: בשורה שבה הטופס יושב לצד הרשימה, בלעדיו
+   * ה-flex היה מכווץ אותו מתחת ל-320px כשהרשימה רחבה.
+   */
+  const layout = `flex flex-col gap-2 ${FORM_PANEL_WIDTH} lg:shrink-0`;
 
   return (
     <div className={surface === "card" ? cardClasses(layout) : layout}>
@@ -59,7 +71,13 @@ export function AdminAddForm({
           size="compact"
         />
       </Field>
+      {/*
+       * ‏`compact` כמו השדה שמעליו. קודם השדה היה 32px והכפתור 36px — שני
+       * פקדים בערימה אחת בשני גבהים, שנקראים כשתי מערכות ולא כטופס אחד.
+       * הרצפה במגע נשמרת בשני המקרים (`touch:min-h-11`).
+       */}
       <Button
+        size="compact"
         onClick={submit}
         disabled={busy || value.trim().length === 0}
         className="self-start"

@@ -73,7 +73,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
   }
 
   return (
-    <section className={cardClasses("flex flex-col gap-3")}>
+    <section className={cardClasses("flex flex-col gap-2")}>
       <h2 className={TITLE_DESCRIPTIVE}>{he.tag.accessHeading}</h2>
 
       {granted.length === 0 ? (
@@ -90,7 +90,9 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
                     disabled={busy}
                     onClick={() => revoke(contractor.id)}
                     aria-label={`${he.tag.revoke} ${contractor.label}`}
-                    className="px-1 text-base leading-none disabled:opacity-50"
+                    // ‏`opacity-60` ולא 50: זו רצפת ה-`disabled` של `Button`
+                    // ‏(`BASE` ב-button.tsx), וכאן היא נכתבה מהזיכרון וסטתה.
+                    className="px-1 text-base leading-none disabled:opacity-60"
                   >
                     ×
                   </button>
@@ -120,7 +122,7 @@ export function TagAccessControl({ tagId, granted, candidates }: TagAccessContro
         </ul>
       )}
 
-      <div className="flex flex-col gap-2 border-t border-border pt-3">
+      <div className="flex flex-col gap-2 border-t border-border pt-2">
         <p className="text-xs text-muted">{he.tag.openHint}</p>
 
         {pending.length > 0 ? (

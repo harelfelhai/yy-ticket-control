@@ -16,13 +16,20 @@ import { acceptDialogs, createTicket, uniq } from "../fixtures/world";
  * דרך יציבה לזייף קריאת Server Action מ-Playwright.
  */
 
-const ADMIN_PAGES = [
-  "/admin",
-  "/admin/sites",
-  "/admin/users",
-  "/admin/professionals",
-  "/admin/domains",
-];
+/**
+ * **הרשימה התפצלה, וזו החלוקה עצמה שנבדקת כאן.**
+ *
+ * עד סבב הצפיפות `/admin` היה "מסך הניהול" ונחסם יחד עם ארבעת האחרים.
+ * מאז שסקירת האתרים (מסך 10) עברה לראשו הוא מחזיק שתי שכבות לשני קהלים:
+ * הבעלים רואה את הסקירה ואינו מנהל דבר. לכן הכתובת אינה נחסמת עוד לבעלים,
+ * בעוד שארבעת מסכי הניהול — §4 שורה 345, "מנהל מערכת ראשי בלבד" — נשארים
+ * חסומים בפניו. שני שערים, ולא תנאי אחד (ראו `admin/(manage)/layout.tsx`).
+ *
+ * למנהל עבודה שום דבר מזה אינו נפתח, וחמשת הנתיבים נבדקים אצלו ביחד.
+ */
+const MANAGE_PAGES = ["/admin/sites", "/admin/users", "/admin/professionals", "/admin/domains"];
+const ADMIN_HUB = "/admin";
+const ADMIN_PAGES = [ADMIN_HUB, ...MANAGE_PAGES];
 
 test.describe("§5.ז — מנהל עבודה", () => {
   test("A3-01/A3-09 — מנהל אתר ב׳ אינו מגיע לפנייה של אתר א׳ גם בכתובת ישירה", async ({
@@ -99,6 +106,15 @@ test.describe("§5.ז — מנהל עבודה", () => {
   test("S10-01 — מנהל עבודה מופנה מתצוגת הבעלים ללוח", async ({ page }) => {
     acceptDialogs(page);
     await loginAs(page, "managerA");
+
+    // תצוגת הבעלים (מסך 10) יושבת בראש `/admin` — זו הכתובת שהטענה מכוונת
+    // אליה עכשיו, והשער שם הוא `canViewOverview`.
+    await page.goto(ADMIN_HUB);
+    await expect(page).toHaveURL(/\/board/);
+
+    // ‏`/overview` נשאר כבדל הפניה בשביל סימניות וקישורים שיצאו החוצה,
+    // ולכן גם הוא נבדק: הוא מפנה ל-`/admin`, ומשם השער מחזיר ללוח. שרשרת
+    // שנשברת באמצע הייתה מחזירה מנהל עבודה למסך שאינו שלו.
     await page.goto("/overview");
     await expect(page).toHaveURL(/\/board/);
   });
@@ -181,13 +197,26 @@ test.describe("§5.ז — בעלים", () => {
     await expect(page.getByRole("button", { name: "+ איש מקצוע חדש" })).toHaveCount(0);
   });
 
-  test("A2-08 — חמשת מסכי הניהול חסומים לבעלים", async ({ page }) => {
+  test("A2-08 — ארבעת מסכי הניהול חסומים לבעלים, וסקירת האתרים נפתחת לו", async ({ page }) => {
     acceptDialogs(page);
     await loginAs(page, "owner");
-    for (const url of ADMIN_PAGES) {
+    for (const url of MANAGE_PAGES) {
       await page.goto(url);
       await expect(page, `${url} אמור להפנות ללוח`).toHaveURL(/\/board/);
     }
+
+    /*
+     * הצד החיובי של אותה טענה, ובלעדיו הבדיקה חצי בדיקה: מסך 10 נבנה
+     * **לבעלים**, ומאז שהוא עבר לראש `/admin` חסימה גורפת של הכתובת הייתה
+     * נועלת אותו מחוץ למסך היחיד שנועד לו.
+     */
+    await page.goto(ADMIN_HUB);
+    await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.getByRole("heading", { name: "סקירת אתרים" })).toBeVisible();
+    // ושכבת הניהול שבתוך אותו מסך נשארת סגורה בפניו (§4 שורה 345) —
+    // הכפתורים אינם מרונדרים כלל, ולא רק מוסתרים.
+    await expect(page.getByRole("heading", { name: "ניהול המערכת" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "משתמשים" })).toHaveCount(0);
   });
 });
 
@@ -287,12 +316,20 @@ test.describe("§4 מסך 9 — היקף ההרשאה מסנן את החיפוש
       recipients: [PROS.full.name],
     });
 
+    /*
+     * החיפוש עבר לתוך הלוח, ואיתו הכתובת: `/board?q=`. ההוכחה עצמה לא
+     * השתנתה כהוא זה — היא על **היקף ההרשאה** ולא על המסך שבו מחפשים —
+     * ולכן היא הועברה לכתובת החדשה ולא נמחקה יחד עם המסך.
+     */
     await loginAs(page, "managerA");
-    await page.goto(`/search?q=${encodeURIComponent(needle)}`);
+    await page.goto(`/board?q=${encodeURIComponent(needle)}`);
     await expect(page.getByText(needle)).toBeVisible();
 
     await loginAs(page, "managerB");
-    await page.goto(`/search?q=${encodeURIComponent(needle)}`);
+    await page.goto(`/board?q=${encodeURIComponent(needle)}`);
     await expect(page.getByText(needle)).toHaveCount(0);
+    // ומסך התוצאות אכן נטען אצלו — כלומר האפס הוא "אין לך גישה" ולא
+    // "המסך לא הגיע". בלי זה הטענה השלילית מרוצה גם מעמוד ריק.
+    await expect(page.getByText("לא נמצאו פניות")).toBeVisible();
   });
 });

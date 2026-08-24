@@ -7,7 +7,7 @@ import { he } from "@/lib/he";
 import { getTagDetail } from "@/lib/services/tags";
 import { TagAccessControl } from "./tag-access-control";
 import { TagChatBox } from "./tag-chat-box";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, ROW_LIST} from "@/lib/ui";
+import { CONTENT_WIDTH, LINK, PAGE_X, TITLE_DESCRIPTIVE, TITLE_IDENTIFYING, ROW_LIST} from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
 
@@ -35,10 +35,13 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         .map((p) => ({ id: p.id, label: p.name, hint: p.phone ?? p.email ?? undefined }))
     : [];
 
+  // רוחב הקריאה נשמר: המסך הוא צ׳אט שקוראים בו ברצף, ולא רשימה שסורקים.
   return (
-    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    <div className={`flex flex-col gap-3 py-3 ${PAGE_X} ${CONTENT_WIDTH}`}>
       <header className="flex flex-col gap-1">
-        <Link href="/tags" className="text-sm text-brand">
+        {/* קו תחתון ולא `text-brand`: בפלטת הגרפיט צבע המותג זהה כמעט לטקסט
+            הגוף, וקישור שמסומן בו בלבד מפסיק להיראות לחיץ (`LINK` ב-ui.ts). */}
+        <Link href="/tags" className={`text-sm text-fg ${LINK}`}>
           ← {he.tag.listTitle}
         </Link>
         <h1 className={TITLE_IDENTIFYING}>{detail.tag.name}</h1>
@@ -61,7 +64,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
               <li key={ticket.id}>
                 <Link
                   href={`/tickets/${ticket.id}`}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-bg p-3 text-sm"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-bg p-2 text-sm"
                 >
                   {/*
                    * מספר הפנייה ירד מכאן ב-0.5, כפי שירד מטבלת הלוח: הוא
@@ -120,7 +123,7 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
         </section>
       )}
 
-      <section className={cardClasses("flex flex-col gap-3")}>
+      <section className={cardClasses("flex flex-col gap-2")}>
         <div>
           <h2 className={TITLE_DESCRIPTIVE}>{he.tag.chatHeading}</h2>
           <p className="text-xs text-muted">{he.tag.chatHint}</p>

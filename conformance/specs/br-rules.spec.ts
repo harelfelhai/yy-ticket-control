@@ -180,12 +180,29 @@ test.describe("§4 מסך 1 — הלוח מסביר את עצמו", () => {
     await expect(card).toContainText("נשלח, טרם נצפה");
   });
 
-  test("S1-18/S1-19 — כפתור פנייה חדשה וחיפוש זמינים מהלוח", async ({ page }) => {
+  /**
+   * ‏S1-19 — **החיפוש בראש המסך, ולא קישור בסרגל הניווט.**
+   *
+   * ‏§4 שורה 230 מנסחת את הפעולה כך: "חיפוש (בראש המסך): מעבר למסך
+   * החיפוש". חצי המשפט הראשון הוא הדרישה, והשני הוא המימוש שהיה. מאז סבב
+   * הצפיפות אין מסך לעבור אליו — החיפוש הוא שדה ברצועת המסננים של הלוח,
+   * כלומר בראש המסך פשוטו כמשמעו, והדרישה מתקיימת חזק יותר מקודם.
+   *
+   * הטענה נבדקת על השדה **ועל כפתור השיגור** שלצדו: `searchbox` לבדו קיים
+   * גם אילו הטופס לא היה מחובר לכלום.
+   */
+  test("S1-18/S1-19 — כפתור פנייה חדשה וחיפוש זמינים מהלוח (§4 שורות 228–230)", async ({
+    page,
+  }) => {
     acceptDialogs(page);
     await loginAs(page, "managerA");
     await page.goto("/board");
     await expect(page.getByRole("link", { name: BOARD.newTicket })).toBeVisible();
-    await expect(page.getByRole("navigation").getByRole("link", { name: "חיפוש" })).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: "חיפוש" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "חפש" })).toBeVisible();
+    // הטענה השלילית שומרת על האיחוד: קישור ניווט לחיפוש שיחזור פירושו שהמסך
+    // הנפרד חזר, ואיתו הקבוצות שהתוצאות השטוחות נועדו להחליף.
+    await expect(page.getByRole("navigation").getByRole("link", { name: "חיפוש" })).toHaveCount(0);
   });
 
   /*

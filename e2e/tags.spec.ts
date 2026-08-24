@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openFilters } from "./helpers";
+import { applyFilter } from "./helpers";
 import { openDetails, showLink, shownText } from "./ticket-screen";
 
 /**
@@ -128,8 +128,11 @@ test("תגית: תיוג, צ׳אט קבוצתי, ופתיחה לקבלן שרו�
   await expect(page.getByText(contractorMessage)).toBeVisible();
 
   // ── 8. מסנן התגית בלוח מציג את הפנייה ─────────────────────────────
+  // ‏`applyFilter` ולא `selectOption` ישיר: הרצועה גלויה תמיד מאז סבב
+  // הצפיפות, ו-`openFilters` — שההמתנה שלו שימשה כאן כמחסום הידרציה —
+  // ירד יחד עם המתג. הבחירה חוזרת עד שהפרמטר מגיע לכתובת, ולכן היא
+  // ההמתנה **וגם** הפעולה.
   await page.goto("/board");
-  await openFilters(page);
-  await page.getByLabel("תגיות", { exact: true }).selectOption({ label: tagName });
+  await applyFilter(page, "תגיות", { label: tagName }, "tag");
   await expect(page.getByRole("link").filter({ hasText: description })).toBeVisible();
 });

@@ -1,8 +1,8 @@
 import { DeleteButton } from "@/components/delete-button";
 import { InlineRename } from "@/components/inline-rename";
 import { cardClasses } from "@/components/ui/card";
-import { deleteDomainAction, renameDomainAction } from "../actions";
-import { CARD_LIST, RECORD_NAME} from "@/lib/ui";
+import { deleteDomainAction, renameDomainAction } from "../../actions";
+import { CARD_LIST, RECORD_NAME } from "@/lib/ui";
 
 interface DomainRow {
   id: string;

@@ -10,9 +10,9 @@ import {
   mergeProfessionalsAction,
   setProfessionalActiveAction,
   updateProfessionalAction,
-} from "../actions";
+} from "../../actions";
 import { DeleteButton } from "@/components/delete-button";
-import { TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
+import { TITLE_DESCRIPTIVE, CARD_LIST, FORM_PANEL_WIDTH, RECORD_NAME } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
 import { Banner, FormError } from "@/components/ui/message";
 import { chipClasses } from "@/components/ui/chip";
@@ -60,9 +60,15 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    /*
+     * טופס האיחוד יורד לפאנל לצד הרשימה, באותה תבנית של "משתמש חדש"
+     * ושל `AdminAddForm` — ארבעת מסכי הניהול נפתחים על הרשומות ולא על
+     * טופס ההזנה שלהם. כאן זה חד במיוחד: האיחוד הוא הפעולה **הנדירה
+     * ביותר** במסך, והוא זה שישב בראשו ברוחב מלא.
+     */
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
       {/* איחוד כפילויות */}
-      <section className={cardClasses("flex flex-col gap-2")}>
+      <section className={cardClasses(`flex flex-col gap-2 ${FORM_PANEL_WIDTH} lg:shrink-0`)}>
         <h2 className={TITLE_DESCRIPTIVE}>{he.admin.mergeHeading}</h2>
         <p className="text-xs text-muted">{he.admin.mergeHint}</p>
 
@@ -72,36 +78,54 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
          * רואה שני ערכים נבחרים וכפתור "אחד" שנשאר מושבת בלי שום הסבר —
          * בדיוק הכפתור המת שדווח מהשטח במקום אחר. פקד מושבת שנדלק הוא
          * מצב שאפשר להבין; פקד שעונה ואינו קולט אינו.
+         *
+         * **בטור ולא בשתי עמודות**, בניגוד לזוגות שב"משתמש חדש": בבורר
+         * הזה התוכן הוא שם של אדם, ובחצי פאנל הוא נחתך באמצע. פעולה
+         * שמוחקת זהות שלמה אינה יכולה להישען על שם מקוצר.
          */}
-        <div className="grid grid-cols-2 gap-2">
-          <Field label={he.admin.mergeKeep}>
-            <Select value={keepId} onChange={(e) => setKeepId(e.target.value)} disabled={busy}>
-              <option value="">{he.common.choose}</option>
-              {professionals
-                .filter((p) => p.active)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </Select>
-          </Field>
+        <Field label={he.admin.mergeKeep}>
+          <Select
+            value={keepId}
+            onChange={(e) => setKeepId(e.target.value)}
+            disabled={busy}
+            size="compact"
+          >
+            <option value="">{he.common.choose}</option>
+            {professionals
+              .filter((p) => p.active)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </Select>
+        </Field>
 
-          <Field label={he.admin.mergeDrop}>
-            <Select value={dropId} onChange={(e) => setDropId(e.target.value)} disabled={busy}>
-              <option value="">{he.common.choose}</option>
-              {professionals
-                .filter((p) => p.active && p.id !== keepId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </Select>
-          </Field>
-        </div>
+        <Field label={he.admin.mergeDrop}>
+          <Select
+            value={dropId}
+            onChange={(e) => setDropId(e.target.value)}
+            disabled={busy}
+            size="compact"
+          >
+            <option value="">{he.common.choose}</option>
+            {professionals
+              .filter((p) => p.active && p.id !== keepId)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </Select>
+        </Field>
 
-        <Button onClick={merge} disabled={busy || !keepId || !dropId} className="self-start">
+        {/* בגובה הבוררים שמעליו — טופס אחד, מידה אחת. */}
+        <Button
+          size="compact"
+          onClick={merge}
+          disabled={busy || !keepId || !dropId}
+          className="self-start"
+        >
           {he.admin.mergeButton}
         </Button>
 
@@ -115,7 +139,7 @@ export function ProfessionalsManager({ professionals }: { professionals: Profess
         ) : null}
       </section>
 
-      <ul className={CARD_LIST}>
+      <ul className={`${CARD_LIST} min-w-0 flex-1`}>
         {professionals.map((professional) => (
           <ProfessionalItem key={professional.id} professional={professional} disabled={busy} />
         ))}
@@ -201,10 +225,24 @@ function ProfessionalItem({
 
   return (
     <li className={cardClasses("flex flex-col gap-2")}>
-      <Input value={name} onChange={(e) => setName(e.target.value)} />
+      {/* ‏`compact` בשלושת השדות ובשני הכפתורים: עריכה בתוך שורת רשימה,
+          לא הפעולה הראשית של המסך — ואותה מידה כמו בעריכת משתמש. */}
+      <Input value={name} onChange={(e) => setName(e.target.value)} size="compact" />
       <div className="grid grid-cols-2 gap-2">
-        <Input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" inputMode="tel" />
-        <Input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" inputMode="email" />
+        <Input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          dir="ltr"
+          inputMode="tel"
+          size="compact"
+        />
+        <Input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          dir="ltr"
+          inputMode="email"
+          size="compact"
+        />
       </div>
       {error ? (
         <FormError>
@@ -212,7 +250,7 @@ function ProfessionalItem({
         </FormError>
       ) : null}
       <div className="flex gap-2">
-        <Button onClick={save} disabled={busy} className="flex-1">
+        <Button size="compact" onClick={save} disabled={busy} className="flex-1">
           {he.admin.saveProfessional}
         </Button>
         <Button variant="secondary" size="compact" onClick={() => setEditing(false)}>

@@ -5,7 +5,7 @@ import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import type { Room } from "@/generated/prisma/enums";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 import { ROOMS } from "@/lib/rooms";
@@ -20,7 +20,7 @@ import {
 } from "@/lib/offline-draft";
 import { useAction } from "@/lib/use-action";
 import { unwrapOrThrow } from "@/lib/action-result";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import { CONTENT_WIDTH, PAGE_BLEED, PAGE_X, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { chipClasses } from "@/components/ui/chip";
 import {
   createApartmentAction,
@@ -381,8 +381,36 @@ export function CreateTicketForm({
   return (
     // pb-28: רצועת הפעולות דביקה בתחתית (sticky), והריפוד נותן לתוכן — למשל
     // טופס יצירת איש מקצוע כשהוא פתוח — מקום להיגלל מעליה במקום להיחסם מאחוריה.
-    <div className={`flex flex-col gap-4 p-4 pb-28 ${CONTENT_WIDTH}`}>
-      <h1 className={TITLE_DESCRIPTIVE}>{he.ticket.createTitle}</h1>
+    //
+    // ‏`CONTENT_WIDTH` נשאר גם כאן: זו עמודת שדות אחת, ושדה טקסט שנמתח על
+    // ‏1920px אינו קריא ואינו ניתן לסריקה — הרוחב אינו קונה בו מידע נוסף.
+    <div className={`flex flex-col gap-3 py-3 pb-28 ${PAGE_X} ${CONTENT_WIDTH}`}>
+      {/*
+        הכותרת והמעבר להזנה מרוכזת יושבים יחד, וזה מיקומה החדש של האחרונה.
+
+        קודם היא הייתה קישור בסרגל הניווט הגלובלי — כלומר הוצעה בכל מסך
+        במערכת. אבל הזנה מרוכזת אינה יעד אלא **דרך שנייה לעשות בדיוק את מה
+        שהמסך הזה עושה**: לפתוח פניות. שתי הדרכים שייכות זו לצד זו, ובמקום
+        שבו המשתמש כבר החליט שהוא פותח פנייה.
+
+        ‏`flex-wrap` + `gap` ולא דחיפה לקצה הנגדי: הכפתור מתייחס לכותרת
+        ונצמד אליה (§ Layout).
+
+        ‏`hidden md:inline-flex` נשמר מהניסוח הקודם — האפיון (מסך 5) מגדיר את
+        ההזנה המרוכזת כתכונת דסקטופ, וטבלה של עשרות שורות ברוחב 390px אינה
+        ניתנת למילוי. מעבר מיקום אינו משנה את זה.
+      */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className={TITLE_DESCRIPTIVE}>{he.ticket.createTitle}</h1>
+        <ButtonLink
+          href="/tickets/batch"
+          variant="secondary"
+          size="compact"
+          className="hidden md:inline-flex"
+        >
+          {he.batch.navLink}
+        </ButtonLink>
+      </div>
 
       {/* המדיה היא הפעולה הראשונה (אפיון מסך 4): בשטח מצלמים לפני שמקלידים.
           בלי ticketId — הפנייה עדיין אינה קיימת; הקלטה ממלאת את התיאור אם ריק. */}
@@ -573,7 +601,18 @@ export function CreateTicketForm({
         </Banner>
       ) : null}
 
-      <div className="sticky bottom-0 flex gap-2 border-t border-border bg-bg py-3">
+      {/*
+        רצועת הפעולות, ובאותה בליטה כמו הקומפוזר במסך הפנייה.
+
+        עד הסבב הזה הרצועה כאן **לא** נמתחה לקצה בעוד שהקומפוזר כן, ושתיהן
+        אותו דפוס בדיוק — פס דביק בתחתית מסך שנשמר בו טקסט. בעמודה צרה
+        ההבדל לא נראה; מרגע שה-`<main>` חדל להגביל, קו ההפרדה של הרצועה
+        נעצר בגבול העמודה ונקרא כחצי-קו. `PAGE_BLEED` + `PAGE_X` הם אותם
+        שני קבועים ששם, ולכן הן אינן יכולות לסטות שוב זו מזו.
+      */}
+      <div
+        className={`sticky bottom-0 ${PAGE_BLEED} flex gap-2 border-t border-border bg-bg ${PAGE_X} py-3`}
+      >
         <Button onClick={() => send(false)} disabled={busy} className="flex-1">
           {he.ticket.submit}
         </Button>

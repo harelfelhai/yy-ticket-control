@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { CONTENT_WIDTH, TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
+import { FULL_WIDTH, PAGE_X, TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
 import { deleteTagAction, renameTagAction } from "./actions";
 import { DeleteButton } from "@/components/delete-button";
@@ -24,8 +24,10 @@ export default async function TagsPage() {
   // שינוי שם תגית שמור למנהל המערכת, כמו שאר ניהול הרשומות.
   const canManage = user.role === "ADMIN";
 
+  // ‏`FULL_WIDTH` ולא רוחב קריאה: זהו מסך ניהול שסורקים בו רשומות, ואין בו
+  // שורת טקסט אחת שנקראת ברצף. עמודה ממורכזת כאן רק קונה גלילה.
   return (
-    <div className={`flex flex-col gap-4 p-4 ${CONTENT_WIDTH}`}>
+    <div className={`flex flex-col gap-3 py-3 ${PAGE_X} ${FULL_WIDTH}`}>
       <h1 className={TITLE_DESCRIPTIVE}>{he.tag.listTitle}</h1>
 
       {tags.length === 0 ? (
@@ -39,7 +41,7 @@ export default async function TagsPage() {
             >
               {/* מונה הקבלנים צמוד לשם התגית ולא נדחף לקצה הנגדי —
                   ראו DESIGN.md § Layout על `justify-between`. */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <Link href={`/tags/${tag.id}`} className="flex min-w-0 flex-col gap-1">
                   <span className={RECORD_NAME}>{tag.name}</span>
                   <span className="text-sm text-muted">

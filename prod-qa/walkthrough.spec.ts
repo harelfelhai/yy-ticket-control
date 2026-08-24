@@ -67,8 +67,13 @@ test("כל המסכים הפנימיים נטענים ומצולמים", async (
    */
   const screens: [string, string][] = [
     ["/board", "01-board"],
-    ["/overview", "02-overview"],
-    ["/search", "03-search"],
+    /*
+     * ‏`/overview` ו-`/search` ירדו מהרשימה: שניהם בדלי הפניה מאז סבב
+     * הצפיפות, וסריקה שלהם הייתה מאמתת פעמיים את היעד תחת שם שאינו שלו.
+     * שני המסכים עצמם נשארים מכוסים — הסקירה בראש `/admin` שברשימה, והחיפוש
+     * כמצב של הלוח כאן. ההפניות עצמן נבדקות בבדיקה נפרדת שמתחת.
+     */
+    [`/board?q=${encodeURIComponent("חשמל")}`, "02-board-search"],
     ["/tags", "04-tags"],
     ["/tickets/new", "05-ticket-new"],
     ["/tickets/batch", "06-batch"],
@@ -295,16 +300,57 @@ test("ניהול: משתמש חדש, תחום חדש ושינוי שם", async (
   await shot(page, "24-admin-user-added", testInfo);
 });
 
-test("חיפוש: סינון לפי טווח תאריכים", async ({ page }, testInfo) => {
+/**
+ * הרצועה מסננת בפועל — **הבדיקה שירשה את מסנן התאריכים.**
+ *
+ * הבדיקה שהייתה כאן מילאה "מתאריך" במסך החיפוש. שני אלה ירדו יחד בסבב
+ * הצפיפות: המסך אוחד לתוך הלוח, ופקדי התאריך לא עברו איתו. מה שהיא באמת
+ * שמרה עליו אינו השדה אלא **השרשרת**: פקד → כתובת → שאילתה בשרת, על
+ * פרודקשן אמיתי ולא על בנייה מקומית. כאן היא נבדקת דרך מסנן הכיוון.
+ *
+ * המילוי חוזר על עצמו עד שהכתובת מתעדכנת, כמו בכל שאר הסוויטות: הפקדים
+ * מנווטים ב-`onChange` → `router.replace`, ובחירה לפני ההידרציה נבלעת
+ * בשקט. על רשת אמיתית החלון הזה רחב יותר מאשר מקומית, לא צר.
+ */
+test("הלוח: מסנן שנבחר מגיע לכתובת ומסנן בפועל", async ({ page }, testInfo) => {
   await login(page);
-  await page.goto("/search");
+  await page.goto("/board");
 
-  const toggle = page.getByRole("button", { name: /^מסננים/ });
-  if (await toggle.isVisible()) await toggle.click();
+  await expect
+    .poll(
+      async () => {
+        await page.getByLabel("הפניתי", { exact: true }).selectOption("opened");
+        return new URL(page.url()).search;
+      },
+      { timeout: 20_000, message: "המסנן לא הגיע לכתובת" },
+    )
+    .toContain("direction=opened");
 
-  const today = new Date().toISOString().slice(0, 10);
-  await page.getByLabel("מתאריך").fill(today);
-  await expect(page).toHaveURL(/from=/);
+  // ‏"נקה מסננים" נחשף רק כשיש מסנן פעיל — כלומר השרת באמת קרא את הפרמטר
+  // והמסך מסביר את עצמו. בלי זה הטענה היא על הכתובת בלבד.
+  await expect(page.getByRole("button", { name: "נקה מסננים" })).toBeVisible();
   await assertNoError(page);
-  await shot(page, "25-search-filtered", testInfo);
+  await shot(page, "25-board-filtered", testInfo);
+});
+
+/**
+ * הכתובות הישנות ממשיכות לעבוד — **וזה נבדק דווקא בפרודקשן.**
+ *
+ * ‏`/search` ו-`/overview` נשארו כבדלי הפניה מפני שהן יצאו החוצה: קישורים
+ * בוואטסאפ, סימניות של מנהלים, היסטוריית דפדפן. ההבטחה הזו חלה על השרת
+ * החי ולא על בנייה מקומית, ולכן זה המקום היחיד שבו יש טעם לאמת אותה.
+ */
+test("הכתובות שהוחלפו מפנות ואינן 404", async ({ page }) => {
+  await login(page);
+
+  const term = "חשמל";
+  const searchResponse = await page.goto(`/search?q=${encodeURIComponent(term)}`);
+  expect(searchResponse?.status(), "‏/search החזיר שגיאה").toBeLessThan(400);
+  await expect(page).toHaveURL(/\/board\?/);
+  expect(new URL(page.url()).searchParams.get("q")).toBe(term);
+
+  const overviewResponse = await page.goto("/overview");
+  expect(overviewResponse?.status(), "‏/overview החזיר שגיאה").toBeLessThan(400);
+  await expect(page).toHaveURL(/\/admin$/);
+  await assertNoError(page);
 });

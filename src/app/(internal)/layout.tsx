@@ -1,18 +1,20 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { WIDE_WIDTH } from "@/lib/ui";
+import { canViewOverview } from "@/lib/permissions";
+import { toViewer } from "@/lib/session";
+import { FULL_WIDTH, HEADER_HEIGHT } from "@/lib/ui";
 import { logoutAction } from "../login/actions";
 
 /**
  * קישור בסרגל הניווט.
  *
- * `text-fg` ולא `text-brand`: חמישה קישורים בצבע המותג הפכו את הסרגל לגוש
- * כחול שמתחרה בתוכן, בעוד שצבע המותג שמור לפעולה הראשית של המסך.
+ * `text-fg` ולא צבע: הסרגל אינו מקום לצבע — הוא הרקע הקבוע של כל מסך,
+ * וכל גוון בו מתחרה במידע שמתחתיו. בפלטת הגרפיט זה ממילא הפך למובן מאליו.
  * `shrink-0` ו-`whitespace-nowrap` מונעים שבירת מילים בתוך הסרגל הנגלל.
  */
 const NAV_LINK =
-  "flex min-h-11 shrink-0 items-center whitespace-nowrap font-medium text-fg";
+  "flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-sm px-2 font-medium text-fg touch:min-h-11";
 
 /**
  * המעטפת של כל המסכים הפנימיים.
@@ -31,11 +33,15 @@ export default async function InternalLayout({
   return (
     <div className="flex min-h-full flex-col">
       {/*
-        גובה הכותרת קבוע (h-14) ואינו נגזר מהתוכן.
-        כותרות הקיבוץ בלוח דביקות מתחתיה (`top-14`), וכותרת שגובהה משתנה לפי
-        מספר הקישורים או רוחב המסך הייתה מסיטה אותן בלי שאיש ישים לב.
+        גובה הכותרת קבוע ואינו נגזר מהתוכן: כותרות הקיבוץ בלוח דביקות
+        מתחתיה, וכותרת שגובהה משתנה לפי מספר הקישורים או רוחב המסך הייתה
+        מסיטה אותן בלי שאיש ישים לב. שני הערכים מגיעים מאותו מקום
+        (`HEADER_HEIGHT` / `STICKY_UNDER_HEADER`) ולא ממחרוזות שחייבות
+        להסכים בשלושה קבצים.
       */}
-      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border bg-surface px-4">
+      <header
+        className={`sticky top-0 z-10 flex ${HEADER_HEIGHT} items-center gap-2 border-b border-border bg-surface px-3`}
+      >
         <Link href="/board" className="shrink-0 font-bold">
           {he.app.name}
         </Link>
@@ -45,24 +51,25 @@ export default async function InternalLayout({
           שומרת על שורה אחת נקייה ועל גובה יציב.
         */}
         <nav className="flex min-w-0 flex-1 items-center justify-end gap-3 overflow-x-auto text-sm">
-          {/* תצוגת הבעלים חוצת-אתרים; למנהל עבודה, המקובע לאתר אחד, אין בה צורך */}
-          {user.role !== "SITE_MANAGER" ? (
-            <Link href="/overview" className={NAV_LINK}>
-              {he.overview.navLink}
-            </Link>
-          ) : null}
-          {/* הזנה מרוכזת מיועדת לדסקטופ (אפיון מסך 5), ולכן מוסתרת במובייל */}
-          <Link href="/tickets/batch" className={`hidden md:inline-flex ${NAV_LINK}`}>
-            {he.batch.navLink}
-          </Link>
-          <Link href="/tags" className={NAV_LINK}>
-            {he.tag.navLink}
-          </Link>
-          <Link href="/search" className={NAV_LINK}>
-            {he.search.title}
-          </Link>
-          {/* אזור הניהול — למנהל המערכת הראשי בלבד (אפיון §5.ז) */}
-          {user.role === "ADMIN" ? (
+          {/*
+           * **הזנה מרוכזת אינה כאן, והיא ירדה בכוונה.**
+           *
+           * היא ישבה בסרגל הגלובלי, כלומר הוצעה בכל מסך במערכת — כולל מסכים
+           * שאין לה בהם שום קשר. אבל הזנה מרוכזת היא **דרך ליצור פניות**, לא
+           * יעד בפני עצמו, ולכן מקומה לצד יצירת פנייה בודדת: היא עברה לראש
+           * מסך "פנייה חדשה" (`tickets/new/create-ticket-form.tsx`).
+           *
+           * המחיר מוכר: היא ירדה רמת עומק אחת, ופעולה שנעשית מול דוח בדק בית
+           * דורשת עכשיו מעבר דרך מסך היצירה. זו ההכרעה — סרגל ניווט שמציע
+           * בכל רגע רק את מה שרלוונטי לכל מסך.
+           */}
+          {/*
+           * אזור הניהול. **גם לבעלים ולא למנהל המערכת בלבד**, מאז שסקירת
+           * האתרים עברה לראשו: היא נבנתה לבעלים, וקישור שחסום בפניו היה
+           * מסתיר ממנו את המסך היחיד שנועד לו. הכפתורים שבתוך המסך נשארים
+           * חסומים — ראו `admin/(manage)/layout.tsx`.
+           */}
+          {canViewOverview(toViewer(user)) ? (
             <Link href="/admin" className={NAV_LINK}>
               {he.admin.navLink}
             </Link>
@@ -82,11 +89,16 @@ export default async function InternalLayout({
         </nav>
       </header>
       {/*
-        רוחב מרבי אחד לכל המסכים הפנימיים, ולא בכל עמוד בנפרד.
-        בלעדיו כרטיס פנייה נמתח על פני 1400px כדי להחזיק שתי שורות טקסט,
-        ותג הסטטוס נותר במרחק שאינו מאפשר לקשור אותו לכותרת שהוא מתאר.
+        ‏`<main>` אינו מגביל רוחב, וזו הפיכה של ההחלטה הקודמת.
+
+        התקרה של 1024px נועדה למנוע כרטיס פנייה מתוח על פני 1400px — נימוק
+        שנשאר נכון, אבל התשובה לו אינה לצמצם את העמוד: מסך של 1920px הראה
+        עמודה ברוחב שליש ושני שלישים אפור, במערכת שכל תפקידה הוא לסרוק
+        פניות. הריסון עבר **לרכיב** — גריד הכרטיסים חוסם כל עמודה, טבלת
+        הפניות חוסמת את עמודת התיאור, ומסך שקוראים בו (שרשור, טופס) בוחר
+        `CONTENT_WIDTH` לעצמו.
       */}
-      <main className={`flex-1 ${WIDE_WIDTH}`}>{children}</main>
+      <main className={`flex-1 ${FULL_WIDTH}`}>{children}</main>
     </div>
   );
 }
