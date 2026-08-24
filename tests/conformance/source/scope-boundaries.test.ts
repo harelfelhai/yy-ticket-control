@@ -163,14 +163,38 @@ describe("§3 — הסכימה תואמת את מודל המידע", () => {
     expect(assignment).toMatch(/statusChangedAt/);
   });
 
-  it("DM-Q04 — אינדקסי pg_trgm: הסכימה מתעדת אותם, והמיגרציות מוחקות ואינן משחזרות", () => {
+  it("DM-Q04 — אינדקסי pg_trgm שוחזרו, **ומוצהרים בסכימה** כדי שלא יימחקו שוב", () => {
     /**
-     * ‏`20260722180000_search_trigram_indexes` יוצרת ארבעה אינדקסי GIN,
-     * ו-`20260724054950_add_rate_limit` מוחקת את כולם. אף מיגרציה מאוחרת
-     * אינה יוצרת אותם מחדש, אך `schema.prisma` עדיין מתעד אותם כקיימים.
-     * הבדיקה מקבעת את הפער כדי שלא ייעלם מהעין; היא תיהפך לאדומה ברגע
-     * שמיגרציה חדשה תשחזר אותם — וזה בדיוק הרגע לעדכן גם את התיעוד.
+     * **הבדיקה הזו התהפכה, וזה היה מתוכנן.**
+     *
+     * הניסוח הקודם קיבע פער: `20260722180000_search_trigram_indexes` יצרה
+     * ארבעה אינדקסי GIN, ו-`20260724054950_add_rate_limit` — מיגרציה שכל
+     * תוכנה היה הוספת טבלת `RateLimit` — מחקה את ארבעתם. ההערה שם אמרה
+     * במפורש: "היא תיהפך לאדומה ברגע שמיגרציה חדשה תשחזר אותם, וזה בדיוק
+     * הרגע לעדכן גם את התיעוד". זה הרגע.
+     *
+     * **מה שנבדק עכשיו אינו ה-SQL אלא ההצהרה.** ספירת `CREATE`/`DROP`
+     * במיגרציות הייתה מקבעת את ההיסטוריה, והיא תמשיך להשתנות בכל מיגרציה
+     * עתידית. מה שבאמת מונע חזרה של התקלה הוא שהאינדקסים מוצהרים
+     * ב-`schema.prisma`: כל עוד הם חיים ב-SQL גולמי בלבד, ההשוואה של Prisma
+     * מול בסיס הנתונים מסווגת אותם כעודפים ומוחקת אותם — בכל מיגרציה, בכל
+     * נושא, בשקט.
+     *
+     * ‏`tests/integration/search-indexes.test.ts` בודק את הצד השני: שהם
+     * באמת קיימים בבסיס הנתונים, ושה-`LC_CTYPE` שלו מאפשר ל-pg_trgm לחלץ
+     * שלשות מעברית — פגם נפרד שההצהרה אינה מגינה מפניו.
      */
+    const declarations =
+      SCHEMA_RAW.match(/@@index\(\[[^\]]*gin_trgm_ops[^\]]*\],\s*type:\s*Gin\)/g) ?? [];
+
+    expect(
+      declarations.length,
+      "ארבעת אינדקסי החיפוש חייבים להיות מוצהרים ב-schema.prisma " +
+        "(Ticket.description, Message.text, MediaFile.transcription, MediaFile.extractedText). " +
+        "אינדקס שאינו מוצהר נמחק בשקט על ידי המיגרציה הבאה — כפי שקרה ב-add_rate_limit.",
+    ).toBe(4);
+
+    // ...ושהשחזור אכן קיים כמיגרציה, ולא רק כהצהרה שמעולם לא הורצה.
     const migrations = join(process.cwd(), "prisma", "migrations");
     const files = sourceFilesRecursive(migrations, ".sql");
     const sql = files.map((file) => readFileSync(file, "utf8")).join("\n");
@@ -178,9 +202,7 @@ describe("§3 — הסכימה תואמת את מודל המידע", () => {
     const created = (sql.match(/CREATE INDEX[^;]*USING GIN[^;]*gin_trgm_ops/gi) ?? []).length;
     const dropped = (sql.match(/DROP INDEX[^;]*_trgm/gi) ?? []).length;
 
-    expect(created, "מיגרציה יוצרת ארבעה אינדקסי trgm").toBe(4);
-    expect(dropped, "מיגרציה מאוחרת מוחקת את כולם").toBe(4);
-    expect(SCHEMA_RAW, "הסכימה עדיין מתעדת אותם כקיימים").toMatch(/pg_trgm|trgm/i);
+    expect(created - dropped, "נטו: ארבעה אינדקסי trgm חיים אחרי כל המיגרציות").toBe(4);
   });
 });
 

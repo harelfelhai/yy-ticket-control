@@ -272,6 +272,9 @@ model Ticket {
   @@index([lastActivityAt])
   @@index([createdById])
   @@index([handlerId])
+  // אינדקס החיפוש החופשי. ראה את ההערה ב-`MediaFile` — הוא מוצהר כאן ולא
+  // ב-SQL גולמי בלבד, ובזה כל העניין.
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 /// שיוך פנייה↔נמען. הסטטוס יושב כאן ולא על הפנייה (אפיון §3.4).
@@ -332,6 +335,7 @@ model Message {
 
   @@index([ticketId, createdAt])
   @@index([tagId, createdAt])
+  @@index([text(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 model MediaFile {
@@ -371,9 +375,28 @@ model MediaFile {
   createdAt DateTime @default(now())
 
   @@index([aiStatus])
-  // בנוסף קיימים אינדקסי pg_trgm על transcription ועל extractedText,
-  // שנוצרו במיגרציה `search_trigram_indexes`. הם אינם ניתנים לביטוי כאן
-  // ואינם משפיעים על הטיפוסים — ראה את המיגרציה להסבר למה trgm ולא tsvector.
+
+  // ────────────────────────────────────────────────────────────────────
+  // אינדקסי החיפוש החופשי — **מוצהרים כאן, וזה תיקון של תקלה.**
+  //
+  // ההערה שעמדה כאן קודם אמרה שהם "אינם ניתנים לביטוי" ב-Prisma, ולכן הם
+  // חיו ב-SQL גולמי בלבד (מיגרציה `search_trigram_indexes`). זו הייתה טעות
+  // עם מחיר: ב-24.7.2026 המיגרציה `add_rate_limit` — שכל תוכנה היה הוספת
+  // טבלה שאין לה קשר — **הפילה את ארבעתם**, מפני ש-Prisma השווה את הסכימה
+  // מול בסיס הנתונים, לא מצא אותם מוצהרים, וסיווג אותם כעודפים. מאז כל
+  // חיפוש במערכת היה סריקה סדרתית של ארבע טבלאות, ואף בדיקה לא נכשלה.
+  //
+  // כל עוד אינדקס אינו מוצהר בסכימה הוא חשוף לאותה מחיקה בדיוק, בכל
+  // מיגרציה עתידית ובכל נושא. `type: Gin` עם `ops: raw` מבטא אותם במלואם.
+  //
+  // (‏trgm ולא tsvector: ל-Postgres אין stemmer לעברית, ולכן חיפוש טקסט
+  // מלא לא היה מזהה נטיות טוב יותר מהתאמת תת-מחרוזת. הנימוק המלא במיגרציה.)
+  //
+  // נאכף גם ב-`tests/integration/search-indexes.test.ts`, שמוודא מול בסיס
+  // הנתונים שארבעתם קיימים — הצהרה שומרת מפני Prisma, בדיקה שומרת מפני
+  // כל השאר.
+  @@index([transcription(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([extractedText(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 /// תגית — קיבוץ פניות (למשל כל ליקויי בדק בית בדירה אחת) + צ'אט קבוצתי.
