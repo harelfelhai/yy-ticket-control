@@ -33,7 +33,8 @@
     "smoke:notify": "tsx scripts/smoke-notify.mts",
     "smoke:prod": "tsx scripts/smoke-prod.mts",
     "gen:icons": "node scripts/gen-icons.mjs",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:seed:demo": "tsx prisma/seed-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.5",
