@@ -24,11 +24,18 @@ import { he } from "@/lib/he";
  */
 
 /*
- * העמודות ב-`minmax(0,1fr)` ולא ברוחב קבוע: `rtl-mobile.spec.ts` מודד גלישה
+ * העמודות ב-`minmax(0,…)` ולא ברוחב קבוע: `rtl-mobile.spec.ts` מודד גלישה
  * אופקית בסטייה של עד 2px, ורשת עם עמודות קבועות ושם בניין ארוך היא בדיוק
  * מה שמפיל אותה. התיאור מקבל את החלק הרחב — הוא המשפט היחיד כאן.
+ *
+ * **התקרות נוספו עם הרוחב המלא.** כשהעמוד היה חסום ב-1024px, `1fr` היה
+ * ריסון מספיק; על מסך של 1920px אותו יחס מותח את עמודת המיקום ל-450px כדי
+ * להחזיק "בניין 2 · דירה 7", והעין מפסיקה לקשור בין המיקום לתיאור שלצדו.
+ * ‏`minmax(0,Npx)` על שלוש העמודות הצרות משאיר את העודף לתיאור, שהוא
+ * היחיד שיודע מה לעשות ברוחב.
  */
-const COLUMNS = "grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,1fr)]";
+const COLUMNS =
+  "grid-cols-[minmax(0,16rem)_minmax(0,10rem)_minmax(0,48rem)_minmax(0,18rem)]";
 
 export interface SortState {
   key: SortKey;
@@ -108,9 +115,10 @@ function SortHeader({
   return (
     <Link
       href={href}
-      // ‏`min-h-11` ככל דבר לחיץ. שורת הכותרות מתגבהת בהתאם, וזה נכון:
-      // היא הפכה לשורת פקדים ולא תוויות.
-      className="flex min-h-11 items-center gap-1 text-sm font-semibold text-muted"
+      // גובה של דבר לחיץ, ולכן הזוג המלא: 36px בעכבר ו-44px באצבע
+      // (§ אזורי מגע). שורת הכותרות מתגבהת בהתאם, וזה נכון — היא שורת
+      // פקדים ולא תוויות.
+      className="flex min-h-9 items-center gap-1 text-sm font-semibold text-muted touch:min-h-11"
     >
       <span>{header.label}</span>
       <span aria-hidden>{caret}</span>
@@ -126,8 +134,12 @@ function TicketRow({ card }: { card: BoardCard }) {
   return (
     <Link
       href={`/tickets/${card.id}`}
-      // ‏`min-h-12` (48px) ולא 44: שורה בטבלה נסרקת בעין ולא רק נלחצת,
-      // וצפיפות של 44 הופכת עשרים שורות לגוש (DESIGN.md § טבלה / רשימה).
+      // ‏36px בעכבר, 44px במגע — כמו כל דבר לחיץ.
+      //
+      // עד סבב הצפיפות זה היה `min-h-12` (48px), בנימוק ש"שורה בטבלה נסרקת
+      // בעין ולא רק נלחצת" ולכן מגיע לה יותר מרצפת המגע. הנימוק **התהפך**
+      // כשהרצפה בעכבר ירדה ל-36: שורה של 48 כבר אינה נדיבה אלא חריגה,
+      // ובטבלה של ארבעים פניות היא קונה גלילה ולא קריאוּת.
       //
       // הקו האדום בהתחלה הוא המקבילה הטבלאית ל-`dangerOutline` של הכרטיס:
       // עד 0.5 הטיוטה זוהתה בטבלה דרך שורת הסיבה האדומה, ובלי תחליף היא
@@ -137,7 +149,7 @@ function TicketRow({ card }: { card: BoardCard }) {
       // ‏`border-b-border` ולא `border-border`: הצבע הכללי היה קובע גם את
       // צבע ההתחלה, ואז הקו של הטיוטה תלוי בסדר שבו Tailwind פולט את שתי
       // המחלקות — כלומר אדום שעלול לצאת אפור בלי שאיש יבחין.
-      className={`grid ${COLUMNS} min-h-12 items-center gap-x-3 border-b border-b-border px-3 py-2 text-sm ${
+      className={`grid ${COLUMNS} min-h-9 items-center gap-x-3 border-b border-b-border px-3 py-1 text-sm touch:min-h-11 ${
         isDraft ? "border-s-2 border-s-danger" : ""
       }`}
     >

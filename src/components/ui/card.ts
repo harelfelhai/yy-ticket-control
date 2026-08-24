@@ -32,13 +32,23 @@ import { twMerge } from "tailwind-merge";
 export type CardTone = "default" | "danger" | "dangerOutline" | "dangerQuiet" | "success";
 
 /**
- * `compact` — 12px. כרטיס בתוך רשימה צפופה (שורת ליקוי בהזנה מרוכזת).
- * `default` — 16px. כרטיס במסך.
- * `roomy` — 24px. פאנל יחיד על מסך ריק (התחברות, קישור שפג).
+ * `compact` — 8px. כרטיס בתוך רשימה צפופה (שורת ליקוי בהזנה מרוכזת).
+ * `default` — 12px. כרטיס במסך.
+ * `roomy` — 16px. פאנל יחיד על מסך ריק (התחברות, קישור שפג).
+ *
+ * כל השלושה ירדו דרגה בסבב הצפיפות. ‏`roomy` נשאר קיים ולא בוטל: פאנל
+ * התחברות על מסך ריק הוא המקרה היחיד שבו מרווח הוא התוכן.
  */
 export type CardPadding = "compact" | "default" | "roomy";
 
-const BASE = "rounded-2xl border";
+/**
+ * ‏`rounded-md` (‏6px) — דרגה אחת מעל הפקדים (4px) ולא ארבע כמו קודם (16px).
+ *
+ * ההיררכיה נשמרת: מיכל מעוגל מעט יותר ממה שיושב בתוכו, כך שכרטיס נקרא
+ * כמשטח וכפתור נקרא כפקד. מה שהשתנה הוא הסקאלה עצמה — 16px על כרטיס בתוך
+ * רשימה צפופה נראה כמו אריח באפליקציה, לא כשורה בטבלת עבודה.
+ */
+const BASE = "rounded-md border";
 
 const TONES: Record<CardTone, string> = {
   default: "border-border bg-surface",
@@ -49,9 +59,9 @@ const TONES: Record<CardTone, string> = {
 };
 
 const PADDINGS: Record<CardPadding, string> = {
-  compact: "p-3",
-  default: "p-4",
-  roomy: "p-6",
+  compact: "p-2",
+  default: "p-3",
+  roomy: "p-4",
 };
 
 interface CardOptions {

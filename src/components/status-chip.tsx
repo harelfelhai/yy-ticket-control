@@ -33,7 +33,9 @@ const TICKET_TONES: Record<DerivedTicketStatus, ChipTone> = {
   AWAITING_OPENER_APPROVAL: "success",
   PARTIAL: "warning",
   VIEWED: "neutralStrong",
-  NEW: "brand",
+  // ‏`info` ולא `brand`: מאז המעבר לגרפיט, `brand` הוא הדיו של המערכת ואינו
+  // מובחן מטקסט רגיל. "חדשה" הוא מצב, ולכן הוא צריך צבע מצב.
+  NEW: "info",
 };
 
 export function AssignmentStatusChip({ status }: { status: AssignmentStatus }) {

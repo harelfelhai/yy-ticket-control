@@ -1,12 +1,13 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
+import { cardClasses } from "@/components/ui/card";
 import { Input, controlClasses } from "@/components/ui/field";
+import { FormError } from "@/components/ui/message";
 import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
 import type { SelectOption } from "@/lib/options";
 import { useHydrated } from "@/lib/use-hydrated";
-import { FormError } from "@/components/ui/message";
 
 export type LearnedOption = SelectOption;
 
@@ -121,7 +122,11 @@ export function LearnedSelect({
       </button>
 
       {open ? (
-        <div className="rounded-xl border border-border bg-surface p-2">
+        // ‏`cardClasses` ולא מסגרת ורקע שנכתבים כאן: הפאנל הצף הוא משטח
+        // ‏— אותו משטח בדיוק של כרטיס — והכתיבה הידנית היא מה שהשאיר אותו
+        // ‏על עיגול 12px אחרי שהכרטיסים ירדו ל-6px. `compact` כי מה שבתוכו
+        // ‏הוא רשימת שורות ולא תוכן כרטיס.
+        <div className={cardClasses(undefined, { padding: "compact" })}>
           <Input
             ref={searchRef}
             type="text"
@@ -144,7 +149,16 @@ export function LearnedSelect({
                     onChange(option.id);
                     close();
                   }}
-                  className={`flex min-h-11 w-full flex-col justify-center rounded-lg px-3 text-start ${
+                  /*
+                   * שורת אפשרות היא **פקד**: אותו עיגול (4px), אותו ריפוד
+                   * ואותו זוג גבהים של פקד קומפקטי — 32px בעכבר, 44px במגע.
+                   * קודם היא נעלה 44px גם בעכבר, כלומר רשימה של שמונה בניינים
+                   * דרשה גלילה במקום שבה כולם נכנסים.
+                   *
+                   * המילוי הגרפיטי שמור ל**נבחר** ולו בלבד — זהו הסימן היחיד
+                   * בפאנל שאינו טקסט, ולכן אסור לו להתחלק עם שורה אחרת.
+                   */
+                  className={`flex min-h-8 w-full flex-col justify-center rounded-sm px-2 text-start touch:min-h-11 touch:px-3 ${
                     option.id === value ? "bg-brand text-brand-fg" : ""
                   }`}
                 >
@@ -166,9 +180,12 @@ export function LearnedSelect({
              * חיפוש** — שורת "צור חדש" דורשת טקסט בשדה, ולכן היא עדיין אינה
              * קיימת. זה בדיוק המסך שדווח מהשטח כ"אין איפה להגדיר בניינים":
              * "אין תוצאות" לבדו קורא כמבוי סתום, בעוד שהמסלול פתוח לגמרי.
+             *
+             * ‏`px-2` כמו שורת אפשרות — הודעה שאינה מיושרת עם הרשימה שהיא
+             * מדברת עליה נקראת כטקסט שנפל לתוך הפאנל.
              */}
             {filtered.length === 0 && !canCreate ? (
-              <li className="px-3 py-2 text-sm text-muted">
+              <li className="px-2 py-2 text-sm text-muted touch:px-3">
                 {onCreate ? he.directory.emptyListHint : he.common.noResults}
               </li>
             ) : null}
@@ -179,16 +196,32 @@ export function LearnedSelect({
               type="button"
               onClick={handleCreate}
               disabled={creating}
-              className="mt-1 min-h-11 w-full rounded-lg border border-dashed border-brand px-3 text-start font-medium text-brand disabled:opacity-60"
+              /*
+               * "צור חדש" — **הצורה נושאת את ההזמנה, לא הצבע.**
+               *
+               * עד המעבר לגרפיט השורה הייתה `border-brand` + `text-brand`,
+               * כלומר מסגרת ומילה בכחול המותג. בפלטה הנוכחית `text-brand`
+               * הוא בפועל צבע הטקסט הרגיל (ניגודיות 1.26 מול טקסט גוף) —
+               * כלומר השורה הייתה הופכת לטקסט אפור בתוך רשימת אפשרויות,
+               * ודווקא הפעולה שהאפיון דורש שתהיה **מכוונת ומפורשת**.
+               *
+               * המסגרת המקווקוות היא מה שנשאר, והיא מספיקה: קו מקווקו אינו
+               * מופיע בשום מקום אחר במערכת, ולכן הוא קורא כ"כאן מוסיפים".
+               * זהו בדיוק הנימוק של `LINK` — סימן שאינו תלוי בצבע — ולכן
+               * גם אין כאן טוקן מצב: יצירת ערך אינה שגיאה, אינה אזהרה
+               * ואינה מצב של פנייה.
+               *
+               * המילוי הגרפיטי לא בא בחשבון: הוא כבר מסמן את האפשרות
+               * הנבחרת שלוש שורות מעל.
+               */
+              className="mt-1 min-h-8 w-full rounded-sm border border-dashed border-fg px-2 text-start font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
             >
               {he.directory.createNew(trimmedQuery)}
             </button>
           ) : null}
 
           {error ? (
-            <FormError className="mt-2 px-1">
-              {error}
-            </FormError>
+            <FormError className="mt-2 px-1">{error}</FormError>
           ) : null}
         </div>
       ) : null}

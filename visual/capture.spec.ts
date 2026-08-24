@@ -165,8 +165,9 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await expect(page.getByRole("heading", { name: /^אצל הנמענים/ })).toBeVisible();
   await shot(page, device, "03d-board-table-sorted");
 
-  // הלוח המסונן — המצב היחיד שבו רצועת המסננים פרושה בנייד. בלי הצילום הזה
-  // הפריסה של הרצועה הפתוחה אינה נראית לאיש עד שמשתמש נתקל בה.
+  // הלוח המסונן. הרצועה גלויה בכל רוחב מאז סבב הצפיפות, ולכן הצילום הזה
+  // אינו עוד "המצב היחיד שבו היא פרושה" — מה שהוא מראה הוא **הרצועה עם
+  // ערך פעיל**: הבורר שאינו על ברירת המחדל ו"נקה מסננים" שנחשף לצדו.
   await page.goto("/board?direction=opened");
   await expect(page.getByLabel("הפניתי")).toBeVisible();
   await shot(page, device, "03b-board-filtered");
@@ -175,14 +176,26 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
   await shot(page, device, "04-ticket-detail");
 
-  await page.goto("/overview");
-  await shot(page, device, "06-overview");
-
-  await page.goto("/search");
-  await shot(page, device, "07-search");
-
+  /*
+   * ‏`/overview` ו-`/admin` היו שני צילומים והפכו לאחד: סקירת האתרים עברה
+   * לראש מסך הניהול, ושתי הכתובות מובילות עכשיו לאותו מסך. צילום נוסף של
+   * אותו URL אינו מוסיף מידע לסבב הביקורת — הוא רק מכפיל את מה שיש לקרוא.
+   *
+   * ההמתנה לכותרת ולא ל-`networkidle` לבדו: המסך מרנדר שתי שכבות, והמדדים
+   * מגיעים משאילתה — צילום מוקדם היה לוכד את הכותרת מעל מצב ריק.
+   */
   await page.goto("/admin");
-  await shot(page, device, "09-admin");
+  await expect(page.getByRole("heading", { name: "סקירת אתרים" })).toBeVisible();
+  await shot(page, device, "06-admin-overview");
+
+  /*
+   * החיפוש אינו מסך משלו אלא **מצב** של הלוח: רשימה שטוחה עם מונה תוצאות,
+   * שמחליפה את שלוש קבוצות הקיבוץ. זו פריסה שונה לגמרי מהלוח הרגיל, ובלי
+   * מונח פעיל בכתובת הצילום היה יוצא זהה ל-`03-board`.
+   */
+  await page.goto(`/board?q=${encodeURIComponent("חשמל")}`);
+  await expect(page.getByText(/\d+ תוצאות/)).toBeVisible();
+  await shot(page, device, "07-board-search");
 
   // מסך 13 — אנשי מקצוע. לא נלכד עד 0.4, ולכן מתג ההשבתה שנוסף בו לא היה
   // נראה לאיש עד שמישהו נתקל בו בשטח. זו גם השורה הצפופה במערכת: שם, צ׳יפ

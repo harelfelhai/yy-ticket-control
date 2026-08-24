@@ -4,6 +4,7 @@ import { type ReactNode, useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/ui/button";
+import { cardClasses } from "@/components/ui/card";
 import { he } from "@/lib/he";
 import { PANEL_WIDTH, TITLE_DESCRIPTIVE } from "@/lib/ui";
 
@@ -109,8 +110,15 @@ export function Dialog({ title, onClose, width = PANEL_WIDTH, children }: Dialog
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    // הכיסוי סוגר בלחיצה, אבל **רק כשהלחיצה עליו עצמו** ולא על ילד שלו —
-    // אחרת גרירת בחירה שמסתיימת מחוץ לפאנל הייתה סוגרת אותו.
+    /*
+     * הכיסוי סוגר בלחיצה, אבל **רק כשהלחיצה עליו עצמו** ולא על ילד שלו —
+     * אחרת גרירת בחירה שמסתיימת מחוץ לפאנל הייתה סוגרת אותו.
+     *
+     * ‏`p-4` כאן **אינו** ריפוד עמוד ולכן אינו `PAGE_X`: זה השוליים שבין
+     * הפאנל הצף לקצה המסך, והוא היחיד שמונע מפאנל בטלפון צר להיצמד
+     * לשפה. ריפוד עמוד נמדד מול `PAGE_BLEED` של רצועות דביקות; לכיסוי
+     * ‏`fixed` אין רצועה ואין בליטה.
+     */
     <div
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
@@ -123,14 +131,32 @@ export function Dialog({ title, onClose, width = PANEL_WIDTH, children }: Dialog
         aria-modal
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={twMerge("rounded-2xl border border-border bg-surface p-4 shadow-lg", width)}
+        /*
+         * ‏`cardClasses` ולא גיאומטריית כרטיס שנכתבת כאן בשנית.
+         *
+         * מה שישב כאן — `rounded-2xl border border-border bg-surface p-4` — היה
+         * העתק תו-בתו של הכרטיס, ולכן הוא **פספס את סבב הצפיפות**: הכרטיס ירד
+         * ל-6px עיגול ול-12px ריפוד, והפאנל נשאר על 16px ועל 16px. עותק אינו
+         * יורש, וזו בדיוק הסיבה שגיאומטריה יושבת בפונקציה אחת.
+         *
+         * ‏`shadow-lg` נוסף מבחוץ ואינו נכנס לכרטיס: התקן קובע הפרדה במסגרת
+         * ולא בצל (§ Elevation), והדיאלוג הוא החריג היחיד — הוא **צף** מעל
+         * כיסוי ומעל תוכן, ושם הצל אומר "זה למעלה", לא "זה מוגבה מעט".
+         */
+        className={twMerge(cardClasses(), "shadow-lg", width)}
       >
         {/* הכותרת אינה קישוט: היא השם הנגיש של הפאנל. בלעדיה קורא מסך
             מכריז על אזור אנונימי באמצע העמוד. */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {/* כותרת פאנל היא כותרת **תיאורית** לפי הסקאלה, ולא גודל שהרכיב
-              קובע לעצמו — ראה `docs/DESIGN.md` § Typography. */}
-          <h2 id={titleId} className={`flex-1 ${TITLE_DESCRIPTIVE}`}>
+              קובע לעצמו — ראה `docs/DESIGN.md` § Typography.
+
+              ‏`flex-1` ירד ממנה: הוא מתח את הכותרת על כל רוחב הפאנל ודחף
+              את "סגור" לקצה הנגדי — כלומר `justify-between` בשם אחר
+              (§ Layout), אותה צורה מוסווית שכבר הוסרה מ-`recipient-editor`
+              ומרשימות הניהול. `flex-wrap` על השורה כבר מטפל בכותרת ארוכה,
+              ולכן הכפתור פשוט נצמד למה שהוא סוגר. */}
+          <h2 id={titleId} className={TITLE_DESCRIPTIVE}>
             {title}
           </h2>
           {/* כפתור סגירה גלוי — "לחץ מחוץ" אינו אפשרות שמישהו לומד מעצמו. */}

@@ -111,14 +111,18 @@ export function CameraCapture({ onCaptured, onClose }: CameraCaptureProps) {
           <>
             {/* ‏`playsInline` — בלעדיו ספארי ב-iOS פותח את הווידאו במסך מלא
                 של מערכת ההפעלה ומכסה את כפתור הצילום.
-                ‏`muted` — אין כאן שמע, והוא תנאי ל-autoplay ברוב הדפדפנים. */}
+                ‏`muted` — אין כאן שמע, והוא תנאי ל-autoplay ברוב הדפדפנים.
+
+                ‏`rounded-md` (‏6px) ולא `rounded-xl`: התצוגה החיה היא מיכל
+                בתוך הדיאלוג, ומיכל הוא 6px מאז סבב הצפיפות. ‏12px כאן היו
+                מעגלים את התמונה יותר מהפאנל שמחזיק אותה. */}
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
               aria-label={he.media.cameraPreview}
-              className="w-full rounded-xl bg-fg"
+              className="w-full rounded-md bg-fg"
             />
             {/*
              * טקסט מפורש בזמן ההמתנה, ולא כפתור מושבת לבדו.

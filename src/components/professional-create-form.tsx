@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cardClasses } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
+import { FormError } from "@/components/ui/message";
 import { he } from "@/lib/he";
 import { useHydrated } from "@/lib/use-hydrated";
-import { FormError } from "@/components/ui/message";
 
 /**
  * טופס יצירת איש מקצוע חדש — שם, טלפון ומייל.
@@ -50,10 +51,19 @@ export function ProfessionalCreateForm({ onCreate, onCancel }: ProfessionalCreat
   }
 
   return (
-    // scroll-mb-32: כשהטופס נפתח בתוך מסך עם רצועת פעולות דביקה בתחתית
-    // (מסך היצירה), הריפוד-לגלילה מוודא שכפתור השמירה נגלל מעל הרצועה
-    // ולא נחסם מאחוריה.
-    <div className="flex scroll-mb-32 flex-col gap-2 rounded-xl border border-border bg-surface p-3">
+    /*
+     * ‏`cardClasses` ולא מסגרת, רקע, עיגול וריפוד שנכתבים כאן.
+     *
+     * מה שישב כאן — `rounded-xl border border-border bg-surface p-3` — היה
+     * הכרטיס במילים אחרות, ולכן הוא **פספס את סבב הצפיפות** ונשאר על עיגול
+     * ‏12px אחרי שהכרטיסים ירדו ל-6px. אותו סיפור בדיוק של `Dialog`: עותק
+     * אינו יורש.
+     *
+     * scroll-mb-32: כשהטופס נפתח בתוך מסך עם רצועת פעולות דביקה בתחתית
+     * (מסך היצירה), הריפוד-לגלילה מוודא שכפתור השמירה נגלל מעל הרצועה
+     * ולא נחסם מאחוריה. זו פריסה ולא גיאומטריה, ולכן היא נשארת כאן.
+     */
+    <div className={cardClasses("flex scroll-mb-32 flex-col gap-2")}>
       <Field label={he.directory.professionalName}>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
@@ -79,11 +89,7 @@ export function ProfessionalCreateForm({ onCreate, onCancel }: ProfessionalCreat
         </Field>
       </div>
 
-      {error ? (
-        <FormError>
-          {error}
-        </FormError>
-      ) : null}
+      {error ? <FormError>{error}</FormError> : null}
 
       <div className="flex gap-2">
         <Button

@@ -24,7 +24,13 @@ function token(name: string): string {
   return match[1].toLowerCase();
 }
 
-const SEMANTIC = ["brand", "danger", "success", "warning"] as const;
+/**
+ * ארבעת **המצבים**. ‏`brand` אינו ביניהם, ומאז המעבר לגרפיט זו הכרעה ולא
+ * השמטה: הוא הדיו של המערכת — המילוי של פעולה ראשית — ולא מצב שהפנייה
+ * נמצאת בו. המשמעות היחידה שהייתה לו כמצב, "פנייה חדשה שטרם נצפתה", עברה
+ * ל-`info`. בדיקות שחלות עליו כעוגן נייטרלי יושבות ב-describe נפרד למטה.
+ */
+const STATES = ["info", "danger", "success", "warning"] as const;
 const SURFACE = token("surface");
 const BG = token("bg");
 const ON_FILL = token("brand-fg");
@@ -58,19 +64,19 @@ function oklch(hex: string): { L: number; C: number } {
 }
 
 describe("ניגודיות", () => {
-  it.each(SEMANTIC)("‏%s כטקסט על משטח עומד ב-AAA", (name) => {
+  it.each(STATES)("‏%s כטקסט על משטח עומד ב-AAA", (name) => {
     // 7.0 ולא 4.5: מסך בשמש ישירה מאבד ניגודיות אפקטיבית, והמכשיר העיקרי
     // כאן הוא טלפון בשטח. זו גם השאיפה שכתובה ב-DESIGN.md § Colors.
     expect(contrast(token(name), SURFACE)).toBeGreaterThanOrEqual(7);
   });
 
-  it.each(SEMANTIC)("‏%s כטקסט על רקע העמוד שומר מרווח אמיתי מעל AA", (name) => {
+  it.each(STATES)("‏%s כטקסט על רקע העמוד שומר מרווח אמיתי מעל AA", (name) => {
     // רצפת AA היא 4.5. 6.0 היא מרווח, ולא "עבר בקושי" — הפלטה הקודמת ישבה
     // על 4.59, כלומר כל כוונון עתידי היה מפיל אותה בלי שאיש ישים לב.
     expect(contrast(token(name), BG)).toBeGreaterThanOrEqual(6);
   });
 
-  it.each(SEMANTIC)("טקסט לבן על מילוי %s עומד ב-AAA", (name) => {
+  it.each(STATES)("טקסט לבן על מילוי %s עומד ב-AAA", (name) => {
     // הווריאנט `solid` של הצ׳יפ, וכפתור ראשי/הרסני. לפני הכיול `success`
     // ו-`warning` נתנו 5.02 בלבד.
     expect(contrast(ON_FILL, token(name))).toBeGreaterThanOrEqual(7);
@@ -78,19 +84,75 @@ describe("ניגודיות", () => {
 });
 
 describe("היררכיה סמנטית", () => {
-  it("‏`danger` רווי יותר מ-`brand` — עבודה עצורה גוברת על פעולה ראשית", () => {
-    expect(oklch(token("danger")).C).toBeGreaterThan(oklch(token("brand")).C);
+  it("‏`danger` רווי יותר מכל מצב אחר — עבודה עצורה גוברת", () => {
+    // ההשוואה היא מול **כל** המצבים ולא מול `brand` בלבד, כפי שהיה כשהוא
+    // עוד היה אחד מהם. הכלל שנשמר הוא הכלל עצמו: אין מצב שצועק חזק יותר
+    // מ"העבודה בשטח עצורה".
+    const danger = oklch(token("danger")).C;
+    for (const name of STATES.filter((state) => state !== "danger")) {
+      expect(danger).toBeGreaterThan(oklch(token(name)).C);
+    }
   });
 
-  it("ארבעת הסמנטיים נושאים משקל נתפס זהה", () => {
+  it("ארבעת המצבים נושאים משקל נתפס זהה", () => {
     // בהירות אחידה. בלעדיה מצב אחד בולט על פני אחר מפני שהגוון שלו במקרה
     // בהיר יותר — כלומר הפלטה מוסיפה דגש שאיש לא התכוון אליו.
-    const lightness = SEMANTIC.map((name) => oklch(token(name)).L);
+    const lightness = STATES.map((name) => oklch(token(name)).L);
     expect(Math.max(...lightness) - Math.min(...lightness)).toBeLessThan(0.02);
   });
 });
 
-describe("מקור אמת אחד לכחול", () => {
+/**
+ * ‏`brand` הוא הדיו ולא מצב — ולכן הכללים שחלים עליו שונים.
+ *
+ * הבדיקות כאן הן מה שמחליף את חברותו במשפחה הסמנטית. בלעדיהן המעבר לגרפיט
+ * היה מוציא את הצבע הנפוץ ביותר במערכת מכל פיקוח: הוא היה נשאר מכוסה רק
+ * בבדיקת ה"מקור אחד" למטה, שמוודאת שלושה עותקים זהים — ולא שהערך עצמו קריא.
+ */
+describe("‏brand — עוגן נייטרלי", () => {
+  it("כהה מכל אחד מארבעת המצבים", () => {
+    // זו כל ההכרעה של הגרפיט בשורה אחת: הפעולה שקטה מהמצב. אילו brand היה
+    // מטפס חזרה לבהירות של המצבים, הכפתורים היו שוב מתחרים במידע.
+    const brand = oklch(token("brand")).L;
+    for (const name of STATES) {
+      expect(brand).toBeLessThan(oklch(token(name)).L);
+    }
+  });
+
+  it("טקסט לבן על מילוי brand עומד ב-AAA", () => {
+    expect(contrast(ON_FILL, token("brand"))).toBeGreaterThanOrEqual(7);
+  });
+
+  it("‏brand אינו משמש לטקסט על משטח — הוא בלתי-מובחן מטקסט רגיל", () => {
+    /**
+     * לא בדיקת ניגודיות אלא **תיעוד של המלכודת**, במספר.
+     *
+     * ‏brand מול fg יושב על ~1.26 — כלומר קישור בצבע המותג נראה בדיוק כמו
+     * טקסט גוף. זו הסיבה ש-DESIGN.md § Colors אוסר `text-brand` וקובע
+     * שקישור מסומן בקו תחתון. אם מישהו יבהיר את brand בעתיד עד שההבחנה
+     * תחזור, הבדיקה תיכשל ותכריח לקרוא מחדש את ההחלטה.
+     */
+    expect(contrast(token("brand"), token("fg"))).toBeLessThan(1.5);
+  });
+});
+
+describe("טבעת מיקוד", () => {
+  /**
+   * הכלל של `focus` שונה מזה של כל שאר הפלטה: לא AAA מול משטח אחד, אלא
+   * ‏3:1 — רצפת WCAG לרכיב שאינו טקסט — מול **שני** הקצוות. הטבעת מופיעה
+   * גם על שדה לבן וגם על כפתור ראשי גרפיט, וערך שעובר רק על אחד מהם משאיר
+   * את מי שמנווט במקלדת בלי סימן על מחצית מהמסך.
+   */
+  it.each([
+    ["משטח לבן", "surface"],
+    ["מילוי גרפיט", "brand"],
+    ["רקע העמוד", "bg"],
+  ] as const)("נקראת על %s", (_label, against) => {
+    expect(contrast(token("focus"), token(against))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("מקור אמת אחד לצבע המותג", () => {
   /**
    * שלושה עותקים, ואי אפשר לאחדם: `@theme` דורש ליטרל ב-CSS, מטא-דאטה של
    * Next דורשת מחרוזת ב-JS, ו-`icon.svg` הוא נכס סטטי שאינו מייבא דבר.
@@ -100,11 +162,57 @@ describe("מקור אמת אחד לכחול", () => {
     expect(BRAND_COLOR.toLowerCase()).toBe(token("brand"));
   });
 
-  it("האייקון צבוע באותו כחול", () => {
+  it("האייקון צבוע באותו גרפיט", () => {
     // אם זה נכשל אחרי שינוי צבע — יש להריץ גם `npm run gen:icons`, אחרת
     // ה-PNG-ים שנגזרים ממנו נשארים בצבע הישן.
     const hexes = [...ICON.matchAll(/#[0-9a-f]{6}/gi)].map((m) => m[0].toLowerCase());
     expect(hexes).toContain(token("brand"));
     expect(new Set(hexes)).toEqual(new Set([token("brand"), "#ffffff"]));
+  });
+
+  it("‏frontmatter של DESIGN.md נושא את אותם ערכים", () => {
+    /**
+     * העותק הרביעי, והוא היה **לגמרי ללא שמירה** עד עכשיו.
+     *
+     * ה-frontmatter הוא הצורה שקריאה למכונה של התקן — `npm run design:lint`
+     * קורא אותו, וכך גם כל כלי עיצוב שיתחבר אליו. אבל הלינטר מוודא רק
+     * שההפניות מתאימות זו לזו **בתוך המסמך**, ולא שהערכים תואמים לקוד:
+     * הפלטה בקובץ הזה יכלה להישאר כחולה בעוד המערכת כולה גרפיט, והבדיקה
+     * הייתה ירוקה. הפער הזה נמצא בפועל, בסבב הגרפיט.
+     */
+    const doc = readFileSync(join(process.cwd(), "docs/DESIGN.md"), "utf8");
+    const frontmatter = doc.slice(0, doc.indexOf("\n---", 4));
+
+    for (const [docName, cssName] of [
+      ["primary", "brand"],
+      ["onPrimary", "brand-fg"],
+      ["bg", "bg"],
+      ["surface", "surface"],
+      ["border", "border"],
+      ["fg", "fg"],
+      ["muted", "muted"],
+      ["focus", "focus"],
+      ["info", "info"],
+      ["danger", "danger"],
+      ["success", "success"],
+      ["warning", "warning"],
+    ] as const) {
+      const match = frontmatter.match(new RegExp(`^ +${docName}: "(#[0-9a-f]{6})"`, "im"));
+      expect(match?.[1]?.toLowerCase(), `‏${docName} חסר ב-frontmatter`).toBe(token(cssName));
+    }
+  });
+
+  it("חץ הבורר צבוע ב-`--color-muted`", () => {
+    /**
+     * העותק הרביעי, והוא היה עד עכשיו ללא שמירה.
+     *
+     * ‏`.control-chevron` מקודד את הצבע בתוך `data:` URI, שם משתנה CSS אינו
+     * ניתן להשתלה — כלומר הכפילות בלתי נמנעת. מה שכן נמנע הוא סטייה שקטה:
+     * בלי הבדיקה הזו שינוי של `--color-muted` היה משאיר חץ בגוון הישן בכל
+     * בורר במערכת, ואף בדיקה קיימת לא הייתה מבחינה — `field.test.tsx`
+     * מוודא רק ששני הפקדים חולקים את המחלקה, לא מה צבעה.
+     */
+    const encoded = token("muted").replace("#", "%23");
+    expect(CSS).toContain(`stroke='${encoded}'`);
   });
 });

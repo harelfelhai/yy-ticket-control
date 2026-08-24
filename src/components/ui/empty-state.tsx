@@ -24,7 +24,17 @@ interface EmptyStateProps {
 
 export function EmptyState({ children, action, className }: EmptyStateProps) {
   return (
-    <div className={twMerge("flex flex-col items-center gap-4 py-12 text-center", className)}>
+    /*
+     * ‏`py-6` (‏24px) ולא `py-12`.
+     *
+     * ‏48px למעלה ו-48px למטה היו **הלבן הקבוע הגדול ביותר במערכת** — יותר
+     * מכל כרטיס, כותרת או רצועה — סביב משפט אחד שכל תוכנו הוא "אין כאן
+     * כלום עדיין". מצב ריק אינו אירוע: הוא השורה שמעל הרשימה הבאה, ובמסך
+     * ניהול שיש בו שלוש רשימות הוא דחק את השלישית מתחת לקו הקיפול.
+     *
+     * ‏`gap-3` ולא `gap-4` — צעד אחד, כמו בשאר סבב הצפיפות.
+     */
+    <div className={twMerge("flex flex-col items-center gap-3 py-6 text-center", className)}>
       <p className="text-muted">{children}</p>
       {action}
     </div>

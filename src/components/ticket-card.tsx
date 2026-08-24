@@ -25,7 +25,7 @@ export function TicketCard({ card }: { card: BoardCard }) {
       href={`/tickets/${card.id}`}
       // טיוטה מקבלת מסגרת אדומה מלאה: היא חוסמת שיגור, וזה הסימן היחיד
       // שמבדיל אותה בסריקה מהירה של הלוח.
-      className={cardClasses("flex flex-col gap-2", { tone: isDraft ? "dangerOutline" : "default" })}
+      className={cardClasses("flex flex-col gap-1", { tone: isDraft ? "dangerOutline" : "default" })}
     >
       {/*
         צ׳יפ הסטטוס ירד מכאן ב-0.5, יחד עם עמודת הסטטוס בטבלה: שלוש כותרות
@@ -44,7 +44,17 @@ export function TicketCard({ card }: { card: BoardCard }) {
         <p className="truncate text-sm">{card.descriptionLine}</p>
       ) : null}
 
-      <p className={`text-sm font-medium ${isDraft ? "text-danger" : "text-brand"}`}>
+      {/*
+        שורת הסיבה — "למה הפנייה כאן".
+
+        **הצבע נגזר מהמצב ולא מהמותג.** עד המעבר לגרפיט היא נצבעה
+        ב-`text-brand`, כלומר בצבע הפעולה הראשית; היום אותו טוקן הוא כמעט
+        שחור ובלתי-מובחן מטקסט גוף, ולכן הוא היה מוחק את ההדגשה בשקט.
+        ‏`danger` שמור לשני המצבים שבהם העבודה עצורה — טיוטה שחוסמת שיגור
+        ופנייה שהוסלמה — וכל השאר נשאר טקסט. כך הכרטיס האדום היחיד בשורה
+        הוא באמת היחיד שדורש מבט.
+      */}
+      <p className={`text-sm font-medium ${isDraft || card.escalated ? "text-danger" : "text-fg"}`}>
         {card.reason}
       </p>
 

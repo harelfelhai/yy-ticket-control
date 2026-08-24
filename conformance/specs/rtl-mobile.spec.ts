@@ -11,7 +11,43 @@ import { createTicket, showLink, uniq, uniqPhone } from "../fixtures/world";
  * חמישה־עשר הוא בדיוק מה שאיש לא מגלה עד שמשתמש אמיתי נכנס אליו.
  */
 
+/**
+ * **רצפת הגובה תלויה במצביע, ולא במספר אחד לכל העולם.**
+ *
+ * עד סבב הצפיפות 44px היה הרצפה בכל מקום, וכך היא כתובה גם ב-`DESIGN.md`
+ * (§ אזורי מגע). הצפיפות פיצלה אותה: הפקדים נכתבים
+ * `min-h-9 touch:min-h-11`, כלומר 36px עם עכבר ו-44px באצבע. זו
+ * אינה הנחתה — WCAG 2.5.5 מדבר על יעד **מגע**, ומסך עם עכבר הוא מקרה אחר.
+ *
+ * הסריקה כאן מודדת `boundingBox` אמיתי, ולכן היא **חייבת** לשאול את אותה
+ * שאלה שה-CSS שואל. הפרויקט `mobile` (Pixel 5) מדמה מגע ועונה כן; הפרויקט
+ * `desktop` (Desktop Chrome) עונה לא, ועליו מדידה מול 44 הייתה מכשילה כל
+ * כפתור במערכת על תקן שאינו חל שם.
+ *
+ * ‏`matchMedia` ולא `project.use.hasTouch`: זו בדיוק השאילתה שהסטיילשיט
+ * מריץ, ולכן אין דרך שהבדיקה והעיצוב יחלקו על התשובה. הרצפה עם עכבר היא
+ * 32px — גובה הווריאנט `compact`, הקטן ביותר שסקאלת הצפיפות מתירה.
+ */
 const MIN_TOUCH = 44;
+const MIN_POINTER_FINE = 32;
+
+/**
+ * **מועתק מ-`@custom-variant touch` ב-`src/app/globals.css`, ולא מיובא.**
+ *
+ * ייבוא מ-`src/` היה יוצר תלות של חבילת הבדיקות בקוד האפליקציה בשביל
+ * מחרוזת אחת. במקום זה `tests/unit/touch-variant.test.ts` קורא את שלושת
+ * העותקים ונכשל אם הם נפרדים — אותה תבנית שבה נשמרת פלטת ה-frontmatter.
+ *
+ * ‏`(not (any-pointer: fine))` הוא מה שהפריד בין "מכשיר מגע" ל"מסך מגע
+ * במחשב": `pointer: coarse` לבדו החזיר אמת גם על דסקטופ עם מסך מגע, כלומר
+ * העלה כל פקד ל-44px אצל משתמש שעובד בעכבר.
+ */
+const TOUCH_QUERY = "(pointer: coarse) and (not (any-pointer: fine))";
+
+async function minHeight(page: Page): Promise<number> {
+  const touch = await page.evaluate((q) => matchMedia(q).matches, TOUCH_QUERY);
+  return touch ? MIN_TOUCH : MIN_POINTER_FINE;
+}
 
 async function expectRtlNoOverflow(page: Page, label: string) {
   await expect(page.locator("html"), `${label}: dir`).toHaveAttribute("dir", "rtl");
@@ -43,6 +79,7 @@ async function expectRtlNoOverflow(page: Page, label: string) {
 const SANCTIONED = ["ערוך", "×", "שנה שם", "← חזרה לרשימה", "← תגיות", "← ניהול המערכת"];
 
 async function smallTargets(page: Page): Promise<string[]> {
+  const floor = await minHeight(page);
   const targets = page.locator("main button:visible, main a:visible");
   const count = await targets.count();
   const small: string[] = [];
@@ -54,13 +91,14 @@ async function smallTargets(page: Page): Promise<string[]> {
     if (inline) continue;
     const text = (await target.innerText()).trim().slice(0, 30);
     if (SANCTIONED.includes(text)) continue;
-    if (box.height < MIN_TOUCH) small.push(`${text} (${Math.round(box.height)}px)`);
+    if (box.height < floor) small.push(`${text} (${Math.round(box.height)}px)`);
   }
   return small;
 }
 
 async function expectTouchTargets(page: Page, label: string) {
-  expect(await smallTargets(page), `${label}: אזורי מגע קטנים מ-${MIN_TOUCH}px`).toEqual([]);
+  const floor = await minHeight(page);
+  expect(await smallTargets(page), `${label}: אזורי לחיצה קטנים מ-${floor}px`).toEqual([]);
 }
 
 test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים", () => {
@@ -99,11 +137,20 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
       ["/tickets/new", "מסך 4 — יצירה מהירה"],
       [ticketPath, "מסך 2 — פנייה ושרשור"],
       ["/tickets/batch", "מסך 5 — הזנה מרוכזת"],
-      ["/search", "מסך 9 — חיפוש"],
-      ["/overview", "מסך 10 — תצוגת הבעלים"],
+      /*
+       * ‏`/search` ו-`/overview` ירדו מהרשימה — לא כוויתור על כיסוי אלא
+       * מפני שאין שם מסך למדוד: שניהם בדלי הפניה (`redirect`), וסריקה
+       * שלהם הייתה מודדת פעמיים את היעד ומדווחת עליו בשם הלא נכון.
+       *
+       * שני המסכים עצמם נשארים ברשימה במקומם החדש: החיפוש הוא **מצב** של
+       * הלוח ולכן הוא נסרק עם מונח פעיל (הרשימה השטוחה היא פריסה אחרת
+       * לגמרי מהלוח המקובץ, ובלי השורה הזו איש אינו מודד אותה), וסקירת
+       * האתרים יושבת בראש `/admin`.
+       */
+      [`/board?q=${encodeURIComponent(description)}`, "מסך 9 — חיפוש בלוח"],
       ["/tags", "רשימת תגיות"],
       ...(tagPath ? ([[tagPath, "מסך 6 — צ׳אט תגית"]] as [string, string][]) : []),
-      ["/admin", "מסך ניהול"],
+      ["/admin", "מסך 10 + ניהול — סקירת אתרים ורכזת הניהול"],
       ["/admin/sites", "מסך 11 — אתרים"],
       ...(sitePath ? ([[sitePath, "מסך 16 — בניינים ודירות"]] as [string, string][]) : []),
       ["/admin/users", "מסך 12 — משתמשים"],
@@ -167,7 +214,9 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
 
     const remove = page.getByRole("button", { name: /^הסר / }).first();
     const box = await remove.boundingBox();
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(MIN_TOUCH);
+    // ‏16px נופל מתחת לשתי הרצפות, ולכן הטענה נשארת נכונה בשני הפרויקטים
+    // גם אחרי שהרצפה הפכה תלוית-מצביע.
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(await minHeight(page));
   });
 
   test("S0-04 — מסך 404: המעטפת עברית ו-RTL", async ({ page }) => {

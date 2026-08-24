@@ -14,8 +14,8 @@ import { FormError } from "@/components/ui/message";
  */
 
 /**
- * `default` — 48px. שדה בטופס.
- * `compact` — 44px. פקד בשורה צפופה, למשל מסננים.
+ * `default` — שדה בטופס.
+ * `compact` — פקד בשורה צפופה, למשל מסננים.
  */
 export type ControlSize = "default" | "compact";
 
@@ -28,11 +28,18 @@ export type ControlSize = "default" | "compact";
  * החלטת עיצוב.
  */
 const CONTROL_BASE =
-  "w-full border border-border bg-surface text-base disabled:opacity-60";
+  "w-full rounded-sm border border-border bg-surface text-base disabled:opacity-60";
 
+/**
+ * **הגובה תלוי במכשיר, ה-radius אינו תלוי בכלום.**
+ *
+ * ‏36px/32px בעכבר ו-44px במגע, מאותו נימוק שבכפתור: רצפת המגע מדברת על
+ * אצבע, לא על סמן. ה-radius ירד ל-4px בכל הגדלים — שדה ופקד מסנן שיושבים
+ * זה לצד זה נבדלו קודם גם בעיגול, וזו הבחנה שאיש לא התכוון אליה.
+ */
 const CONTROL_SIZES: Record<ControlSize, string> = {
-  default: "min-h-12 rounded-xl px-3",
-  compact: "min-h-11 rounded-lg px-3",
+  default: "min-h-9 px-2 touch:min-h-11 touch:px-3",
+  compact: "min-h-8 px-2 touch:min-h-11 touch:px-3",
 };
 
 /**
@@ -84,20 +91,14 @@ export function Select({ size = "default", invalid, className, ...rest }: Select
 export type TextareaProps = ControlExtras & ComponentProps<"textarea">;
 
 /**
- * ‏`p-3` ולא `px-3` בלבד: בשדה רב-שורות הטקסט מתחיל בשורה הראשונה, וריפוד
- * אנכי אפס מדביק אותו לגבול העליון. `min-h-12` אינו רלוונטי — הגובה נקבע
- * מ-`rows`.
+ * ‏`p-2` ולא `px-2` בלבד: בשדה רב-שורות הטקסט מתחיל בשורה הראשונה, וריפוד
+ * אנכי אפס מדביק אותו לגבול העליון. גובה מזערי אינו רלוונטי כאן — הגובה
+ * נקבע מ-`rows` — ולכן `size` אינו משפיע עוד על הצורה, רק על ההקשר.
  */
-export function Textarea({ size = "default", invalid, className, ...rest }: TextareaProps) {
+export function Textarea({ invalid, className, ...rest }: TextareaProps) {
   return (
     <textarea
-      className={twMerge(
-        CONTROL_BASE,
-        size === "compact" ? "rounded-lg" : "rounded-xl",
-        "p-3",
-        invalid && "border-danger",
-        className,
-      )}
+      className={twMerge(CONTROL_BASE, "p-2", invalid && "border-danger", className)}
       {...rest}
     />
   );

@@ -43,10 +43,10 @@ export function FormNotice({ className, children }: MessageProps) {
   );
 }
 
-export type BannerTone = "success" | "warning" | "brand";
+export type BannerTone = "success" | "warning" | "info";
 
 /**
- * ‏`brand` נוסף בסבב 0.4 (פער 34), ומאותה סיבה שבה `quiet` נוסף ל-`Button`
+ * ‏`info` (שנקרא `brand` עד המעבר לגרפיט) נוסף בסבב 0.4 (פער 34), ומאותה סיבה שבה `quiet` נוסף ל-`Button`
  * בדיעבד: **וריאנט חסר דוחף כתיבה ידנית.** באנר המיקוד בלוח נכתב ביד עם
  * `bg-brand/5` — ערך שקיפות שאינו קיים בתקן כלל — ובלי `role`, כלומר אילם
  * לקורא מסך. השקיפות מיושרת כאן ל-`/10` של שאר הטונים (§ מצבי רקע חלשים).
@@ -54,7 +54,7 @@ export type BannerTone = "success" | "warning" | "brand";
 const BANNER_TONES: Record<BannerTone, string> = {
   success: "border-success/30 bg-success/10 text-success",
   warning: "border-warning/30 bg-warning/10 text-warning",
-  brand: "border-brand/30 bg-brand/10 text-brand",
+  info: "border-info/30 bg-info/10 text-info",
 };
 
 /**
@@ -76,7 +76,7 @@ export function Banner({
   return (
     <p
       role="status"
-      className={twMerge("rounded-xl border p-3 text-sm font-medium", BANNER_TONES[tone], className)}
+      className={twMerge("rounded-md border p-2 text-sm font-medium", BANNER_TONES[tone], className)}
     >
       {children}
     </p>

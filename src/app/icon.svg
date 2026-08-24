@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="בקרת פניות">
-  <!-- רקע מלא (full-bleed) בכחול המותג. מלא ולא מעוגל כדי שגם כאייקון
+  <!-- רקע מלא (full-bleed) בגרפיט המותג. מלא ולא מעוגל כדי שגם כאייקון
        maskable, שבו אנדרואיד חותך לצורה, הרקע ימלא את כל השטח. -->
-  <rect width="512" height="512" fill="#204ab4"/>
+  <rect width="512" height="512" fill="#1e2a35"/>
   <!-- לוח (clipboard) לבן עם צבט בראשו — סמל של רשימת פניות. הגליף כולו
        יושב בתוך אזור הבטיחות המרכזי (‏80%) כדי שלא ייחתך במסכות. -->
   <rect x="206" y="120" width="100" height="60" rx="20" fill="#ffffff"/>
   <rect x="146" y="150" width="220" height="242" rx="26" fill="#ffffff"/>
-  <!-- וי בכחול המותג בתוך הלוח — "טופל". -->
-  <polyline points="190,272 236,320 330,212" fill="none" stroke="#204ab4" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- וי בגרפיט המותג בתוך הלוח — "טופל". -->
+  <polyline points="190,272 236,320 330,212" fill="none" stroke="#1e2a35" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -134,8 +134,20 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
         disabled={disabled || starting}
         onClick={() => void start()}
         aria-pressed={false}
-        className={`rounded-xl border border-border px-3 font-medium disabled:opacity-60 ${
-          className ?? "min-h-11 text-sm"
+        /*
+         * שלושת הכפתורים כאן נשארים כתובים ביד (חריג מתועד ב-
+         * `tests/unit/primitives.test.ts`), כי המראה שלהם הוא **מצב**: אותו
+         * פקד עצמו הוא מסגרת שקטה לפני ההקלטה ומילוי אדום בתוכה, ו-`Button`
+         * אינו מחליף וריאנט תוך כדי. מה שהם כן חייבים לרשת הוא הצורה:
+         * ‏4px עיגול, וזוג הגבהים 32px בעכבר / 44px במגע. קודם הם ישבו על
+         * ‏`rounded-xl` ועל `min-h-11` — שלוש מידות שאינן מידה של אף פקד.
+         *
+         * הגובה נשאר בברירת המחדל של `className` ולא בבסיס, כי ההורה דורס
+         * אותו (‏64px במסך היצירה); שתי מחלקות גובה באותו אלמנט נפתרות לפי
+         * סדר ה-CSS ולא לפי סדר הכתיבה, כלומר ההורה היה מפסיד בשקט.
+         */
+        className={`rounded-sm border border-border px-2 font-medium disabled:opacity-60 touch:px-3 ${
+          className ?? "min-h-8 text-sm touch:min-h-11"
         }`}
       >
         {/* טקסט מפורש בזמן המתנה להרשאה — כפתור שנראה כאילו הלחיצה נבלעה
@@ -160,7 +172,7 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
         disabled={disabled}
         onClick={stop}
         aria-pressed
-        className="min-h-11 flex-1 rounded-xl bg-danger px-3 font-medium text-brand-fg disabled:opacity-60"
+        className="min-h-8 flex-1 rounded-sm bg-danger px-2 font-medium text-brand-fg disabled:opacity-60 touch:min-h-11 touch:px-3"
       >
         {he.media.stopRecording}
         {/* הזמן צמוד לפעולה השומרת, כי הוא מתאר אותה: כמה ייכנס לקובץ.
@@ -173,7 +185,7 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
         type="button"
         disabled={disabled}
         onClick={cancel}
-        className="min-h-11 rounded-xl border border-border px-3 font-medium disabled:opacity-60"
+        className="min-h-8 rounded-sm border border-border px-2 font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
       >
         {he.media.cancelRecording}
       </button>

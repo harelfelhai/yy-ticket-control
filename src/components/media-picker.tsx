@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { useId, useRef, useState } from "react";
 import { confirmUploadAction, registerMediaAction } from "@/app/media-actions";
 import { Button } from "@/components/ui/button";
+import { cardClasses } from "@/components/ui/card";
 import { FormError } from "@/components/ui/message";
 import { he } from "@/lib/he";
 import { mediaKind } from "@/lib/media-view";
@@ -191,16 +192,21 @@ export function MediaPicker({
       {files.length > 0 ? (
         <ul aria-label={he.media.attach} className="flex flex-wrap gap-2">
           {files.map((file) => (
+            // ‏`cardClasses` ולא מסגרת שנכתבת כאן: אריח הקובץ הוא כרטיס קטן,
+            // ‏וכל מה שהיה מקומי בו הוא `bg-bg` — רקע שנועד להפריד מהמשטח
+            // ‏שמתחתיו בזמן שהכרטיס עשה זאת ממילא במסגרת (§ Elevation).
             <li
               key={file.mediaId}
-              className="flex items-center gap-2 rounded-xl border border-border bg-bg p-2"
+              className={cardClasses("flex items-center gap-2", { padding: "compact" })}
             >
               {file.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- blob: מקומי, next/image אינו מטפל בו
                 <img
                   src={file.previewUrl}
                   alt={he.media.imageAlt}
-                  className="size-12 rounded-lg object-cover"
+                  // ‏4px: התצוגה המקדימה יושבת **בתוך** אריח, ומה שבתוך מיכל
+                  // ‏מעוגל פחות ממנו.
+                  className="size-12 rounded-sm object-cover"
                 />
               ) : (
                 <span className="max-w-40 truncate text-sm">{file.name}</span>
@@ -210,7 +216,7 @@ export function MediaPicker({
                 size="compact"
                 onClick={() => remove(file.mediaId)}
                 aria-label={`${he.media.remove}: ${file.name}`}
-                className="shrink-0 px-2"
+                className="shrink-0"
               >
                 ×
               </Button>
@@ -248,7 +254,27 @@ export function MediaPicker({
                 type="button"
                 disabled={busy}
                 onClick={openCamera}
-                className="min-h-16 rounded-xl border border-brand bg-brand/10 px-3 text-base font-semibold text-brand disabled:opacity-60"
+                /*
+                 * יעד הצילום — **64px, ובכוונה גדול מכל וריאנט של `Button`**:
+                 * הוא נלחץ באגודל בכפפה, מול דירה, על מסך בשמש. לכן הוא נשאר
+                 * כתוב ביד (חריג מתועד ב-`tests/unit/primitives.test.ts`):
+                 * ‏`Button` נושא `touch:min-h-11`, ודריסתו ב-64px
+                 * הייתה **מקטינה** אותו דווקא במגע — כלומר בדיוק במכשיר
+                 * שבשבילו הוא גדול.
+                 *
+                 * **הבלטה בגודל, לא בצבע.** הוא היה `border-brand` +
+                 * `bg-brand/10` + `text-brand`, ובגרפיט שלושתם הופכים למלבן
+                 * אפור עם טקסט בצבע טקסט רגיל — פקד שנראה מושבת. הפיתוי היה
+                 * להעביר אותו לטוקן צבעוני אחר, אבל ארבעת הטוקנים הצבעוניים
+                 * הם **מצבים** (§ Colors), ו-"צלם" אינו מצב: `info` פירושו
+                 * "פנייה חדשה שטרם נצפתה", ושימוש בו כאן הוא בדיוק הצבע
+                 * שנגזר מאסתטיקה ולא ממשמעות שהסעיף אוסר.
+                 *
+                 * לכן המראה הוא של כפתור משני רגיל, וכל ההבלטה מגיעה מהמידה
+                 * — שהיא ממילא הסיבה שהפקד הזה חורג. הוא הדבר הגדול ביותר
+                 * במסך; הוא אינו זקוק גם לגוון.
+                 */
+                className="min-h-16 rounded-sm border border-border bg-surface px-3 text-base font-semibold text-fg disabled:opacity-60"
               >
                 {he.media.camera}
               </button>

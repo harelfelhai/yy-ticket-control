@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
+import { LINK } from "@/lib/ui";
 
 /**
  * הכפתור של המערכת — מקור אמת אחד.
@@ -25,7 +26,7 @@ import { twMerge } from "tailwind-merge";
  * `dangerQuiet` — פעולה הרסנית בתוך שורה או כרטיס ("הסר נמען"), שאסור לה
  *   למשוך את העין יותר מהתוכן שהיא פועלת עליו.
  * `quiet` — התאום החיובי של `dangerQuiet`: פעולה משנית בתוך שורה או כרטיס
- *   ("נקה מסננים", "+ הוסף קובץ"), בצבע המותג ובלי מסגרת.
+ *   ("נקה מסננים", "+ הוסף קובץ"), בקו תחתון ובלי מסגרת.
  *
  * שישה ואף לא אחד מעבר: כל אחד מהם ממופה לשימוש קיים בפועל. וריאנט שנוסף
  * "ליתר ביטחון" הוא הזמנה לסחיפה חדשה.
@@ -43,26 +44,46 @@ export type ButtonVariant =
   | "quiet";
 
 /**
- * `default` — 48px. פעולה ראשית או פעולה שקשה לבטל.
- * `compact` — 44px, המינימום המוחלט. לפעולות בתוך שורה או כרטיס בלבד,
- *   ולעולם לא כפעולה ראשית של מסך.
+ * `default` — פעולה ראשית או פעולה שקשה לבטל.
+ * `compact` — פעולה בתוך שורה או כרטיס, ולעולם לא פעולה ראשית של מסך.
+ *
+ * **הגובה תלוי במכשיר ולא בווריאנט.** שניהם יורדים ל-36px ול-32px בעכבר,
+ * ושניהם חוזרים ל-44px במגע (`touch:`). זו ההכרעה שהחליפה את "‏48/44, אין
+ * יוצא מן הכלל": הנימוק של הרצפה — אצבע בכפפה על מסך בשמש — מדבר על מגע,
+ * ובעכבר הוא קנה גובה שדחק מידע מהמסך בלי לקנות דיוק.
+ *
+ * ‏`touch:` הוא וריאנט מותאם ולא `pointer-coarse:` המובנה, ובגלל כשל שנמדד:
+ * המובנה שואל על המצביע **הראשי**, ומחשב עם מסך מגע ענה "גס" וקיבל 44px
+ * למרות שיש עליו עכבר. ההגדרה והנימוק המלא ב-`src/app/globals.css`.
  */
 export type ButtonSize = "default" | "compact";
 
-const BASE = "inline-flex items-center justify-center disabled:opacity-60";
+/**
+ * ‏`rounded-sm` (‏4px) לכל הכפתורים, ובלי הבדל בין הגדלים.
+ *
+ * קודם ה-radius היה נגזרת של הגובה — 12px ל-48 ו-8px ל-44 — כלומר שני
+ * כפתורים שיושבים בשורה אחת נבדלו גם בעיגול. הצורה היא **תכונה של המערכת**
+ * ולא של המידה: כלי תפעול צפוף נראה כמו טופס, לא כמו אפליקציית מובייל.
+ */
+const BASE = "inline-flex items-center justify-center rounded-sm disabled:opacity-60";
 
+/**
+ * ‏`quiet` נושא קו תחתון ולא צבע — ראו `LINK` ב-`src/lib/ui.ts`. בפלטת
+ * הגרפיט `text-brand` הוא בפועל צבע הטקסט הרגיל, ופעולה שמסומנת בו בלבד
+ * חדלה להיראות לחיצה.
+ */
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-brand text-brand-fg font-semibold",
   secondary: "border border-border bg-surface text-fg font-medium",
   danger: "bg-danger text-brand-fg font-semibold",
   dangerOutline: "border border-danger bg-surface text-danger font-medium",
-  dangerQuiet: "text-danger font-medium",
-  quiet: "text-brand font-medium",
+  dangerQuiet: `text-danger font-medium ${LINK}`,
+  quiet: `text-fg font-semibold ${LINK}`,
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  default: "min-h-12 rounded-xl px-6 text-base",
-  compact: "min-h-11 rounded-lg px-4 text-sm",
+  default: "min-h-9 px-3 text-sm touch:min-h-11 touch:px-4",
+  compact: "min-h-8 px-2 text-sm touch:min-h-11 touch:px-3",
 };
 
 /**

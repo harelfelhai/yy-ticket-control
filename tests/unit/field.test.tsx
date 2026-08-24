@@ -20,12 +20,16 @@ describe("פקדי קלט", () => {
     const className = screen.getByLabelText("חיפוש").className;
 
     expect(className).toContain("text-base");
-    expect(className).toContain("min-h-11");
+    expect(className).toContain("touch:min-h-11");
   });
 
-  it("ברירת המחדל היא 48px", () => {
+  it("ברירת המחדל צפופה בעכבר וחוזרת לרצפת המגע באצבע", () => {
     render(<Input aria-label="שם" />);
-    expect(screen.getByLabelText("שם").className).toContain("min-h-12");
+    // ‏36px בעכבר / 44px במגע. הגובה הוא הדבר היחיד שתלוי במכשיר — הגופן
+    // נשאר 16px בשני המקרים (ראו הבדיקה שמעל: ספארי ב-iOS מגדיל מתחת לזה).
+    const className = screen.getByLabelText("שם").className;
+    expect(className).toContain("min-h-9");
+    expect(className).toContain("touch:min-h-11");
   });
 
   it("`invalid` מוסיף מסגרת אדומה", () => {
@@ -49,7 +53,7 @@ describe("פקדי קלט", () => {
 
   it("Textarea מקבל ריפוד אנכי — בלעדיו הטקסט נדבק לגבול העליון", () => {
     render(<Textarea aria-label="תיאור" />);
-    expect(screen.getByLabelText("תיאור").className).toContain("p-3");
+    expect(screen.getByLabelText("תיאור").className).toContain("p-2");
   });
 
   it("מעביר props הלאה ומגיב להקלדה", async () => {

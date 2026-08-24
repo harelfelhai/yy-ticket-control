@@ -21,10 +21,20 @@ import { twMerge } from "tailwind-merge";
  * `neutralStrong` — גם הוא ללא דחיפות, **אבל משהו קרה**: "נצפה" אומר
  *   שהקבלן באמת פתח. אותו גוון, טקסט מלא במקום דהוי. ההבחנה נשמרת כאן
  *   כי איחודה עם `neutral` היה מוחק את ההבדל בין "שלחתי" ל"הוא ראה".
- * `brand` — תגית או שיוך. `success` — הסתיים.
- * `warning` — ממתין להכרעה. `danger` — עבודה עצורה.
+ * `brand` — תגית או שיוך שהמשתמש **בחר**. זהו הדיו של המערכת ולא מצב:
+ *   הוא אומר "זה שלך", לא "הפנייה נמצאת במצב הזה".
+ * `info` — פנייה חדשה שטרם נצפתה. ירש מ-`brand` את המשמעות היחידה שהייתה
+ *   לו כמצב, כשהמותג הפך לגרפיט וחדל להיות מובחן מטקסט רגיל.
+ * `success` — הסתיים. `warning` — ממתין להכרעה. `danger` — עבודה עצורה.
  */
-export type ChipTone = "neutral" | "neutralStrong" | "brand" | "success" | "warning" | "danger";
+export type ChipTone =
+  | "neutral"
+  | "neutralStrong"
+  | "brand"
+  | "info"
+  | "success"
+  | "warning"
+  | "danger";
 
 /**
  * `soft` — רקע דהוי ומסגרת. ברירת המחדל: הצ׳יפ מוסר מידע ואינו פעולה.
@@ -39,12 +49,20 @@ export type ChipVariant = "soft" | "solid";
  */
 export type ChipSize = "default" | "large";
 
-const BASE = "inline-flex items-center rounded-full font-medium";
+/**
+ * ‏`rounded-sm` (‏4px) ולא `rounded-full`.
+ *
+ * הצ׳יפ המעוגל לגמרי נקרא כתג באפליקציית צריכה. במסך שסורקים בו עשרות
+ * פניות, אותה צורה חוזרת עשרות פעמים ומרעישה את הגריד; פינה קטנה נקראת
+ * כשדה נתונים ומתיישרת עם הכפתורים והשדות שלצדה.
+ */
+const BASE = "inline-flex items-center rounded-sm font-medium";
 
 const SOFT: Record<ChipTone, string> = {
   neutral: "border border-border bg-surface text-muted",
   neutralStrong: "border border-border bg-surface text-fg",
-  brand: "border border-brand/30 bg-brand/10 text-brand",
+  brand: "border border-brand/30 bg-brand/10 text-fg",
+  info: "border border-info/30 bg-info/10 text-info",
   success: "border border-success/30 bg-success/10 text-success",
   warning: "border border-warning/30 bg-warning/10 text-warning",
   danger: "border border-danger/30 bg-danger/10 text-danger",
@@ -54,15 +72,16 @@ const SOLID: Record<ChipTone, string> = {
   neutral: "bg-muted text-brand-fg",
   neutralStrong: "bg-fg text-brand-fg",
   brand: "bg-brand text-brand-fg",
+  info: "bg-info text-brand-fg",
   success: "bg-success text-brand-fg",
   warning: "bg-warning text-brand-fg",
   danger: "bg-danger text-brand-fg",
 };
 
-/** ‏`py-0.5`/`py-1.5` — ראו ההערה על החריג בראש הקובץ. */
+/** ‏`px-1.5`/`py-0.5` — ראו ההערה על החריג בראש הקובץ. */
 const SIZES: Record<ChipSize, string> = {
-  default: "gap-1 px-2.5 py-0.5 text-xs",
-  large: "gap-1 px-3 py-1.5 text-sm",
+  default: "gap-1 px-1.5 py-0.5 text-xs",
+  large: "gap-1 px-2 py-1 text-sm",
 };
 
 export function chipClasses(

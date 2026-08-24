@@ -1,3 +1,4 @@
+import { buttonClasses } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { type MediaView, mediaKind } from "@/lib/media-view";
 import { ROW_LIST } from "@/lib/ui";
@@ -27,7 +28,15 @@ export function MediaAttachments({ media }: MediaAttachmentsProps) {
         <li key={file.id} className="flex flex-col gap-1">
           {renderFile(file)}
           {file.aiText ? (
-            <p className="rounded-lg bg-surface p-2 text-sm">
+            /*
+             * ‏`rounded-md` — התמלול הוא מיכל בתוך הבועה, ומיכל הוא 6px.
+             *
+             * ‏`bg-bg` ולא `bg-surface`: הבועה עצמה עברה ל-`bg-surface`
+             * (ראו `thread-bubble.tsx`), ולבן בתוך לבן אינו מיכל אלא פסקה.
+             * האפור של העמוד הוא הרקע היחיד שנבדל משתי הבועות — זו של
+             * הצופה וזו של האחרים — ולכן הוא הנכון כאן.
+             */
+            <p className="rounded-md bg-bg p-2 text-sm">
               <span className="text-xs font-medium text-muted">
                 {mediaKind(file.mimeType) === "audio"
                   ? he.ai.transcriptionLabel
@@ -54,14 +63,14 @@ function renderFile(file: MediaView) {
             src={file.url}
             alt={file.name || he.media.imageAlt}
             loading="lazy"
-            className="max-h-72 w-full rounded-xl object-cover"
+            className="max-h-72 w-full rounded-md object-cover"
           />
         </a>
       );
 
     case "video":
       return (
-        <video controls preload="metadata" className="max-h-72 w-full rounded-xl">
+        <video controls preload="metadata" className="max-h-72 w-full rounded-md">
           <source src={file.url} type={file.mimeType.split(";")[0]} />
         </video>
       );
@@ -98,12 +107,22 @@ function renderFile(file: MediaView) {
     }
 
     default:
+      /*
+       * ‏`buttonClasses` ולא כפתור משני שנכתב ביד — וזהו בדיוק המקרה שהפונקציה
+       * קיימת בשבילו: קישור **חיצוני** (`target="_blank"`), שאינו `<button>`
+       * ואינו `Link` של Next.
+       *
+       * העותק הידני כבר סטה משני צדדים: `rounded-xl` בזמן ש-`compact` דרש
+       * ‏`rounded-lg`, ו-`px-3` בזמן שהוא דרש `px-4` — כלומר הוא לא ירש את
+       * הסקאלה הישנה **ולא** את החדשה. ובנוסף `text-brand`, שבפלטת הגרפיט
+       * הוא צבע הטקסט הרגיל: היחיד שאמר "אפשר ללחוץ" היה המסגרת.
+       */
       return (
         <a
           href={file.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-sm font-medium text-brand"
+          className={buttonClasses("secondary", "compact", "gap-2")}
         >
           {he.media.fileLabel(file.name)}
         </a>

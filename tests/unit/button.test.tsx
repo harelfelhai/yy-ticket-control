@@ -10,14 +10,16 @@ import { Button, ButtonLink } from "@/components/ui/button";
  */
 
 describe("Button", () => {
-  it("ברירת המחדל היא פעולה ראשית בגובה מגע מלא", () => {
+  it("ברירת המחדל היא פעולה ראשית, וגובהה תלוי במכשיר", () => {
     render(<Button>שלח</Button>);
     const button = screen.getByRole("button", { name: "שלח" });
 
     expect(button.className).toContain("bg-brand");
     expect(button.className).toContain("font-semibold");
-    // 48px — הסף לפעולה ראשית בעבודת שדה עם כפפות.
-    expect(button.className).toContain("min-h-12");
+    // ‏36px בעכבר, 44px במגע. הרצפה של "אצבע בכפפה" מדברת על מגע ולא על
+    // סמן, ובעכבר היא קנתה גובה שדחק מידע מהמסך בלי לקנות דיוק לחיצה.
+    expect(button.className).toContain("min-h-9");
+    expect(button.className).toContain("touch:min-h-11");
   });
 
   it("`type` הוא button כברירת מחדל, כדי שכפתור בתוך טופס לא ישלח אותו בטעות", () => {
@@ -36,8 +38,8 @@ describe("Button", () => {
     ["danger", "bg-danger"],
     ["dangerOutline", "border-danger"],
     ["dangerQuiet", "text-danger"],
-    ["quiet", "text-brand"],
-  ] as const)("הווריאנט %s מקבל את הצבע שלו", (variant, expected) => {
+    ["quiet", "underline"],
+  ] as const)("הווריאנט %s מקבל את הסימן שלו", (variant, expected) => {
     render(<Button variant={variant}>פעולה</Button>);
     expect(screen.getByRole("button").className).toContain(expected);
   });
@@ -48,14 +50,31 @@ describe("Button", () => {
     render(<Button variant="quiet">נקה מסננים</Button>);
     const className = screen.getByRole("button").className;
 
-    expect(className).not.toContain("border");
-    expect(className).not.toContain("bg-");
+    // ‏`border-` ולא `border`: הקו התחתון מביא איתו `decoration-border`,
+    // שהוא צבע הקו ולא מסגרת. חיפוש המחרוזת הגולמית היה תופס אותו ומכריח
+    // לוותר על הסימן היחיד שיש לווריאנט הזה.
+    expect(className).not.toMatch(/border(-|)/);
+    expect(className).not.toMatch(/bg-/);
   });
 
-  it("`compact` נשאר מעל סף המגע המינימלי (44px)", () => {
+  it("`quiet` מסומן בקו תחתון ולא בצבע — הכרעת פלטת הגרפיט", () => {
+    /**
+     * הבדיקה קיימת כדי שלא יחזירו לו `text-brand` "כדי שייראה כמו קישור".
+     * בגרפיט `brand` הוא בפועל צבע הטקסט הרגיל (ניגודיות 1.26 מול `fg`),
+     * ופעולה שמסומנת בו בלבד היא פעולה שאי אפשר לראות שהיא פעולה.
+     */
+    render(<Button variant="quiet">נקה מסננים</Button>);
+    const className = screen.getByRole("button").className;
+
+    expect(className).toContain("underline");
+    expect(className).not.toContain("text-brand");
+  });
+
+  it("`compact` נשאר מעל סף המגע המינימלי (44px) — במגע", () => {
     render(<Button size="compact">הסר</Button>);
-    // min-h-11 = 44px. אילו היה יורד מזה, לחיצות בשטח היו מתפספסות.
-    expect(screen.getByRole("button").className).toContain("min-h-11");
+    // ‏32px בעכבר, אבל `touch:min-h-11` מחזיר 44px ברגע שיש אצבע.
+    // בלי הזוג הזה, לחיצות בשטח היו מתפספסות.
+    expect(screen.getByRole("button").className).toContain("touch:min-h-11");
   });
 
   it("כל וריאנט מקבל מצב disabled — זה מה שנשכח כשכל עמוד בנה כפתור לעצמו", () => {
@@ -133,6 +152,6 @@ describe("ButtonLink", () => {
     const className = screen.getByRole("link", { name: "חזרה" }).className;
 
     expect(className).toContain("border-border");
-    expect(className).toContain("min-h-11");
+    expect(className).toContain("touch:min-h-11");
   });
 });
