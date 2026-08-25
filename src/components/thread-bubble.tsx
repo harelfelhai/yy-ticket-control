@@ -61,9 +61,15 @@ export function ThreadBubble({ message }: { message: ThreadMessageView }) {
      *
      * ‏`border` ולא `cardClasses`: הכרטיס קובע גם רדיוס וגם ריפוד, ושניהם
      * שונים כאן בכוונה — כלומר קריאה לו הייתה דריסה של רוב מה שהוא נותן.
+     *
+     * **‏`px-2 py-1` ולא `px-3 py-2` — סבב הצ׳אט.** הריפוד שהיה כאן הוא ריפוד
+     * של **כרטיס**, ובועה אינה כרטיס: היא פריט אחד ברצף של עשרות, וכל 4px
+     * אנכיים מוכפלים במספר ההודעות. בשרשור טיפוסי זה היה הפרש של מסך שלם.
+     * ההקטנה נעשית **בריפוד בלבד** — טקסט ההודעה נשאר `text-base`, כי
+     * ‏`text-xs` הוא בתקן תפקיד של מטא-דאטה ולא תחליף לטקסט גוף (§ Typography).
      */
     <div
-      className={`flex max-w-96 flex-col gap-1 rounded-lg border bg-surface px-3 py-2 ${surface}`}
+      className={`flex max-w-96 flex-col gap-1 rounded-lg border bg-surface px-2 py-1 ${surface}`}
     >
       {message.own ? null : (
         <p className="text-xs font-medium text-muted">{message.authorName}</p>

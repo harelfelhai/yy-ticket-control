@@ -1,5 +1,6 @@
 "use client";
 
+import { Send } from "lucide-react";
 import { useState } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { Button } from "@/components/ui/button";
@@ -35,13 +36,26 @@ export function TagChatBox({ tagId }: { tagId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <ReplyField value={text} onChange={setText} />
+      {/* שורת הקלטה אחת, כמו במסך הפנייה — ראו את ההנמקה ב-`ticket-actions`. */}
+      <div className="flex items-end gap-2">
+        <MediaPicker
+          variant="composer"
+          showRecorder={!canSend}
+          files={files}
+          onChange={setFiles}
+          disabled={busy}
+        />
 
-      <MediaPicker files={files} onChange={setFiles} disabled={busy} />
+        <div className="flex-1">
+          <ReplyField value={text} onChange={setText} />
+        </div>
 
-      <Button disabled={busy || !canSend} onClick={send} className="self-start">
-        {he.ticket.send}
-      </Button>
+        {canSend ? (
+          <Button size="compact" disabled={busy} onClick={send} aria-label={he.ticket.send}>
+            <Send className="size-4" aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
 
       {error ? (
         <FormError>

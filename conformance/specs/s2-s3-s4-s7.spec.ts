@@ -4,6 +4,7 @@ import { loginAs } from "../fixtures/roles";
 import {
   CREATE_SCREEN,
   DRAFT_SCREEN,
+  MEDIA,
   RECIPIENTS_SCREEN,
   THREAD_EVENTS,
   TICKET_SCREEN,
@@ -119,14 +120,37 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
     });
 
     /*
-     * שלוש הפעולות האלה **גלויות בלי לפתוח דבר**, וזו הדרישה עצמה
+     * **פעולות הפנייה** גלויות בלי לפתוח דבר, וזו הדרישה עצמה
      * (§מסך 2 אזור ד׳): סגירת פנייה היא התוצאה של המסך ולא פרט מנהלי,
      * ולכן היא אינה נכנסת לא לפאנל ולא לדיאלוג.
      */
-    await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.markHandler })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.close })).toBeVisible();
+
+    /*
+     * הקומפוזר — האפיון מונה בו שלוש יכולות: "טקסט, צירוף תמונה, הקלטת
+     * קול". שלושתן נבדקות כאן, וכפתור השליחה **אינו** ברשימה.
+     *
+     * **הטענה על "שלח" שונתה, ולא רוככה.** קודם נדרש כאן שהוא יהיה גלוי
+     * מיד — טענה שהאפיון אינו עושה — והיא נכשלה כשהמיקרופון וכפתור
+     * השליחה החלו לחלוק מקום בקצה השורה (DESIGN.md § שורת ההקלטה). זו
+     * אינה הסתרה מאחורי פאנל, שהיא מה שהסעיף אוסר, אלא **החלפה**: כשאין
+     * מה לשלוח יושב שם מיקרופון, וברגע שיש טקסט הוא מתחלף.
+     *
+     * מה שנבדק עכשיו הוא ההתנהגות ולא הנוכחות, וזו טענה **חזקה יותר**:
+     * היא תיכשל גם אם הכפתור ייעלם לגמרי, וגם אם הוא יופיע בלי תוכן
+     * לשלוח — שני כשלים שהגרסה הקודמת לא הייתה תופסת.
+     */
     await expect(page.getByLabel("תגובה")).toBeEditable();
+    await expect(page.getByRole("button", { name: MEDIA.attach })).toBeVisible();
+    await expect(page.getByRole("button", { name: MEDIA.camera })).toBeVisible();
+    await expect(page.getByRole("button", { name: MEDIA.record })).toBeVisible();
+    await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toHaveCount(0);
+
+    await page.getByLabel("תגובה").fill(uniq("טקסט לשליחה"));
+    await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: MEDIA.record })).toHaveCount(0);
+    await page.getByLabel("תגובה").fill("");
 
     // עריכת הנמענים היא פרט מנהלי, ומ-0.4 היא יושבת בדיאלוג "פרטים".
     await openDetails(page);

@@ -1,6 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import { Camera, Paperclip, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { confirmUploadAction, registerMediaAction } from "@/app/media-actions";
 import { Button } from "@/components/ui/button";
@@ -34,10 +35,31 @@ interface MediaPickerProps {
   onChange: (files: AttachedFile[]) => void;
   disabled?: boolean;
   /**
+   * `default` — כפתורי טקסט קומפקטיים. זהו הווריאנט של **טופס**, ומשמש
+   *   היום את מסך ההזנה המרוכזת בלבד.
+   * `composer` — אייקונים בשורת ההקלטה של שיחה (DESIGN.md § אייקונים).
    * `prominent` — צילום והקלטה ככפתורים גדולים בראש (מסך היצירה, אפיון
-   * מסך 4: "המדיה היא הפעולה הראשונה"). ברירת המחדל קומפקטית, לתיבת התגובה.
+   *   מסך 4: "המדיה היא הפעולה הראשונה").
+   *
+   * **‏`composer` נפרד מ-`default` ואינו מחליף אותו**, וזה תיקון של הכללה
+   * שנעשתה בסבב הצ׳אט: האייקונים הוחלו על ברירת המחדל, וירשו אותם גם
+   * מסכים שאינם שיחה. שלושה סמלים בלי תווית תחת הכותרת "מקור" בטופס אינם
+   * "כמו ווצאפ" אלא פשוט פחות ברורים — החריג בתקן (§ Field) מוגבל במפורש
+   * לקומפוזר, ומכאן שגם הצורה שלו.
    */
-  variant?: "default" | "prominent";
+  variant?: "default" | "composer" | "prominent";
+  /**
+   * האם להציג את כפתור ההקלטה.
+   *
+   * קיים בשביל התנהגות ווצאפ בקומפוזר: **המיקרופון וכפתור השליחה חולקים
+   * מקום אחד בקצה השורה**. כשאין מה לשלוח מוצג מיקרופון, וברגע שיש טקסט
+   * או קובץ הוא מתחלף בשליחה. הקומפוזר מעביר `showRecorder={!canSend}`.
+   *
+   * זה אינו קישוט: במסך של 393px ארבעה כפתורים הותירו לתיבת הכתיבה 39%
+   * מהשורה — כ-15 תווים — והחלפה במקום הצגה בו-זמנית היא מה שמחזיר לה את
+   * הרוחב. **ההקלטה עצמה לא אבדה**: היא חוזרת ברגע שהתיבה מתרוקנת.
+   */
+  showRecorder?: boolean;
 }
 
 /**
@@ -59,6 +81,7 @@ export function MediaPicker({
   onChange,
   disabled,
   variant = "default",
+  showRecorder = true,
 }: MediaPickerProps) {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(0);
@@ -218,7 +241,9 @@ export function MediaPicker({
                 aria-label={`${he.media.remove}: ${file.name}`}
                 className="shrink-0"
               >
-                ×
+                {/* היה תו `×` מילולי. הוחלף לאייקון יחד עם שאר השורה — תו טקסט
+                    בודד לצד ארבעה אייקונים נקרא כשריד, לא כהבחנה. */}
+                <X className="size-4" aria-hidden="true" />
               </Button>
             </li>
           ))}
@@ -301,31 +326,84 @@ export function MediaPicker({
             ) : null}
           </div>
         ) : (
-          <>
-            <Button
-              variant="secondary"
-              size="compact"
-              disabled={busy}
-              onClick={() => fileInput.current?.click()}
-            >
-              {he.media.attach}
-            </Button>
-            <Button variant="secondary" size="compact" disabled={busy} onClick={openCamera}>
-              {he.media.camera}
-            </Button>
+          /*
+           * שורת הפקדים של הקומפוזר — אייקונים ולא תוויות (DESIGN.md § אייקונים).
+           *
+           * שלוש תוויות עבריות מלאות בשורת ההקלטה דחקו את תיבת הכתיבה עצמה
+           * לשורה נפרדת מתחתן; זו הסיבה שהשורה הזו עברה לאייקונים.
+           *
+           * **‏`aria-label` נושא את אותה מחרוזת שהייתה התווית הגלויה**, ולכן
+           * השם הנגיש לא השתנה ואף בדיקה שמחפשת "צרף קובץ"/"צלם" אינה נשברת.
+           *
+           * ‏`secondary` ולא `quiet`: הווריאנט השקט נושא קו תחתון (`LINK`),
+           * וקו תחתון מתחת לסמל בודד נקרא כתקלת רינדור. המסגרת גם משווה את
+           * שלושת הפקדים — כפתור ההקלטה נושא מסגרת משלו כמצב.
+           */
+          variant === "composer" ? (
+            <>
+              <Button
+                variant="secondary"
+                size="compact"
+                disabled={busy}
+                onClick={() => fileInput.current?.click()}
+                aria-label={he.media.attach}
+              >
+                <Paperclip className="size-4" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="compact"
+                disabled={busy}
+                onClick={openCamera}
+                aria-label={he.media.camera}
+              >
+                <Camera className="size-4" aria-hidden="true" />
+              </Button>
 
-            <AudioRecorder
-              disabled={busy}
-              onRecorded={(file) => void addFiles(toFileList(file))}
-              onError={setError}
-            />
+              {/* מתחלף בכפתור השליחה כשיש מה לשלוח — ראו `showRecorder`. */}
+              {showRecorder ? (
+                <AudioRecorder
+                  icon
+                  disabled={busy}
+                  onRecorded={(file) => void addFiles(toFileList(file))}
+                  onError={setError}
+                />
+              ) : null}
 
-            {uploading > 0 ? (
-              <span role="status" className="text-sm text-muted">
-                {he.media.uploading}
-              </span>
-            ) : null}
-          </>
+              {uploading > 0 ? (
+                <span role="status" className="text-sm text-muted">
+                  {he.media.uploading}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            /* טופס — תוויות טקסט מלאות. אינו שיחה ואינו נראה כמותה. */
+            <>
+              <Button
+                variant="secondary"
+                size="compact"
+                disabled={busy}
+                onClick={() => fileInput.current?.click()}
+              >
+                {he.media.attach}
+              </Button>
+              <Button variant="secondary" size="compact" disabled={busy} onClick={openCamera}>
+                {he.media.camera}
+              </Button>
+
+              <AudioRecorder
+                disabled={busy}
+                onRecorded={(file) => void addFiles(toFileList(file))}
+                onError={setError}
+              />
+
+              {uploading > 0 ? (
+                <span role="status" className="text-sm text-muted">
+                  {he.media.uploading}
+                </span>
+              ) : null}
+            </>
+          )
         )}
       </div>
 

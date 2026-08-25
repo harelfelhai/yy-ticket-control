@@ -1,5 +1,6 @@
 "use client";
 
+import { Send } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
@@ -27,15 +28,29 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
 
   return (
     <div className="flex flex-col gap-2">
-      <ReplyField value={text} onChange={setText} />
+      {/*
+       * אין כאן `MediaPicker` — הקבלן כותב טקסט בלבד (ראו למעלה), ולכן
+       * השורה מחזיקה שדה וכפתור שליחה בלבד.
+       *
+       * **וכאן כפתור השליחה נשאר מוצג ומושבת**, בשונה משלושת הקומפוזרים
+       * האחרים שמסתירים אותו כשאין מה לשלוח. שם ההסתרה מפנה את המקום
+       * למיקרופון; כאן אין מיקרופון שייכנס במקומו, והסתרה הייתה משאירה
+       * שורה שאין בה שום פקד מלבד התיבה.
+       */}
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <ReplyField value={text} onChange={setText} />
+        </div>
 
-      <Button
-        disabled={busy || text.trim().length === 0}
-        onClick={send}
-        className="self-start"
-      >
-        {he.ticket.send}
-      </Button>
+        <Button
+          size="compact"
+          disabled={busy || text.trim().length === 0}
+          onClick={send}
+          aria-label={he.ticket.send}
+        >
+          <Send className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
 
       {error ? (
         <FormError>

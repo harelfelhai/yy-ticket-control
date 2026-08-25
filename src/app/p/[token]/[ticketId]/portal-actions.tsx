@@ -1,5 +1,6 @@
 "use client";
 
+import { Send } from "lucide-react";
 import { useState } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
@@ -67,33 +68,49 @@ export function PortalActions({
         <Banner tone="success">{he.portal.doneNotice(openerName)}</Banner>
       ) : null}
 
-      <ReplyField value={text} onChange={setText} />
+      {/*
+       * שורת הקלטה אחת, זהה לצד הפנימי (§ Overview: "קבלן שרואה ממשק זר
+       * חושד בו"). ההנמקה המלאה ב-`ticket-actions`.
+       *
+       * **"שלח" איבד את `w-full` והפך לאייקון קומפקטי**, וזה מחדד את
+       * ההיררכיה שכבר תועדה כאן במקום לשבור אותה: הוא היה `secondary`
+       * מלא-רוחב מעל `primary` מלא-רוחב, כלומר שני מלבנים באותה מידה
+       * שנבדלו בצבע בלבד. עכשיו "סיימתי — טופל" הוא הדבר הרחב היחיד
+       * במסך — בדיוק מה שסעיף 3 למטה טוען שהוא.
+       */}
+      <div className="flex items-end gap-2">
+        <MediaPicker
+          variant="composer"
+          showRecorder={!canReply}
+          ticketId={ticketId}
+          token={token}
+          files={files}
+          onChange={setFiles}
+          disabled={busy}
+        />
 
-      <MediaPicker
-        ticketId={ticketId}
-        token={token}
-        files={files}
-        onChange={setFiles}
-        disabled={busy}
-      />
+        <div className="flex-1">
+          <ReplyField value={text} onChange={setText} />
+        </div>
+
+        {canReply ? (
+          <Button
+            size="compact"
+            disabled={busy}
+            aria-label={he.ticket.send}
+            onClick={() =>
+              run(
+                () => replyAction(token, ticketId, text, files.map((f) => f.mediaId)),
+                clear,
+              )
+            }
+          >
+            <Send className="size-4" aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-2">
-        {/* `Button` ולא `<button>`: זהו `secondary` רגיל, והכתיבה-מהזיכרון
-            כאן כבר סטתה — `px-4` (הריפוד של `compact`) על גובה `default`. */}
-        <Button
-          variant="secondary"
-          className="w-full"
-          disabled={busy || !canReply}
-          onClick={() =>
-            run(
-              () => replyAction(token, ticketId, text, files.map((f) => f.mediaId)),
-              clear,
-            )
-          }
-        >
-          {he.ticket.send}
-        </Button>
-
         {/*
          * **הכפתור הירוק בן 56px עבר ל-`Button` ב-`primary`**, וההחרגה שלו
          * ב-`primitives.test.ts` נמחקה. שלוש סיבות, לפי סדר החומרה:

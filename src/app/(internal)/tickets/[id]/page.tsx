@@ -234,6 +234,23 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           <span className="text-xs text-muted" dir="ltr">
             #{ticket.seq}
           </span>
+          {/*
+           * התחום והחדר — **בתוך שורת הזיהוי ולא בשורה משלהם** (סבב הצ׳אט).
+           *
+           * האפיון (מסך 2 אזור א׳) מונה אותם כתוכן **הפס העליון**: "בניין ·
+           * דירה · סטטוס נגזר · מספר פנייה · תחום · חדר". הפיתוי היה להוריד
+           * אותם לדיאלוג "פרטים" ולחסוך שורה — אבל רשימת תוכן הפאנל שם סגורה
+           * ואינה כוללת אותם, כלומר זו הייתה **המצאת התנהגות**. הבדיקה
+           * ‏`S2-01` ב-conformance היא מה שתפס את זה.
+           *
+           * מה שכן ירד הוא ה**שורה**, לא המידע: הם היו `<p>` נפרד מתחת, וכיום
+           * הם פריט נוסף באותה שורה גולשת. הפס העליון ירד משלוש שורות לשתיים
+           * בלי לגרוע פריט אחד ממה שהאפיון דורש שיהיה בו.
+           */}
+          <span className="text-sm text-muted">
+            {ticket.domain?.name ?? he.ticket.noDomain}
+            {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
+          </span>
           {/* "נפתחה מחדש" אינו סטטוס אלא תג — הפנייה מתנהגת לפי הכללים הרגילים */}
           {ticket.reopenCount > 0 ? (
             <span className={chipClasses("warning")}>{he.ticket.reopenedBadge}</span>
@@ -289,10 +306,6 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
             </span>
           )}
         </div>
-        <p className="text-sm text-muted">
-          {ticket.domain?.name ?? he.ticket.noDomain}
-          {ticket.room ? ` · ${he.room[ticket.room]}` : ""}
-        </p>
         {/*
          * שורת הסיבה נשארת גלויה תמיד ואינה נכנסת לפאנל: בלעדיה פנייה קופצת
          * בין קבוצות הלוח בלי הסבר, וזה שוחק את האמון במיון (אפיון §5.ב).

@@ -1,5 +1,6 @@
 "use client";
 
+import { Send } from "lucide-react";
 import { useState } from "react";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import type { ActionResult } from "@/lib/action-result";
@@ -115,33 +116,64 @@ export function TicketActions({
       </div>
 
       {canComment ? (
-        <div className={cardClasses("flex flex-col gap-2")}>
-          <ReplyField value={text} onChange={setText} />
-
+        /*
+         * **שורת הקלטה אחת** (סבב הצ׳אט).
+         *
+         * קודם ישבו כאן ארבע שכבות זו מעל זו — תווית, תיבה בת שלוש שורות
+         * קבועות, שורת שלושה כפתורי מדיה בטקסט, וכפתור "שלח" מתחתם — כלומר
+         * הקומפוזר גזל מהשרשור יותר גובה מכפי שהשרשור נותן להודעות. עכשיו
+         * הכול בשורה אחת, כמו בכל אפליקציית שיחה.
+         *
+         * ‏`items-end` ולא `items-center`: התיבה גדלה כלפי מעלה עם התוכן,
+         * והאייקונים חייבים להישאר מיושרים לתחתיתה — במרכוז הם היו נודדים
+         * למעלה עם כל שורה שנוספת.
+         *
+         * ‏`MediaPicker` מחזיק בתוכו גם את התצוגות המקדימות של הקבצים,
+         * שנפרשות מעליו כשיש קבצים — ולכן הוא כאן ולא מפוצל.
+         */
+        <div className={cardClasses("flex items-end gap-2")}>
           <MediaPicker
+            variant="composer"
+            // המיקרופון וכפתור השליחה חולקים את הקצה, כמו בווצאפ.
+            showRecorder={!canSend}
             ticketId={ticketId}
             files={files}
             onChange={setFiles}
             disabled={busy}
           />
 
-          {/* `self-start` כמו בצ׳אט התגית — כפתור שנמתח לכל הרוחב נראה
-              כפעולה ראשית של המסך, וזו רק שליחת תגובה. */}
-          <Button
-            className="self-start"
-            disabled={busy || !canSend}
-            onClick={() =>
-              act(
-                () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
-                () => {
-                  setText("");
-                  setFiles([]);
-                },
-              )
-            }
-          >
-            {he.ticket.send}
-          </Button>
+          {/* `flex-1` על עטיפה ולא על השדה: `Textarea` נושא `w-full` משלו,
+              וההתמתחות היא תפקיד של התא בשורה. */}
+          <div className="flex-1">
+            <ReplyField value={text} onChange={setText} />
+          </div>
+
+          {/*
+           * מוצג רק כשיש מה לשלוח — ובמקומו יושב המיקרופון.
+           *
+           * **הסתרה ולא `disabled`, ובכוונה.** כפתור מושבת תופס את מקומו
+           * ברוחב בלי לתת דבר, וארבעה פקדים בשורה של 393px הותירו לתיבה
+           * ‏15 תווים. שני המצבים מוציאים זה את זה ממילא: אין רגע שבו
+           * המשתמש רוצה גם להקליט וגם לשלוח את מה שכתב.
+           */}
+          {canSend ? (
+            <Button
+              size="compact"
+              disabled={busy}
+              aria-label={he.ticket.send}
+              onClick={() =>
+                act(
+                  () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
+                  () => {
+                    setText("");
+                    setFiles([]);
+                  },
+                )
+              }
+            >
+              <Send className="size-4" aria-hidden="true" />
+            </Button>
+          ) : null}
         </div>
       ) : (
         <p className={cardClasses("text-sm text-muted")}>

@@ -1,4 +1,7 @@
-import { Field, Textarea } from "@/components/ui/field";
+"use client";
+
+import { useLayoutEffect, useRef } from "react";
+import { Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
 
 interface ReplyFieldProps {
@@ -16,21 +19,74 @@ interface ReplyFieldProps {
  * היא רכיב": ארבעת המסכים נבדלים במבנה (כרטיס, באנרים, מדיה בשלוש תצורות,
  * ואפס עד שלושה כפתורים נוספים), ורכיב יחיד היה מקודד את זה כתשעה פרופס.
  *
- * מה שכן משותף להם הוא בדיוק ארבע השורות האלה — וחשוב מזה, `rows={3}`:
- * הערך הזה כבר סטה פעם אחת (`rows={2}` בצ׳אט התגית), ושתי תיבות כתיבה
- * בגבהים שונים לאותה פעולה נקראו כשני רכיבים שונים.
- *
  * נאכף ב-`tests/unit/primitives.test.ts` — `he.ticket.reply` מופיע כאן ורק כאן.
+ *
+ * ---
+ *
+ * **סבב הצ׳אט: התווית ירדה, והגובה נעשה דינמי.** שני שינויים, ושניהם באים
+ * מאותה דרישה — שורת הקלטה אחת, כמו בכל אפליקציית שיחה.
+ *
+ * **‏1. `aria-label` במקום תווית גלויה.** זהו חריג מתועד ל-§ Field, ולא
+ * הפרה שלו: הכלל "תווית תמיד גלויה" קיים מפני שהמשתמש שוכח מה השדה מבקש
+ * אחרי שה-placeholder נעלם — נימוק שאינו מתקיים בשדה שיושב מתחת לשיחה
+ * ולצד כפתור שליחה. **המחרוזת עצמה לא השתנתה:** `he.ticket.reply` ("תגובה")
+ * היה התווית והוא עכשיו השם הנגיש, ולכן כל `getByLabel("תגובה")` בבדיקות
+ * ממשיך למצוא בדיוק את אותו שדה.
+ *
+ * **‏2. `rows={1}` וגדילה לפי התוכן.** קודם עמד כאן `rows={3}` קבוע, וערך
+ * זה כבר סטה פעם אחת ל-2 בצ׳אט התגית — מה שהוליד את הרכיב הזה מלכתחילה.
+ * הגובה הקבוע היה תמיד שגוי לאחד משני הכיוונים: שלוש שורות ריקות תופסות
+ * מסך בשביל "אוקיי", ופסקה ארוכה גוללת בתוך חלון של שלוש שורות. עכשיו
+ * המספר אינו קבוע כלל, ולכן גם אינו יכול לסטות.
  */
 export function ReplyField({ value, onChange, disabled }: ReplyFieldProps) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * גדילה לפי התוכן.
+   *
+   * ‏`useLayoutEffect` ולא `useEffect`: המדידה משנה את הגובה, ובמסלול
+   * האסינכרוני הדפדפן מספיק לצייר פריים אחד בגובה הישן — כלומר קפיצה
+   * גלויה בכל תו שמוסיף שורה.
+   *
+   * **איפוס ל-`auto` לפני הקריאה הוא הכרחי ואינו מיותר.** ‏`scrollHeight`
+   * לעולם אינו קטן מהגובה הנוכחי, ולכן בלי האיפוס השדה יודע רק לגדול:
+   * מחיקת שורה הייתה משאירה אותו מתוח.
+   *
+   * התקרה יושבת ב-`max-h-32` (‏128px, כחמש שורות) עם `overflow-y-auto`,
+   * ולא בחישוב כאן — כך היא ערך אחד במחלקה ולא מספר קסם בקוד.
+   */
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
   return (
-    <Field label={he.ticket.reply}>
-      <Textarea
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={3}
-        disabled={disabled}
-      />
-    </Field>
+    <Textarea
+      ref={ref}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      rows={1}
+      disabled={disabled}
+      // התווית שירדה מהמסך — ראו החריג בראש הקובץ. אותה מחרוזת בדיוק.
+      aria-label={he.ticket.reply}
+      placeholder={he.ticket.replyPlaceholder}
+      /*
+       * ‏`resize-none`: הידית הידנית של הדפדפן קובעת `style.height` משלה,
+       * והיא נדרסת בכל הקלדה — כלומר פקד שנראה כאילו הוא מתנגד למשתמש.
+       *
+       * **‏`min-h-9 touch:min-h-11` — זוג רצפת המגע, ולא קישוט.** ב-`rows={1}`
+       * השדה יוצא כ-42px (שורה של 16px בגובה שורה רגיל ועוד `p-2` משני
+       * הצדדים), כלומר **מתחת ל-44px** של § אזורי מגע. ‏`Textarea` אינו נושא
+       * את `CONTROL_SIZES` — גובהו הגיע תמיד מ-`rows` — ולכן הזוג לא היה
+       * עליו, ואף בדיקה לא תפסה זאת: האוכף בודק כפתורים.
+       *
+       * הרצפה אינה מתנגשת בגדילה: `min-height` גובר רק כשהתוכן קטן ממנו,
+       * ומרגע שנוספת שורה שנייה `style.height` גדול ממילא.
+       */
+      className="max-h-32 min-h-9 resize-none overflow-y-auto touch:min-h-11"
+    />
   );
 }

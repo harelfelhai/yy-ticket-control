@@ -1,5 +1,6 @@
 "use client";
 
+import { Mic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { he } from "@/lib/he";
 
@@ -9,6 +10,18 @@ interface AudioRecorderProps {
   disabled?: boolean;
   /** גודל/סגנון הכפתור. ברירת המחדל קומפקטית; מסך היצירה מבקש כפתור בולט. */
   className?: string;
+  /**
+   * הכפתור שלפני ההקלטה מוצג כאייקון מיקרופון במקום כטקסט.
+   *
+   * **opt-in ולא ברירת מחדל, ובכוונה.** הקורא היחיד שמבקש אותו הוא הקומפוזר
+   * של שיחה (`MediaPicker` בווריאנט `default`), שם שורת ההקלטה כולה עברה
+   * לאייקונים. מסך היצירה (`prominent`) נשאר בטקסט: שם הכפתור הוא 64px
+   * ונלחץ באגודל בכפפה, ותווית מפורשת היא בדיוק מה שהגודל בא לשרת.
+   *
+   * **מצב ההקלטה הפעילה נשאר טקסטואלי בשני המצבים** — "עצור ושמור" נושא
+   * את הטיימר, שהוא מידע תפקודי (כמה ייכנס לקובץ) ולא קישוט.
+   */
+  icon?: boolean;
 }
 
 /**
@@ -27,7 +40,13 @@ interface AudioRecorderProps {
  * פעולה שנייה על צ׳יפ ברשימה. מי שהתחיל להקליד־בקול והתחרט העלה בכל פעם
  * הקלטת סרק. עכשיו "בטל" מוצג לצד "עצור ושמור" כל עוד ההקלטה רצה.
  */
-export function AudioRecorder({ onRecorded, onError, disabled, className }: AudioRecorderProps) {
+export function AudioRecorder({
+  onRecorded,
+  onError,
+  disabled,
+  className,
+  icon,
+}: AudioRecorderProps) {
   const [recording, setRecording] = useState(false);
   /**
    * ההרשאה נבדקת, ההקלטה טרם התחילה.
@@ -128,12 +147,21 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
   }
 
   if (!recording) {
+    /*
+     * ‏`label` הוא אותה מחרוזת בשני המצבים, ומשמש פעמיים בכוונה: כטקסט גלוי
+     * במצב הרגיל, וכ-`aria-label` במצב האייקון. **השם הנגיש אינו משתנה** —
+     * וזה מה שמשאיר את `getByRole("button", { name: "הקלט" })` בחבילות
+     * ה-e2e עובד אחרי המעבר לאייקון (DESIGN.md § אייקונים).
+     */
+    const label = starting ? he.media.micStarting : he.media.record;
+
     return (
       <button
         type="button"
         disabled={disabled || starting}
         onClick={() => void start()}
         aria-pressed={false}
+        aria-label={icon ? label : undefined}
         /*
          * שלושת הכפתורים כאן נשארים כתובים ביד (חריג מתועד ב-
          * `tests/unit/primitives.test.ts`), כי המראה שלהם הוא **מצב**: אותו
@@ -151,8 +179,9 @@ export function AudioRecorder({ onRecorded, onError, disabled, className }: Audi
         }`}
       >
         {/* טקסט מפורש בזמן המתנה להרשאה — כפתור שנראה כאילו הלחיצה נבלעה
-            הוא בדיוק מה שדווח מהשטח על פקדים אחרים. */}
-        {starting ? he.media.micStarting : he.media.record}
+            הוא בדיוק מה שדווח מהשטח על פקדים אחרים. במצב האייקון החיווי
+            הזה נשמר דרך `aria-label`, שמתחלף באותה מחרוזת. */}
+        {icon ? <Mic className="size-4" aria-hidden="true" /> : label}
       </button>
     );
   }
