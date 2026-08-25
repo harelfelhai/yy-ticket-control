@@ -138,7 +138,13 @@ export function RecipientEditor({
   }
 
   return (
-    <section className={cardClasses()}>
+    /*
+     * **‏`cardClasses` ירד מכאן ב-0.6.** הסקציה יושבת בתוך דיאלוג "פרטים",
+     * שהוא בעצמו כרטיס — כלומר היה כאן כרטיס בתוך כרטיס, ולצדו עוד אחד
+     * (תגיות). שלוש מסגרות מקוננות ברוחב 448px נקראו כבלגן ולא כהיררכיה.
+     * ההפרדה בין הסקציות עברה לקו אחד (`border-t`) אצל ההורה.
+     */
+    <section className="flex flex-col border-t border-border pt-3">
       <h2 className={`mb-2 ${TITLE_DESCRIPTIVE}`}>{he.ticket.recipients}</h2>
 
       {active.length === 0 ? (
@@ -165,7 +171,10 @@ export function RecipientEditor({
                       disabled={busy}
                       onClick={() => remove(assignment.id, assignment.name)}
                       aria-label={`${he.ticket.removeRecipient} ${assignment.name}`}
-                      className="shrink-0 px-3"
+                      // ‏`px-3` ירד: הוא ריפוד, ו-`className` ב-`Button` הוא
+                      // פריסה בלבד. דריסה כזו היא בדיוק הסחיפה שהפרימיטיב
+                      // נועד לעצור, והיא גם הרחיבה אותו מעבר ל-`compact`.
+                      className="shrink-0"
                     >
                       {he.ticket.removeRecipient}
                     </Button>
@@ -179,22 +188,31 @@ export function RecipientEditor({
                 <span className="ms-2 opacity-70">· {assignment.statusChangedAt}</span>
               </p>
 
-              {/* "שלח שוב במייל" — לכל נמען עם כתובת מייל (חיצוני או פנימי),
-                  בשונה מכפתורי הקישור שרלוונטיים רק לקבלן חיצוני. */}
-              {canEdit && assignment.canResendEmail ? (
-                <Button
-                  variant="secondary"
-                  size="compact"
-                  disabled={busy}
-                  onClick={() => resend(assignment.id, assignment.name)}
-                  className="self-start"
-                >
-                  {he.ticket.resendEmail}
-                </Button>
-              ) : null}
-
-              {canEdit && assignment.professionalId ? (
+              {/*
+               * **שלוש הפעולות בשורה אחת** (0.6).
+               *
+               * "שלח שוב במייל" ישב עד כאן בשורה משלו עם `self-start`, ולכן
+               * כל נמען תפס **ארבע** שורות: שם, חיווי, מייל, ואז שני כפתורי
+               * הקישור. הכפתורים עצמם היו `compact` ממילא — מה שהגדיל את
+               * הפאנל היה הערימה, לא המידה.
+               *
+               * "שלח שוב במייל" רלוונטי לכל נמען עם כתובת מייל (חיצוני או
+               * פנימי), בשונה משני כפתורי הקישור שרלוונטיים רק לקבלן חיצוני
+               * — ולכן התנאי על העטיפה הוא איחוד ולא חיתוך.
+               */}
+              {canEdit && (assignment.canResendEmail || assignment.professionalId) ? (
                 <div className="flex flex-wrap gap-2">
+                  {assignment.canResendEmail ? (
+                    <Button
+                      variant="secondary"
+                      size="compact"
+                      disabled={busy}
+                      onClick={() => resend(assignment.id, assignment.name)}
+                    >
+                      {he.ticket.resendEmail}
+                    </Button>
+                  ) : null}
+
                   {/* קישור רגיל ולא כפתור: הוא חייב לפתוח את וואטסאפ ישירות
                       מלחיצת המשתמש. פתיחה מתוך תשובה אסינכרונית נחסמת
                       כחלון קופץ — בדיוק בדפדפני המובייל שבהם זה נחוץ. */}
@@ -204,20 +222,29 @@ export function RecipientEditor({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={`${he.ticket.sendWhatsApp} ${assignment.name}`}
-                      className={buttonClasses("primary", "compact", "px-3")}
+                      className={buttonClasses("primary", "compact")}
                     >
                       {he.ticket.sendWhatsApp}
                     </a>
                   ) : null}
-                  <Button
-                    variant="secondary"
-                    size="compact"
-                    disabled={busy}
-                    onClick={() => showLink(assignment.professionalId as string)}
-                    aria-label={`${he.ticket.showLink} ${assignment.name}`}
-                  >
-                    {he.ticket.showLink}
-                  </Button>
+                  {/*
+                   * **התנאי על `professionalId` נדרש מאז שהעטיפה אוחדה.**
+                   * קודם הוא ישב על ה-`<div>` כולו; עכשיו העטיפה נפתחת גם
+                   * ל"שלח שוב במייל" בלבד, ובלי התנאי הזה נמען **פנימי** עם
+                   * מייל היה מקבל "קישור גישה" — קישור קסם למי שאינו קבלן
+                   * חיצוני. ‏`e2e/self-reminder.spec.ts` בודק בדיוק את זה.
+                   */}
+                  {assignment.professionalId ? (
+                    <Button
+                      variant="secondary"
+                      size="compact"
+                      disabled={busy}
+                      onClick={() => showLink(assignment.professionalId as string)}
+                      aria-label={`${he.ticket.showLink} ${assignment.name}`}
+                    >
+                      {he.ticket.showLink}
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
 

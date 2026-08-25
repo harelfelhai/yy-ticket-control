@@ -158,7 +158,7 @@ export function LearnedSelect({
                    * המילוי הגרפיטי שמור ל**נבחר** ולו בלבד — זהו הסימן היחיד
                    * בפאנל שאינו טקסט, ולכן אסור לו להתחלק עם שורה אחרת.
                    */
-                  className={`flex min-h-8 w-full flex-col justify-center rounded-sm px-2 text-start touch:min-h-11 touch:px-3 ${
+                  className={`flex min-h-7 w-full flex-col justify-center rounded-sm px-2 text-start touch:min-h-11 touch:px-3 ${
                     option.id === value ? "bg-brand text-brand-fg" : ""
                   }`}
                 >
@@ -214,7 +214,7 @@ export function LearnedSelect({
                * המילוי הגרפיטי לא בא בחשבון: הוא כבר מסמן את האפשרות
                * הנבחרת שלוש שורות מעל.
                */
-              className="mt-1 min-h-8 w-full rounded-sm border border-dashed border-fg px-2 text-start font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
+              className="mt-1 min-h-7 w-full rounded-sm border border-dashed border-fg px-2 text-start font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
             >
               {he.directory.createNew(trimmedQuery)}
             </button>

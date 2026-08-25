@@ -74,19 +74,25 @@ export function ReplyField({ value, onChange, disabled }: ReplyFieldProps) {
       aria-label={he.ticket.reply}
       placeholder={he.ticket.replyPlaceholder}
       /*
+       * **‏`size="compact"` הוא מה שמיישר את התיבה לכפתורים שלצדה**, והוא
+       * החליף כאן `min-h-9 touch:min-h-11` שנכתב בסבב הקודם — זוג נכון,
+       * שפתר בעיה אחרת.
+       *
+       * **ההנחה שנפלה:** ההערה כאן טענה שהשדה יוצא "כ-42px (שורה של 16px
+       * בגובה שורה רגיל)". גובה השורה אינו רגיל — `globals.css` קובע
+       * ‏1.6 ל-`text-base`, כלומר 25.6px — ועם `p-2` ומסגרת התיבה יוצאת
+       * ‏**≈43.6px** מול כפתורים של 32px. זה הפער שנראה בצילום.
+       *
+       * **ולכן `min-h` לא היה מתקן אותו:** הרצפה אינה נוגעת כלל, מפני
+       * ש-`useLayoutEffect` למטה כותב `style.height = scrollHeight`.
+       * הורדתה ל-`min-h-8` הייתה עוברת כל בדיקה ו**מרחיבה** את הפער.
+       * הריפוד האנכי הוא מה שקובע, והוא יושב ב-`TEXTAREA_SIZES`.
+       *
        * ‏`resize-none`: הידית הידנית של הדפדפן קובעת `style.height` משלה,
        * והיא נדרסת בכל הקלדה — כלומר פקד שנראה כאילו הוא מתנגד למשתמש.
-       *
-       * **‏`min-h-9 touch:min-h-11` — זוג רצפת המגע, ולא קישוט.** ב-`rows={1}`
-       * השדה יוצא כ-42px (שורה של 16px בגובה שורה רגיל ועוד `p-2` משני
-       * הצדדים), כלומר **מתחת ל-44px** של § אזורי מגע. ‏`Textarea` אינו נושא
-       * את `CONTROL_SIZES` — גובהו הגיע תמיד מ-`rows` — ולכן הזוג לא היה
-       * עליו, ואף בדיקה לא תפסה זאת: האוכף בודק כפתורים.
-       *
-       * הרצפה אינה מתנגשת בגדילה: `min-height` גובר רק כשהתוכן קטן ממנו,
-       * ומרגע שנוספת שורה שנייה `style.height` גדול ממילא.
        */
-      className="max-h-32 min-h-9 resize-none overflow-y-auto touch:min-h-11"
+      size="compact"
+      className="max-h-32 resize-none overflow-y-auto"
     />
   );
 }

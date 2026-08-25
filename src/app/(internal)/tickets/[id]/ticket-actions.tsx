@@ -2,65 +2,44 @@
 
 import { Send } from "lucide-react";
 import { useState } from "react";
-import { type AttachedFile, MediaPicker } from "@/components/media-picker";
-import type { ActionResult } from "@/lib/action-result";
+import { AddMediaButton } from "@/components/add-media-button";
+import { AttachedFiles } from "@/components/attached-files";
+import { AudioRecorder } from "@/components/audio-recorder";
+import {
+  type AttachedFile,
+  toFileList,
+  useMediaUpload,
+} from "@/lib/use-media-upload";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
 import { PAGE_BLEED, PAGE_X } from "@/lib/ui";
 import { cardClasses } from "@/components/ui/card";
-import {
-  closeTicketAction,
-  reopenTicketAction,
-  replyAction,
-  setHandlerAction,
-} from "./actions";
-import { FormError, FormNotice } from "@/components/ui/message";
+import { replyAction } from "./actions";
+import { FormError } from "@/components/ui/message";
 import { ReplyField } from "@/components/reply-field";
 
 interface TicketActionsProps {
   ticketId: string;
-  isClosed: boolean;
-  canClose: boolean;
   canComment: boolean;
-  canSetHandler: boolean;
-  hasHandler: boolean;
 }
 
 /**
- * תיבת התגובה ופעולות הפנייה.
+ * תיבת התגובה — שורה אחת, צמודה לתחתית.
  *
- * הסגירה והפתיחה מחדש דורשות אישור: הן משנות את מיקום הפנייה בלוח של כל
- * מנהלי האתר, ולחיצה בטעות במובייל היא תרחיש ממשי — שני הכפתורים יושבים
- * זה לצד זה על מסך קטן.
+ * **פעולות הפנייה אינן כאן מ-0.6.** הן עלו לפס העליון
+ * (`ticket-header-actions`), ואיתן ירדו מכאן גם `useAction` והודעות המצב
+ * שלהן: מה שנשאר הוא קומפוזר, וכל מצבו יושב ב-`useMediaUpload`.
  */
-export function TicketActions({
-  ticketId,
-  isClosed,
-  canClose,
-  canComment,
-  canSetHandler,
-  hasHandler,
-}: TicketActionsProps) {
+export function TicketActions({ ticketId, canComment }: TicketActionsProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
   const { busy, error, run } = useAction();
+  const media = useMediaUpload({ ticketId, files, onChange: setFiles, disabled: busy });
 
   // תמונה בלי כיתוב היא הודעה שלמה — ולעיתים המדויקת ביותר.
   const canSend = text.trim().length > 0 || files.length > 0;
-
-  /**
-   * ‏`run` בתוספת ניקוי ההודעה החיובית.
-   *
-   * ‏`useAction` מנקה שגיאה בלבד, ובכוונה: `notice` הוא טקסט של המסך הזה —
-   * "הפנייה נסגרה" — ולא מצב של הפעולה. הוא מנוקה כאן מפני ש**כאן** ידוע
-   * שהודעה מלפני שתי לחיצות כבר אינה מתארת את מה שקורה עכשיו.
-   */
-  function act(action: () => Promise<ActionResult>, onSuccess?: () => void) {
-    setNotice(null);
-    run(action, onSuccess);
-  }
 
   return (
     /*
@@ -81,40 +60,16 @@ export function TicketActions({
     <div
       className={`sticky bottom-0 z-[1] ${PAGE_BLEED} flex flex-col gap-3 border-t border-border bg-bg ${PAGE_X} py-3`}
     >
-      {/* פעולות הפנייה **מעל** הקומפוזר: הן על הפנייה כולה, בעוד שהקומפוזר
-          מוסיף לה הודעה. הסמיכות לתיבת הכתיבה הייתה קוראת אותן כחלק ממנה. */}
-      <div className="flex flex-wrap gap-2">
-        {canSetHandler && !hasHandler && !isClosed ? (
-          <Button
-            variant="secondary"
-            size="compact"
-            disabled={busy}
-            onClick={() => act(() => setHandlerAction(ticketId))}
-          >
-            {he.ticket.setHandler}
-          </Button>
-        ) : null}
-
-        {canClose ? (
-          <Button
-            variant="secondary"
-            size="compact"
-            disabled={busy}
-            onClick={() => {
-              const closing = !isClosed;
-              const question = closing ? he.ticket.confirmClose : he.ticket.confirmReopen;
-              if (!window.confirm(question)) return;
-              act(
-                () => (closing ? closeTicketAction(ticketId) : reopenTicketAction(ticketId)),
-                () => setNotice(closing ? he.ticket.closedNotice : he.ticket.reopenedNotice),
-              );
-            }}
-          >
-            {isClosed ? he.ticket.reopen : he.ticket.close}
-          </Button>
-        ) : null}
-      </div>
-
+      {/*
+       * **פעולות הפנייה ירדו מכאן ב-0.6 ועלו לפס העליון** (אפיון §7 שורה 35).
+       *
+       * הנימוק שהיה כתוב כאן — "הן על הפנייה כולה, בעוד שהקומפוזר מוסיף לה
+       * הודעה; הסמיכות לתיבת הכתיבה הייתה קוראת אותן כחלק ממנה" — **הוא
+       * בדיוק מה שהוליד את המעבר**: הוא נכון, והמסקנה שנגזרה ממנו (רצועה
+       * נפרדת מעליה) הייתה המקום השגוי לקיים אותו. ראו `ticket-header-actions`.
+       *
+       * מה שנשאר כאן הוא שורה אחת.
+       */}
       {canComment ? (
         /*
          * **שורת הקלטה אחת** (סבב הצ׳אט).
@@ -131,61 +86,67 @@ export function TicketActions({
          * ‏`MediaPicker` מחזיק בתוכו גם את התצוגות המקדימות של הקבצים,
          * שנפרשות מעליו כשיש קבצים — ולכן הוא כאן ולא מפוצל.
          */
-        <div className={cardClasses("flex items-end gap-2")}>
-          <MediaPicker
-            variant="composer"
-            // המיקרופון וכפתור השליחה חולקים את הקצה, כמו בווצאפ.
-            showRecorder={!canSend}
-            ticketId={ticketId}
-            files={files}
-            onChange={setFiles}
-            disabled={busy}
-          />
+        <div className={cardClasses("flex flex-col gap-2")}>
+          <AttachedFiles media={media} />
 
-          {/* `flex-1` על עטיפה ולא על השדה: `Textarea` נושא `w-full` משלו,
-              וההתמתחות היא תפקיד של התא בשורה. */}
-          <div className="flex-1">
-            <ReplyField value={text} onChange={setText} />
+          <div className="flex items-end gap-2">
+            {recording ? null : <AddMediaButton media={media} />}
+
+            {/* `flex-1` על עטיפה ולא על השדה: `Textarea` נושא `w-full` משלו,
+                וההתמתחות היא תפקיד של התא בשורה. */}
+            {recording ? null : (
+              <div className="flex-1">
+                <ReplyField value={text} onChange={setText} />
+              </div>
+            )}
+
+            {/*
+             * מוצג רק כשיש מה לשלוח — ובמקומו יושב המיקרופון.
+             *
+             * **הסתרה ולא `disabled`, ובכוונה.** כפתור מושבת תופס את מקומו
+             * ברוחב בלי לתת דבר, וזה בדיוק המשאב שחסר בשורה של 393px. שני
+             * המצבים מוציאים זה את זה ממילא: אין רגע שבו המשתמש רוצה גם
+             * להקליט וגם לשלוח את מה שכתב.
+             */}
+            {canSend && !recording ? (
+              <Button
+                size="compact"
+                disabled={busy}
+                aria-label={he.ticket.send}
+                onClick={() =>
+                  run(
+                    () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
+                    () => {
+                      setText("");
+                      setFiles([]);
+                    },
+                  )
+                }
+              >
+                <Send className="size-3" aria-hidden="true" />
+              </Button>
+            ) : null}
+
+            {/* **אלמנט אחד במיקום קבוע**, ולא ענף מול כפתור השליחה — ראו
+                ההסבר על `hidden` ב-`audio-recorder`: החלפה בענפים מפרקת
+                אותו וההקלטה מתה באמצע. */}
+            <AudioRecorder
+              icon
+              hidden={canSend}
+              disabled={media.busy}
+              onRecordingChange={setRecording}
+              onRecorded={(file) => void media.addFiles(toFileList(file))}
+              onError={media.setError}
+            />
           </div>
 
-          {/*
-           * מוצג רק כשיש מה לשלוח — ובמקומו יושב המיקרופון.
-           *
-           * **הסתרה ולא `disabled`, ובכוונה.** כפתור מושבת תופס את מקומו
-           * ברוחב בלי לתת דבר, וארבעה פקדים בשורה של 393px הותירו לתיבה
-           * ‏15 תווים. שני המצבים מוציאים זה את זה ממילא: אין רגע שבו
-           * המשתמש רוצה גם להקליט וגם לשלוח את מה שכתב.
-           */}
-          {canSend ? (
-            <Button
-              size="compact"
-              disabled={busy}
-              aria-label={he.ticket.send}
-              onClick={() =>
-                act(
-                  () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
-                  () => {
-                    setText("");
-                    setFiles([]);
-                  },
-                )
-              }
-            >
-              <Send className="size-4" aria-hidden="true" />
-            </Button>
-          ) : null}
+          {media.error ? <FormError>{media.error}</FormError> : null}
         </div>
       ) : (
         <p className={cardClasses("text-sm text-muted")}>
           {he.notices.closedTicketBlocked}
         </p>
       )}
-
-      {notice ? (
-        <FormNotice>
-          {notice}
-        </FormNotice>
-      ) : null}
 
       {error ? (
         <FormError>

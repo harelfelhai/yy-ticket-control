@@ -142,10 +142,28 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
      * לשלוח — שני כשלים שהגרסה הקודמת לא הייתה תופסת.
      */
     await expect(page.getByLabel("תגובה")).toBeEditable();
-    await expect(page.getByRole("button", { name: MEDIA.attach })).toBeVisible();
-    await expect(page.getByRole("button", { name: MEDIA.camera })).toBeVisible();
     await expect(page.getByRole("button", { name: MEDIA.record })).toBeVisible();
     await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toHaveCount(0);
+
+    /*
+     * **הטענה על צירוף וצילום שונתה ב-0.6, ולא רוככה** — אותו תיקון שנעשה
+     * כאן ל"שלח", ומאותה סיבה.
+     *
+     * שני הפקדים עברו לגיליון שנפתח מ-"+" (§7 שורה 34). הדרישה ששייכת
+     * להם — שהם **נפרדים** — חתומה "(מסך 4)" ב-§7 #21, ונבדקת שם בלי
+     * שינוי (S4-01 ו-V03-03). כאן האפיון מונה **יכולות** ולא כפתורים.
+     *
+     * הטענה החדשה חזקה יותר משלוש בחינות: הקודמת הסתפקה בכך ששני
+     * `aria-label` קיימים איפשהו במסך, והייתה עוברת בירוק גם אם התפריט לא
+     * נפתח, גם אם נפתח ריק, וגם אם הפקדים היו כפולים.
+     */
+    await expect(page.getByRole("button", { name: MEDIA.attachMenu, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: MEDIA.attachMenu, exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: MEDIA.attachMenu });
+    await expect(sheet.getByRole("button", { name: MEDIA.camera })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: MEDIA.attach })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
 
     await page.getByLabel("תגובה").fill(uniq("טקסט לשליחה"));
     await expect(page.getByRole("button", { name: TICKET_SCREEN.send, exact: true })).toBeVisible();

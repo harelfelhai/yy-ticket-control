@@ -2,7 +2,10 @@
 
 import { Send } from "lucide-react";
 import { useState } from "react";
-import { type AttachedFile, MediaPicker } from "@/components/media-picker";
+import { AddMediaButton } from "@/components/add-media-button";
+import { AttachedFiles } from "@/components/attached-files";
+import { AudioRecorder } from "@/components/audio-recorder";
+import { type AttachedFile, toFileList, useMediaUpload } from "@/lib/use-media-upload";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
@@ -20,7 +23,9 @@ import { ReplyField } from "@/components/reply-field";
 export function TagChatBox({ tagId }: { tagId: string }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
+  const [recording, setRecording] = useState(false);
   const { busy, error, run } = useAction();
+  const media = useMediaUpload({ files, onChange: setFiles, disabled: busy });
 
   const canSend = text.trim().length > 0 || files.length > 0;
 
@@ -37,25 +42,34 @@ export function TagChatBox({ tagId }: { tagId: string }) {
   return (
     <div className="flex flex-col gap-2">
       {/* שורת הקלטה אחת, כמו במסך הפנייה — ראו את ההנמקה ב-`ticket-actions`. */}
+      <AttachedFiles media={media} />
+
       <div className="flex items-end gap-2">
-        <MediaPicker
-          variant="composer"
-          showRecorder={!canSend}
-          files={files}
-          onChange={setFiles}
-          disabled={busy}
-        />
+        {recording ? null : <AddMediaButton media={media} />}
 
-        <div className="flex-1">
-          <ReplyField value={text} onChange={setText} />
-        </div>
+        {recording ? null : (
+          <div className="flex-1">
+            <ReplyField value={text} onChange={setText} />
+          </div>
+        )}
 
-        {canSend ? (
+        {canSend && !recording ? (
           <Button size="compact" disabled={busy} onClick={send} aria-label={he.ticket.send}>
-            <Send className="size-4" aria-hidden="true" />
+            <Send className="size-3" aria-hidden="true" />
           </Button>
         ) : null}
+
+        <AudioRecorder
+          icon
+          hidden={canSend}
+          disabled={media.busy}
+          onRecordingChange={setRecording}
+          onRecorded={(file) => void media.addFiles(toFileList(file))}
+          onError={media.setError}
+        />
       </div>
+
+      {media.error ? <FormError>{media.error}</FormError> : null}
 
       {error ? (
         <FormError>

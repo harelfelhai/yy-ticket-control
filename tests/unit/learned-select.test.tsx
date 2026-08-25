@@ -168,12 +168,29 @@ describe("LearnedSelect — יצירה כפעולה מכוונת", () => {
   it("הכפתור נבנה מאותו פרימיטיב כמו `<select>`, ולא ממחלקות משלו", () => {
     setup();
     const trigger = screen.getByRole("button", { name: /בחר/ });
-    const expected = controlClasses("default", false, "control-chevron");
 
-    // אותו חץ, אותו גובה, ואותה שקיפות במצב מושבת — לפני האיחוד הוא היה
-    // `disabled:opacity-50` מול 60 בכל שאר הפקדים.
-    for (const cls of expected.split(" ")) {
+    /**
+     * ‏`display` מוחרג, וזו **דריסה מוצהרת ולא סטייה**.
+     *
+     * ‏`CONTROL_BASE` נושא `block` מ-0.6 (ראו את הנימוק שם: `inline-block`
+     * משאיר מרווח קו-בסיס שמסיט פקד ב-7px כלפי מעלה כשהוא בשורה). הכפתור
+     * כאן מעביר `flex items-center` במפורש כדי למרכז את הערך אנכית,
+     * ו-`twMerge` מכריע ביניהם — כך שה-`block` **אמור** להיעלם.
+     *
+     * החרגה של המחלקה הזו ולא ויתור על הבדיקה: מה שהיא שומרת עליו הוא
+     * שהחץ, הגובה, המסגרת ושקיפות ה-`disabled` מגיעים מהפרימיטיב — לפני
+     * האיחוד הוא נשא `disabled:opacity-50` מול 60 בכל שאר הפקדים.
+     */
+    const DISPLAY_OVERRIDDEN = new Set(["block"]);
+    const expected = controlClasses("default", false, "control-chevron")
+      .split(" ")
+      .filter((cls) => !DISPLAY_OVERRIDDEN.has(cls));
+
+    for (const cls of expected) {
       expect(trigger.className.split(" ")).toContain(cls);
     }
+
+    // והדריסה עצמה נבדקת, כדי שההחרגה לא תכסה על היעלמות שקטה שלה.
+    expect(trigger.className.split(" ")).toContain("flex");
   });
 });

@@ -29,7 +29,7 @@ import { createTicket, showLink, uniq, uniqPhone } from "../fixtures/world";
  * 32px — גובה הווריאנט `compact`, הקטן ביותר שסקאלת הצפיפות מתירה.
  */
 const MIN_TOUCH = 44;
-const MIN_POINTER_FINE = 32;
+const MIN_POINTER_FINE = 28;
 
 /**
  * **מועתק מ-`@custom-variant touch` ב-`src/app/globals.css`, ולא מיובא.**

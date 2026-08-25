@@ -20,8 +20,30 @@ interface AudioRecorderProps {
    *
    * **מצב ההקלטה הפעילה נשאר טקסטואלי בשני המצבים** — "עצור ושמור" נושא
    * את הטיימר, שהוא מידע תפקודי (כמה ייכנס לקובץ) ולא קישוט.
+   *
+   * ‏`icon` פירושו גם "אתה בקומפוזר", ולכן **בזמן הקלטה הוא נמתח לכל
+   * רוחב השורה**: שם `+` והתיבה יורדים, ושני כפתורי ההקלטה מתחלקים במקום
+   * שהתפנה. פרופ נוסף היה מקודד את אותו מידע פעמיים.
    */
   icon?: boolean;
+  /**
+   * מדווח להורה שההקלטה החלה או הסתיימה.
+   *
+   * הקומפוזר צריך לדעת כדי להוריד את `+` ואת התיבה. הדיווח נעשה כאן ולא
+   * נגזר מבחוץ, מפני שההקלטה מסתיימת גם בלי לחיצה — `onstop` יורה גם
+   * בביטול וגם בפירוק הרכיב.
+   */
+  onRecordingChange?: (recording: boolean) => void;
+  /**
+   * מוסתר לגמרי (מוחזר `null`).
+   *
+   * **הפרופ קיים כדי שהאלמנט לא יזוז ממקומו ב-JSX.** הקומפוזר מחליף בין
+   * מיקרופון לכפתור שליחה באותו מקום, והדרך הטבעית — לרנדר את המקליט
+   * בענף אחד ואת השליחה באחר — הייתה **מפרקת ומרכיבה** אותו: React מזהה
+   * אלמנט לפי מיקומו, ה-cleanup קורא ל-`stopTracks`, וההקלטה מתה באמצע.
+   * הבדיקות מרנדרות את הרכיב לבדו ולעולם לא היו תופסות את זה.
+   */
+  hidden?: boolean;
 }
 
 /**
@@ -46,6 +68,8 @@ export function AudioRecorder({
   disabled,
   className,
   icon,
+  onRecordingChange,
+  hidden,
 }: AudioRecorderProps) {
   const [recording, setRecording] = useState(false);
   /**
@@ -120,6 +144,7 @@ export function AudioRecorder({
       const blob = new Blob(chunksRef.current, { type });
       stopTracks(recorder);
       setRecording(false);
+      onRecordingChange?.(false);
       setSeconds(0);
 
       // הבתים נאספו ממילא — מה שהביטול עושה הוא לא להעביר אותם הלאה,
@@ -134,6 +159,7 @@ export function AudioRecorder({
     recorderRef.current = recorder;
     setSeconds(0);
     setRecording(true);
+    onRecordingChange?.(true);
   }
 
   function stop() {
@@ -145,6 +171,9 @@ export function AudioRecorder({
     cancelledRef.current = true;
     recorderRef.current?.stop();
   }
+
+  // מוסתר — אך **נשאר באותו מיקום ב-JSX** אצל ההורה. ראו `hidden`.
+  if (hidden && !recording) return null;
 
   if (!recording) {
     /*
@@ -175,13 +204,13 @@ export function AudioRecorder({
          * סדר ה-CSS ולא לפי סדר הכתיבה, כלומר ההורה היה מפסיד בשקט.
          */
         className={`rounded-sm border border-border px-2 font-medium disabled:opacity-60 touch:px-3 ${
-          className ?? "min-h-8 text-sm touch:min-h-11"
+          className ?? "min-h-7 text-sm touch:min-h-11"
         }`}
       >
         {/* טקסט מפורש בזמן המתנה להרשאה — כפתור שנראה כאילו הלחיצה נבלעה
             הוא בדיוק מה שדווח מהשטח על פקדים אחרים. במצב האייקון החיווי
             הזה נשמר דרך `aria-label`, שמתחלף באותה מחרוזת. */}
-        {icon ? <Mic className="size-4" aria-hidden="true" /> : label}
+        {icon ? <Mic className="size-3" aria-hidden="true" /> : label}
       </button>
     );
   }
@@ -189,8 +218,11 @@ export function AudioRecorder({
   return (
     // ‏`className` מגיע מההורה כאילוץ פריסה של תא בגריד (`min-h-16 w-full`),
     // ולכן הוא נשאר על המיכל — שני הכפתורים מתחלקים ברוחב שהוקצה לפקד אחד.
+    //
+    // **בקומפוזר (`icon`) השורה כולה היא המקליט:** ‏`w-full` מותח אותו על
+    // המקום ש-`+` והתיבה פינו, כדי שהטיימר יישאר קריא ליד "עצור ושמור".
     <div
-      className={`flex items-stretch gap-2 ${className ?? "text-sm"}`}
+      className={`flex items-stretch gap-2 ${className ?? (icon ? "w-full text-sm" : "text-sm")}`}
       // הכרזה לקורא מסך שההקלטה החלה. הטיימר לבדו הוא מספר שמשתנה כל
       // שנייה — הכרזה עליו הייתה רעש, ולכן הוא `aria-hidden` והמצב נמסר פעם אחת.
       role="group"
@@ -201,7 +233,7 @@ export function AudioRecorder({
         disabled={disabled}
         onClick={stop}
         aria-pressed
-        className="min-h-8 flex-1 rounded-sm bg-danger px-2 font-medium text-brand-fg disabled:opacity-60 touch:min-h-11 touch:px-3"
+        className="min-h-7 flex-1 rounded-sm bg-danger px-2 font-medium text-brand-fg disabled:opacity-60 touch:min-h-11 touch:px-3"
       >
         {he.media.stopRecording}
         {/* הזמן צמוד לפעולה השומרת, כי הוא מתאר אותה: כמה ייכנס לקובץ.
@@ -214,7 +246,7 @@ export function AudioRecorder({
         type="button"
         disabled={disabled}
         onClick={cancel}
-        className="min-h-8 rounded-sm border border-border px-2 font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
+        className="min-h-7 rounded-sm border border-border px-2 font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
       >
         {he.media.cancelRecording}
       </button>

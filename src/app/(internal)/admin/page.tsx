@@ -91,7 +91,7 @@ export default async function AdminHubPage() {
                 <Link
                   href={card.href}
                   className={cardClasses(
-                    "flex min-h-9 items-center font-semibold touch:min-h-11",
+                    "flex min-h-8 items-center font-semibold touch:min-h-11",
                     { padding: "compact" },
                   )}
                 >

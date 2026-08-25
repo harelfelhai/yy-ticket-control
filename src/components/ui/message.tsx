@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
+import { he } from "@/lib/he";
 
 /**
  * הודעות מצב — מקור אמת אחד לכל מה שהמערכת אומרת למשתמש אחרי פעולה.
@@ -40,6 +41,27 @@ export function FormNotice({ className, children }: MessageProps) {
     <p role="status" className={twMerge("text-sm font-medium text-success", className)}>
       {children}
     </p>
+  );
+}
+
+/**
+ * חיווי "מעלה…" בזמן שקובץ בדרך לשרת.
+ *
+ * **נולד ב-0.6 מפני שהוא כבר היה במוצר שלוש פעמים** — אותן שלוש שורות
+ * בדיוק, בשלושת הווריאנטים של בורר המדיה. זהו אותו סיפור של `quiet`
+ * ב-`Button` ושל `info` ב-`Banner`: התבנית קיימת, ורק הפרימיטיב לא הכיר
+ * אותה. וכאן היה לזה מחיר נוסף — היא כפתה החרגה ברמת **קובץ** באוכף
+ * ה-`role="status"`, שכיסתה בדרך גם דברים שלא נועדה להם.
+ *
+ * ‏`status` ולא `alert`: העלאה שמתקדמת אינה תקלה ואינה דורשת קטיעה.
+ * **מוצג בתנאי בלבד** — אלמנט `role="status"` שמרונדר תמיד היה הופך שש
+ * בדיקות שמחפשות `getByRole("status")` בלי scope לשגיאת strict-mode.
+ */
+export function UploadingNotice({ className }: { className?: string }) {
+  return (
+    <span role="status" className={twMerge("text-sm text-muted", className)}>
+      {he.media.uploading}
+    </span>
   );
 }
 

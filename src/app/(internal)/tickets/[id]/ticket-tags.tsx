@@ -6,7 +6,6 @@ import { he } from "@/lib/he";
 import type { SelectOption } from "@/lib/options";
 import { addTicketTagAction, removeTicketTagAction } from "./actions";
 import { TITLE_DESCRIPTIVE } from "@/lib/ui";
-import { cardClasses } from "@/components/ui/card";
 import { chipClasses } from "@/components/ui/chip";
 import { FormError } from "@/components/ui/message";
 
@@ -67,7 +66,15 @@ export function TicketTags({ ticketId, initial, all, canEdit }: TicketTagsProps)
   if (!canEdit && tags.length === 0) return null;
 
   return (
-    <section className={cardClasses("flex flex-col gap-2")}>
+    /*
+     * **‏`cardClasses` ירד ב-0.6, ומאותה סיבה כמו ב-`recipient-editor`:**
+     * הסקציה יושבת בתוך דיאלוג "פרטים" שהוא בעצמו כרטיס. ההפרדה מהסקציה
+     * שמעליה עוברת לקו אחד אצל ההורה.
+     *
+     * במסך הטיוטה הרכיב יושב בתוך `cardClasses` של ההורה, כלומר גם שם זו
+     * הייתה מסגרת בתוך מסגרת.
+     */
+    <section className="flex flex-col gap-2 border-t border-border pt-3">
       <h2 className={TITLE_DESCRIPTIVE}>{he.tag.label}</h2>
 
       {tags.length > 0 ? (

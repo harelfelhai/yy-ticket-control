@@ -4,7 +4,7 @@ import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { he } from "@/lib/he";
-import { DIALOG_SCROLL_BODY } from "@/lib/ui";
+import { DIALOG_SCROLL_BODY, DIALOG_WIDE } from "@/lib/ui";
 
 /**
  * "פרטים" — כל מה שמסביב לשיחה, מאחורי כפתור.
@@ -19,8 +19,9 @@ import { DIALOG_SCROLL_BODY } from "@/lib/ui";
  * נכשלת — גם `toHaveCount(0)` הופך ירוק-שקר. דיאלוג סגור פשוט אינו
  * מרונדר, וזו הבחנה שקורא מסך וגם בדיקה יודעים לעשות.
  *
- * **מה נשאר בחוץ.** פעולות הפנייה ("סגור פנייה", "סמן: אני מטפל") והקומפוזר
- * נשארים ברצועה התחתונה: סגירת פנייה היא התוצאה של המסך ולא פרט מנהלי.
+ * **מה נשאר בחוץ.** פעולות הפנייה ("סגור פנייה", "סמן: אני מטפל") יושבות
+ * מ-0.6 **לצד הכפתור הזה בפס העליון**, והקומפוזר ברצועה התחתונה: סגירת
+ * פנייה היא התוצאה של המסך ולא פרט מנהלי, וזה נכון בשני המקומות.
  * **וטיוטה אינה נכנסת לכאן כלל** — מסך ההשלמה הוא כל תכליתה של טיוטה,
  * והסתרתו מאחורי כפתור הייתה מחזירה בדיוק את התקלה שהמעבר הזה מתקן.
  *
@@ -38,9 +39,22 @@ export function TicketDetailsDialog({ children }: { children: ReactNode }) {
       </Button>
 
       {open ? (
-        <Dialog title={he.ticket.detailsPanel} onClose={() => setOpen(false)}>
-          {/* הגלילה על עוטף התוכן ולא על הפאנל: הכותרת וכפתור הסגירה
-              חייבים להישאר גלויים גם כשהרשימה ארוכה. ראה § Dialog. */}
+        <Dialog
+          title={he.ticket.detailsPanel}
+          width={DIALOG_WIDE}
+          onClose={() => setOpen(false)}
+        >
+          {/*
+           * הגלילה על עוטף התוכן ולא על הפאנל: הכותרת וכפתור הסגירה
+           * חייבים להישאר גלויים גם כשהרשימה ארוכה. ראה § Dialog.
+           *
+           * **ההפרדה בין הסקציות עברה ב-0.6 ממסגרת לקו.** עד אז
+           * `RecipientEditor` ו-`TicketTags` נשאו `cardClasses` משלהם,
+           * כלומר כרטיס בתוך כרטיס בתוך כרטיס. הקו יושב על הסקציות עצמן
+           * (`border-t border-border pt-3`) ולא על בורר-צאצאים כאן: וריאנט
+           * שרירותי (`[&>*+*]`) אינו בשימוש באף מקום אחר בקוד הזה, ותחביר
+           * שמופיע פעם אחת הוא תחביר שאיש לא יזהה בפעם השנייה.
+           */}
           <div className={`flex flex-col gap-3 ${DIALOG_SCROLL_BODY}`}>{children}</div>
         </Dialog>
       ) : null}

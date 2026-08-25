@@ -27,7 +27,9 @@ export function DeleteTicket({ ticketId }: { ticketId: string }) {
 
   if (!confirming) {
     return (
-      <div className="flex flex-col gap-1 border-t border-border pt-4">
+      // ‏`pt-3` ולא `pt-4`: מ-0.6 המפריד הזה אינו יחיד בפאנל — כל סקציה
+      // נושאת אותו — ולכן הוא מיושר לריתמוס של הפאנל ולא לערך משלו.
+      <div className="flex flex-col gap-1 border-t border-border pt-3">
         <Button
           variant="dangerQuiet"
           size="compact"

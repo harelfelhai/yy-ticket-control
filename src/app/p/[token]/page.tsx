@@ -97,7 +97,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
            *    אותה כותרת בשני הצדדים — קבלן שרואה ממשק זר חושד בו.
            */}
           <summary
-            className={`min-h-9 cursor-pointer py-2 touch:min-h-11 ${TITLE_DESCRIPTIVE}`}
+            className={`min-h-8 cursor-pointer py-2 touch:min-h-11 ${TITLE_DESCRIPTIVE}`}
           >
             {he.portal.archiveTitle} · {archived.length}
           </summary>

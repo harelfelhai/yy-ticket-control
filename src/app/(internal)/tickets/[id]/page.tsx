@@ -41,6 +41,7 @@ import { RecipientEditor } from "./recipient-editor";
 import { ResidentName } from "./resident-name";
 import { TicketActions } from "./ticket-actions";
 import { TicketDetailsDialog } from "./ticket-details-dialog";
+import { TicketHeaderActions } from "./ticket-header-actions";
 import { TicketTags } from "./ticket-tags";
 import { ThreadEvent } from "./thread-event";
 import { cardClasses } from "@/components/ui/card";
@@ -256,12 +257,50 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
             <span className={chipClasses("warning")}>{he.ticket.reopenedBadge}</span>
           ) : null}
 
-          {/*
-           * ‏`ms-auto` דוחף לקצה השורה: הכפתור הוא מוצא ולא חלק מזהות
-           * הפנייה. בטיוטה הוא אינו מוצג — שם הכול פרוש על המסך ממילא.
-           */}
-          {ticket.isDraft ? null : (
-            <span className="ms-auto">
+        </div>
+
+        {/*
+         * שורת הסיבה **ופעולות הפנייה** (עדכון 0.6, אפיון §7 שורה 35).
+         *
+         * שורת הסיבה נשארת גלויה תמיד ואינה נכנסת לפאנל: בלעדיה פנייה קופצת
+         * בין קבוצות הלוח בלי הסבר, וזה שוחק את האמון במיון (אפיון §5.ב).
+         * אותו עיצוב כמו בכרטיס הלוח — זה אותו מידע בדיוק.
+         *
+         * **הצבע נגזר מהמצב ולא מהמותג**, בדיוק כמו ב-`ticket-card`: עד
+         * המעבר לגרפיט השורה נצבעה ב-`text-brand`, וכיום אותו טוקן הוא
+         * כמעט-שחור ובלתי-מובחן מטקסט גוף — כלומר ההדגשה הייתה נמחקת בשקט.
+         * ‏`danger` שמור לשני המצבים שבהם העבודה עצורה — טיוטה שחוסמת שיגור
+         * ופנייה שהוסלמה — וכל השאר נשאר טקסט רגיל.
+         *
+         * **הפעולות הצטרפו לשורה הזו ולא לשורת הזיהוי**, וזו הכרעה של רוחב:
+         * שורת הזיהוי כבר מחזיקה חמישה פריטים, ושלושה כפתורים בתוכה היו
+         * דוחקים את הכותרת לשורה משלה בטלפון. כאן הן יושבות מול משפט קצר,
+         * וכשאין מקום הקבוצה כולה יורדת שורה — בלי לפרק את הזהות.
+         *
+         * ‏`ms-auto` על הקבוצה: פקד שתפקידו **מוצא** נדחף לקצה, והוא מתייחס
+         * לפס כולו ולא לשורת הסיבה שלצדו (DESIGN.md § Layout, החריג הצר).
+         */}
+        <div className="flex flex-wrap items-center gap-2">
+          <p
+            className={`text-sm font-medium ${
+              status === "DRAFT" || ticket.escalated ? "text-danger" : "text-fg"
+            }`}
+          >
+            {reason}
+          </p>
+
+          <div className="ms-auto flex flex-wrap items-center gap-2">
+            {ticket.isDraft ? null : (
+              <TicketHeaderActions
+                ticketId={ticket.id}
+                isClosed={ticket.closedAt !== null}
+                canClose={canCloseTicket(viewer, ticket)}
+                canSetHandler={canSetHandler(viewer, ticket, ticket.assignments)}
+                hasHandler={ticket.handlerId !== null}
+              />
+            )}
+
+            {ticket.isDraft ? null : (
               <TicketDetailsDialog>
                 {ticket.apartmentId ? (
                   <p className="text-sm text-muted">
@@ -303,27 +342,9 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
                     היום-יום. בטיוטה היא נעשית דרך "מחק טיוטה" במסך ההשלמה. */}
                 {canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
               </TicketDetailsDialog>
-            </span>
-          )}
+            )}
+          </div>
         </div>
-        {/*
-         * שורת הסיבה נשארת גלויה תמיד ואינה נכנסת לפאנל: בלעדיה פנייה קופצת
-         * בין קבוצות הלוח בלי הסבר, וזה שוחק את האמון במיון (אפיון §5.ב).
-         * אותו עיצוב כמו בכרטיס הלוח — זה אותו מידע בדיוק.
-         *
-         * **הצבע נגזר מהמצב ולא מהמותג**, בדיוק כמו ב-`ticket-card`: עד
-         * המעבר לגרפיט השורה נצבעה ב-`text-brand`, וכיום אותו טוקן הוא
-         * כמעט-שחור ובלתי-מובחן מטקסט גוף — כלומר ההדגשה הייתה נמחקת בשקט.
-         * ‏`danger` שמור לשני המצבים שבהם העבודה עצורה — טיוטה שחוסמת שיגור
-         * ופנייה שהוסלמה — וכל השאר נשאר טקסט רגיל.
-         */}
-        <p
-          className={`text-sm font-medium ${
-            status === "DRAFT" || ticket.escalated ? "text-danger" : "text-fg"
-          }`}
-        >
-          {reason}
-        </p>
       </header>
 
       {/*
@@ -414,12 +435,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
        */}
       <TicketActions
         ticketId={ticket.id}
-        isClosed={ticket.closedAt !== null}
-        // טיוטה אינה נסגרת — משגרים אותה או מוחקים דרך מסך ההשלמה.
-        canClose={canCloseTicket(viewer, ticket) && !ticket.isDraft}
         canComment={canCommentOnTicket(viewer, ticket, ticket.assignments)}
-        canSetHandler={canSetHandler(viewer, ticket, ticket.assignments)}
-        hasHandler={ticket.handlerId !== null}
       />
     </div>
   );

@@ -25,10 +25,10 @@ describe("פקדי קלט", () => {
 
   it("ברירת המחדל צפופה בעכבר וחוזרת לרצפת המגע באצבע", () => {
     render(<Input aria-label="שם" />);
-    // ‏36px בעכבר / 44px במגע. הגובה הוא הדבר היחיד שתלוי במכשיר — הגופן
+    // ‏32px בעכבר / 44px במגע. הגובה הוא הדבר היחיד שתלוי במכשיר — הגופן
     // נשאר 16px בשני המקרים (ראו הבדיקה שמעל: ספארי ב-iOS מגדיל מתחת לזה).
     const className = screen.getByLabelText("שם").className;
-    expect(className).toContain("min-h-9");
+    expect(className).toContain("min-h-8");
     expect(className).toContain("touch:min-h-11");
   });
 
@@ -80,7 +80,14 @@ describe("פקדי קלט", () => {
   });
 
   it("controlClasses נותן את אותן מחלקות לאלמנט חיצוני", () => {
-    expect(controlClasses("compact")).toContain("min-h-11");
+    /*
+     * **הטענה הודקה ב-0.6.** קודם היא בדקה `toContain("min-h-11")` על
+     * הגודל הקומפקטי — והיא עברה רק מפני ש-`"touch:min-h-11"` **מכיל**
+     * את המחרוזת. כלומר היא לא בדקה דבר על גובה העכבר, ורצפת המגע נבדקה
+     * בה במקרה. שני חצאי הזוג נבדקים עכשיו בנפרד ובמפורש.
+     */
+    expect(controlClasses("compact")).toContain("min-h-7");
+    expect(controlClasses("compact")).toContain("touch:min-h-11");
     expect(controlClasses("default", true)).toContain("border-danger");
   });
 });

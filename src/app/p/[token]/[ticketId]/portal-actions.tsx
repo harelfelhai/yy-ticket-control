@@ -2,7 +2,10 @@
 
 import { Send } from "lucide-react";
 import { useState } from "react";
-import { type AttachedFile, MediaPicker } from "@/components/media-picker";
+import { AddMediaButton } from "@/components/add-media-button";
+import { AttachedFiles } from "@/components/attached-files";
+import { AudioRecorder } from "@/components/audio-recorder";
+import { type AttachedFile, toFileList, useMediaUpload } from "@/lib/use-media-upload";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { he } from "@/lib/he";
@@ -43,7 +46,9 @@ export function PortalActions({
 }: PortalActionsProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
+  const [recording, setRecording] = useState(false);
   const { busy, error, run } = useAction();
+  const media = useMediaUpload({ ticketId, token, files, onChange: setFiles, disabled: busy });
 
   // תגובה יכולה להיות תמונה בלבד — וזה המקרה השכיח כאן: קבלן מצלם את מה
   // שתיקן במקום לתאר אותו במילים.
@@ -78,22 +83,18 @@ export function PortalActions({
        * שנבדלו בצבע בלבד. עכשיו "סיימתי — טופל" הוא הדבר הרחב היחיד
        * במסך — בדיוק מה שסעיף 3 למטה טוען שהוא.
        */}
+      <AttachedFiles media={media} />
+
       <div className="flex items-end gap-2">
-        <MediaPicker
-          variant="composer"
-          showRecorder={!canReply}
-          ticketId={ticketId}
-          token={token}
-          files={files}
-          onChange={setFiles}
-          disabled={busy}
-        />
+        {recording ? null : <AddMediaButton media={media} />}
 
-        <div className="flex-1">
-          <ReplyField value={text} onChange={setText} />
-        </div>
+        {recording ? null : (
+          <div className="flex-1">
+            <ReplyField value={text} onChange={setText} />
+          </div>
+        )}
 
-        {canReply ? (
+        {canReply && !recording ? (
           <Button
             size="compact"
             disabled={busy}
@@ -105,10 +106,21 @@ export function PortalActions({
               )
             }
           >
-            <Send className="size-4" aria-hidden="true" />
+            <Send className="size-3" aria-hidden="true" />
           </Button>
         ) : null}
+
+        <AudioRecorder
+          icon
+          hidden={canReply}
+          disabled={media.busy}
+          onRecordingChange={setRecording}
+          onRecorded={(file) => void media.addFiles(toFileList(file))}
+          onError={media.setError}
+        />
       </div>
+
+      {media.error ? <FormError>{media.error}</FormError> : null}
 
       <div className="flex flex-col gap-2">
         {/*

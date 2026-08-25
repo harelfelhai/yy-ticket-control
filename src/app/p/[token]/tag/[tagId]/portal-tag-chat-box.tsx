@@ -48,7 +48,7 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
           onClick={send}
           aria-label={he.ticket.send}
         >
-          <Send className="size-4" aria-hidden="true" />
+          <Send className="size-3" aria-hidden="true" />
         </Button>
       </div>
 

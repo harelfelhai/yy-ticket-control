@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { twMerge } from "tailwind-merge";
@@ -27,6 +28,24 @@ interface DialogProps {
   onClose: () => void;
   /** רוחב מ-`src/lib/ui.ts`. ברירת המחדל היא פאנל ממורכז (448px). */
   width?: string;
+  /**
+   * `center` — פאנל ממורכז (ברירת מחדל).
+   * `bottom` — **גיליון תחתון**, לתפריט קצר של פעולות.
+   *
+   * **ההבדל הוא בכיסוי בלבד** (`items-end` מול `items-center`); הפאנל זהה,
+   * כולל `rounded-md` בארבע הפינות — כלומר הגיליון **צף מעל הקצה ואינו
+   * נצמד אליו**. גיליון צמוד-קצה היה דורש `rounded-none` בשתי פינות, שאינו
+   * בסקאלה (§ Shapes).
+   *
+   * **למה הוא עובר דרך `Dialog` ולא נבנה כפאנל מוחלט:** לא בגלל הצל — אותו
+   * ‏§ Elevation כבר מתיר — אלא בגלל ה-**Portal**. הקומפוזר שפותח אותו יושב
+   * ברצועה דביקה עם `z-[1]`, כלומר בהקשר ערימה, ופאנל שנפתח בתוכה נלכד בו
+   * בדיוק כפי שקרה לדיאלוג "פרטים" (ראו ההסבר על ה-Portal למטה).
+   *
+   * ‏`DIALOG_SCROLL_BODY` נכתב לפאנל ממורכז; תוכן ארוך ב-`bottom` יגלוש
+   * כלפי מעלה מחוץ למסך, ולכן הוא שמור לתפריט קצר.
+   */
+  placement?: "center" | "bottom";
   children: ReactNode;
 }
 
@@ -34,7 +53,13 @@ interface DialogProps {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Dialog({ title, onClose, width = PANEL_WIDTH, children }: DialogProps) {
+export function Dialog({
+  title,
+  onClose,
+  width = PANEL_WIDTH,
+  placement = "center",
+  children,
+}: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   /**
@@ -123,7 +148,9 @@ export function Dialog({ title, onClose, width = PANEL_WIDTH, children }: Dialog
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}
-      className="fixed inset-0 z-20 flex items-center justify-center bg-fg/50 p-4"
+      className={`fixed inset-0 z-20 flex justify-center bg-fg/50 p-4 ${
+        placement === "bottom" ? "items-end" : "items-center"
+      }`}
     >
       <div
         ref={panelRef}
@@ -151,17 +178,37 @@ export function Dialog({ title, onClose, width = PANEL_WIDTH, children }: Dialog
           {/* כותרת פאנל היא כותרת **תיאורית** לפי הסקאלה, ולא גודל שהרכיב
               קובע לעצמו — ראה `docs/DESIGN.md` § Typography.
 
-              ‏`flex-1` ירד ממנה: הוא מתח את הכותרת על כל רוחב הפאנל ודחף
-              את "סגור" לקצה הנגדי — כלומר `justify-between` בשם אחר
-              (§ Layout), אותה צורה מוסווית שכבר הוסרה מ-`recipient-editor`
-              ומרשימות הניהול. `flex-wrap` על השורה כבר מטפל בכותרת ארוכה,
-              ולכן הכפתור פשוט נצמד למה שהוא סוגר. */}
+              ‏`flex-1` ירד ממנה **ואינו חוזר**: הוא מותח את ה-`<h2>` על כל
+              רוחב הפאנל, כלומר `justify-between` בשם אחר, ומה שנמתח בו הוא
+              **התווית**. זו הצורה שהאוכף ב-`layout-guards` תופס, ובצדק. */}
           <h2 id={titleId} className={TITLE_DESCRIPTIVE}>
             {title}
           </h2>
-          {/* כפתור סגירה גלוי — "לחץ מחוץ" אינו אפשרות שמישהו לומד מעצמו. */}
-          <Button variant="secondary" size="compact" onClick={close}>
-            {he.common.close}
+          {/*
+           * **כפתור סגירה גלוי** — "לחץ מחוץ" אינו אפשרות שמישהו לומד מעצמו.
+           *
+           * ‏`ms-auto` **על הכפתור** הוא מנגנון אחר מ-`flex-1` על הכותרת,
+           * ולא עקיפה שלו: הכותרת נשארת ברוחב תוכנה, והפקד הוא זה שזז. וזה
+           * גם אינו חידוש — זהו הדפוס שכבר במוצר (כפתור "פרטים" במסך
+           * הפנייה): **מוצא נדחף לקצה מפני שהוא מתייחס למיכל ולא לכותרת
+           * שלצדו**. § Layout מחזיק את החריג הזה בכתב מ-0.6.
+           *
+           * **השם הנגיש הוא `he.common.close` בדיוק.** ‏`world.ts` ו-
+           * `ticket-screen.ts` מחפשים `{ name: "סגור", exact: true }` בכל
+           * זרימה שנוגעת בקישורי הגישה, ו-`exact` פירושו שאין רשת ביטחון
+           * של תת-מחרוזת: "סגור פאנל" היה שובר את שתיהן בצוואר בקבוק.
+           *
+           * רצפת המגע מגיעה מהפרימיטיב (`touch:min-h-11`) ואינה מחלקה שמישהו
+           * צריך לזכור — § Dialog דורש 44px גם מכפתור הסגירה.
+           */}
+          <Button
+            variant="secondary"
+            size="compact"
+            onClick={close}
+            aria-label={he.common.close}
+            className="ms-auto shrink-0"
+          >
+            <X className="size-3" aria-hidden="true" />
           </Button>
         </div>
 

@@ -1,6 +1,17 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CONTENT_WIDTH, FULL_WIDTH, PAGE_BLEED, PAGE_X } from "@/lib/ui";
-import { scan } from "./source-scan";
+import { CONTENT_WIDTH, DIALOG_WIDE, FULL_WIDTH, PAGE_BLEED, PAGE_X } from "@/lib/ui";
+import { SRC, scan } from "./source-scan";
+
+const ROOT = join(SRC, "..");
+
+/** גובה בפיקסלים של מחלקת `min-h-N` של Tailwind (בסיס 4px) */
+function heightOf(source: string, key: string): number {
+  const match = new RegExp(`${key}:\\s*"min-h-(\\d+)`).exec(source);
+  if (!match) throw new Error(`לא נמצא גובה עבור ${key}`);
+  return Number(match[1]) * 4;
+}
 
 /**
  * שני אוכפים שנולדו מסבב הביקורת הראשון של סוכן design-review (1.8.2026).
@@ -31,6 +42,11 @@ describe("רוחבי תוכן", () => {
   it("רוחב הקריאה תואם לתקן — 768px", () => {
     // אם ערך כאן משתנה, DESIGN.md § רוחבי תוכן חייב להשתנות איתו.
     expect(CONTENT_WIDTH).toContain("max-w-3xl");
+  });
+
+  it("רוחב הדיאלוג הרחב תואם לתקן — 672px", () => {
+    // כנ"ל: DESIGN.md § Dialog מונה את הערך הזה בשמו.
+    expect(DIALOG_WIDE).toContain("max-w-2xl");
   });
 
   it("מסך שסורקים בו אינו מוגבל ואינו ממורכז", () => {
@@ -102,6 +118,77 @@ describe("אזורי מגע", () => {
       offenders,
       `‏touch:min-h-11 מחייב גובה בסיס לפניו:\n${offenders.join("\n")}`,
     ).toEqual([]);
+  });
+
+  /**
+   * **הרצפה הנמדדת נגזרת מהקוד, ואינה מוקלדת.**
+   *
+   * שתי חבילות Playwright מודדות גובה אמיתי בדפדפן (`rtl-mobile` סורק כל
+   * כפתור וקישור ב-15 מסכים; `mobile-qa` בודק את מסך ההתחברות), ולשתיהן
+   * קבוע משלהן לרצפה בעכבר. עד 0.6 שלושת המספרים — הוא, הוא, ו-`compact`
+   * ב-`button.tsx` — הסכימו **במקרה**.
+   *
+   * זה הפך למסוכן ברגע שהרצפה ירדה: היא **המדידה היחידה** בפרויקט על גובה
+   * פקדים, וכל השאר הן סריקות מחרוזת. מספר שנשאר מאחור אינו מכשיל דבר —
+   * הוא פשוט מפסיק לתפוס, ואז פקד שנוחת על גובה שגוי הוא בלתי נראה.
+   *
+   * זו אותה תבנית בדיוק של `touch-variant.test.ts`, שנולד מפני שהשאילתה
+   * חיה בשלושה קבצים שחייבים להסכים.
+   */
+  it("רצפת העכבר בחבילות המדידה זהה לגובה `compact` שבפרימיטיב", () => {
+    const compact = heightOf(readFileSync(join(SRC, "components/ui/button.tsx"), "utf8"), "compact");
+
+    const suites = [
+      ["conformance/specs/rtl-mobile.spec.ts", /const MIN_POINTER_FINE = (\d+);/],
+      ["e2e/mobile-qa.spec.ts", /const MIN_POINTER_FINE_PX = (\d+);/],
+    ] as const;
+
+    for (const [file, pattern] of suites) {
+      const match = pattern.exec(readFileSync(join(ROOT, file), "utf8"));
+      expect(match, `לא נמצאה רצפת העכבר ב-${file}`).not.toBeNull();
+      expect(
+        Number(match?.[1]),
+        `${file} מודד מול רצפה שאינה גובה \`compact\` (${compact}px). ` +
+          `שינוי גובה בפרימיטיב מחייב את שתי החבילות באותה נשימה.`,
+      ).toBe(compact);
+    }
+  });
+});
+
+/**
+ * **מספרי הגובה ב-DESIGN.md מושווים לקוד.**
+ *
+ * ‏`design:lint` מוודא שההפניות במסמך מתאימות זו לזו **בתוך המסמך**, ולא
+ * שהערכים תואמים למה שהקוד עושה — בדיוק הפער ש-`palette.test.ts` סוגר
+ * לצבעים. עד 0.6 חמישה גבהים מתועדים חיו בלי שום קישור לקוד, וזה הסבב
+ * שבו הם השתנו: בלי האוכף הזה אפשר היה להוריד גובה ולהשאיר את המסמך
+ * מספר-אחד אחורה, והלינט היה נשאר ירוק.
+ */
+describe("גבהים מתועדים מול הקוד", () => {
+  const DOC = readFileSync(join(ROOT, "docs/DESIGN.md"), "utf8");
+
+  /** `height: 32px` בתוך בלוק ה-frontmatter של רכיב נתון */
+  function documented(component: string): number {
+    const block = new RegExp(`^  ${component}:$([\\s\\S]*?)^  \\S`, "m").exec(DOC);
+    const height = /height:\s*(\d+)px/.exec(block?.[1] ?? "");
+    if (!height) throw new Error(`לא נמצא גובה מתועד עבור ${component}`);
+    return Number(height[1]);
+  }
+
+  it.each([
+    ["button-primary", "components/ui/button.tsx", "default"],
+    ["button-secondary", "components/ui/button.tsx", "default"],
+    ["button-danger", "components/ui/button.tsx", "default"],
+    ["button-compact", "components/ui/button.tsx", "compact"],
+    ["input", "components/ui/field.tsx", "default"],
+    ["input-compact", "components/ui/field.tsx", "compact"],
+  ])("‏%s במסמך תואם לקוד", (component, file, key) => {
+    const inCode = heightOf(readFileSync(join(SRC, file), "utf8"), key);
+    expect(
+      documented(component),
+      `DESIGN.md מתעד גובה אחר מהקוד עבור ${component}. ` +
+        `המסמך הוא מקור האמת — לעדכן אותו, ולא את הבדיקה.`,
+    ).toBe(inCode);
   });
 });
 

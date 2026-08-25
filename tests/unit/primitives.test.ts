@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SRC, scan, sourceFiles } from "./source-scan";
 
@@ -106,8 +106,7 @@ describe("פרימיטיב הכפתור", () => {
  * רחבה מנימוקה היא חור בגדר, לא חריג מנומק.
  */
 const STATUS_EXEMPT: Record<string, string> = {
-  "components/ui/message.tsx": "הפרימיטיב עצמו — FormError, FormNotice ו-Banner מוגדרים כאן",
-  "components/media-picker.tsx": "מונה התקדמות העלאה, לא תוצאת פעולה — text-muted ולא ירוק",
+  "components/ui/message.tsx": "הפרימיטיב עצמו — FormError, FormNotice, Banner ו-UploadingNotice",
 };
 
 /** ל-`role="alert"` יש בית אחד בלבד: `FormError`. אין חריגים. */
@@ -139,10 +138,24 @@ describe("פרימיטיב הודעת המצב", () => {
     ).toEqual([]);
   });
 
-  it("החריג של media-picker עדיין קיים — אחרת יש למחוק אותו", () => {
-    // החרגה ששרדה את הצורך בה היא חור בגדר, לא חריג מנומק.
-    const source = readFileSync(join(SRC, "components/media-picker.tsx"), "utf8");
-    expect(source).toContain('role="status"');
+  /**
+   * **החריג של `media-picker` נמחק ב-0.6, וזו הבדיקה שהחליפה אותו.**
+   *
+   * הבדיקה הקודמת שמרה על החריג עצמו ("החרגה ששרדה את הצורך בה היא חור
+   * בגדר"), והצורך אכן נעלם: חיווי ההעלאה עבר ל-`UploadingNotice`, ולקובץ
+   * אין עוד `role="status"` משלו. חריג שמתאר קוד שאינו קיים הוא בדיוק מה
+   * שמרשה לחריג הבא להיכנס בלי דיון — ולכן הוא נמחק ולא נוסח מחדש.
+   *
+   * מה שהחליף אותו שומר על אותו דבר עצמו בכיוון החיובי: החיווי מרוכז,
+   * ואיש אינו מרכיב אותו מחדש משלוש שורות.
+   */
+  it("אין חיווי העלאה שנבנה ביד — לזה יש `UploadingNotice`", () => {
+    const offenders = scan(/he\.media\.uploading\b/, ["components/ui/message.tsx"]);
+
+    expect(
+      offenders,
+      `יש להשתמש ב-UploadingNotice מ-@/components/ui/message:\n${offenders.join("\n")}`,
+    ).toEqual([]);
   });
 });
 
@@ -174,13 +187,20 @@ describe("טיפול ב-ActionResult", () => {
  * הכשל הזה **שקט בשני הכיוונים**: הכפתור נראה תקין בצילום, והבדיקה שנשברת
  * מדווחת "לא נמצא אלמנט" ולא "חסרה נגישות". לכן הוא נאכף כאן.
  *
+ * **הבדיקה רחבה מ"אייקון בלבד", ובכוונה.** היא מסמנת כל אייקון בתוך כפתור
+ * שאין עליו `aria-label` — גם כשיש טקסט גלוי לצדו, כמו בכניסות של גיליון
+ * הצירוף. הניסוח הצר היה דורש לזהות "האם יש כאן גם טקסט", וזו שאלה
+ * שסריקת מחרוזת אינה יכולה לענות עליה בלי היוריסטיקה. התגובה הנכונה
+ * להסתמנות היא **להוסיף את התווית** (זהה לטקסט הגלוי), לא להחליש את האוכף
+ * — בדיוק הלקח מפער 33, שם אוכף שנוסח רחב מדי נמחק בסבב הבא.
+ *
  * הספציפיקציה: `docs/DESIGN.md` § אייקונים.
  */
 describe("אייקון בכפתור", () => {
   /** האייקונים שהמערכת מכירה (§ אייקונים — הטבלה שם היא המקור) */
-  const ICONS = /<(Paperclip|Camera|Mic|Send|X)\b/;
+  const ICONS = /<(Paperclip|Camera|Mic|Send|X|Plus)\b/;
 
-  it("כל כפתור שתוכנו אייקון בלבד נושא `aria-label`", () => {
+  it("כל אייקון בתוך כפתור נושא `aria-label`", () => {
     const offenders: string[] = [];
 
     for (const file of sourceFiles(SRC)) {
@@ -292,7 +312,10 @@ describe("hook הפעולה", () => {
     "lib/use-action.ts": "המקור — כאן `busy` מוגדר, וממנו הוא מגיע לכל מסך",
     "components/recipient-picker.tsx": "פרימיטיב קלט; ההוספה מקומית וה-action יושב אצל ההורה",
     "components/learned-select.tsx": "פרימיטיב קלט; `onCreate` מוזרק מההורה וזורק בכשל",
-    "components/media-picker.tsx": "העלאה ל-R2 ולא Server Action — `busy` שלו הוא `disabled` של ההורה",
+    // ‏0.6: החריג עבר מ-`media-picker` ל-hook שחולץ ממנו. הוא **החליף** את
+    // הרשומה ולא נוסף לה — פיצול `!hydrated` בין ה-hook לשני צרכניו היה
+    // דורש שלוש רשומות במקום אחת, כלומר חריגה מהתקרה של שש.
+    "lib/use-media-upload.ts": "העלאה ל-R2 ולא Server Action — `busy` שלו הוא `disabled` של ההורה",
     "components/professional-create-form.tsx":
       "טופס מוצג בלבד: `onCreate` מוזרק מההורה וזורק, ולכן אין כאן `ActionResult` לפרוק",
   };

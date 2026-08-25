@@ -118,7 +118,7 @@ function SortHeader({
       // גובה של דבר לחיץ, ולכן הזוג המלא: 36px בעכבר ו-44px באצבע
       // (§ אזורי מגע). שורת הכותרות מתגבהת בהתאם, וזה נכון — היא שורת
       // פקדים ולא תוויות.
-      className="flex min-h-9 items-center gap-1 text-sm font-semibold text-muted touch:min-h-11"
+      className="flex min-h-8 items-center gap-1 text-sm font-semibold text-muted touch:min-h-11"
     >
       <span>{header.label}</span>
       <span aria-hidden>{caret}</span>
@@ -149,7 +149,7 @@ function TicketRow({ card }: { card: BoardCard }) {
       // ‏`border-b-border` ולא `border-border`: הצבע הכללי היה קובע גם את
       // צבע ההתחלה, ואז הקו של הטיוטה תלוי בסדר שבו Tailwind פולט את שתי
       // המחלקות — כלומר אדום שעלול לצאת אפור בלי שאיש יבחין.
-      className={`grid ${COLUMNS} min-h-9 items-center gap-x-3 border-b border-b-border px-3 py-1 text-sm touch:min-h-11 ${
+      className={`grid ${COLUMNS} min-h-8 items-center gap-x-3 border-b border-b-border px-3 py-1 text-sm touch:min-h-11 ${
         isDraft ? "border-s-2 border-s-danger" : ""
       }`}
     >

@@ -27,8 +27,18 @@ export type ControlSize = "default" | "compact";
  * הקלדה. המכשיר העיקרי כאן הוא טלפון בשטח, ולכן 14px בפקד הוא באג ולא
  * החלטת עיצוב.
  */
+/**
+ * **‏`block` אינו קישוט.** ‏`<input>` ו-`<textarea>` הם `inline-block` עם
+ * ‏`vertical-align: baseline` כברירת מחדל, כלומר הדפדפן משאיר מתחתיהם
+ * מרווח של קו-בסיס. כשפקד כזה יושב בשורה לצד כפתורים, העטיפה שלו מיושרת
+ * לתחתית — **והפקד עצמו יושב מעל תחתיתה**.
+ *
+ * נמדד בקומפוזר: שלושת האלמנטים בגובה 44.0px **זהה**, ותחתית התיבה
+ * ב-357 מול 364 של הכפתורים — הפרש של 7px שנראה כמו "לא באותו גובה"
+ * ואינו הפרש גובה כלל. אף בדיקה לא רואה את זה: הן מודדות `height`.
+ */
 const CONTROL_BASE =
-  "w-full rounded-sm border border-border bg-surface text-base disabled:opacity-60";
+  "block w-full rounded-sm border border-border bg-surface text-base disabled:opacity-60";
 
 /**
  * **הגובה תלוי במכשיר, ה-radius אינו תלוי בכלום.**
@@ -38,8 +48,26 @@ const CONTROL_BASE =
  * זה לצד זה נבדלו קודם גם בעיגול, וזו הבחנה שאיש לא התכוון אליה.
  */
 const CONTROL_SIZES: Record<ControlSize, string> = {
-  default: "min-h-9 px-2 touch:min-h-11 touch:px-3",
-  compact: "min-h-8 px-2 touch:min-h-11 touch:px-3",
+  default: "min-h-8 px-2 touch:min-h-11 touch:px-3",
+  compact: "min-h-7 px-2 touch:min-h-11 touch:px-3",
+};
+
+/**
+ * גדלי `Textarea` — **טבלה נפרדת, ולא `p-2` בבסיס פלוס דריסה.**
+ *
+ * ‏`p-2` ו-`py-0` אינן דורסות זו את זו: `twMerge` משאיר את שתיהן, והמנצח
+ * נקבע לפי סדר הפליטה של Tailwind ולא לפי סדר הכתיבה. זה עובד היום ונשבר
+ * בשקט ביום שהסדר ישתנה — ולכן כל גודל מחזיק את הריפוד המלא שלו.
+ *
+ * **‏`py-0` בעכבר ו-`touch:py-2` במגע, וזו מדידה ולא טעם.** שורת `text-base`
+ * היא 25.6px (גובה שורה 1.6, ‏`globals.css`), ועם `p-2` קבוע התיבה יוצאת
+ * ‏≈43.6px — כלומר **‏11px גבוהה מהכפתור הקומפקטי שלצדה בקומפוזר**, וזה
+ * בדיוק הפער שדווח. ‏`py-0` מחזיר אותה ל-28px; במגע `py-0` היה מדביק את
+ * הטקסט לראש קופסה של 44px, מפני ש-`<textarea>` מיישר לראש ולא למרכז.
+ */
+const TEXTAREA_SIZES: Record<ControlSize, string> = {
+  default: "p-2",
+  compact: "min-h-7 px-2 py-0 touch:min-h-11 touch:px-3 touch:py-2",
 };
 
 /**
@@ -92,13 +120,17 @@ export type TextareaProps = ControlExtras & ComponentProps<"textarea">;
 
 /**
  * ‏`p-2` ולא `px-2` בלבד: בשדה רב-שורות הטקסט מתחיל בשורה הראשונה, וריפוד
- * אנכי אפס מדביק אותו לגבול העליון. גובה מזערי אינו רלוונטי כאן — הגובה
- * נקבע מ-`rows` — ולכן `size` אינו משפיע עוד על הצורה, רק על ההקשר.
+ * אנכי אפס מדביק אותו לגבול העליון.
+ *
+ * **‏`size` כן משפיע כאן מ-0.6, בניגוד למה שנכתב קודם.** ההנחה הייתה
+ * ש"הגובה נקבע מ-`rows`" ולכן הגודל אינו רלוונטי — והיא נכונה רק כשאיש
+ * אינו צריך שהתיבה תסכים בגובהה עם משהו אחר. בקומפוזר היא חייבת: התיבה
+ * והכפתורים שלצדה הם שורה אחת. ראו `TEXTAREA_SIZES`.
  */
-export function Textarea({ invalid, className, ...rest }: TextareaProps) {
+export function Textarea({ size = "default", invalid, className, ...rest }: TextareaProps) {
   return (
     <textarea
-      className={twMerge(CONTROL_BASE, "p-2", invalid && "border-danger", className)}
+      className={twMerge(CONTROL_BASE, TEXTAREA_SIZES[size], invalid && "border-danger", className)}
       {...rest}
     />
   );

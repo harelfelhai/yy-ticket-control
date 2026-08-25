@@ -16,9 +16,9 @@ describe("Button", () => {
 
     expect(button.className).toContain("bg-brand");
     expect(button.className).toContain("font-semibold");
-    // ‏36px בעכבר, 44px במגע. הרצפה של "אצבע בכפפה" מדברת על מגע ולא על
+    // ‏32px בעכבר, 44px במגע. הרצפה של "אצבע בכפפה" מדברת על מגע ולא על
     // סמן, ובעכבר היא קנתה גובה שדחק מידע מהמסך בלי לקנות דיוק לחיצה.
-    expect(button.className).toContain("min-h-9");
+    expect(button.className).toContain("min-h-8");
     expect(button.className).toContain("touch:min-h-11");
   });
 
@@ -72,8 +72,9 @@ describe("Button", () => {
 
   it("`compact` נשאר מעל סף המגע המינימלי (44px) — במגע", () => {
     render(<Button size="compact">הסר</Button>);
-    // ‏32px בעכבר, אבל `touch:min-h-11` מחזיר 44px ברגע שיש אצבע.
+    // ‏28px בעכבר, אבל `touch:min-h-11` מחזיר 44px ברגע שיש אצבע.
     // בלי הזוג הזה, לחיצות בשטח היו מתפספסות.
+    expect(screen.getByRole("button").className).toContain("min-h-7");
     expect(screen.getByRole("button").className).toContain("touch:min-h-11");
   });
 
