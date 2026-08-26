@@ -104,6 +104,8 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
     // תחום חדש שנכנס לפנייה אחת — ומרגע זה הוא היסטוריה ולא טעות הקלדה.
     const domain = uniq("תחום-בשימוש");
     await page.goto("/admin/domains");
+    // מחסום הידרציה — ראו את ההנמקה ב-`s9-s10-s11` § S14-01.
+    await expect(page.getByLabel("תחום חדש")).toBeEnabled();
     await page.getByLabel("תחום חדש").fill(domain);
     await page.getByRole("button", { name: "הוסף תחום", exact: true }).click();
     await expect(page.getByRole("button", { name: `שנה שם ${domain}` })).toBeVisible();
@@ -134,6 +136,8 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
     const domain = uniq("תחום-לניקוי");
 
     await page.goto("/admin/domains");
+    // מחסום הידרציה — ראו את ההנמקה ב-`s9-s10-s11` § S14-01.
+    await expect(page.getByLabel("תחום חדש")).toBeEnabled();
     await page.getByLabel("תחום חדש").fill(domain);
     await page.getByRole("button", { name: "הוסף תחום", exact: true }).click();
 

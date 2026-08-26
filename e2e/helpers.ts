@@ -48,7 +48,18 @@ export async function applyFilter(
         await page.getByLabel(label, { exact: true }).selectOption(option);
         return new URL(page.url()).search;
       },
-      { timeout: 15_000, message: `המסנן ${label} לא הגיע לכתובת` },
+      /*
+       * **בלי `timeout` קבוע — הוא יורש מהקונפיג.**
+       *
+       * הערך שישב כאן היה `15_000`, זהה ל-`expect.timeout` של חבילת ה-E2E
+       * — כלומר נכון שם וסמוי. משהעוזר הזה נקרא גם מחבילת ההתאמה, שבה
+       * התקציב הוא 25 שניות **מנימוק כתוב** ("קימפול ראשון של Server
+       * Action תחת העומס הזה חרג מ-15 שניות"), המספר הקבוע היה נותן דווקא
+       * לצעד היחיד שהוא סבב שרת מלא את התקציב הצר ביותר בקובץ.
+       *
+       * מקור אמת אחד לתקציב, והוא בקונפיג.
+       */
+      { message: `המסנן ${label} לא הגיע לכתובת` },
     )
     .toContain(`${param}=`);
 }

@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { type Page, expect } from "@playwright/test";
 import { applyFilter, pick, searchBoard } from "../../e2e/helpers";
-import { SITE_A } from "./cast";
+import { CAST, SITE_A } from "./cast";
 import { query } from "./db";
 
 /**
@@ -413,6 +414,48 @@ export async function ageTicket(ticketId: string, days: number): Promise<void> {
       where id = $2`,
     [String(days), ticketId],
   );
+}
+
+/** שם התגית שקיימת תמיד — קבוע ולא `uniq`, כדי שקריאות חוזרות לא יציפו את הרשימה */
+export const BACKGROUND_TAG = "תגית-רקע-להתאמה";
+
+/**
+ * מוודא שקיימת תגית אחת לפחות בבסיס.
+ *
+ * **למה זה קיים.** מסנן התגיות ברצועת הלוח מרונדר בתנאי `tags.length > 0`,
+ * והשאילתה שמזינה אותו גלובלית. כלומר "תשעה מסננים" היא טענה שתלויה בשורה
+ * אחת בטבלה — ועד כה השורה הזו הגיעה **מקובץ אחר** (`s6-tag-chat`), בזכות
+ * הסדר האלפביתי של Playwright בלבד. שינוי שם קובץ, `--grep`, או כשל
+ * ב-`s6` היו שוברים אותה. **בדיקה שהתנאי המוקדם שלה נוצר בקובץ אחר אינה
+ * בודקת את המוצר אלא את סדר ההרצה.**
+ *
+ * **דרך ה-DB ולא דרך ה-UI**, לפי הכלל שבראש הקובץ: יצירת תגית אינה הפעולה
+ * הנבדקת כאן — היא נבדקת ב-`s6-tag-chat` וב-`s5-batch` — והמסלול המלא
+ * (פנייה · קבלן · דיאלוג "פרטים") הוא הקשר יקר שאינו מוסיף כיסוי.
+ *
+ * ‏`id` נמסר במפורש: `@default(cuid())` נוצר בצד הלקוח של Prisma ואין לו
+ * ברירת מחדל בעמודה. הפורמט נשמר `[a-z0-9]+` כדי שלא יישבר ביטוי כמו
+ * `/\/tags\/[a-z0-9]+$/` שמופיע בחבילה.
+ */
+export async function ensureTag(name: string = BACKGROUND_TAG): Promise<string> {
+  await query(
+    `insert into "Tag" (id, name, "createdById")
+     select $1, $2, u.id from "User" u where u.phone = $3
+     on conflict ("name") do nothing`,
+    [`c${randomUUID().replace(/-/g, "")}`, name, CAST.admin.phone],
+  );
+
+  /*
+   * שומר ולא הנחה: ה-`select` שבתוך ה-`insert` מחזיר אפס שורות אם המשתמש
+   * אינו נמצא, וההוספה **נבלעת בשקט**. בלי הבדיקה הזו הכשל היה מופיע
+   * מאוחר יותר כ"מסנן חסר: תגיות" — כלומר נראה כפער במוצר ולא כתקלת
+   * זריעה. זו אותה מחלה שמתועדת ב-`openDetails`: תנאי מגודר שמדלג בלי לומר.
+   */
+  const rows = await query<{ count: string }>(`select count(*)::text as count from "Tag"`);
+  if (Number(rows[0]?.count ?? 0) === 0) {
+    throw new Error(`ensureTag נכשל: אין תגיות בבסיס. האם ${CAST.admin.phone} קיים כמשתמש?`);
+  }
+  return name;
 }
 
 /**

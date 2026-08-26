@@ -119,3 +119,81 @@ test("הכתובת /search הישנה מגיעה ללוח עם אותו מונח
   await page.goto("/search");
   await expect(page).toHaveURL(/\/board$/);
 });
+
+test("ריקון שדה החיפוש מחזיר את הלוח — בשתי הדרכים", async ({ page }) => {
+  /*
+   * **הבאג שזה מכסה, וזו הייתה נקודת עיוורון שלמה בחבילה.**
+   *
+   * מקור האמת של החיפוש הוא `?q=` בכתובת; ה-state בשדה הוא טיוטה. עד 0.6
+   * ‏`onChange` עדכן רק את הטיוטה, ולכן מחיקת הטקסט לא הפעילה ניווט,
+   * ה-Server Component לא רץ מחדש, ו-`board.search` נשאר לא-ריק — המשתמש
+   * נשאר עם **תוצאות החיפוש הקודם מתחת לשדה ריק**. היציאה היחידה הייתה
+   * לשגר שדה ריק, פעולה שאיש אינו מנחש.
+   *
+   * הכשל הזה שקט לחלוטין בצילום — שדה ריק ורשימת פניות נראים תקינים כל עוד
+   * לא יודעים מה חיפשו. לכן הוא נאכף כאן ולא בעין.
+   */
+  await loginAsManager(page);
+  const description = await createSentTicket(page, "אריח שבור במבואה", "רצף");
+
+  await page.goto("/board");
+  const grouped = page.getByRole("heading", { name: /^אצל הנמענים/ });
+  const counter = page.getByText(/\d+ תוצאות/);
+  const clear = page.getByRole("button", { name: "נקה חיפוש" });
+
+  // כשאין טקסט אין מה לנקות, ולכן הכפתור אינו תופס רוחב (§ שורת החיפוש:
+  // הסתרה ולא `disabled`).
+  await expect(clear).toHaveCount(0);
+
+  // ── דרך א׳: לחיצה על ה-X ──────────────────────────────────────────
+  await searchBoard(page, description);
+  await expect(counter).toBeVisible();
+  await expect(grouped).toHaveCount(0);
+  await expect(clear).toBeVisible();
+
+  await clear.click();
+  await expect(grouped).toBeVisible();
+  await expect(counter).toHaveCount(0);
+  await expect(page.getByRole("searchbox", { name: "חיפוש" })).toHaveValue("");
+  // הכתובת היא הטענה האמיתית: בלעדיה רענון היה מחזיר את התוצאות.
+  await expect(page).toHaveURL(/\/board$/);
+  await expect(clear).toHaveCount(0);
+
+  // ── דרך ב׳: מחיקה ידנית עד הריק ────────────────────────────────────
+  await searchBoard(page, description);
+  await expect(counter).toBeVisible();
+
+  await page.getByRole("searchbox", { name: "חיפוש" }).fill("");
+  await expect(grouped).toBeVisible();
+  await expect(counter).toHaveCount(0);
+  await expect(page).toHaveURL(/\/board$/);
+});
+
+test("מחיקת תו בודד אינה מבטלת את החיפוש", async ({ page }) => {
+  /*
+   * הצד השני של אותו כלל, והוא מה שמונע ממנו לזחול: השיגור המפורש נשאר
+   * ברירת המחדל (§ שורת החיפוש — רשת סלולרית באתר בנייה, וארבעה מקורות
+   * טקסט לכל שאילתה). מה שהתחלף הוא **היציאה** ממצב החיפוש בלבד.
+   *
+   * בלי הבדיקה הזו, "ריקון מחזיר את הלוח" היה יכול להיות ממומש כחיפוש
+   * תוך-כדי-הקלדה בלי שאף בדיקה תבחין.
+   */
+  await loginAsManager(page);
+  const description = await createSentTicket(page, "נזילה בחניון", "שרברב");
+
+  await page.goto("/board");
+  await searchBoard(page, description);
+  await expect(page.getByText(/\d+ תוצאות/)).toBeVisible();
+
+  const box = page.getByRole("searchbox", { name: "חיפוש" });
+  // ‏`press` לבדו ממקד את השדה אך משאיר את הסמן בתחילתו, ו-Backspace שם
+  // אינו מוחק דבר. `End` הוא מה שהופך את זה להקשה אמיתית של משתמש.
+  await box.click();
+  await box.press("End");
+  await box.press("Backspace");
+  await expect(box).toHaveValue(description.slice(0, -1));
+
+  // התוצאות נשארו, והכתובת נשארה — ההקלדה אינה מנווטת.
+  await expect(page.getByText(/\d+ תוצאות/)).toBeVisible();
+  await expect(page).toHaveURL(/[?&]q=/);
+});

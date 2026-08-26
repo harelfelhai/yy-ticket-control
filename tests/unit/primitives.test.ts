@@ -37,7 +37,6 @@ const EXEMPT: Record<string, string> = {
   // הפתח שדרכו נכנס הבא, ולכן הנימוק מתוקן ולא מוארך.
   "components/learned-select.tsx":
     "שורת אפשרות ב-listbox — role=\"option\" ולא פעולה; המילוי הוא סימון הנבחר",
-  "components/media-picker.tsx": "יעד צילום בולט של 64px, גדול מכל וריאנט",
   "components/audio-recorder.tsx": "מראה שמשתנה לפי מצב ההקלטה",
   // ‏**החריג של `portal-actions` נמחק בסבב הצפיפות, וזו הפעם השנייה.**
   // ברשומה ההיא ישבו שני כפתורים: `warning` ("יש לי שאלה") ירד ב-0.4 עם
@@ -198,7 +197,7 @@ describe("טיפול ב-ActionResult", () => {
  */
 describe("אייקון בכפתור", () => {
   /** האייקונים שהמערכת מכירה (§ אייקונים — הטבלה שם היא המקור) */
-  const ICONS = /<(Paperclip|Camera|Mic|Send|X|Plus)\b/;
+  const ICONS = /<(Folder|Camera|Mic|Send|X|Plus|Search)\b/;
 
   it("כל אייקון בתוך כפתור נושא `aria-label`", () => {
     const offenders: string[] = [];

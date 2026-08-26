@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { Camera, Folder } from "lucide-react";
+import { useRef, useState } from "react";
 import { AttachedFiles } from "@/components/attached-files";
 import { Button } from "@/components/ui/button";
 import { FormError, UploadingNotice } from "@/components/ui/message";
@@ -19,25 +20,6 @@ interface MediaPickerProps {
   files: AttachedFile[];
   onChange: (files: AttachedFile[]) => void;
   disabled?: boolean;
-  /**
-   * `default` — כפתורי טקסט קומפקטיים. זהו הווריאנט של **טופס**, ומשמש
-   *   היום את מסך ההזנה המרוכזת בלבד.
-   * `prominent` — צילום והקלטה ככפתורים גדולים בראש (אפיון מסך 4:
-   *   "המדיה היא הפעולה הראשונה").
-   *
-   * **הווריאנט `composer` ירד ב-0.6 ולא הוחלף בשלישי.** הקומפוזר הפסיק
-   * להיות תצורה של הרכיב הזה ונעשה **הרכבה במקום הקריאה**: `AddMediaButton`
-   * לצירוף ולצילום, `AudioRecorder` בקצה השורה, ו-`AttachedFiles` מעליה.
-   * שלושתם חולקים מצב אחד דרך `useMediaUpload`.
-   *
-   * הסיבה אינה אסתטיקה אלא פריסה: המיקרופון עבר לקצה השורה ומתחלף שם
-   * בכפתור השליחה, כלומר הוא כבר **אינו שכן** של הצירוף והצילום. וריאנט
-   * הוא הכלי הנכון כשאותו מבנה משנה מראה; כאן המבנה עצמו התפרק.
-   *
-   * **טופס אינו שיחה ואינו נראה כמותה** — זה מה שנשאר מ-0.5, וזו הסיבה
-   * ש-`default` לא ירש את האייקונים.
-   */
-  variant?: "default" | "prominent";
 }
 
 /**
@@ -46,19 +28,24 @@ interface MediaPickerProps {
  * הרכיב מחזיק את **הפקדים** בלבד; ההעלאה עצמה יושבת ב-`useMediaUpload`
  * (שם גם הנימוק לשלושת שלבי השרת ולהעלאה המיידית), והתצוגות המקדימות
  * ב-`AttachedFiles`.
+ *
+ * **תצורה אחת, ולא וריאנטים.** עד כאן היו שניים: `prominent` שהחזיק שני
+ * כפתורי 64px בגריד ו"צרף קובץ" שקט מתחתיהם, ו-`default` שהחזיק שלושה
+ * כפתורי טקסט בשורה. שניהם התאחדו לשורת אייקונים אחת — צירוף · צילום ·
+ * הקלטה — בהכרעת בעל המוצר, ולכן הפרופ `variant` נמחק ולא נשאר כפרופ שכל
+ * ערכיו מרנדרים אותו דבר. שני ההיפוכים רשומים ב-`DESIGN.md` נספח א׳.
+ *
+ * **מה שנשמר מהנימוק של 64px:** רצפת המגע. `size="compact"` נושא
+ * `touch:min-h-11`, כלומר על טלפון בשטח הכפתורים נשארים 44px, ורק בעכבר
+ * הם יורדים ל-28px. מה שנוותר עליו הוא ההבלטה בגודל, לא הנגישות לאצבע.
+ *
+ * **הכרעת האפיון #21 אינה נוגעת כאן.** היא על ההתנהגות — "צלם" נשאר פקד
+ * נפרד מ"צרף קובץ" ופותח מצלמה בכל מכשיר — ולא על גודלו של הכפתור.
  */
-export function MediaPicker({
-  ticketId,
-  token,
-  files,
-  onChange,
-  disabled,
-  variant = "default",
-}: MediaPickerProps) {
+export function MediaPicker({ ticketId, token, files, onChange, disabled }: MediaPickerProps) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
-  const inputId = useId();
   const media = useMediaUpload({ ticketId, token, files, onChange, disabled });
 
   /**
@@ -92,7 +79,6 @@ export function MediaPicker({
             בשטח — אבל הוא גם חוסם בחירה מהגלריה, שנחוצה כשמצלמים קודם. */}
         <input
           ref={fileInput}
-          id={inputId}
           type="file"
           multiple
           accept="image/*,application/pdf,video/*"
@@ -108,85 +94,39 @@ export function MediaPicker({
           className="hidden"
         />
 
-        {variant === "prominent" ? (
-          // צילום והקלטה גדולים ובראש (אפיון מסך 4); "צרף קובץ" משני מתחת.
-          <div className="flex w-full flex-col gap-2">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={media.busy}
-                onClick={openCamera}
-                /*
-                 * יעד הצילום — **64px, ובכוונה גדול מכל וריאנט של `Button`**:
-                 * הוא נלחץ באגודל בכפפה, מול דירה, על מסך בשמש. לכן הוא נשאר
-                 * כתוב ביד (חריג מתועד ב-`tests/unit/primitives.test.ts`):
-                 * ‏`Button` נושא `touch:min-h-11`, ודריסתו ב-64px
-                 * הייתה **מקטינה** אותו דווקא במגע — כלומר בדיוק במכשיר
-                 * שבשבילו הוא גדול.
-                 *
-                 * **הבלטה בגודל, לא בצבע.** הוא היה `border-brand` +
-                 * `bg-brand/10` + `text-brand`, ובגרפיט שלושתם הופכים למלבן
-                 * אפור עם טקסט בצבע טקסט רגיל — פקד שנראה מושבת. הפיתוי היה
-                 * להעביר אותו לטוקן צבעוני אחר, אבל ארבעת הטוקנים הצבעוניים
-                 * הם **מצבים** (§ Colors), ו-"צלם" אינו מצב: `info` פירושו
-                 * "פנייה חדשה שטרם נצפתה", ושימוש בו כאן הוא בדיוק הצבע
-                 * שנגזר מאסתטיקה ולא ממשמעות שהסעיף אוסר.
-                 *
-                 * לכן המראה הוא של כפתור משני רגיל, וכל ההבלטה מגיעה מהמידה
-                 * — שהיא ממילא הסיבה שהפקד הזה חורג. הוא הדבר הגדול ביותר
-                 * במסך; הוא אינו זקוק גם לגוון.
-                 */
-                className="min-h-16 rounded-sm border border-border bg-surface px-3 text-base font-semibold text-fg disabled:opacity-60"
-              >
-                {he.media.camera}
-              </button>
-              <AudioRecorder
-                disabled={media.busy}
-                onRecorded={(file) => add(toFileList(file))}
-                onError={media.setError}
-                className="min-h-16 w-full text-base"
-              />
-            </div>
-            <Button
-              variant="quiet"
-              size="compact"
-              disabled={media.busy}
-              onClick={() => fileInput.current?.click()}
-              className="self-start px-1"
-            >
-              {he.media.attach}
-            </Button>
-            {media.uploading > 0 ? <UploadingNotice /> : null}
-          </div>
-        ) : (
-          /* טופס — תוויות טקסט מלאות. אינו שיחה ואינו נראה כמותה. */
-          <>
-            <Button
-              variant="secondary"
-              size="compact"
-              disabled={media.busy}
-              onClick={() => fileInput.current?.click()}
-            >
-              {he.media.attach}
-            </Button>
-            <Button
-              variant="secondary"
-              size="compact"
-              disabled={media.busy}
-              onClick={openCamera}
-            >
-              {he.media.camera}
-            </Button>
+        {/*
+         * שלושת ה-`aria-label` נושאים **בדיוק** את המחרוזות שהיו התוויות
+         * הגלויות. זו אינה הקפדה תיאורטית: `conformance` ו-`e2e` מאתרים את
+         * הפקדים האלה ב-`getByRole("button", { name: ... })`, ונאכף
+         * ב-`tests/unit/primitives.test.ts` § "אייקון בכפתור".
+         */}
+        <Button
+          variant="secondary"
+          size="compact"
+          disabled={media.busy}
+          onClick={() => fileInput.current?.click()}
+          aria-label={he.media.attach}
+        >
+          <Folder className="size-3" aria-hidden="true" />
+        </Button>
+        <Button
+          variant="secondary"
+          size="compact"
+          disabled={media.busy}
+          onClick={openCamera}
+          aria-label={he.media.camera}
+        >
+          <Camera className="size-3" aria-hidden="true" />
+        </Button>
 
-            <AudioRecorder
-              disabled={media.busy}
-              onRecorded={(file) => add(toFileList(file))}
-              onError={media.setError}
-            />
+        <AudioRecorder
+          icon
+          disabled={media.busy}
+          onRecorded={(file) => add(toFileList(file))}
+          onError={media.setError}
+        />
 
-            {media.uploading > 0 ? <UploadingNotice /> : null}
-          </>
-        )}
+        {media.uploading > 0 ? <UploadingNotice /> : null}
       </div>
 
       {media.error ? <FormError>{media.error}</FormError> : null}

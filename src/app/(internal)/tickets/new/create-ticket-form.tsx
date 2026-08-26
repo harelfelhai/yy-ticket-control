@@ -413,8 +413,11 @@ export function CreateTicketForm({
       </div>
 
       {/* המדיה היא הפעולה הראשונה (אפיון מסך 4): בשטח מצלמים לפני שמקלידים.
+          **ראשונה במיקום, ולא עוד בגודל** — שני כפתורי ה-64px ירדו לשורת
+          אייקונים קומפקטית בהכרעת בעל המוצר (DESIGN.md נספח א׳), והמיקום
+          מעל כל שדות הטופס הוא מה שנשאר לשאת את ההכרעה.
           בלי ticketId — הפנייה עדיין אינה קיימת; הקלטה ממלאת את התיאור אם ריק. */}
-      <MediaPicker variant="prominent" files={files} onChange={setFiles} disabled={busy} />
+      <MediaPicker files={files} onChange={setFiles} disabled={busy} />
 
       {/*
         האתר הוא שדה בטופס ולא מסך שקודם לו.

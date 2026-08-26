@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Paperclip, Plus } from "lucide-react";
+import { Camera, Folder, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -126,7 +126,7 @@ export function AddMediaButton({ media }: { media: MediaUpload }) {
               aria-label={he.media.attach}
               className="w-full justify-start gap-2"
             >
-              <Paperclip className="size-3" aria-hidden="true" />
+              <Folder className="size-3" aria-hidden="true" />
               {he.media.attach}
             </Button>
           </div>

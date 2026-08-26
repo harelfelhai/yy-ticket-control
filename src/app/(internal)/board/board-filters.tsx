@@ -1,5 +1,6 @@
 "use client";
 
+import { Search, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -312,9 +313,17 @@ export function BoardFilters({
  *
  * **טופס עם שיגור מפורש, ולא חיפוש-תוך-כדי-הקלדה.** כל הקשה הייתה מפעילה
  * שאילתה שחוצה ארבעה מקורות טקסט — תיאור, הודעות, תמלול וטקסט שחולץ —
- * ובלי אינדקסי trigram (נמחקו במיגרציה ולא שוחזרו) זו סריקה סדרתית. מנהל
- * עבודה מקליד את זה על רשת סלולרית באתר בנייה. ההחלטה הזו נשמרה מהמסך
- * הנפרד שהיה, יחד עם הנימוק שלה.
+ * ומנהל עבודה מקליד את זה על רשת סלולרית באתר בנייה. ההחלטה נשמרה מהמסך
+ * הנפרד שהיה.
+ *
+ * > הנימוק כאן **תוקן**: עד כה נכתב שבלי אינדקסי trigram ("נמחקו במיגרציה
+ * > ולא שוחזרו") כל הקשה היא סריקה סדרתית. האינדקסים שוחזרו מאז, ו-
+ * > `tests/integration/search-indexes.test.ts` אוכף את קיומם. מה שנשאר
+ * > מהנימוק הוא הצד שלא היה תלוי בהם — הרשת והמכשיר.
+ *
+ * **לריקון יש מסלול משלו, והוא היוצא מן הכלל היחיד לשיגור המפורש.** שדה
+ * חיפוש ריק מעל רשימת תוצאות הוא מצב **סותר**: המשתמש מחק את מה שחיפש
+ * ורואה את תוצאותיו. ההקלדה עדיין אינה מנווטת — רק המעבר לריק המוחלט.
  *
  * **הסנכרון ל-URL נעשה ברינדור ולא ב-`useEffect`.** הטקסט שבשדה חייב לעקוב
  * אחרי הכתובת — "אחורה" בדפדפן שמחזיר תוצאות קודמות חייב להחזיר גם את מה
@@ -335,6 +344,43 @@ function BoardSearch() {
     setQuery(current);
   }
 
+  /**
+   * כתיבת המונח לכתובת — הפעולה היחידה שמחליפה את תוכן המסך.
+   *
+   * מחולצת מ-`onSubmit` מפני שיש לה עכשיו שלושה קוראים: שיגור, ריקון השדה,
+   * ולחיצה על ה-X. שלושה מסלולים שכותבים את אותה כתובת ביד נפרדים בשקט
+   * ברגע שאחד מהם מקבל תיקון — וההבדל בין "נמחק גם `focus`" ל"לא נמחק"
+   * אינו נראה בצילום.
+   */
+  function apply(value: string) {
+    const next = new URLSearchParams(params.toString());
+    const trimmed = value.trim();
+    if (trimmed) next.set("q", trimmed);
+    else next.delete("q");
+    // `focus` הוא צלילה ממדד בסקירה, והוא סותר חיפוש: שניהם מחליפים
+    // את תוכן המסך, והשארתו הייתה מציגה תוצאות מסוננות פעמיים.
+    next.delete("focus");
+    const search = next.toString();
+    router.replace(search ? `${pathname}?${search}` : pathname);
+  }
+
+  /**
+   * ריקון השדה מחזיר את הלוח, ומחיקת תו בודד אינה עושה דבר.
+   *
+   * **הבאג שזה מתקן:** מקור האמת הוא `?q=` בכתובת, וה-state כאן הוא טיוטה
+   * בלבד. עד כה `onChange` עדכן רק את הטיוטה, ולכן מחיקת הטקסט לא הפעילה
+   * ניווט, ה-Server Component לא רץ מחדש, ו-`board.search` נשאר לא-ריק —
+   * המשתמש נשאר עם תוצאות החיפוש הקודם מתחת לשדה ריק.
+   *
+   * ‏`value === ""` ולא `trim()`: רווחים אינם "שדה ריק" לעין, ומי שהקליד
+   * רווח אינו מבקש לבטל את החיפוש. השומר `current !== ""` מונע ניווט
+   * כשאין מונח בכתובת מלכתחילה — ריקון טיוטה שמעולם לא שוגרה אינו אמור
+   * למחוק את `focus`.
+   */
+  function clearIfApplied() {
+    if (current !== "") apply("");
+  }
+
   return (
     <form
       // חסם רוחב ולא רוחב מלא: במסך של 1600px שדה חיפוש נמתח הוא 1560px של
@@ -348,27 +394,55 @@ function BoardSearch() {
       className="flex w-full max-w-144 items-center gap-2"
       onSubmit={(event) => {
         event.preventDefault();
-        const next = new URLSearchParams(params.toString());
-        const value = query.trim();
-        if (value) next.set("q", value);
-        else next.delete("q");
-        // ‏`focus` הוא צלילה ממדד בסקירה, והוא סותר חיפוש: שניהם מחליפים
-        // את תוכן המסך, והשארתו הייתה מציגה תוצאות מסוננות פעמיים.
-        next.delete("focus");
-        const search = next.toString();
-        router.replace(search ? `${pathname}?${search}` : pathname);
+        apply(query);
       }}
     >
       <Input
         type="search"
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          const value = event.target.value;
+          setQuery(value);
+          if (value === "") clearIfApplied();
+        }}
         aria-label={he.common.search}
         placeholder={he.board.searchPlaceholder}
         className="min-w-0 flex-1"
       />
-      <Button type="submit" variant="secondary" className="shrink-0">
-        {he.search.submit}
+
+      {/*
+       * ה-X מוצג רק כשיש מה לנקות — הסתרה ולא `disabled`, לפי § שורת
+       * ההקלטה: פקד מושבת גוזל רוחב בלי לתת דבר, וכאן הרוחב הוא בדיוק
+       * המשאב שהשדה מתחרה עליו בטלפון.
+       *
+       * **הוא פקד משלנו ולא זה של הדפדפן.** ‏`::-webkit-search-cancel-button`
+       * קיים בכרום ובספארי בלבד, אינו קיים בפיירפוקס, ואינו מעוצב — הוא
+       * מושתק ב-`globals.css`, מאותו נימוק שבו החץ של `<select>` מוחלף
+       * (§ Input). בלי ההשתקה היו נראים שני X זה לצד זה.
+       */}
+      {query !== "" ? (
+        <Button
+          variant="quiet"
+          aria-label={he.search.clear}
+          onClick={() => {
+            setQuery("");
+            clearIfApplied();
+          }}
+          className="shrink-0"
+        >
+          <X className="size-3" aria-hidden="true" />
+        </Button>
+      ) : null}
+
+      {/* אייקון ולא "חפש": השם הנגיש נשאר בדיוק אותה מחרוזת, וזה מה
+          שמשאיר את `getByRole("button", { name: "חפש" })` עובד. */}
+      <Button
+        type="submit"
+        variant="secondary"
+        aria-label={he.search.submit}
+        className="shrink-0"
+      >
+        <Search className="size-3" aria-hidden="true" />
       </Button>
     </form>
   );

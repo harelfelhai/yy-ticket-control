@@ -4,12 +4,15 @@ import { loginAs } from "../fixtures/roles";
 import { TICKET_SCREEN } from "../fixtures/spec-text";
 import {
   acceptDialogs,
+  applyFilter,
   createTicket,
+  ensureTag,
   openDetails,
   searchBoard,
+  shownText,
   uniq,
   uniqPhone,
- shownText,} from "../fixtures/world";
+} from "../fixtures/world";
 
 /**
  * מסכים 9, 10 ו-11–15: חיפוש, תצוגת הבעלים והניהול.
@@ -71,18 +74,26 @@ test.describe("מסך 9 — חיפוש", () => {
 
   test("S9-03/DM-Q02 — תשעת מסנני §3.6, ברצועה הגלויה של הלוח", async ({ page }) => {
     acceptDialogs(page);
+
+    /*
+     * **התנאי המוקדם מוקם כאן, ולא נשען על קובץ אחר.**
+     *
+     * מסנן "תגיות" מותנה בקיום תגית אחת לפחות (`board-filters.tsx`),
+     * בשונה מהמסך הנפרד שהציג אותו תמיד. עד 0.6 השורה הזו בבסיס הגיעה
+     * מ-`s6-tag-chat` — כלומר הבדיקה עברה בזכות **הסדר האלפביתי** של
+     * Playwright, ונפלה בכל ריצה ממוקדת. ההערה שישבה כאן הודתה בכך
+     * וקראה לזה "תופעה של סדר ההרצה"; זו הודאה, לא תירוץ.
+     *
+     * תשע הטענות למטה לא נגעו — מה שהשתנה הוא שהבדיקה מביאה את מה שהיא
+     * צריכה במקום לקוות שמישהו אחר הביא אותו.
+     */
+    await ensureTag();
+
     await loginAs(page, "admin");
     await page.goto("/board");
 
-    /*
-     * הרצועה גלויה בכל רוחב ואין מתג לפתוח — לכן אין כאן `openFilters`,
-     * והנוכחות נבדקת ישירות.
-     *
-     * ‏"תגיות" מותנה בקיום תגית אחת לפחות (`board-filters.tsx`), בשונה
-     * מהמסך הנפרד שהציג אותו תמיד. בריצה מלאה `s6-tag-chat` יוצר תגית לפני
-     * הקובץ הזה; ריצה מבודדת של הקובץ בלבד עלולה להיכשל כאן, וזו תופעה של
-     * סדר ההרצה ולא פער במוצר.
-     */
+    // הרצועה גלויה בכל רוחב ואין מתג לפתוח — לכן אין כאן `openFilters`,
+    // והנוכחות נבדקת ישירות.
     for (const label of [
       "הפניתי",
       "אתר",
@@ -119,7 +130,18 @@ test.describe("מסך 9 — חיפוש", () => {
     const value = await options[1]?.getAttribute("value");
     if (!value) throw new Error("אין בניין לבחור — הנתונים לא נזרעו כמצופה");
 
-    await buildings.selectOption(value);
+    /*
+     * ‏`applyFilter` ולא `selectOption` ישיר.
+     *
+     * הבורר מנווט ב-`onChange` → `router.replace`, ובחירה שקדמה להידרציה
+     * **נבלעת בשקט**: הערך משתנה בדפדפן, `?building=` אינו נכתב, ובורר
+     * הדירה — שמגיע מ-`getBoard` בסבב שרת בלבד — לעולם אינו מרונדר. זה
+     * הכשל שנראה תחת עומס, והוא דיווח על עצמו כ"element(s) not found".
+     *
+     * הטענה לא רוככה: `toHaveCount(0)` שלמעלה ו-`toBeVisible` שלמטה
+     * נשארים כלשונם, ומה שנוסף הוא טענה שלישית — שהכתובת באמת השתנתה.
+     */
+    await applyFilter(page, "בניין", value, "building");
     await expect(page.getByLabel("דירה", { exact: true })).toBeVisible();
   });
 
@@ -261,6 +283,15 @@ test.describe("מסכים 11–15 — ניהול", () => {
     acceptDialogs(page);
     await loginAs(page, "admin");
     await page.goto("/admin/domains");
+    /*
+     * מחסום הידרציה. **הוא נעשה אפשרי בזכות תיקון במוצר, ולא במקומו:**
+     * עד 0.6 השדה לא היה מושבת עד ההידרציה, כלומר `fill` מוקדם הצליח
+     * לרגע והערך נמחק — והכפתור, שמושבת גם על שדה ריק, נשאר מושבת לנצח.
+     * זה נמדד בניסוי, וזה היה באג של משתמש אמיתי ולא רק של בדיקה.
+     * מאז `admin-add-form` מעביר `disabled={busy}` לשדה, וההמתנה כאן היא
+     * על אותו סימן בדיוק — בצורה של S12-01.
+     */
+    await expect(page.getByLabel("תחום חדש")).toBeEnabled();
     const domain = uniq("תחום-חדש");
     await page.getByLabel("תחום חדש").fill(domain);
     await page.getByRole("button", { name: "הוסף תחום" }).click();
