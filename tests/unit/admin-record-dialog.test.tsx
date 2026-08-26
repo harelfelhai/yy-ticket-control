@@ -110,6 +110,31 @@ describe("כרטיס רשומה — יעד אחד, בלי פקד מקונן", ()
      */
     expect(card.querySelectorAll("button, a, input, select")).toHaveLength(0);
   });
+
+  it.each([
+    ["אתרים", () => render(<SitesManager sites={SITES} managers={MANAGERS} />), "פרויקט הדר"],
+    ["משתמשים", () => render(<UsersManager sites={[]} users={USERS} />), "שירה לוי"],
+    [
+      "אנשי מקצוע",
+      () => render(<ProfessionalsManager professionals={PROFESSIONALS} />),
+      "אבי דגן",
+    ],
+  ])("‏%s: הכרטיס ממלא את תא הגריד — שורה בגובה אחד", (_label, mount, name) => {
+    /**
+     * **‏`h-full` ולא רק `w-full`, מ-0.8.**
+     *
+     * הרשימה עברה ל-`RECORD_CARD_GRID`, ושם ה-`<li>` נמתח לגובה
+     * השורה (`align-items: stretch`) — אבל הכפתור שבתוכו נשא רוחב
+     * בלבד. כרטיס עם שורת סיכום קצרה היה נמוך משכניו, והשורה
+     * נראתה משוננת. זו תקלה חזותית בלבד, ולכן אף בדיקה אחרת
+     * בפרויקט אינה רואה אותה.
+     */
+    mount();
+    const card = screen.getByRole("button", { name });
+
+    expect(card).toHaveClass("h-full");
+    expect(card).toHaveClass("w-full");
+  });
 });
 
 describe("דיאלוג פרטי אתר", () => {

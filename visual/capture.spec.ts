@@ -234,6 +234,22 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
     await shot(page, device, "14-admin-site-buildings");
   }
 
+  /*
+   * ‏0.8: שני המסכים שהסבב שינה ולא היו נלכדים מעולם.
+   *
+   * עד כאן חבילת הצילום כיסתה אתרים, בניינים ואנשי מקצוע — ודילגה על
+   * **תחומים ומשתמשים**. זה היה פער ולא בחירה: שניהם מסכי ניהול
+   * מלאים, ומסך התחומים הוא היחיד שנושא את זוג הפעולות בקצה הכרטיס
+   * בצורה גלויה. סבב ביקורת שאינו רואה אותם אינו יכול לחוות דעה עליהם.
+   */
+  await page.goto("/admin/users");
+  await expect(page.getByRole("listitem").first()).toBeVisible();
+  await shot(page, device, "16-admin-users");
+
+  await page.goto("/admin/domains");
+  await expect(page.getByRole("listitem").first()).toBeVisible();
+  await shot(page, device, "17-admin-domains");
+
   await captureBatchAndTag(page, device);
 });
 

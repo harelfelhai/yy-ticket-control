@@ -9,7 +9,12 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/field";
 import { FormError } from "@/components/ui/message";
 import { he } from "@/lib/he";
-import { CARD_LIST, DIALOG_SCROLL_BODY, RECORD_NAME, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import {
+  DIALOG_SCROLL_BODY,
+  RECORD_CARD_GRID,
+  RECORD_NAME,
+  TITLE_DESCRIPTIVE,
+} from "@/lib/ui";
 import { useAction } from "@/lib/use-action";
 import { RecordCard } from "../../record-card";
 import { createUserAction, setUserActiveAction, updateUserAction } from "../../actions";
@@ -65,7 +70,7 @@ export function UsersManager({ sites, users }: { sites: SiteOption[]; users: Use
         </Button>
       </div>
 
-      <ul className={CARD_LIST}>
+      <ul className={RECORD_CARD_GRID}>
         {users.map((user) => (
           <RecordCard key={user.id} label={user.name} onOpen={() => setOpenId(user.id)}>
             <span className={RECORD_NAME}>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
-import { FULL_WIDTH, PAGE_X, TITLE_DESCRIPTIVE, CARD_LIST, RECORD_NAME} from "@/lib/ui";
+import { FULL_WIDTH, PAGE_X, TITLE_DESCRIPTIVE, RECORD_CARD_GRID, RECORD_NAME} from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
 import { deleteTagAction, renameTagAction } from "./actions";
 import { DeleteButton } from "@/components/delete-button";
@@ -33,7 +33,7 @@ export default async function TagsPage() {
       {tags.length === 0 ? (
         <EmptyState>{he.tag.listEmpty}</EmptyState>
       ) : (
-        <ul className={CARD_LIST}>
+        <ul className={RECORD_CARD_GRID}>
           {tags.map((tag) => (
             <li
               key={tag.id}
@@ -53,8 +53,15 @@ export default async function TagsPage() {
                 </span>
               </div>
               {canManage ? (
+                // ‏`ms-auto` על העיפרון — הפעולות בקצה הכרטיס ולא בתחילתו
+                // (§ Layout, החריג הצר). הכרטיס חסום בעמודת גריד, ולכן
+                // המרחק שהכלל מונע אינו יכול להיווצר כאן.
                 <div className="flex flex-wrap items-start gap-2">
-                  <InlineRename value={tag.name} action={renameTagAction.bind(null, tag.id)} />
+                  <InlineRename
+                    className="ms-auto"
+                    value={tag.name}
+                    action={renameTagAction.bind(null, tag.id)}
+                  />
                   <DeleteButton name={tag.name} action={deleteTagAction.bind(null, tag.id)} />
                 </div>
               ) : null}

@@ -26,6 +26,7 @@ export function InlineRename({
   action,
   disabled,
   inputMode,
+  className,
 }: {
   /** הערך הנערך עצמו — מה שיישלח לפעולה ומה שמשמש כתווית הנגישה של השדה */
   value: string;
@@ -37,6 +38,18 @@ export function InlineRename({
   action: (next: string) => Promise<ActionResult>;
   disabled?: boolean;
   inputMode?: "text" | "numeric";
+  /**
+   * מחלקות **מיקום** לטריגר המקופל (העיפרון) — בפועל `ms-auto`, שמצמיד את
+   * זוג הפעולות לקצה הכרטיס במקום לשם שלצדו (§ Layout, החריג הצר).
+   *
+   * **מוחל על המצב המקופל בלבד, וזו הנקודה.** במצב הפתוח הרכיב מרנדר
+   * ‏`w-full` ותופס שורה שלמה — שם `ms-auto` חסר משמעות, ומחלקה שהייתה
+   * מוחלת גם שם רק יכולה להזיק.
+   *
+   * זהו אותו דפוס שהרכיב כבר משתמש בו בעצמו: הוא מעביר
+   * `className="min-w-0 flex-1"` ל-`Input` שבתוכו.
+   */
+  className?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -56,6 +69,7 @@ export function InlineRename({
         size="compact"
         onClick={() => setEditing(true)}
         disabled={disabled}
+        className={className}
         aria-label={`${he.common.rename} ${name}`}
       >
         {/*

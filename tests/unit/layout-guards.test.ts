@@ -1,7 +1,16 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CONTENT_WIDTH, DIALOG_WIDE, FULL_WIDTH, PAGE_BLEED, PAGE_X } from "@/lib/ui";
+import {
+  CONTENT_WIDTH,
+  DIALOG_WIDE,
+  FULL_WIDTH,
+  NESTED_CARD_GRID,
+  PAGE_BLEED,
+  PAGE_X,
+  RECORD_CARD_GRID,
+  TICKET_CARD_GRID,
+} from "@/lib/ui";
 import { SRC, scan } from "./source-scan";
 
 const ROOT = join(SRC, "..");
@@ -59,6 +68,42 @@ describe("רוחבי תוכן", () => {
      * ייכתבו בתום לב על ידי מי שינסה "לרסן" מסך רחב במקום לרסן את הרכיב.
      */
     expect(FULL_WIDTH).toBe("w-full");
+  });
+
+  /**
+   * **גריד הכרטיסים — אותה משפחה בדיוק כמו `max-w-*` הישיר שמעליו.**
+   *
+   * הדפוס `grid-cols-[repeat(auto-fill,minmax(min(Npx,100%),1fr))]` נולד בלוח
+   * ב-0.6 וחי שם כליטרל יחיד. ב-0.8 מסכי הניהול אימצו אותו בשני רוחבים
+   * נוספים, וברגע שיש **שלושה** ליטרלים כמעט-זהים בשלושה קבצים — יופיע רביעי
+   * ברוחב רביעי, וזו הצורה שפער 22 חזר בה פעמיים.
+   *
+   * **הבדיקה שומרת גם על `min(…,100%)` ולא רק על מקור אחד**, מפני שזה החלק
+   * שנשבר בשקט: `minmax` עם רצפה קשיחה אינה יורדת מתחתיה, ובטלפון של 320px
+   * עמודה של 360px גולשת מהמסך. הכשל הזה נתפס רק ב-`rtl-mobile.spec.ts`,
+   * כלומר רק במדידה בדפדפן ורק אם מריצים אותה.
+   */
+  const CARD_GRID_LITERAL = /grid-cols-\[repeat\(auto-fill/;
+
+  it("אין גריד כרטיסים ישיר — הרוחב מגיע מ-`src/lib/ui.ts`", () => {
+    const offenders = scan(CARD_GRID_LITERAL, ["lib/ui.ts"]);
+
+    expect(
+      offenders,
+      "יש להשתמש ב-RECORD_CARD_GRID / TICKET_CARD_GRID / NESTED_CARD_GRID " +
+        `מ-@/lib/ui (DESIGN.md § רוחבי תוכן):\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["RECORD_CARD_GRID", RECORD_CARD_GRID, 280],
+    ["TICKET_CARD_GRID", TICKET_CARD_GRID, 360],
+    ["NESTED_CARD_GRID", NESTED_CARD_GRID, 420],
+  ])("‏%s חוסם את העמודה ואינו גולש בטלפון", (_name, value, min) => {
+    // הרצפה עצמה, ו-`min(…,100%)` שמונע ממנה לגלוש ממסך צר ממנה.
+    expect(value).toContain(`minmax(min(${min}px,100%),1fr)`);
+    // אותו ריתמוס של `CARD_LIST` — DESIGN.md § ריתמוס.
+    expect(value).toContain("gap-2");
   });
 
   it("ריפוד העמוד והבליטה הדביקה הם אותו ערך", () => {

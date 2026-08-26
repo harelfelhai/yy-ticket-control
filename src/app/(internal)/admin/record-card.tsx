@@ -27,6 +27,12 @@ import { cardClasses } from "@/components/ui/card";
  *
  * **‏`text-start` חובה:** ‏`<button>` מיישר טקסט למרכז כברירת מחדל של
  * ה-UA, וכרטיס שתוכנו ממורכז נקרא כהודעה ולא כשורה ברשימה.
+ *
+ * **‏`h-full` הצטרף ב-0.8 עם המעבר לגריד.** הרשימה אינה עוד עמודה אחת, וב-
+ * `RECORD_CARD_GRID` ה-`<li>` נמתח לגובה השורה (`align-items: stretch`
+ * כברירת מחדל). הכפתור שבתוכו נשא `w-full` בלבד, ולכן כרטיס עם שורת סיכום
+ * קצרה היה נמוך משכניו והשורה נראתה משוננת. שאר רשימות הניהול אינן צריכות
+ * את זה — שם ה-`<li>` **הוא** הכרטיס, והמתיחה מגיעה מהגריד עצמו.
  */
 export function RecordCard({
   label,
@@ -50,7 +56,7 @@ export function RecordCard({
         type="button"
         onClick={onOpen}
         aria-label={label}
-        className={cardClasses("flex w-full flex-col gap-1 text-start")}
+        className={cardClasses("flex h-full w-full flex-col gap-1 text-start")}
       >
         {children}
       </button>

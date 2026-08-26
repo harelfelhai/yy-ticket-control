@@ -15,7 +15,14 @@ import {
 import { he } from "@/lib/he";
 import { type BoardFilters as Filters, getBoard } from "@/lib/services/board";
 import type { BoardSection, DerivedTicketStatus } from "@/lib/ticket-status";
-import { FULL_WIDTH, PAGE_BLEED, PAGE_X, STICKY_UNDER_HEADER, TITLE_DESCRIPTIVE } from "@/lib/ui";
+import {
+  FULL_WIDTH,
+  PAGE_BLEED,
+  PAGE_X,
+  STICKY_UNDER_HEADER,
+  TICKET_CARD_GRID,
+  TITLE_DESCRIPTIVE,
+} from "@/lib/ui";
 import { BoardFilters } from "./board-filters";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Banner } from "@/components/ui/message";
@@ -308,8 +315,12 @@ function CardList({
      * ביניהם. ‏`auto-fill` פותר את זה בלי לוותר על המסך — עמודה חסומה
      * ב-360px, וכל מה שנשאר הופך לעמודה נוספת. מסך רחב קונה **עוד כרטיסים
      * בשורה**, לא כרטיס מתוח אחד.
+     *
+     * **המחרוזת עברה ל-`src/lib/ui.ts` ב-0.8.** מסכי הניהול אימצו את אותה
+     * תשובה בשני רוחבים נוספים, ושלושה ליטרלים כמעט-זהים בשלושה קבצים הם
+     * בדיוק הצורה שפער 22 חזר בה פעמיים. הערך והתנהגותו לא השתנו.
      */
-    <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(360px,100%),1fr))]">
+    <div className={TICKET_CARD_GRID}>
       {ordered.map((card) => (
         <TicketCard key={card.id} card={card} />
       ))}

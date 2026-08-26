@@ -13,7 +13,7 @@ import {
   LINK,
   TITLE_DESCRIPTIVE,
   TITLE_IDENTIFYING,
-  CARD_LIST,
+  NESTED_CARD_GRID,
   ROW_LIST,
   RECORD_NAME,
 } from "@/lib/ui";
@@ -87,7 +87,16 @@ export default async function AdminSiteBuildingsPage(
         {buildings.length === 0 ? (
           <EmptyState className="min-w-0 flex-1">{he.admin.noBuildings}</EmptyState>
         ) : (
-          <ul className={`${CARD_LIST} min-w-0 flex-1`}>
+          /*
+           * ‏`NESTED_CARD_GRID` (420px) ולא `RECORD_CARD_GRID` (280px):
+           * כרטיס הבניין אינו שורת סיכום אלא **מיכל** — בתוכו רשימת דירות
+           * וטופס הוספה. בעמודה של 280px כל שורת דירה נשברת לשלוש.
+           *
+           * הדירות שבתוכו נשארות `ROW_LIST` ואינן מקבלות גריד: § ריתמוס
+           * מבחין בין "פריטים נפרדים" ל"שורות **בתוך** פריט אחד", והן
+           * השנייה. גריד עליהן היה שובר את ההיררכיה שהכרטיס מייצג.
+           */
+          <ul className={`${NESTED_CARD_GRID} min-w-0 flex-1`}>
             {buildings.map((building) => (
               <li key={building.id} className={cardClasses("flex flex-col gap-2")}>
                 {/*
@@ -105,7 +114,10 @@ export default async function AdminSiteBuildingsPage(
                   <span className="text-sm text-muted">
                     {he.admin.linkedTickets(building.ticketCount)}
                   </span>
+                  {/* ‏`ms-auto` על העיפרון — הפעולות בקצה הכרטיס, והפח
+                      נגרר אחריו (§ Layout, החריג הצר). */}
                   <InlineRename
+                    className="ms-auto"
                     value={building.name}
                     action={renameBuildingAction.bind(null, siteId, building.id)}
                   />
@@ -149,6 +161,7 @@ export default async function AdminSiteBuildingsPage(
                            * את אותו שם והאישור אינו אומר איזו דירה נמחקת.
                            */}
                           <InlineRename
+                            className="ms-auto"
                             value={apartment.number}
                             name={he.ticket.location(building.name, apartment.number)}
                             inputMode="numeric"

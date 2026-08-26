@@ -2,7 +2,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { InlineRename } from "@/components/inline-rename";
 import { cardClasses } from "@/components/ui/card";
 import { deleteDomainAction, renameDomainAction } from "../../actions";
-import { CARD_LIST, RECORD_NAME } from "@/lib/ui";
+import { RECORD_CARD_GRID, RECORD_NAME } from "@/lib/ui";
 
 interface DomainRow {
   id: string;
@@ -21,7 +21,7 @@ interface DomainRow {
  */
 export function DomainsList({ domains }: { domains: DomainRow[] }) {
   return (
-    <ul className={CARD_LIST}>
+    <ul className={RECORD_CARD_GRID}>
       {domains.map((domain) => (
         <li
           key={domain.id}
@@ -33,7 +33,23 @@ export function DomainsList({ domains }: { domains: DomainRow[] }) {
               מייצר, ו**חומק מהאוכף** — זו הצורה המוסווית של אותה הפרה.
               `min-w-0` נשאר: הוא מה שמאפשר קיצור שם ארוך. */}
           <span className={`min-w-0 ${RECORD_NAME}`}>{domain.name}</span>
-          <InlineRename value={domain.name} action={renameDomainAction.bind(null, domain.id)} />
+          {/*
+           * ‏`ms-auto` על העיפרון מצמיד את זוג הפעולות לקצה הכרטיס, והפח
+           * נגרר אחריו. **זהו החריג הצר של § Layout ולא הפרה שלו:** הכלל
+           * מנוסח נגד דחיפה לקצה של מיכל **רחב**, וכאן הכרטיס חסום בעמודת
+           * גריד של 280-560px — הנזק שהכלל מונע (מאות פיקסלים בין הפעולה
+           * למה שהיא פועלת עליו) אינו יכול להתרחש.
+           *
+           * **מרווח אוטומטי ולא עטיפה, וזה אילוץ מדוד:** ‏`InlineRename`
+           * פתוח מרנדר `w-full` שנועד להיות רוחב **השורה**, כדי שהשדה ירד
+           * לשורה משלו. בתוך `<div>` עוטף הוא היה נמדד מול העטיפה — כלומר
+           * שדה קלט ברוחב שני כפתורים.
+           */}
+          <InlineRename
+            className="ms-auto"
+            value={domain.name}
+            action={renameDomainAction.bind(null, domain.id)}
+          />
           <DeleteButton name={domain.name} action={deleteDomainAction.bind(null, domain.id)} />
         </li>
       ))}
