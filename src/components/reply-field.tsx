@@ -75,8 +75,8 @@ export function ReplyField({ value, onChange, disabled }: ReplyFieldProps) {
       placeholder={he.ticket.replyPlaceholder}
       /*
        * **‏`size="compact"` הוא מה שמיישר את התיבה לכפתורים שלצדה**, והוא
-       * החליף כאן `min-h-9 touch:min-h-11` שנכתב בסבב הקודם — זוג נכון,
-       * שפתר בעיה אחרת.
+       * החליף כאן `min-h-9` + רצפת מגע שנכתבו בסבב קודם — ניסוח נכון
+       * לזמנו, שפתר בעיה אחרת.
        *
        * **ההנחה שנפלה:** ההערה כאן טענה שהשדה יוצא "כ-42px (שורה של 16px
        * בגובה שורה רגיל)". גובה השורה אינו רגיל — `globals.css` קובע

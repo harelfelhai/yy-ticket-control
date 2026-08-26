@@ -11,6 +11,27 @@ function setup(props: Partial<Parameters<typeof InlineRename>[0]> = {}) {
 }
 
 describe("InlineRename", () => {
+  it("הטריגר הוא עיפרון, והשם הנגיש שורד את היעלמות התווית", () => {
+    /**
+     * **הבדיקה הזו שומרת על החוזה שמחזיק חמש חבילות e2e.**
+     *
+     * ב-0.7 התווית הגלויה "שנה שם" הוחלפה ב-`Pencil` (§ אייקונים). כל
+     * חבילה שמאתרת את הכפתור עושה זאת **בשמו** — `getByRole("button",
+     * { name: "שנה שם X" })` — והשם הזה מגיע מעכשיו מ-`aria-label` ולא
+     * מהטקסט. סטייה של תו אחד בו שוברת אותן בשקט, ולכן הוא נבדק כאן
+     * במפורש ולא דרך רגקס סלחני.
+     *
+     * ‏`aria-hidden` על ה-SVG הוא החצי השני: בלעדיו קורא מסך היה מקריא
+     * גם את שם האייקון וגם את התווית.
+     */
+    setup();
+    const trigger = screen.getByRole("button", { name: `${he.common.rename} בניין א` });
+
+    expect(trigger).toHaveTextContent("");
+    expect(trigger.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(trigger.querySelector("svg")).toHaveClass("size-3");
+  });
+
   it("השדה נפתח רק בלחיצה — רשימה נשארת רשימה ולא טופס", async () => {
     const { user } = setup();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();

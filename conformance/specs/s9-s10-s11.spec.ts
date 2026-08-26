@@ -236,21 +236,26 @@ test.describe("מסכים 11–15 — ניהול", () => {
     const name = uniq("עובד חדש");
     const phone = uniqPhone();
 
+    // ‏0.7: הטופס ירד לדיאלוג שנפתח מכפתור שצמוד לכותרת.
+    await page.getByRole("button", { name: "הוסף משתמש חדש" }).click();
+    const form = page.getByRole("dialog");
+
     // הטופס מושבת עד ההידרציה; `selectOption` לפניה נבלע, התפקיד נשאר
     // ברירת המחדל, ושדה האתר (שמותנה ב-SITE_MANAGER) אינו מרונדר כלל.
-    await expect(page.getByRole("button", { name: "הוסף משתמש" })).toBeEnabled();
-    await page.getByLabel("שם", { exact: true }).fill(name);
-    await page.getByLabel("טלפון", { exact: true }).fill(phone);
-    await page.getByLabel("תפקיד").selectOption({ label: "מנהל עבודה" });
+    await expect(form.getByRole("button", { name: "הוסף משתמש", exact: true })).toBeEnabled();
+    await form.getByLabel("שם", { exact: true }).fill(name);
+    await form.getByLabel("טלפון", { exact: true }).fill(phone);
+    await form.getByLabel("תפקיד").selectOption({ label: "מנהל עבודה" });
     // ‏`getByLabel("אתר", {exact:true})` נכשל כאן: ה-`Field` עוטף את ה-select
     // בתוך ה-`label`, ולכן ה-textContent שלו הוא "אתר" ועוד כל טקסטי
     // האפשרויות. ‏`getByRole` משתמש בשם הנגיש המחושב ולא בטקסט הגולמי.
-    await expect(page.getByRole("combobox", { name: "אתר" })).toBeVisible();
-    await page.getByRole("combobox", { name: "אתר" }).selectOption({ label: SITE_A });
-    await page.getByLabel("סיסמה ראשונית").fill("conformance-1234");
-    await page.getByRole("button", { name: "הוסף משתמש" }).click();
+    await expect(form.getByRole("combobox", { name: "אתר" })).toBeVisible();
+    await form.getByRole("combobox", { name: "אתר" }).selectOption({ label: SITE_A });
+    await form.getByLabel("סיסמה ראשונית").fill("conformance-1234");
+    await form.getByRole("button", { name: "הוסף משתמש", exact: true }).click();
 
-    await expect(shownText(page, name)).toBeVisible();
+    await expect(form).toBeHidden();
+    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
   });
 
   test("S13-04 — איחוד כפילויות של אנשי מקצוע", async ({ page }) => {
@@ -270,13 +275,18 @@ test.describe("מסכים 11–15 — ניהול", () => {
 
     await loginAs(page, "admin");
     await page.goto("/admin/professionals");
+    // ‏0.7: האיחוד ירד מהפאנל הקבוע לדיאלוג — הפעולה הנדירה ביותר במסך
+    // הייתה זו שתפסה פאנל לצד הרשימה.
+    await page.getByRole("button", { name: "איחוד כפילויות" }).click();
+    const merge = page.getByRole("dialog");
+
     // הבוררים מושבתים עד ההידרציה — `selectOption` לפניה נבלע ומשאיר את
     // "אחד" מושבת לנצח. ממתינים שהם יידלקו, כמו ב-S12-01.
-    await expect(page.getByLabel("להשאיר")).toBeEnabled();
-    await page.getByLabel("להשאיר").selectOption({ label: keep });
-    await page.getByLabel("לאחד ולמחוק").selectOption({ label: drop });
-    await page.getByRole("button", { name: "אחד", exact: true }).click();
-    await expect(page.getByText(/הכפילות אוחדה/)).toBeVisible();
+    await expect(merge.getByLabel("להשאיר")).toBeEnabled();
+    await merge.getByLabel("להשאיר").selectOption({ label: keep });
+    await merge.getByLabel("לאחד ולמחוק").selectOption({ label: drop });
+    await merge.getByRole("button", { name: "אחד", exact: true }).click();
+    await expect(merge.getByText(/הכפילות אוחדה/)).toBeVisible();
   });
 
   test("S14-01 — ניהול רשימת התחומים", async ({ page }) => {

@@ -9,6 +9,7 @@ import {
   createBuilding,
   createDomain,
   createInternalUser,
+  createProfessionalRecord,
   createSite,
   deleteApartment,
   deleteBuilding,
@@ -21,6 +22,7 @@ import {
   renameDomain,
   renameSite,
   setProfessionalActive,
+  setSiteManagers,
   setUserActive,
   updateProfessional,
   updateUser,
@@ -39,10 +41,37 @@ const roleSchema = z.enum(["ADMIN", "OWNER", "SITE_MANAGER"]);
 /** מזהה חובה. חוזר בכל פעולה, ולכן מנורמל במקום אחד ולא בכל קריאה מחדש. */
 const id = (value: string) => z.string().min(1).parse(value);
 
-export async function createSiteAction(name: string): Promise<ActionResult> {
+/** רשימת מזהים שמגיעה מהלקוח — כל איבר מנורמל, ולא רק המערך. */
+const idList = z.array(z.string().min(1));
+
+export async function createSiteAction(input: {
+  name: string;
+  managerIds: string[];
+}): Promise<ActionResult> {
   return guard(async () => {
-    await createSite(await requireUser(), z.string().parse(name));
+    await createSite(
+      await requireUser(),
+      z.string().parse(input.name),
+      idList.parse(input.managerIds),
+    );
     revalidatePath("/admin/sites");
+  });
+}
+
+/**
+ * שיוך מנהלי העבודה לאתר — נערך מתוך דיאלוג הפרטים (0.7).
+ *
+ * ‏`/admin/users` מרוענן גם הוא: שיוך מנהל משנה את עמודת "אתר" שלו שם,
+ * ובלי הרענון המסך השני מציג את השיוך הישן עד ניווט מלא.
+ */
+export async function setSiteManagersAction(
+  siteId: string,
+  managerIds: string[],
+): Promise<ActionResult> {
+  return guard(async () => {
+    await setSiteManagers(await requireUser(), id(siteId), idList.parse(managerIds));
+    revalidatePath("/admin/sites");
+    revalidatePath("/admin/users");
   });
 }
 
@@ -179,6 +208,22 @@ const professionalSchema = z.object({
   phone: z.string().optional(),
   email: z.string().optional(),
 });
+
+/**
+ * הקמת איש מקצוע ממסך הניהול (0.7).
+ *
+ * מרענן גם את `/tickets/new`: בורר הנמענים שם נטען בשרת, ואיש מקצוע שהוקם
+ * זה עתה לא היה מופיע בו עד ניווט מלא.
+ */
+export async function createProfessionalAction(
+  input: z.infer<typeof professionalSchema>,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await createProfessionalRecord(await requireUser(), professionalSchema.parse(input));
+    revalidatePath("/admin/professionals");
+    revalidatePath("/tickets/new");
+  });
+}
 
 export async function updateProfessionalAction(
   id: string,

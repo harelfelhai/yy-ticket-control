@@ -3,8 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { listProfessionalsForAdmin } from "@/lib/services/admin";
 import { ProfessionalsManager } from "./professionals-manager";
-import { FULL_WIDTH, LINK, PAGE_X, TITLE_DESCRIPTIVE } from "@/lib/ui";
-import { EmptyState } from "@/components/ui/empty-state";
+import { FULL_WIDTH, LINK, PAGE_X } from "@/lib/ui";
 
 export const metadata = { title: `${he.admin.professionals} — ${he.app.name}` };
 
@@ -15,19 +14,20 @@ export default async function AdminProfessionalsPage() {
 
   return (
     <div className={`flex flex-col gap-3 py-3 ${PAGE_X} ${FULL_WIDTH}`}>
-      <div>
-        {/* קו תחתון ולא `text-brand` — ראו `LINK` ב-`src/lib/ui.ts`. */}
-        <Link href="/admin" className={`text-sm ${LINK}`}>
-          ← {he.admin.title}
-        </Link>
-        <h1 className={TITLE_DESCRIPTIVE}>{he.admin.professionals}</h1>
-      </div>
+      {/* קו תחתון ולא `text-brand` — ראו `LINK` ב-`src/lib/ui.ts`. */}
+      <Link href="/admin" className={`text-sm ${LINK}`}>
+        ← {he.admin.title}
+      </Link>
 
-      {professionals.length === 0 ? (
-        <EmptyState>{he.common.noResults}</EmptyState>
-      ) : (
-        <ProfessionalsManager professionals={professionals} />
-      )}
+      {/*
+       * **הכותרת והמצב הריק ירדו שניהם ל-`ProfessionalsManager` (0.7).**
+       *
+       * המצב הריק היה כאן ענף אח לרכיב כולו, וזה נשבר ברגע שנוספה הוספה
+       * מהמסך הזה: כשאין אף איש מקצוע, הענף הזה החליף את הרכיב — כלומר
+       * **הסתיר את הכפתור שנועד למלא אותו**. מצב ריק שמסתיר את הפעולה
+       * שממלאת אותו הוא מסך מת (§ EmptyState: "מזמין לפעולה").
+       */}
+      <ProfessionalsManager professionals={professionals} />
     </div>
   );
 }

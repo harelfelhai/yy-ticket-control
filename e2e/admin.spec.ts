@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { openDetails, shownText} from "./ticket-screen";
+import { openDetails } from "./ticket-screen";
 
 /**
  * מסכי הניהול (11–15), מקצה לקצה.
@@ -50,21 +50,35 @@ test("מנהל מערכת מקים משתמש ותחום", async ({ page }) => {
   await loginAsAdmin(page);
 
   // ── משתמש חדש — מנהל עבודה משויך לאתר ה-seed ──────────────────────
+  //
+  // ‏0.7: הטופס ירד מהפאנל הצדדי לדיאלוג שנפתח מכפתור שצמוד לכותרת.
+  // השדות עצמם לא השתנו, ולכן רק שורת הפתיחה נוספה כאן.
   await page.goto("/admin/users");
-  await page.getByLabel("שם", { exact: true }).fill(managerName);
-  await page.getByLabel("טלפון").fill(`050${String(stamp).slice(-7)}`);
+  await page.getByRole("button", { name: "הוסף משתמש חדש" }).click();
+
+  const newUser = page.getByRole("dialog");
+  await newUser.getByLabel("שם", { exact: true }).fill(managerName);
+  await newUser.getByLabel("טלפון").fill(`050${String(stamp).slice(-7)}`);
   // התפקיד "מנהל עבודה" הוא ברירת המחדל, ולכן בורר האתר גלוי.
-  await page.getByLabel("אתר").selectOption({ label: "אתר לדוגמה" });
-  await page.getByLabel("סיסמה ראשונית").fill("sod-chazak-123");
-  await page.getByRole("button", { name: "הוסף משתמש" }).click();
-  await expect(shownText(page, managerName)).toBeVisible();
+  await newUser.getByLabel("אתר").selectOption({ label: "אתר לדוגמה" });
+  await newUser.getByLabel("סיסמה ראשונית").fill("sod-chazak-123");
+  await newUser.getByRole("button", { name: "הוסף משתמש", exact: true }).click();
+
+  // הדיאלוג נסגר בהצלחה, והמשתמש מופיע ברשימה שמאחוריו.
+  await expect(newUser).toBeHidden();
+  await expect(page.getByRole("button", { name: managerName, exact: true })).toBeVisible();
 
   // ── תחום חדש ──────────────────────────────────────────────────────
+  //
+  // מסך התחומים **נשאר** על טופס בצד (§ שלב 6): לתחום שדה אחד, ודיאלוג
+  // סביבו היה מוסיף שתי לחיצות בלי להוסיף מקום. מה שהשתנה הוא שהכפתור
+  // הוא `+` — והשם הנגיש נשמר, ולכן הבורר כאן לא זז.
   await page.goto("/admin/domains");
   await page.getByLabel("תחום חדש").fill(domainName);
   await page.getByRole("button", { name: "הוסף תחום" }).click();
   // ‏0.3: שם התחום מוצג כטקסט, ושדה העריכה נפתח בלחיצה על "שנה שם" — משנוספה
   // המחיקה לשורה, שדה קלט פתוח בכל שורה הפך את הרשימה לטופס.
+  // ‏0.7: הכפתור נושא אייקון עיפרון, ואותו שם נגיש בדיוק.
   await expect(page.getByRole("button", { name: `שנה שם ${domainName}` })).toBeVisible();
 });
 
@@ -80,22 +94,30 @@ test("מנהל מערכת מאחד שני אנשי מקצוע כפולים", asy
 
   await page.goto("/admin/professionals");
 
+  // ‏0.7: טופס האיחוד ירד מהפאנל הקבוע לדיאלוג — זו הפעולה הנדירה ביותר
+  // במסך, והיא זו שתפסה פאנל לצד הרשימה.
+  await page.getByRole("button", { name: "איחוד כפילויות" }).click();
+  const mergeDialog = page.getByRole("dialog");
+
   // הבחירה עטופה ב-toPass: כשבסיס הנתונים המשותף צובר אנשי מקצוע רבים,
   // ‏selectOption על select מבוקר ב-React נכשל לעיתים להירשם במצב — flake
   // של סביבת הבדיקה. חוזרים על הבחירה עד שהכפתור מאופשר.
-  const mergeButton = page.getByRole("button", { name: "אחד", exact: true });
+  const mergeButton = mergeDialog.getByRole("button", { name: "אחד", exact: true });
   await expect(async () => {
-    await page.getByLabel("להשאיר").selectOption({ label: keep });
-    await page.getByLabel("לאחד ולמחוק").selectOption({ label: drop });
+    await mergeDialog.getByLabel("להשאיר").selectOption({ label: keep });
+    await mergeDialog.getByLabel("לאחד ולמחוק").selectOption({ label: drop });
     await expect(mergeButton).toBeEnabled({ timeout: 1000 });
   }).toPass({ timeout: 15_000 });
 
   page.once("dialog", (d) => d.accept());
   await mergeButton.click();
 
-  await expect(page.getByText(`הכפילות אוחדה. הכול הועבר ל"${keep}".`)).toBeVisible();
-  // הכפיל נמחק — אינו מופיע עוד ברשימה.
-  await expect(page.getByText(drop)).toHaveCount(0);
+  await expect(mergeDialog.getByText(`הכפילות אוחדה. הכול הועבר ל"${keep}".`)).toBeVisible();
+
+  // הכפיל נמחק — אינו מופיע עוד ברשימה. הבדיקה על הכרטיס ולא על טקסט
+  // חופשי: הדיאלוג הפתוח עדיין מחזיק את שמו בהודעת האישור שמעליו.
+  await mergeDialog.getByRole("button", { name: "סגור", exact: true }).click();
+  await expect(page.getByRole("button", { name: drop, exact: true })).toHaveCount(0);
 });
 
 test("מנהל מערכת מוחק פנייה כפולה — אישור כפול", async ({ page }) => {

@@ -31,12 +31,19 @@ export default async function AdminDomainsPage() {
        * טופס ההוספה לצד הרשימה, כמו בשאר מסכי הניהול. הרשימה עטופה כדי
        * לקבל את השארית (`flex-1`) בלי ש-`DomainsList` יידע איפה הוא מוצג —
        * הוא רכיב רשימה ולא רכיב עמוד.
+       *
+       * **המסך הזה נשאר על טופס בצד, ולא עבר לדיאלוג כמו אתרים ומשתמשים
+       * ואנשי מקצוע (0.7).** לתחום יש שדה אחד — שם — ודיאלוג סביב שדה
+       * בודד מוסיף שתי לחיצות ומסך שנחסם, בלי להוסיף מקום לשום דבר. מה
+       * שכן ירד כאן הוא התווית של הכפתור: `buttonStyle="icon"` הופך אותו
+       * ל-`+` בשורה אחת עם השדה, והשם הנגיש נשמר ב-`aria-label`.
        */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
         <AdminAddForm
           label={he.admin.newDomain}
           buttonLabel={he.admin.addDomain}
           action={createDomainAction}
+          buttonStyle="icon"
         />
 
         <div className="min-w-0 flex-1">

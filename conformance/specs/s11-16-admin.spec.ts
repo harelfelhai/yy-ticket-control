@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { type Page, expect, test } from "@playwright/test";
 import { SITE_A } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
 import { acceptDialogs, createTicket, gotoNewTicket, uniq, uniqPhone } from "../fixtures/world";
@@ -15,6 +15,24 @@ import { acceptDialogs, createTicket, gotoNewTicket, uniq, uniqPhone } from "../
  * ושאר הבדיקות מניחות שהאתרים, הבניינים והקבלנים קיימים.
  */
 
+/**
+ * ניווט מרשימת האתרים למסך הבניינים והדירות של אתר.
+ *
+ * **‏0.7: זהו מסלול בן שני שלבים ולא לחיצה אחת.** הקישור "בניינים ודירות"
+ * ישב על כרטיס האתר, וירד יחד עם שאר הפעולות אל **דיאלוג הפרטים** שנפתח
+ * בלחיצה על הכרטיס. שתי בדיקות מנווטות כך, ולכן המסלול מרוכז כאן —
+ * ולא נכתב פעמיים ומתפצל בשינוי הבא.
+ *
+ * הכרטיס מאותר לפי `aria-label` שהוא שם האתר בדיוק, ולא לפי `hasText`:
+ * שם האתר מופיע גם בשורת מנהלי העבודה של אתרים אחרים, ו-`filter` היה
+ * מחזיר יותר מכרטיס אחד.
+ */
+async function openSiteBuildings(page: Page, site: string): Promise<void> {
+  await page.getByRole("button", { name: site, exact: true }).click();
+  await page.getByRole("dialog").getByRole("link", { name: /בניינים ודירות/ }).click();
+  await page.waitForURL(/\/admin\/sites\/.+/);
+}
+
 test.describe("מסך 16 — בניינים ודירות", () => {
   test("S16-01 — האתר מוביל למסך הבניינים, ואפשר להגדיר בניין ודירה מראש", async ({ page }) => {
     acceptDialogs(page);
@@ -22,11 +40,7 @@ test.describe("מסך 16 — בניינים ודירות", () => {
     await page.goto("/admin/sites");
 
     // ההגעה היא מהאתר ולא מתפריט שטוח: הייחודיות של שם בניין היא (אתר, שם).
-    await page
-      .getByRole("listitem")
-      .filter({ hasText: SITE_A })
-      .getByRole("link", { name: /בניינים ודירות/ })
-      .click();
+    await openSiteBuildings(page, SITE_A);
     await expect(page.getByRole("heading", { name: SITE_A })).toBeVisible();
 
     const building = uniq("בניין-ניהולי");
@@ -63,11 +77,7 @@ test.describe("מסך 16 — בניינים ודירות", () => {
     const second = uniq("בניין-ב-זמני");
 
     await page.goto("/admin/sites");
-    await page
-      .getByRole("listitem")
-      .filter({ hasText: SITE_A })
-      .getByRole("link", { name: /בניינים ודירות/ })
-      .click();
+    await openSiteBuildings(page, SITE_A);
 
     for (const name of [first, second]) {
       await page.getByLabel("שם הבניין").fill(name);
@@ -151,36 +161,38 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
     await loginAs(page, "admin");
     await page.goto("/admin/users");
 
+    // ‏0.7: ההקמה נפתחת מכפתור שצמוד לכותרת, והשדות יושבים בדיאלוג.
     const name = uniq("משתמש-לעריכה");
-    await expect(page.getByRole("button", { name: "הוסף משתמש" })).toBeEnabled();
-    await page.getByLabel("שם", { exact: true }).fill(name);
-    await page.getByLabel("טלפון", { exact: true }).fill(uniqPhone());
-    await page.getByLabel("תפקיד").selectOption({ label: "בעלים" });
-    await page.getByLabel("סיסמה ראשונית").fill("conformance-1234");
-    await page.getByRole("button", { name: "הוסף משתמש" }).click();
+    await page.getByRole("button", { name: "הוסף משתמש חדש" }).click();
+    const form = page.getByRole("dialog");
+    await form.getByLabel("שם", { exact: true }).fill(name);
+    await form.getByLabel("טלפון", { exact: true }).fill(uniqPhone());
+    await form.getByLabel("תפקיד").selectOption({ label: "בעלים" });
+    await form.getByLabel("סיסמה ראשונית").fill("conformance-1234");
+    await form.getByRole("button", { name: "הוסף משתמש", exact: true }).click();
+    await expect(form).toBeHidden();
 
-    const row = page.getByRole("listitem").filter({ hasText: name });
-    await expect(row).toBeVisible();
+    // הכרטיס נושא `aria-label` שהוא שם הרשומה — זה מה שפותח את הפרטים.
+    const card = page.getByRole("button", { name, exact: true });
+    await expect(card).toBeVisible();
+    await card.click();
 
-    // עריכת פרטי קשר — קיימת.
+    // עריכת פרטי קשר — קיימת, ומאחורי העיפרון.
     const renamed = `${name} עודכן`;
-    await row.getByRole("button", { name: "ערוך פרטים" }).click();
-
-    // השורה בעריכה אינה מכילה עוד את השם כטקסט אלא כערך של שדה, ולכן
-    // ‏`filter({hasText})` מפסיק להתאים לה. מאתרים אותה לפי מה שיש בה.
-    const editing = page
-      .getByRole("listitem")
-      .filter({ has: page.getByRole("button", { name: "שמור", exact: true }) });
-    await editing.getByLabel("שם", { exact: true }).fill(renamed);
-    await editing.getByRole("button", { name: "שמור", exact: true }).click();
-    await expect(page.getByRole("listitem").filter({ hasText: renamed })).toBeVisible();
+    const details = page.getByRole("dialog");
+    await details.getByRole("button", { name: "ערוך פרטים" }).click();
+    await details.getByLabel("שם", { exact: true }).fill(renamed);
+    await details.getByRole("button", { name: "שמור", exact: true }).click();
 
     // מחיקה — אינה קיימת, וזו ההכרעה: `SetNull` היה מוחק "מי מטפל"/"מי סגר".
-    // מסלול ההוצאה הוא ההשבתה.
-    const updated = page.getByRole("listitem").filter({ hasText: renamed });
-    await expect(updated.getByRole("button", { name: /^מחק/ })).toHaveCount(0);
-    await updated.getByRole("button", { name: "השבת" }).click();
-    await expect(page.getByRole("listitem").filter({ hasText: renamed })).toContainText("מושבת");
+    // מסלול ההוצאה הוא ההשבתה. הטענה על **הדיאלוג**, שהוא המקום היחיד
+    // שבו פעולות משתמש קיימות מ-0.7 — ולכן היעדר מחיקה בו הוא היעדר מחיקה.
+    await expect(details.getByRole("button", { name: /^מחק/ })).toHaveCount(0);
+    await details.getByRole("button", { name: "השבת" }).click();
+    await expect(details.getByText("מושבת")).toBeVisible();
+
+    await details.getByRole("button", { name: "סגור", exact: true }).click();
+    await expect(page.getByRole("button", { name: renamed, exact: true })).toBeVisible();
   });
 
   test("S16-05 — אתר עם בניינים ומשתמשים אינו נמחק, וההודעה מונה את שניהם", async ({ page }) => {
@@ -188,14 +200,18 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
     await loginAs(page, "admin");
     await page.goto("/admin/sites");
 
-    const row = page.getByRole("listitem").filter({ hasText: SITE_A });
-    await row.getByRole("button", { name: `מחק ${SITE_A}` }).click();
+    // ‏0.7: המחיקה ירדה מהשורה לדיאלוג הפרטים.
+    await page.getByRole("button", { name: SITE_A, exact: true }).click();
+    const details = page.getByRole("dialog");
+    await details.getByRole("button", { name: `מחק ${SITE_A}` }).click();
 
-    const alert = row.getByRole("alert");
+    const alert = details.getByRole("alert");
     await expect(alert).toContainText("לא ניתן למחוק");
     await expect(alert).toContainText("בניינים באתר");
+
     // האתר עצמו נשאר — הכשל אינו הרסני ואינו חלקי.
-    await expect(page.getByRole("listitem").filter({ hasText: SITE_A })).toBeVisible();
+    await details.getByRole("button", { name: "סגור", exact: true }).click();
+    await expect(page.getByRole("button", { name: SITE_A, exact: true })).toBeVisible();
   });
 });
 
@@ -222,14 +238,16 @@ test.describe("מסך 13 — איש מקצוע שעזב (0.4)", () => {
     });
 
     await page.goto("/admin/professionals");
-    const row = page.getByRole("listitem").filter({ hasText: gone });
-    await expect(row).toBeVisible();
-    await row.getByRole("button", { name: "השבת", exact: true }).click();
+    // ‏0.7: הפעולות ירדו מהשורה לדיאלוג שנפתח בלחיצה על הכרטיס.
+    await page.getByRole("button", { name: gone, exact: true }).click();
+    const details = page.getByRole("dialog");
+    await details.getByRole("button", { name: "השבת", exact: true }).click();
 
     // נשאר ברשימת הניהול ומסומן — אחרת אי אפשר יהיה להפעילו בחזרה.
-    const inactive = page.getByRole("listitem").filter({ hasText: gone });
-    await expect(inactive).toContainText("מושבת");
-    await expect(inactive.getByRole("button", { name: "הפעל", exact: true })).toBeVisible();
+    await expect(details.getByText("מושבת")).toBeVisible();
+    await expect(details.getByRole("button", { name: "הפעל", exact: true })).toBeVisible();
+    await details.getByRole("button", { name: "סגור", exact: true }).click();
+    await expect(page.getByRole("button", { name: gone, exact: true })).toBeVisible();
 
     /*
      * ומכאן העיקר: הוא אינו מוצע יותר כנמען. הבורר נפתח דרך אותו לוקטור

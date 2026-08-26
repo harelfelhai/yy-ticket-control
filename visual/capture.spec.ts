@@ -198,20 +198,34 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await shot(page, device, "07-board-search");
 
   // מסך 13 — אנשי מקצוע. לא נלכד עד 0.4, ולכן מתג ההשבתה שנוסף בו לא היה
-  // נראה לאיש עד שמישהו נתקל בו בשטח. זו גם השורה הצפופה במערכת: שם, צ׳יפ
-  // מצב, שתי שורות מטא-דאטה ושלוש פעולות.
+  // נראה לאיש עד שמישהו נתקל בו בשטח.
+  //
+  // ‏0.7: הפעולות ירדו מהשורה לדיאלוג, ולכן ההמתנה היא על **כרטיס** ולא על
+  // כפתור "השבת" שכבר אינו על המסך. הכרטיס נושא `aria-label` שהוא שם
+  // הרשומה, ואין מחרוזת קבועה לחכות לה — ולכן ההמתנה היא על הרשימה.
   await page.goto("/admin/professionals");
-  await expect(page.getByRole("button", { name: "השבת" }).first()).toBeVisible();
+  await expect(page.getByRole("listitem").first()).toBeVisible();
   await shot(page, device, "15-admin-professionals");
 
   // מסך 16 — בניינים ודירות. הנתיב תלוי באתר קיים ולכן נשלף ולא נכתב קשיח.
-  // בלי הלכידה הזו זהו המסך היחיד שסבב ה-design-review אינו רואה כלל, והוא
-  // גם הצפוף מבין מסכי הניהול: שתי רמות היררכיה וארבע פעולות לשורה.
+  // בלי הלכידה הזו זהו המסך היחיד שסבב ה-design-review אינו רואה כלל.
   await page.goto("/admin/sites");
+  await expect(page.getByRole("listitem").first()).toBeVisible();
   await shot(page, device, "13-admin-sites");
-  const firstSite = page.locator('a[href^="/admin/sites/"]').first();
-  if (await firstSite.count()) {
-    await firstSite.click();
+
+  /*
+   * **‏0.7: הקישור לבניינים ודירות עבר אל תוך דיאלוג הפרטים**, ולכן
+   * הניווט לכאן הוא בן שני שלבים — פתיחת הכרטיס ואז הקישור שבתוכו.
+   *
+   * זו בדיוק התלות שקל לפספס: הצילום `14` נשען על `a[href^="/admin/sites/"]`
+   * שהיה על הכרטיס, ובלי העדכון הזה הוא היה מדלג בשקט (ה-`if` מכסה על
+   * היעדר הקישור) ומשאיר את מסך 16 מחוץ לסבב הביקורת בלי שאיש ישים לב.
+   */
+  const firstSiteCard = page.getByRole("listitem").first().getByRole("button");
+  if (await firstSiteCard.count()) {
+    await firstSiteCard.click();
+    const details = page.getByRole("dialog");
+    await details.getByRole("link", { name: "בניינים ודירות" }).click();
     // בלי ההמתנה הזו הצילום נלכד לפני שהניווט הסתיים, והקובץ שנקרא
     // "מסך הבניינים" מכיל בפועל את מסך האתרים — תקלה שקטה שהתגלתה רק
     // כשהסתכלתי על התמונה.

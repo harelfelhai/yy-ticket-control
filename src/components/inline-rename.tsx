@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -57,7 +58,18 @@ export function InlineRename({
         disabled={disabled}
         aria-label={`${he.common.rename} ${name}`}
       >
-        {he.common.rename}
+        {/*
+         * **הסמל החליף את התווית ב-0.7, והשם הנגיש לא זז.**
+         *
+         * ‏`aria-label` נשאר בדיוק `שנה שם {name}` — אותה מחרוזת שהייתה
+         * התווית הגלויה (§ אייקונים). זה אינו נימוס: חמש חבילות בדיקה
+         * מאתרות את הכפתור הזה בשמו, וסטייה של תו אחד שוברת את כולן.
+         *
+         * הכפתור נשאר `quiet`, והקו התחתון של `LINK` פשוט אינו מצויר —
+         * ‏`inline-flex` אינו מוריש `text-decoration` לילד SVG. מתועד
+         * ב-DESIGN.md § אייקונים.
+         */}
+        <Pencil className="size-3" aria-hidden="true" />
       </Button>
     );
   }

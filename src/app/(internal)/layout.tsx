@@ -14,7 +14,7 @@ import { logoutAction } from "../login/actions";
  * `shrink-0` ו-`whitespace-nowrap` מונעים שבירת מילים בתוך הסרגל הנגלל.
  */
 const NAV_LINK =
-  "flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-sm px-2 font-medium text-fg touch:min-h-11";
+  "flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-sm px-2 font-medium text-fg";
 
 /**
  * המעטפת של כל המסכים הפנימיים.

@@ -15,31 +15,18 @@ import { pick } from "./helpers";
  */
 
 /**
- * **הרצפה תלויה במצביע.**
+ * **רצפה אחת לשלושת הפרויקטים — 28px.**
  *
- * מאז סבב הצפיפות הפקדים נכתבים `min-h-9 touch:min-h-11` — 36px עם עכבר,
- * 44px באצבע. הקובץ הזה רץ בשלושה פרויקטים, ורק שניים מהם מדמים מגע:
- * `mobile` (Pixel 5) ו-`safari-qa` (iPhone 13 תחת WebKit) עונים כן, ואילו
- * `desktop` (Desktop Chrome) עונה לא. מדידה מול 44 בדסקטופ הייתה מכשילה את
- * שדות ההתחברות על תקן שאינו חל עליהם — WCAG 2.5.5 מדבר על יעד **מגע**.
+ * הקובץ רץ על `mobile` (Pixel 5), `safari-qa` (iPhone 13) ו-`desktop`,
+ * ועד 0.7 שאל כל אחד מהם בשאילתת מדיה אם הוא מכשיר מגע: כן → 44px,
+ * לא → 28px. הרצפה המותנית בוטלה בהכרעת בעל המוצר, וכל שלושת הפרויקטים
+ * מודדים עכשיו מול אותו מספר.
  *
- * השאלה נשאלת מהדפדפן (`matchMedia`) ולא מהקונפיג, כי זו בדיוק השאילתה
- * שהסטיילשיט מריץ: כך אין דרך שהבדיקה והעיצוב יחלקו על התשובה. הרצפה עם
- * עכבר היא 32px — גובה הווריאנט `compact`, הקטן ביותר שהסקאלה מתירה.
+ * ‏**השם `MIN_POINTER_FINE_PX` נשמר בכוונה** — `layout-guards.test.ts`
+ * מאתר אותו לפי השם וגוזר את ערכו מ-`compact` שב-`button.tsx`, כך
+ * ששינוי גובה בפרימיטיב אינו יכול להשאיר את חבילות המדידה מאחור.
  */
-const MIN_TOUCH_PX = 44;
 const MIN_POINTER_FINE_PX = 28;
-
-/**
- * מועתק מ-`@custom-variant touch` ב-`src/app/globals.css`.
- * ‏`tests/unit/touch-variant.test.ts` נכשל אם העותקים נפרדים.
- */
-const TOUCH_QUERY = "(pointer: coarse) and (not (any-pointer: fine))";
-
-async function minTargetHeight(page: Page): Promise<number> {
-  const touch = await page.evaluate((q) => matchMedia(q).matches, TOUCH_QUERY);
-  return touch ? MIN_TOUCH_PX : MIN_POINTER_FINE_PX;
-}
 
 /** גלישה אופקית: התוכן לא אמור לחרוג מרוחב המסך. סובלנות של 2px לעיגול תת-פיקסלי. */
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
@@ -56,7 +43,7 @@ async function expectRtl(page: Page): Promise<void> {
 /** גובה יעד הלחיצה — נמדד מתיבת התוחם בפועל, לא מ-CSS */
 async function expectTouchTarget(locator: Locator): Promise<void> {
   await expect(locator).toBeVisible();
-  const floor = await minTargetHeight(locator.page());
+  const floor = MIN_POINTER_FINE_PX;
   const box = await locator.boundingBox();
   expect(box).not.toBeNull();
   expect(box?.height ?? 0, `יעד הלחיצה קטן מ-${floor}px`).toBeGreaterThanOrEqual(floor);

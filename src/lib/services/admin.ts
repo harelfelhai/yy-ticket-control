@@ -15,7 +15,12 @@ import { canManageAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
 import { assertDeletable } from "./deletion";
-import { findOrCreateApartment, findOrCreateBuilding, prepareProfessional } from "./directory";
+import {
+  createProfessional,
+  findOrCreateApartment,
+  findOrCreateBuilding,
+  prepareProfessional,
+} from "./directory";
 
 /**
  * מסכי הניהול (11–15): אתרים, משתמשים, אנשי מקצוע ותחומים.
@@ -37,7 +42,19 @@ function assertAdmin(actor: SessionUser): void {
 
 // ────────────────────────────── אתרים ──────────────────────────────
 
-export async function createSite(actor: SessionUser, rawName: string) {
+/**
+ * הקמת אתר, ובאותה פעולה שיוך מנהלי העבודה שלו.
+ *
+ * **‏`managerIds` אינו תוספת נוחות אלא סגירת פער.** ‏`User.siteId` נקבע עד
+ * ‏0.7 בהקמת המשתמש בלבד, ואחריה לא הייתה שום דרך במערכת לשייך מנהל לאתר
+ * או להזיז אותו — כלומר אתר חדש נולד בהכרח בלי מנהל, ומנהל קיים לא יכול
+ * היה לעבור אליו.
+ *
+ * **השיוך הוא העברה ולא הוספה, וזה נגזר מהסכימה:** ‏`siteId` הוא שדה יחיד
+ * (‏`schema.prisma`), ומנהל עבודה משויך לאתר **אחד**. הממשק מציג לצד כל שם
+ * את האתר הנוכחי שלו כדי שההעברה לא תקרה בשקט.
+ */
+export async function createSite(actor: SessionUser, rawName: string, managerIds: string[] = []) {
   assertAdmin(actor);
   const name = normalizeName(rawName);
   if (!name) throw new AdminError(he.admin.siteNameRequired);
@@ -45,7 +62,94 @@ export async function createSite(actor: SessionUser, rawName: string) {
   const existing = await db.site.findUnique({ where: { name } });
   if (existing) throw new AdminError(he.admin.siteExists);
 
-  return db.site.create({ data: { name } });
+  /*
+   * טרנזקציה ולא שתי כתיבות: אתר שנוצר ואז שיוך שנכשל משאיר אתר יתום
+   * שהמשתמש חושב שיש לו מנהל. השיוך עצמו נבדק לפני הכתיבה — ראו
+   * `assertAssignableManagers`.
+   */
+  await assertAssignableManagers(managerIds);
+
+  return db.$transaction(async (tx) => {
+    const site = await tx.site.create({ data: { name } });
+    if (managerIds.length > 0) {
+      await tx.user.updateMany({
+        where: { id: { in: managerIds } },
+        data: { siteId: site.id },
+      });
+    }
+    return site;
+  });
+}
+
+/**
+ * מנהלי העבודה שאפשר לשייך לאתר, עם האתר שהם משויכים אליו כרגע.
+ *
+ * ‏`siteName` הוא **חלק מהמידע ולא קישוט**: שיוך מנהל שכבר יש לו אתר הוא
+ * העברה, והממשק חייב להראות מאיפה. בלעדיו מנהל נעלם מאתר אחד בלי שאיש
+ * ביקש זאת במפורש.
+ */
+export async function listAssignableSiteManagers(actor: SessionUser) {
+  assertAdmin(actor);
+  const users = await db.user.findMany({
+    where: { role: "SITE_MANAGER", active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, site: { select: { id: true, name: true } } },
+  });
+
+  return users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    siteId: user.site?.id ?? null,
+    siteName: user.site?.name ?? null,
+  }));
+}
+
+/**
+ * מחליף את קבוצת מנהלי העבודה של אתר.
+ *
+ * **מי שיורד מהאתר נשאר בלי אתר (`siteId: null`) ואינו מושבת.** אלה שתי
+ * פעולות שונות: הסרה מאתר היא שינוי שיוך, והשבתה מנתקת גישה. מנהל בלי
+ * אתר הוא מצב חוקי וזמני — הוא מוצג ברשימת המשתמשים כ"ללא אתר" — ולכן
+ * אין כאן מחיקה ואין השבתה אוטומטית.
+ */
+export async function setSiteManagers(
+  actor: SessionUser,
+  siteId: string,
+  managerIds: string[],
+): Promise<void> {
+  assertAdmin(actor);
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true } });
+  if (!site) throw new AdminError(he.admin.siteNotFound);
+
+  await assertAssignableManagers(managerIds);
+
+  await db.$transaction([
+    // מי שהיה משויך ואינו ברשימה החדשה — מתנתק מהאתר, לא מהמערכת.
+    db.user.updateMany({
+      where: { siteId, role: "SITE_MANAGER", id: { notIn: managerIds } },
+      data: { siteId: null },
+    }),
+    db.user.updateMany({
+      where: { id: { in: managerIds } },
+      data: { siteId },
+    }),
+  ]);
+}
+
+/**
+ * מוודא שכל מזהה ברשימה הוא באמת מנהל עבודה פעיל.
+ *
+ * הרשימה מגיעה מהלקוח, ו-`updateMany` על מזהה שאינו קיים **מצליח בשקט**
+ * (‏`count: 0`). בלי הבדיקה הזו, שיוך של מזהה שגוי — או של מנהל מערכת,
+ * שאסור לו להיות משויך לאתר (§5.ג) — היה עובר בלי שום חיווי.
+ */
+async function assertAssignableManagers(managerIds: string[]): Promise<void> {
+  if (managerIds.length === 0) return;
+
+  const found = await db.user.count({
+    where: { id: { in: managerIds }, role: "SITE_MANAGER", active: true },
+  });
+  if (found !== managerIds.length) throw new AdminError(he.admin.managerNotAssignable);
 }
 
 /**
@@ -65,6 +169,16 @@ export async function listSites(actor: SessionUser) {
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       },
+      /*
+       * **המונים נטענים לרשימה ומוצגים בדיאלוג בלבד** (0.7).
+       *
+       * הכרטיס ברשימה נשאר סיכומי — שם ומנהלי עבודה — וזה מה שנדרש ממנו
+       * במסך שסורקים בו. המונים הם מה שהופך את הדיאלוג לפרטים ולא לחזרה
+       * על הכרטיס, והם גם מה שאומר למנהל **לפני** הלחיצה על פח הזבל אם
+       * המחיקה תיחסם. שאילתה אחת עם `_count` זולה בהרבה מקריאה נפרדת לכל
+       * אתר שנפתח, ולכן הם כאן ולא בטעינה עצלה.
+       */
+      _count: { select: { buildings: true, tickets: true } },
     },
   });
 }
@@ -393,6 +507,32 @@ export async function setProfessionalActive(actor: SessionUser, id: string, acti
   if (!existing) throw new AdminError(he.admin.professionalNotFound);
 
   return db.professional.update({ where: { id }, data: { active } });
+}
+
+/**
+ * הקמת איש מקצוע ממסך הניהול — **יכולת שלא הייתה עד 0.7**.
+ *
+ * עד כאן איש מקצוע נוצר רק **תוך כדי** פתיחת פנייה (`ProfessionalCreateForm`
+ * בבורר הנמענים), כלומר מסך הניהול ידע לערוך, להשבית, למחוק ולאחד — אבל
+ * לא להקים. זה עבד כל עוד הזרימה היחידה הייתה "צריך לשלוח למישהו חדש
+ * עכשיו", ונשבר ברגע שרוצים להזין ספקים מראש.
+ *
+ * **הנרמול והאימות אינם נכתבים כאן.** ‏`createProfessional` שב-`directory`
+ * כבר מחזיק אותם דרך `prepareProfessional` — כולל "חובה טלפון או מייל",
+ * שהוא אילוץ עסקי (אפיון §5.ו) ולא בדיקת קלט. שכפולו כאן היה מייצר שתי
+ * הגדרות לאותו כלל, ואת אחת מהן מישהו היה מעדכן לבד.
+ *
+ * **‏`createProfessional` ולא `findOrCreateProfessional`, בכוונה:** ההתאמה
+ * לפי טלפון/מייל נועדה לזרימת הפנייה, שם "יוסי" ו"יוסי חשמלאי" הם אותו
+ * אדם. במסך ניהול "הוסף" שמחזיר בשקט רשומה קיימת הוא בדיוק הכפתור שאינו
+ * עושה כלום, והכפילויות ממילא מטופלות באיחוד שבאותו מסך.
+ */
+export async function createProfessionalRecord(
+  actor: SessionUser,
+  input: { name: string; phone?: string; email?: string },
+) {
+  assertAdmin(actor);
+  return createProfessional(input);
 }
 
 export async function updateProfessional(

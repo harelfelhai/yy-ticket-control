@@ -16,10 +16,10 @@ describe("Button", () => {
 
     expect(button.className).toContain("bg-brand");
     expect(button.className).toContain("font-semibold");
-    // ‏32px בעכבר, 44px במגע. הרצפה של "אצבע בכפפה" מדברת על מגע ולא על
-    // סמן, ובעכבר היא קנתה גובה שדחק מידע מהמסך בלי לקנות דיוק לחיצה.
+    // ‏32px, בכל מכשיר. רצפת המגע של 44px בוטלה ב-0.7 בהכרעת בעל המוצר
+    // (DESIGN.md § אזורי מגע) — ומאז אין גובה שתלוי במכשיר.
     expect(button.className).toContain("min-h-8");
-    expect(button.className).toContain("touch:min-h-11");
+    expect(button.className).not.toContain("touch:");
   });
 
   it("`type` הוא button כברירת מחדל, כדי שכפתור בתוך טופס לא ישלח אותו בטעות", () => {
@@ -70,12 +70,18 @@ describe("Button", () => {
     expect(className).not.toContain("text-brand");
   });
 
-  it("`compact` נשאר מעל סף המגע המינימלי (44px) — במגע", () => {
+  it("`compact` הוא 28px — ואותם 28px גם בטלפון", () => {
     render(<Button size="compact">הסר</Button>);
-    // ‏28px בעכבר, אבל `touch:min-h-11` מחזיר 44px ברגע שיש אצבע.
-    // בלי הזוג הזה, לחיצות בשטח היו מתפספסות.
+    /*
+     * עד 0.7 ישבה כאן הטענה ההפוכה: `touch:min-h-11` החזיר 44px ברגע
+     * שהמכשיר ענה "אין לי מצביע מדויק". הרצפה בוטלה בהכרעת בעל המוצר,
+     * והמחיר — אזור לחיצה קטן ב-36% בטלפון — מוצהר ב-DESIGN.md.
+     *
+     * הערך הזה הוא **מקור האמת** לרצפה שנמדדת בשתי חבילות ה-Playwright;
+     * `layout-guards.test.ts` גוזר אותה מכאן ואוסר עליה לסטות.
+     */
     expect(screen.getByRole("button").className).toContain("min-h-7");
-    expect(screen.getByRole("button").className).toContain("touch:min-h-11");
+    expect(screen.getByRole("button").className).not.toContain("touch:");
   });
 
   it("כל וריאנט מקבל מצב disabled — זה מה שנשכח כשכל עמוד בנה כפתור לעצמו", () => {
@@ -153,6 +159,6 @@ describe("ButtonLink", () => {
     const className = screen.getByRole("link", { name: "חזרה" }).className;
 
     expect(className).toContain("border-border");
-    expect(className).toContain("touch:min-h-11");
+    expect(className).toContain("min-h-7");
   });
 });

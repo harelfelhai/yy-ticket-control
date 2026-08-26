@@ -20,16 +20,17 @@ describe("פקדי קלט", () => {
     const className = screen.getByLabelText("חיפוש").className;
 
     expect(className).toContain("text-base");
-    expect(className).toContain("touch:min-h-11");
+    expect(className).toContain("min-h-7");
   });
 
-  it("ברירת המחדל צפופה בעכבר וחוזרת לרצפת המגע באצבע", () => {
+  it("ברירת המחדל היא 32px, ואין גובה שתלוי במכשיר", () => {
     render(<Input aria-label="שם" />);
-    // ‏32px בעכבר / 44px במגע. הגובה הוא הדבר היחיד שתלוי במכשיר — הגופן
-    // נשאר 16px בשני המקרים (ראו הבדיקה שמעל: ספארי ב-iOS מגדיל מתחת לזה).
+    // רצפת המגע בוטלה ב-0.7 (DESIGN.md § אזורי מגע), ולכן הגובה קבוע.
+    // הגופן נשאר 16px ללא תלות בכך — ראו הבדיקה שמעל: ספארי ב-iOS מגדיל
+    // את כל העמוד כשמתמקדים בפקד קטן מזה, וזה אילוץ תפקודי ולא סגנון.
     const className = screen.getByLabelText("שם").className;
     expect(className).toContain("min-h-8");
-    expect(className).toContain("touch:min-h-11");
+    expect(className).not.toContain("touch:");
   });
 
   it("`invalid` מוסיף מסגרת אדומה", () => {
@@ -81,13 +82,14 @@ describe("פקדי קלט", () => {
 
   it("controlClasses נותן את אותן מחלקות לאלמנט חיצוני", () => {
     /*
-     * **הטענה הודקה ב-0.6.** קודם היא בדקה `toContain("min-h-11")` על
-     * הגודל הקומפקטי — והיא עברה רק מפני ש-`"touch:min-h-11"` **מכיל**
-     * את המחרוזת. כלומר היא לא בדקה דבר על גובה העכבר, ורצפת המגע נבדקה
-     * בה במקרה. שני חצאי הזוג נבדקים עכשיו בנפרד ובמפורש.
+     * **הטענה הודקה ב-0.6, ונשארה הדוקה ב-0.7.** קודם היא בדקה
+     * `toContain("min-h-11")` על הגודל הקומפקטי — והיא עברה רק מפני
+     * ש-`"touch:min-h-11"` **מכיל** את המחרוזת, כלומר לא בדקה דבר על
+     * הגובה עצמו. ‏`touch:` בוטל מאז, והשלילה המפורשת היא מה שמונע
+     * ממחלקה מתה לחזור ולהיראות כמו רצפה.
      */
     expect(controlClasses("compact")).toContain("min-h-7");
-    expect(controlClasses("compact")).toContain("touch:min-h-11");
+    expect(controlClasses("compact")).not.toContain("touch:");
     expect(controlClasses("default", true)).toContain("border-danger");
   });
 });

@@ -63,12 +63,14 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
             {detail.tickets.map((ticket) => (
               <li key={ticket.id}>
                 {/*
-                 * **‏`min-h-8 touch:min-h-11` — זוג רצפת המגע, ותיקון של
+                 * **‏`min-h-8` — גובה של דבר לחיץ, ותיקון של
                  * הפרה שהייתה כאן מזמן.**
                  *
                  * לקישור לא היה `min-h` כלל, וגובהו הגיע מהתוכן: `text-sm`
-                 * (שורה של 20px) ועוד `p-2` = **36px**. במגע הרצפה היא 44,
-                 * כלומר כל שורה ברשימה הזו הייתה יעד קטן מדי.
+                 * (שורה של 20px) ועוד `p-2` = **36px**. הרצפה דאז הייתה 44
+                 * במגע, כלומר כל שורה ברשימה הזו הייתה יעד קטן מדי. הרצפה
+                 * ההיא בוטלה מאז (0.7), אבל `min-h` מפורש נשאר נכון: גובה
+                 * שנגזר מאורך הטקסט אינו גובה.
                  *
                  * **למה זה נתפס רק לסירוגין:** התיאור מגיע מהנתונים. תיאור
                  * ארוך גולש לשתי שורות ב-`flex-wrap`, הגובה עובר 44,
@@ -76,14 +78,14 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
                  * הבאג היה תלוי באורך המחרוזת שהבדיקה הגרילה.
                  *
                  * **ולמה אף אוכף סטטי לא תפס:** `layout-guards` בודק
-                 * ש-`min-h` נמוך מלווה ב-`touch:min-h-11` — ולכאן לא היה
+                 * ש-`min-h` נמוך מלווה ברצפת מגע — ולכאן לא היה
                  * ‏`min-h` **בכלל**, כלומר לא היה מה לתפוס. זהו בדיוק
                  * העיוורון שמתועד שם ("הבדיקה אינה מבחינה אם האלמנט לחיץ").
                  * מה שכן תפס הוא `rtl-mobile`, שמודד גובה אמיתי בדפדפן.
                  */}
                 <Link
                   href={`/tickets/${ticket.id}`}
-                  className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-bg p-2 text-sm touch:min-h-11"
+                  className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-bg p-2 text-sm"
                 >
                   {/*
                    * מספר הפנייה ירד מכאן ב-0.5, כפי שירד מטבלת הלוח: הוא

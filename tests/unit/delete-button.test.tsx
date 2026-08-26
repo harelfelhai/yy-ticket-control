@@ -22,6 +22,24 @@ function setup(result: Awaited<ReturnType<Parameters<typeof DeleteButton>[0]["ac
 }
 
 describe("DeleteButton", () => {
+  it("הכפתור הוא פח זבל, והשם הנגיש שורד את היעלמות התווית", () => {
+    /**
+     * ב-0.7 התווית "מחק" הוחלפה ב-`Trash2` (§ אייקונים). ‏`aria-label`
+     * נשאר `מחק {name}` בדיוק — אותה מחרוזת שהייתה גלויה — ולכן שש
+     * רשימות הניהול וכל חבילות ה-e2e שמאתרות אותו בשם ממשיכות לעבוד.
+     *
+     * **‏`Trash2` ולא `X`, וזו הכרעה ולא בחירה גרפית:** `X` נושא במערכת
+     * שלוש משמעויות לא-הרסניות (הסרת קובץ, ניקוי חיפוש, סגירת דיאלוג).
+     * הבדיקה נועלת את הסמל כדי שהעמסתו לא תיכנס בסבב הבא.
+     */
+    setup({ ok: true, data: undefined });
+    const button = screen.getByRole("button", { name: `${he.admin.delete} בניין א` });
+
+    expect(button).toHaveTextContent("");
+    expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(button.querySelector("svg")).toHaveClass("size-3");
+  });
+
   it("שואל לפני מחיקה, ונוקב בשם — לחיצה בטעות אינה עוברת בשקט", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const { action, user } = setup({ ok: true, data: undefined });

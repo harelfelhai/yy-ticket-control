@@ -91,7 +91,14 @@ describe("FilterSelect", () => {
     );
     const className = screen.getByLabelText("תחום").className;
 
-    expect(className).toContain("min-h-11");
+    /*
+     * **הטענה כאן הייתה שקרית עד 0.7, ובאותה צורה בדיוק שתועדה
+     * ב-`field.test.tsx`.** היא ביקשה `min-h-11` — 44px — וקיבלה אותו
+     * כתת-מחרוזת של `touch:min-h-11`, שהיה הרצפה במגע בלבד. כלומר היא
+     * לא בדקה מעולם את הגובה שהפקד מקבל בפועל, ועברה בירוק גם כשהוא
+     * היה 28px. ‏`touch:` בוטל ב-0.7, והמלכודת ירדה איתו.
+     */
+    expect(className).toContain("min-h-7");
     expect(className).toContain("text-base");
   });
 
@@ -135,7 +142,8 @@ describe("FilterDate", () => {
     render(<FilterDate label="מתאריך" />);
     const className = screen.getByLabelText("מתאריך").className;
 
-    expect(className).toContain("min-h-11");
+    // אותה מלכודת תת-מחרוזת שתוקנה בבורר שמעל — ראו ההסבר שם.
+    expect(className).toContain("min-h-7");
     expect(className).toContain("text-base");
   });
 

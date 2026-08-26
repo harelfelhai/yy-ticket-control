@@ -8,12 +8,14 @@ import {
   createApartment,
   createBuilding,
   createInternalUser,
+  createProfessionalRecord,
   createSite,
   deleteApartment,
   deleteBuilding,
   deleteDomain,
   deleteProfessional,
   deleteSite,
+  listAssignableSiteManagers,
   listDomains,
   listProfessionalsForAdmin,
   listSiteTree,
@@ -25,6 +27,7 @@ import {
   renameDomain,
   renameSite,
   setProfessionalActive,
+  setSiteManagers,
   setUserActive,
   updateProfessional,
   updateUser,
@@ -638,5 +641,136 @@ describe("renameSite", () => {
   it("דוחה שם שכבר תפוס", async () => {
     const other = await createSite(admin, "אתר דרום");
     await expect(renameSite(admin, other.id, "אתר קיים")).rejects.toThrow(he.admin.siteExists);
+  });
+});
+
+/**
+ * **שיוך מנהלי עבודה לאתר — היכולת שנוספה ב-0.7.**
+ *
+ * עד כאן `User.siteId` נקבע בהקמת המשתמש **בלבד**, ואחריה לא הייתה שום דרך
+ * במערכת לשייך מנהל לאתר או להזיז אותו. אתר חדש נולד בהכרח בלי מנהל.
+ *
+ * ההתנהגות הרגישה כאן היא ש**השיוך הוא העברה ולא הוספה**: `siteId` הוא שדה
+ * יחיד, ומנהל שכבר משויך נעלם מהאתר הקודם. הממשק מציג את האתר הנוכחי לצד כל
+ * שם כדי שזה לא יקרה בשקט, והבדיקות כאן אוכפות שזו אכן ההתנהגות.
+ */
+describe("שיוך מנהלי עבודה לאתר (0.7)", () => {
+  it("‏createSite משייך את המנהלים שנבחרו באותה פעולה", async () => {
+    const site = await createSite(admin, "אתר עם מנהל", [manager.id]);
+
+    const moved = await db.user.findUniqueOrThrow({ where: { id: manager.id } });
+    expect(moved.siteId).toBe(site.id);
+  });
+
+  it("שיוך מנהל שכבר יש לו אתר הוא **העברה** — הוא יורד מהקודם", async () => {
+    // המנהל מתחיל ב"אתר קיים" (ראו beforeEach).
+    expect(manager.siteId).toBe(siteId);
+
+    const target = await createSite(admin, "אתר יעד", [manager.id]);
+
+    const after = await db.user.findUniqueOrThrow({ where: { id: manager.id } });
+    expect(after.siteId).toBe(target.id);
+    expect(after.siteId).not.toBe(siteId);
+  });
+
+  it("‏setSiteManagers מנתק מי שירד מהרשימה — בלי להשבית אותו", async () => {
+    /*
+     * שתי פעולות שונות: הסרה מאתר היא שינוי שיוך, השבתה מנתקת גישה.
+     * מנהל בלי אתר הוא מצב חוקי שמוצג ברשימת המשתמשים כ"ללא אתר", ולכן
+     * ההסרה **אינה** גוררת `active: false` — אחרת מנהל שהוזז בטעות היה
+     * מאבד גישה למערכת כולה.
+     */
+    await setSiteManagers(admin, siteId, []);
+
+    const after = await db.user.findUniqueOrThrow({ where: { id: manager.id } });
+    expect(after.siteId).toBeNull();
+    expect(after.active).toBe(true);
+  });
+
+  it("‏setSiteManagers מחליף את הקבוצה ואינו מוסיף לה", async () => {
+    const second = await db.user.create({
+      data: { role: "SITE_MANAGER", name: "מנהל שני", phone: "0500000002", passwordHash: "x" },
+    });
+
+    await setSiteManagers(admin, siteId, [second.id]);
+
+    const users = await db.user.findMany({ where: { siteId }, select: { id: true } });
+    expect(users.map((u) => u.id)).toEqual([second.id]);
+  });
+
+  it("דוחה מזהה שאינו מנהל עבודה פעיל — `updateMany` היה מצליח עליו בשקט", async () => {
+    /*
+     * זו הנקודה שדורשת בדיקה מפורשת: `updateMany` על מזהה שאינו קיים
+     * מחזיר `count: 0` ו**אינו זורק**. בלי `assertAssignableManagers`,
+     * שיוך של מנהל מערכת — שאסור לו אתר (§5.ג) — או של מזהה שגוי לגמרי
+     * היה עובר בלי שום חיווי, והמסך היה מציג אתר בלי מנהל בלי להסביר.
+     */
+    await expect(setSiteManagers(admin, siteId, [admin.id])).rejects.toThrow(
+      he.admin.managerNotAssignable,
+    );
+    await expect(createSite(admin, "אתר עם מזהה שגוי", ["לא-קיים"])).rejects.toThrow(
+      he.admin.managerNotAssignable,
+    );
+  });
+
+  it("שיוך שנכשל אינו משאיר אתר יתום — הכול בטרנזקציה", async () => {
+    await expect(createSite(admin, "אתר שלא ייווצר", ["לא-קיים"])).rejects.toThrow(AdminError);
+    expect(await db.site.findUnique({ where: { name: "אתר שלא ייווצר" } })).toBeNull();
+  });
+
+  it("‏listAssignableSiteManagers מחזיר את האתר הנוכחי — זה מה שהופך העברה לגלויה", async () => {
+    const options = await listAssignableSiteManagers(admin);
+    const row = options.find((option) => option.id === manager.id);
+
+    expect(row).toMatchObject({ siteId, siteName: "אתר קיים" });
+    // מנהל מערכת אינו ניתן לשיוך ואינו ברשימה כלל.
+    expect(options.some((option) => option.id === admin.id)).toBe(false);
+  });
+
+  it("מנהל עבודה אינו רשאי לשייך מנהלים", async () => {
+    await expect(setSiteManagers(manager, siteId, [])).rejects.toThrow(he.admin.forbidden);
+  });
+});
+
+/**
+ * **הקמת איש מקצוע ממסך הניהול — יכולת שנוספה ב-0.7.**
+ *
+ * עד כאן איש מקצוע נוצר רק תוך כדי פתיחת פנייה, ולכן לא הייתה דרך להזין
+ * ספקים מראש. הכללים עצמם אינם חדשים — הם מגיעים מ-`prepareProfessional`,
+ * ומה שנבדק כאן הוא שהמסלול החדש **עובר דרכם** ולא עוקף אותם.
+ */
+describe("createProfessionalRecord (0.7)", () => {
+  it("מקים איש מקצוע ומנרמל את הפרטים", async () => {
+    const created = await createProfessionalRecord(admin, {
+      name: "  חשמלאי חדש  ",
+      phone: "052-123-4567",
+    });
+
+    expect(created.name).toBe("חשמלאי חדש");
+    expect(created.phone).toBe("0521234567");
+  });
+
+  it("דורש טלפון או מייל — האילוץ העסקי מגיע מ-prepareProfessional", async () => {
+    await expect(createProfessionalRecord(admin, { name: "בלי דרך ליצור קשר" })).rejects.toThrow(
+      he.notices.cannotSendNoContact,
+    );
+  });
+
+  it("‏**יוצר** ואינו מאתר קיים — הכפילויות מטופלות באיחוד ולא בשקט", async () => {
+    /*
+     * ‏`findOrCreateProfessional` מתאים לפי טלפון ונועד לזרימת הפנייה, שם
+     * "יוסי" ו"יוסי חשמלאי" הם אותו אדם. במסך ניהול "הוסף" שמחזיר בשקט
+     * רשומה קיימת הוא בדיוק הכפתור שאינו עושה כלום.
+     */
+    await createProfessionalRecord(admin, { name: "ראשון", phone: "0521111111" });
+    await createProfessionalRecord(admin, { name: "שני", phone: "0521111111" });
+
+    expect(await db.professional.count({ where: { phone: "0521111111" } })).toBe(2);
+  });
+
+  it("מנהל עבודה אינו רשאי להקים איש מקצוע מהניהול", async () => {
+    await expect(
+      createProfessionalRecord(manager, { name: "x", phone: "0521234567" }),
+    ).rejects.toThrow(he.admin.forbidden);
   });
 });

@@ -197,7 +197,7 @@ describe("טיפול ב-ActionResult", () => {
  */
 describe("אייקון בכפתור", () => {
   /** האייקונים שהמערכת מכירה (§ אייקונים — הטבלה שם היא המקור) */
-  const ICONS = /<(Folder|Camera|Mic|Send|X|Plus|Search)\b/;
+  const ICONS = /<(Folder|Camera|Mic|Send|X|Plus|Search|Pencil|Trash2)\b/;
 
   it("כל אייקון בתוך כפתור נושא `aria-label`", () => {
     const offenders: string[] = [];

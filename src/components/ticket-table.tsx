@@ -115,10 +115,9 @@ function SortHeader({
   return (
     <Link
       href={href}
-      // גובה של דבר לחיץ, ולכן הזוג המלא: 36px בעכבר ו-44px באצבע
-      // (§ אזורי מגע). שורת הכותרות מתגבהת בהתאם, וזה נכון — היא שורת
-      // פקדים ולא תוויות.
-      className="flex min-h-8 items-center gap-1 text-sm font-semibold text-muted touch:min-h-11"
+      // גובה של דבר לחיץ ולא של תווית (§ אזורי מגע). שורת הכותרות
+      // מתגבהת בהתאם, וזה נכון — היא שורת פקדים ולא תוויות.
+      className="flex min-h-8 items-center gap-1 text-sm font-semibold text-muted"
     >
       <span>{header.label}</span>
       <span aria-hidden>{caret}</span>
@@ -134,7 +133,7 @@ function TicketRow({ card }: { card: BoardCard }) {
   return (
     <Link
       href={`/tickets/${card.id}`}
-      // ‏36px בעכבר, 44px במגע — כמו כל דבר לחיץ.
+      // גובה של דבר לחיץ — כמו כל שורה שנלחצת.
       //
       // עד סבב הצפיפות זה היה `min-h-12` (48px), בנימוק ש"שורה בטבלה נסרקת
       // בעין ולא רק נלחצת" ולכן מגיע לה יותר מרצפת המגע. הנימוק **התהפך**
@@ -149,7 +148,7 @@ function TicketRow({ card }: { card: BoardCard }) {
       // ‏`border-b-border` ולא `border-border`: הצבע הכללי היה קובע גם את
       // צבע ההתחלה, ואז הקו של הטיוטה תלוי בסדר שבו Tailwind פולט את שתי
       // המחלקות — כלומר אדום שעלול לצאת אפור בלי שאיש יבחין.
-      className={`grid ${COLUMNS} min-h-8 items-center gap-x-3 border-b border-b-border px-3 py-1 text-sm touch:min-h-11 ${
+      className={`grid ${COLUMNS} min-h-8 items-center gap-x-3 border-b border-b-border px-3 py-1 text-sm ${
         isDraft ? "border-s-2 border-s-danger" : ""
       }`}
     >

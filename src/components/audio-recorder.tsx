@@ -194,14 +194,14 @@ export function AudioRecorder({
          * `tests/unit/primitives.test.ts`), כי המראה שלהם הוא **מצב**: אותו
          * פקד עצמו הוא מסגרת שקטה לפני ההקלטה ומילוי אדום בתוכה, ו-`Button`
          * אינו מחליף וריאנט תוך כדי. מה שהם כן חייבים לרשת הוא הצורה:
-         * ‏4px עיגול, וזוג הגבהים 32px בעכבר / 44px במגע. קודם הם ישבו על
-         * ‏`rounded-xl` ועל `min-h-11` — שלוש מידות שאינן מידה של אף פקד.
+         * ‏4px עיגול, וגובה הפקד הקומפקטי. קודם הם ישבו על `rounded-xl`
+         * ועל `min-h-11` — שלוש מידות שאינן מידה של אף פקד.
          *
          * **הגובה נכתב כאן ולא מגיע מההורה.** עד לאיחוד `MediaPicker` הוא
          * היה `className` שההורה דרס ב-64px, ומשירד אותו כפתור נשאר פרופ
          * בלי קורא — כלומר בדיוק ההפשטה לתרחיש שאינו קיים שהתקן אוסר.
          */
-        className="min-h-7 rounded-sm border border-border px-2 text-sm font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
+        className="min-h-7 rounded-sm border border-border px-2 text-sm font-medium disabled:opacity-60"
       >
         {/* טקסט מפורש בזמן המתנה להרשאה — כפתור שנראה כאילו הלחיצה נבלעה
             הוא בדיוק מה שדווח מהשטח על פקדים אחרים. במצב האייקון החיווי
@@ -227,7 +227,7 @@ export function AudioRecorder({
         disabled={disabled}
         onClick={stop}
         aria-pressed
-        className="min-h-7 flex-1 rounded-sm bg-danger px-2 font-medium text-brand-fg disabled:opacity-60 touch:min-h-11 touch:px-3"
+        className="min-h-7 flex-1 rounded-sm bg-danger px-2 font-medium text-brand-fg disabled:opacity-60"
       >
         {he.media.stopRecording}
         {/* הזמן צמוד לפעולה השומרת, כי הוא מתאר אותה: כמה ייכנס לקובץ.
@@ -240,7 +240,7 @@ export function AudioRecorder({
         type="button"
         disabled={disabled}
         onClick={cancel}
-        className="min-h-7 rounded-sm border border-border px-2 font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
+        className="min-h-7 rounded-sm border border-border px-2 font-medium disabled:opacity-60"
       >
         {he.media.cancelRecording}
       </button>

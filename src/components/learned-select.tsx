@@ -151,14 +151,13 @@ export function LearnedSelect({
                   }}
                   /*
                    * שורת אפשרות היא **פקד**: אותו עיגול (4px), אותו ריפוד
-                   * ואותו זוג גבהים של פקד קומפקטי — 32px בעכבר, 44px במגע.
-                   * קודם היא נעלה 44px גם בעכבר, כלומר רשימה של שמונה בניינים
-                   * דרשה גלילה במקום שבה כולם נכנסים.
+                   * ואותו גובה של פקד קומפקטי. קודם היא נעלה 44px, כלומר
+                   * רשימה של שמונה בניינים דרשה גלילה במקום שבה כולם נכנסים.
                    *
                    * המילוי הגרפיטי שמור ל**נבחר** ולו בלבד — זהו הסימן היחיד
                    * בפאנל שאינו טקסט, ולכן אסור לו להתחלק עם שורה אחרת.
                    */
-                  className={`flex min-h-7 w-full flex-col justify-center rounded-sm px-2 text-start touch:min-h-11 touch:px-3 ${
+                  className={`flex min-h-7 w-full flex-col justify-center rounded-sm px-2 text-start ${
                     option.id === value ? "bg-brand text-brand-fg" : ""
                   }`}
                 >
@@ -185,7 +184,7 @@ export function LearnedSelect({
              * מדברת עליה נקראת כטקסט שנפל לתוך הפאנל.
              */}
             {filtered.length === 0 && !canCreate ? (
-              <li className="px-2 py-2 text-sm text-muted touch:px-3">
+              <li className="px-2 py-2 text-sm text-muted">
                 {onCreate ? he.directory.emptyListHint : he.common.noResults}
               </li>
             ) : null}
@@ -214,7 +213,7 @@ export function LearnedSelect({
                * המילוי הגרפיטי לא בא בחשבון: הוא כבר מסמן את האפשרות
                * הנבחרת שלוש שורות מעל.
                */
-              className="mt-1 min-h-7 w-full rounded-sm border border-dashed border-fg px-2 text-start font-medium disabled:opacity-60 touch:min-h-11 touch:px-3"
+              className="mt-1 min-h-7 w-full rounded-sm border border-dashed border-fg px-2 text-start font-medium disabled:opacity-60"
             >
               {he.directory.createNew(trimmedQuery)}
             </button>

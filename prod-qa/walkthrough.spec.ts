@@ -86,7 +86,17 @@ test("כל המסכים הפנימיים נטענים ומצולמים", async (
 
   // מסך הבניינים (16) תלוי באתר קיים, ולכן הוא נשלף מרשימת האתרים ונוסף
   // לסריקה. בלעדיו הוא המסך היחיד שאינו נבדק כלל בסבב הפרודקשן.
+  // ‏0.7: הקישור ירד לדיאלוג הפרטים — ראו `visual/capture.spec.ts`.
   await page.goto("/admin/sites");
+  const firstCard = page.getByRole("listitem").first().getByRole("button");
+  if (await firstCard.count()) {
+    await firstCard.click();
+    await page
+      .getByRole("dialog")
+      .getByRole("link", { name: /בניינים ודירות/ })
+      .click();
+    await page.waitForURL(/\/admin\/sites\/.+/);
+  }
   const firstSite = page.locator('a[href^="/admin/sites/"]').first();
   if (await firstSite.count()) {
     const sitePath = await firstSite.getAttribute("href");
@@ -281,22 +291,33 @@ test("ניהול: משתמש חדש, תחום חדש ושינוי שם", async (
 
   await login(page);
 
-  // תחום חדש. אחרי ההוספה הוא מופיע ברשימה כשדה עריכה ש-`aria-label` שלו
-  // הוא שם התחום — זה העוגן, ולא `getByDisplayValue` (אינו קיים ב-Playwright).
+  /*
+   * תחום חדש. הכפתור הוא `+` מ-0.7, אך השם הנגיש שלו נשאר "הוסף תחום"
+   * ולכן הבורר כאן לא זז.
+   *
+   * **העוגן שאחרי ההוספה תוקן.** הוא היה `getByLabel(שם התחום)`, בהנחה
+   * שהשם מרונדר כשדה עריכה פתוח — מבנה שירד כבר ב-0.3. מאז הוא התאים
+   * לשני `aria-label` בבת אחת ("שנה שם X" ו"מחק X") ונפל על strict mode.
+   * העוגן הנכון הוא כפתור שינוי השם, שהשם הנגיש שלו מדויק.
+   */
   await page.goto("/admin/domains");
   await page.getByLabel("תחום חדש").fill(`תחום ${RUN}`);
   await page.getByRole("button", { name: "הוסף תחום" }).click();
-  await expect(page.getByLabel(`תחום ${RUN}`)).toBeVisible();
+  await expect(page.getByRole("button", { name: `שנה שם תחום ${RUN}` })).toBeVisible();
   await shot(page, "23-admin-domain-added", testInfo);
 
-  // משתמש חדש — נשאר `ADMIN` (ברירת המחדל היא מנהל עבודה, שחייב אתר)
+  // משתמש חדש — נשאר `ADMIN` (ברירת המחדל היא מנהל עבודה, שחייב אתר).
+  // ‏0.7: הטופס בדיאלוג שנפתח מכפתור שצמוד לכותרת.
   await page.goto("/admin/users");
-  await page.getByLabel("שם", { exact: true }).fill(`משתמש ${RUN}`);
-  await page.getByLabel("טלפון", { exact: true }).fill(`055${String(Date.now()).slice(-7)}`);
-  await page.getByLabel("תפקיד").selectOption({ label: "מנהל מערכת" });
-  await page.getByLabel("סיסמה ראשונית").fill(`Qa!${RUN}xyz`);
-  await page.getByRole("button", { name: "הוסף משתמש" }).click();
-  await expect(page.getByText(`משתמש ${RUN}`)).toBeVisible();
+  await page.getByRole("button", { name: "הוסף משתמש חדש" }).click();
+  const form = page.getByRole("dialog");
+  await form.getByLabel("שם", { exact: true }).fill(`משתמש ${RUN}`);
+  await form.getByLabel("טלפון", { exact: true }).fill(`055${String(Date.now()).slice(-7)}`);
+  await form.getByLabel("תפקיד").selectOption({ label: "מנהל מערכת" });
+  await form.getByLabel("סיסמה ראשונית").fill(`Qa!${RUN}xyz`);
+  await form.getByRole("button", { name: "הוסף משתמש", exact: true }).click();
+  await expect(form).toBeHidden();
+  await expect(page.getByRole("button", { name: `משתמש ${RUN}`, exact: true })).toBeVisible();
   await shot(page, "24-admin-user-added", testInfo);
 });
 

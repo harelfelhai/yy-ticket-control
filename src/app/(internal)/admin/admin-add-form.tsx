@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
@@ -20,6 +21,16 @@ interface AdminAddFormProps {
    */
   surface?: "card" | "plain";
   inputMode?: "text" | "numeric";
+  /**
+   * ‏`icon` מרנדר את הכפתור כ-`+` בלבד, בשורה אחת עם השדה.
+   *
+   * נדרש במסך התחומים, שבו ההוספה היא הקלדת שם ותו לא — כלומר תווית
+   * מלאה ("הוסף תחום") מתחת לשדה בן מילה אחת גוזלת שורה שלמה בלי להוסיף
+   * מידע. **‏`buttonLabel` נשאר חובה גם במצב הזה** והופך ל-`aria-label`:
+   * השם הנגיש אינו יורד יחד עם התווית הגלויה (§ אייקונים), ולכן גם
+   * `getByRole("button", { name: "הוסף תחום" })` ממשיך לפתור.
+   */
+  buttonStyle?: "label" | "icon";
 }
 
 /**
@@ -36,6 +47,7 @@ export function AdminAddForm({
   action,
   surface = "card",
   inputMode,
+  buttonStyle = "label",
 }: AdminAddFormProps) {
   const [value, setValue] = useState("");
   const { busy, error, run } = useAction();
@@ -60,53 +72,77 @@ export function AdminAddForm({
    */
   const layout = `flex flex-col gap-2 ${FORM_PANEL_WIDTH} lg:shrink-0`;
 
+  /** במצב `icon` השדה והכפתור יושבים בשורה אחת; במצב `label` — בטור. */
+  const iconMode = buttonStyle === "icon";
+
+  const field = (
+    /*
+     * ‏`min-w-0 flex-1` נדרש בשורה בלבד: בלעדיו ה-`Field` מתכווץ לרוחב
+     * התווית ומשאיר את השדה צר מהערך שמקלידים בו. הוא לא מוחל על המצב
+     * הטורי כדי שהשדה לא יימתח מעבר ל-`FORM_PANEL_WIDTH`.
+     */
+    <Field label={label} className={iconMode ? "min-w-0 flex-1" : undefined}>
+      {/*
+       * **‏`disabled={busy}` על השדה, ולא רק על הכפתור.**
+       *
+       * זה תיקון של באג אמיתי ולא הקשחה תיאורטית: `busy` כולל
+       * `!hydrated`, ועד כאן השדה היה פתוח בזמן שהמטפלים טרם חוברו. מי
+       * שהקליד לפני ההידרציה קיבל את הטקסט על המסך לרגע — ואז React
+       * איפס אותו ברינדור העוקב, כלומר **ההקלדה נמחקה**. הכפתור, שמושבת
+       * גם על `value.trim().length === 0`, נשאר מושבת לנצח: מסך מת.
+       *
+       * החלון הזה נמדד בפועל בניסוי (עיכוב מלאכותי של ה-chunks): הערך
+       * נכתב, ואחרי ההידרציה הוא ריק והכפתור מושבת.
+       *
+       * הרכיב הזה מגבה **חמישה** מסכי ניהול (אתר · בניין · דירה · תחום ·
+       * תגית), ולכן השורה הזו סוגרת את אותו באג בכולם. הערה בקובץ אחר
+       * כבר טענה שכל פקדי הקלט במערכת מושבתים עד ההידרציה "כמו כל פקד
+       * קלט במערכת" — והטענה הזו פשוט לא הייתה נכונה כאן.
+       */}
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        size="compact"
+        disabled={busy}
+      />
+    </Field>
+  );
+
+  const button = (
+    /*
+     * ‏`compact` כמו השדה שלצדו או שמעליו. קודם השדה היה 32px והכפתור
+     * ‏36px — שני פקדים בערימה אחת בשני גבהים, שנקראים כשתי מערכות ולא
+     * כטופס אחד. מ-0.7 זהו גם הגובה בטלפון: רצפת המגע בוטלה (§ אזורי מגע).
+     */
+    <Button
+      size="compact"
+      onClick={submit}
+      disabled={busy || value.trim().length === 0}
+      className={iconMode ? "shrink-0" : "self-start"}
+      aria-label={iconMode ? buttonLabel : undefined}
+    >
+      {iconMode ? <Plus className="size-3" aria-hidden="true" /> : buttonLabel}
+    </Button>
+  );
+
   return (
     <div className={surface === "card" ? cardClasses(layout) : layout}>
-      <Field label={label}>
-        {/*
-         * **‏`disabled={busy}` על השדה, ולא רק על הכפתור.**
-         *
-         * זה תיקון של באג אמיתי ולא הקשחה תיאורטית: `busy` כולל
-         * `!hydrated`, ועד כאן השדה היה פתוח בזמן שהמטפלים טרם חוברו. מי
-         * שהקליד לפני ההידרציה קיבל את הטקסט על המסך לרגע — ואז React
-         * איפס אותו ברינדור העוקב, כלומר **ההקלדה נמחקה**. הכפתור, שמושבת
-         * גם על `value.trim().length === 0`, נשאר מושבת לנצח: מסך מת.
-         *
-         * החלון הזה נמדד בפועל בניסוי (עיכוב מלאכותי של ה-chunks): הערך
-         * נכתב, ואחרי ההידרציה הוא ריק והכפתור מושבת.
-         *
-         * הרכיב הזה מגבה **חמישה** מסכי ניהול (אתר · בניין · דירה · תחום ·
-         * תגית), ולכן השורה הזו סוגרת את אותו באג בכולם. הערה בקובץ אחר
-         * כבר טענה שכל פקדי הקלט במערכת מושבתים עד ההידרציה "כמו כל פקד
-         * קלט במערכת" — והטענה הזו פשוט לא הייתה נכונה כאן.
-         */}
-        <Input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder}
-          inputMode={inputMode}
-          size="compact"
-          disabled={busy}
-        />
-      </Field>
-      {/*
-       * ‏`compact` כמו השדה שמעליו. קודם השדה היה 32px והכפתור 36px — שני
-       * פקדים בערימה אחת בשני גבהים, שנקראים כשתי מערכות ולא כטופס אחד.
-       * הרצפה במגע נשמרת בשני המקרים (`touch:min-h-11`).
-       */}
-      <Button
-        size="compact"
-        onClick={submit}
-        disabled={busy || value.trim().length === 0}
-        className="self-start"
-      >
-        {buttonLabel}
-      </Button>
-      {error ? (
-        <FormError>
-          {error}
-        </FormError>
-      ) : null}
+      {iconMode ? (
+        // ‏`items-end` ולא `items-center`: התווית מוסיפה גובה מעל השדה,
+        // ומרכוז היה מיישר את הכפתור לאמצע הזוג ולא לפקד שלצדו.
+        <div className="flex items-end gap-2">
+          {field}
+          {button}
+        </div>
+      ) : (
+        <>
+          {field}
+          {button}
+        </>
+      )}
+      {error ? <FormError>{error}</FormError> : null}
     </div>
   );
 }

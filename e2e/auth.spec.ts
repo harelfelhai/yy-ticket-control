@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
-import { shownText } from "./ticket-screen";
 
 /**
  * מסלול ההתחברות מקצה לקצה, במסלול האמיתי: טופס → Server Action → עוגייה
@@ -93,13 +92,17 @@ test("עובד שהושבת מוחזר למסך ההתחברות, ואינו מ�
   if (new URL(page.url()).pathname === "/login") await login(page);
   await expect(page).toHaveURL(/\/board$/);
 
+  // ‏0.7: ההקמה נפתחת מכפתור שצמוד לכותרת, והשדות בדיאלוג.
   await page.goto("/admin/users");
-  await page.getByLabel("שם", { exact: true }).fill(employeeName);
-  await page.getByLabel("טלפון").fill(employeePhone);
-  await page.getByLabel("אתר").selectOption({ label: "אתר לדוגמה" });
-  await page.getByLabel("סיסמה ראשונית").fill(employeePassword);
-  await page.getByRole("button", { name: "הוסף משתמש" }).click();
-  await expect(shownText(page, employeeName)).toBeVisible();
+  await page.getByRole("button", { name: "הוסף משתמש חדש" }).click();
+  const form = page.getByRole("dialog");
+  await form.getByLabel("שם", { exact: true }).fill(employeeName);
+  await form.getByLabel("טלפון").fill(employeePhone);
+  await form.getByLabel("אתר").selectOption({ label: "אתר לדוגמה" });
+  await form.getByLabel("סיסמה ראשונית").fill(employeePassword);
+  await form.getByRole("button", { name: "הוסף משתמש", exact: true }).click();
+  await expect(form).toBeHidden();
+  await expect(page.getByRole("button", { name: employeeName, exact: true })).toBeVisible();
 
   // ── העובד מתחבר בדפדפן נפרד ומגיע ללוח ─────────────────────────────
   const employeeContext = await browser.newContext();
@@ -112,9 +115,13 @@ test("עובד שהושבת מוחזר למסך ההתחברות, ואינו מ�
     await expect(employeePage).toHaveURL(/\/board$/);
 
     // ── המנהל משבית אותו בזמן שהוא מחובר ─────────────────────────────
-    const row = page.getByRole("listitem").filter({ hasText: employeeName });
-    await row.getByRole("button", { name: "השבת" }).click();
-    await expect(row.getByRole("button", { name: "הפעל" })).toBeVisible();
+    //
+    // ‏0.7: ההשבתה ירדה מהשורה לדיאלוג הפרטים שנפתח בלחיצה על הכרטיס.
+    await page.getByRole("button", { name: employeeName, exact: true }).click();
+    const details = page.getByRole("dialog");
+    await details.getByRole("button", { name: "השבת" }).click();
+    await expect(details.getByRole("button", { name: "הפעל" })).toBeVisible();
+    await details.getByRole("button", { name: "סגור", exact: true }).click();
 
     // ── ומכאן: הפניה למסך ההתחברות, לא 500 ───────────────────────────
     const response = await employeePage.goto("/board");

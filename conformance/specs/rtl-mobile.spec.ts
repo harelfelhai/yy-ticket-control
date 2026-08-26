@@ -12,42 +12,22 @@ import { createTicket, showLink, uniq, uniqPhone } from "../fixtures/world";
  */
 
 /**
- * **רצפת הגובה תלויה במצביע, ולא במספר אחד לכל העולם.**
+ * **רצפת גובה אחת לכל המכשירים — 28px.**
  *
- * עד סבב הצפיפות 44px היה הרצפה בכל מקום, וכך היא כתובה גם ב-`DESIGN.md`
- * (§ אזורי מגע). הצפיפות פיצלה אותה: הפקדים נכתבים
- * `min-h-9 touch:min-h-11`, כלומר 36px עם עכבר ו-44px באצבע. זו
- * אינה הנחתה — WCAG 2.5.5 מדבר על יעד **מגע**, ומסך עם עכבר הוא מקרה אחר.
+ * עד 0.7 היו כאן שתיים: 44px במגע ו-28px בעכבר, נבחרות בשאילתת מדיה
+ * (`TOUCH_QUERY`) שהייתה עותק מדויק של `@custom-variant touch` שב-CSS.
+ * הרצפה המותנית **בוטלה בהכרעת בעל המוצר** — הכפתורים בטלפון נקראו לו
+ * גדולים מדי ביחס לדסקטופ — ואיתה ירדו גם השאילתה וגם `MIN_TOUCH`.
  *
- * הסריקה כאן מודדת `boundingBox` אמיתי, ולכן היא **חייבת** לשאול את אותה
- * שאלה שה-CSS שואל. הפרויקט `mobile` (Pixel 5) מדמה מגע ועונה כן; הפרויקט
- * `desktop` (Desktop Chrome) עונה לא, ועליו מדידה מול 44 הייתה מכשילה כל
- * כפתור במערכת על תקן שאינו חל שם.
+ * הנימוק של רצפת ה-44 לא הופרך: ‏WCAG 2.5.5 מדבר על יעד **מגע**, והמחיר
+ * מוצהר ב-`docs/DESIGN.md` § אזורי מגע. מה שהשתנה הוא ההכרעה, לא הידע.
  *
- * ‏`matchMedia` ולא `project.use.hasTouch`: זו בדיוק השאילתה שהסטיילשיט
- * מריץ, ולכן אין דרך שהבדיקה והעיצוב יחלקו על התשובה. הרצפה עם עכבר היא
- * 32px — גובה הווריאנט `compact`, הקטן ביותר שסקאלת הצפיפות מתירה.
+ * ‏**`MIN_POINTER_FINE` שומר על שמו בכוונה:** ‏`layout-guards.test.ts`
+ * גוזר את הערך מ-`compact` שב-`button.tsx` ומאתר אותו **לפי השם הזה**.
+ * שינוי גובה בפרימיטיב מחייב את שתי חבילות המדידה באותה נשימה, וזה
+ * המנגנון שמכריח זאת.
  */
-const MIN_TOUCH = 44;
 const MIN_POINTER_FINE = 28;
-
-/**
- * **מועתק מ-`@custom-variant touch` ב-`src/app/globals.css`, ולא מיובא.**
- *
- * ייבוא מ-`src/` היה יוצר תלות של חבילת הבדיקות בקוד האפליקציה בשביל
- * מחרוזת אחת. במקום זה `tests/unit/touch-variant.test.ts` קורא את שלושת
- * העותקים ונכשל אם הם נפרדים — אותה תבנית שבה נשמרת פלטת ה-frontmatter.
- *
- * ‏`(not (any-pointer: fine))` הוא מה שהפריד בין "מכשיר מגע" ל"מסך מגע
- * במחשב": `pointer: coarse` לבדו החזיר אמת גם על דסקטופ עם מסך מגע, כלומר
- * העלה כל פקד ל-44px אצל משתמש שעובד בעכבר.
- */
-const TOUCH_QUERY = "(pointer: coarse) and (not (any-pointer: fine))";
-
-async function minHeight(page: Page): Promise<number> {
-  const touch = await page.evaluate((q) => matchMedia(q).matches, TOUCH_QUERY);
-  return touch ? MIN_TOUCH : MIN_POINTER_FINE;
-}
 
 async function expectRtlNoOverflow(page: Page, label: string) {
   await expect(page.locator("html"), `${label}: dir`).toHaveAttribute("dir", "rtl");
@@ -67,19 +47,24 @@ async function expectRtlNoOverflow(page: Page, label: string) {
  * המנומקת (36px).
  *
  * האחרים **אינם** חריגים מסונקצנים אלא פערים שנמדדו:
- * "×" של צ׳יפ הנמען (16px), "שנה שם" ברשימת התגיות (16px), ו**קישורי
- * החזרה** — "← חזרה לרשימה" בפורטל, "← תגיות" במסך התגית,
- * "← ניהול המערכת" במסכי הניהול — כולם 20px. זהו **דפוס אחד** ולא שלושה
- * מקרים: קישור חזרה נכתב בכל מקום בלי `min-h`.
+ * "×" של צ׳יפ הנמען (16px), ו**קישורי החזרה** — "← חזרה לרשימה" בפורטל,
+ * "← תגיות" במסך התגית, "← ניהול המערכת" במסכי הניהול — כולם 20px. זהו
+ * **דפוס אחד** ולא שלושה מקרים: קישור חזרה נכתב בכל מקום בלי `min-h`.
  *
  * הם מוחרגים כאן כדי שהסריקה הרוחבית תמשיך לתפוס פערים **חדשים** ולא
  * תיתקע על הידועים; כולם מדווחים ב-conformance-report, ו-`S0-03` מחזיק
  * אחד מהם כבדיקה שנועדה להיכשל עד שיתוקן.
+ *
+ * **‏"שנה שם" הוסר מהרשימה ב-0.7, וזו הסרה של חריג שנסגר ולא ויתור עליו.**
+ * הכפתור עבר לאייקון עיפרון בתוך `Button size="compact"` — כלומר אין לו
+ * עוד טקסט גלוי להתאים לו, **וגם** הגובה שלו הוא 28px, שהוא בדיוק הרצפה.
+ * חריג שאיש אינו סופר אינו חריג אלא פרצה (§ RTL), ולכן ערך מת יורד מכאן
+ * ואינו נשאר "ליתר ביטחון".
  */
-const SANCTIONED = ["ערוך", "×", "שנה שם", "← חזרה לרשימה", "← תגיות", "← ניהול המערכת"];
+const SANCTIONED = ["ערוך", "×", "← חזרה לרשימה", "← תגיות", "← ניהול המערכת"];
 
 async function smallTargets(page: Page): Promise<string[]> {
-  const floor = await minHeight(page);
+  const floor = MIN_POINTER_FINE;
   const targets = page.locator("main button:visible, main a:visible");
   const count = await targets.count();
   const small: string[] = [];
@@ -97,7 +82,7 @@ async function smallTargets(page: Page): Promise<string[]> {
 }
 
 async function expectTouchTargets(page: Page, label: string) {
-  const floor = await minHeight(page);
+  const floor = MIN_POINTER_FINE;
   expect(await smallTargets(page), `${label}: אזורי לחיצה קטנים מ-${floor}px`).toEqual([]);
 }
 
@@ -123,9 +108,18 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
 
     // מסך הבניינים תלוי באתר קיים, ולכן הנתיב נשלף ולא נכתב קשיח — בדיוק
     // כמו מסך התגית. בלעדיו הוא היה המסך היחיד שאיש אינו מודד בו אזורי מגע.
+    // ‏0.7: הקישור לבניינים ודירות ירד מכרטיס האתר אל דיאלוג הפרטים,
+    // ולכן הנתיב נשלף מתוכו. בלי זה `sitePath` היה `null` בשקט, ומסך 16
+    // היה נושר מהסריקה — שוב.
     await page.goto("/admin/sites");
-    const firstSite = page.locator('a[href^="/admin/sites/"]').first();
-    const sitePath = (await firstSite.count()) ? await firstSite.getAttribute("href") : null;
+    const firstCard = page.getByRole("listitem").first().getByRole("button");
+    let sitePath: string | null = null;
+    if (await firstCard.count()) {
+      await firstCard.click();
+      const details = page.getByRole("dialog");
+      sitePath = await details.getByRole("link", { name: /בניינים ודירות/ }).getAttribute("href");
+      await details.getByRole("button", { name: "סגור", exact: true }).click();
+    }
 
     const screens: [string, string][] = [
       ["/login", "מסך התחברות"],
@@ -216,7 +210,7 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
     const box = await remove.boundingBox();
     // ‏16px נופל מתחת לשתי הרצפות, ולכן הטענה נשארת נכונה בשני הפרויקטים
     // גם אחרי שהרצפה הפכה תלוית-מצביע.
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(await minHeight(page));
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(MIN_POINTER_FINE);
   });
 
   test("S0-04 — מסך 404: המעטפת עברית ו-RTL", async ({ page }) => {

@@ -87,9 +87,9 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
           {/*
            * שני תיקונים באותה שורה, ושניהם על הכותרת המתקפלת:
            *
-           * ‏1. **אזור מגע.** ‏`py-2` על `text-sm` נותן 36px — מספיק בעכבר,
-           *    לא באצבע. הזוג `min-h-9` + `touch:min-h-11` הוא
-           *    הניסוח שהתקן דורש (§ אזורי מגע), והפורטל נפתח בטלפון.
+           * ‏1. **אזור לחיצה.** ‏`py-2` על `text-sm` נותן גובה שנגזר מהטקסט
+           *    ולא מהתפקיד. ‏`min-h-8` הוא גובה הפקד שהתקן קובע
+           *    (§ אזורי מגע), והוא מפורש ולא מקרי.
            *    בלי `flex`, בכוונה: `display:flex` על `<summary>` מוחק את
            *    משולש הפתיחה הנייטיב, וזה הרמז היחיד שהאזור נפתח.
            * ‏2. **טיפוגרפיה.** ‏14px/700 אינו זוג בסקאלה (§ Typography מזווג
@@ -97,7 +97,7 @@ export default async function PortalPage(props: PageProps<"/p/[token]">) {
            *    אותה כותרת בשני הצדדים — קבלן שרואה ממשק זר חושד בו.
            */}
           <summary
-            className={`min-h-8 cursor-pointer py-2 touch:min-h-11 ${TITLE_DESCRIPTIVE}`}
+            className={`min-h-8 cursor-pointer py-2 ${TITLE_DESCRIPTIVE}`}
           >
             {he.portal.archiveTitle} · {archived.length}
           </summary>

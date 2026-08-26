@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/message";
 import type { ActionResult } from "@/lib/action-result";
@@ -44,7 +45,17 @@ export function DeleteButton({
         disabled={disabled || busy}
         aria-label={`${he.admin.delete} ${name}`}
       >
-        {he.admin.delete}
+        {/*
+         * **‏`Trash2` ולא `X`, וזו הכרעה מנומקת** (§ אייקונים): `X` נושא
+         * במערכת שלוש משמעויות לא-הרסניות — הסרת קובץ, ניקוי חיפוש,
+         * סגירת דיאלוג — ואותו סמל ל"צא בלי לעשות כלום" ול"מחק לתמיד"
+         * הוא נשא מידע שמשמעותו אינה עקבית.
+         *
+         * ‏`aria-label` נשאר `מחק {name}` בדיוק — אותה מחרוזת שהייתה
+         * התווית הגלויה, ולכן כל חבילות ה-e2e ממשיכות לאתר את הכפתור.
+         * ‏`window.confirm` הוא שממשיך לנקוב בשם בפועל.
+         */}
+        <Trash2 className="size-3" aria-hidden="true" />
       </Button>
       {error ? <FormError>{error}</FormError> : null}
     </div>
