@@ -1,8 +1,6 @@
-import { readFileSync } from "node:fs";
-import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { chipClasses } from "@/components/ui/chip";
-import { SRC, scan, sourceFiles, stripComments } from "./source-scan";
+import { scan } from "./source-scan";
 
 /**
  * ריתמוס 4px — בדיקה על הקוד עצמו, כמו `typography.test.ts`.
