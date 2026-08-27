@@ -14,12 +14,24 @@ import type { EmailTransport } from "./types";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
+/**
+ * גג לשליחת מייל בודדת.
+ *
+ * **למה זה קריטי דווקא כאן.** העבודות בתור מנוקזות בזו אחר זו
+ * (`drainJobs`), ולכן קריאה יוצאת שאינה חוזרת אינה מעכבת רק את עצמה — היא
+ * עוצרת את **כל** ההתראות שממתינות אחריה. שליחת מייל היא בקשת POST קטנה;
+ * עשר שניות הן כבר סימן שהצד השני אינו עונה, ועדיף להיכשל, לרשום
+ * ב-`Job.lastError`, ולנסות שוב בעוד דקה.
+ */
+const SEND_TIMEOUT_MS = 10_000;
+
 export function resendTransport(apiKey: string, from: string): EmailTransport {
   return {
     name: "resend",
     async send(message) {
       const response = await fetch(RESEND_ENDPOINT, {
         method: "POST",
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",

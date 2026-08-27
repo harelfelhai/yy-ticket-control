@@ -106,13 +106,37 @@ export const LOGIN_MAX_FAILURES = 8;
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 /**
- * מפתח ההגבלה, מנורמל כך שצורות שונות של אותו מזהה נספרות יחד: "0501234567"
- * ו-"050-123-4567" הן אותו חשבון, ואסור שכל צורה תקבל מכסת ניסיונות משלה.
+ * מפתחות ההגבלה למזהה נתון — **אחד לכל מועמד שהחיפוש ב-DB עשוי להיתפס בו**.
+ *
+ * **למה רשימה ולא מפתח יחיד, ולמה זו הייתה פרצה.** הגרסה הקודמת בנתה מפתח
+ * אחד לפי הסתעפות משלה (`identifier.includes("@")` → מייל, אחרת טלפון),
+ * בעוד `authenticate` מחפש ב-DB לפי **שני** המועמדים של
+ * ‏`identifierCandidates`. שתי הדרכים לנרמל את אותו קלט נפרדו זו מזו, וזה
+ * הספיק כדי לרוקן את ההגבלה מתוכן: `normalizePhone` מסיר כל תו שאינו ספרה,
+ * ולכן "0501234567@a", "0501234567@b" ואינסוף וריאציות אחרות נפתרות כולן
+ * לאותו טלפון ומוצאות את אותו משתמש — אבל כל אחת מהן קיבלה מפתח הגבלה
+ * **נפרד**, כלומר מכסה חדשה של שמונה ניסיונות. מספר הניסיונות לא היה חסום
+ * כלל, וזו הגנת ה-brute-force היחידה במערכת.
+ *
+ * התיקון הוא מקור אמת אחד: המפתחות נגזרים מ-`identifierCandidates` עצמה,
+ * אותה פונקציה שהחיפוש ב-DB נגזר ממנה. כך כל צורה שמגיעה לאותו משתמש נספרת
+ * בהכרח באותו דלי — אם היא נתפסת בטלפון, היא מגדילה את מונה הטלפון.
+ *
+ * ההפרדה ל-`phone:`/`email:` מונעת התנגשות בין מספר טלפון לכתובת מייל
+ * שבמקרה נראים זהים אחרי נרמול.
  */
-export function loginRateKey(identifier: string): string {
-  const trimmed = identifier.trim().toLowerCase();
-  if (trimmed.includes("@")) return `login:${normalizeEmail(identifier)}`;
-  return `login:${normalizePhone(identifier) || trimmed}`;
+export function loginRateKeys(identifier: string): string[] {
+  const { phone, email } = identifierCandidates(identifier);
+
+  const keys: string[] = [];
+  if (phone) keys.push(`login:phone:${phone}`);
+  if (email) keys.push(`login:email:${email}`);
+
+  // קלט שאינו מניב אף מועמד (רווחים בלבד) עדיין נספר, כדי שלא ייווצר מסלול
+  // שבו אפשר להקיש ללא הגבלה. הוא ממילא לא יתאים לאף משתמש.
+  if (keys.length === 0) keys.push(`login:raw:${identifier.trim().toLowerCase()}`);
+
+  return keys;
 }
 
 export type ThrottledAuth =
@@ -123,26 +147,35 @@ export type ThrottledAuth =
 /**
  * מאמת התחברות עם הגבלת קצב. בודק חסימה *לפני* אימות הסיסמה (כדי לא לבזבז
  * גיבוב argon2 על מזהה חסום), סופר את הכשל אחריו, ומאפס בהצלחה.
+ *
+ * כל המפתחות של המזהה (ראה `loginRateKeys`) מטופלים יחד: **חסימה על אחד
+ * מהם מספיקה** כדי לחסום, וכשל נספר על כולם. זה מה שמונע מצורה חלופית של
+ * אותו מזהה לפתוח לעצמה מכסה נפרדת.
  */
 export async function authenticateThrottled(
   identifier: string,
   password: string,
   now: Date = new Date(),
 ): Promise<ThrottledAuth> {
-  const key = loginRateKey(identifier);
+  const keys = loginRateKeys(identifier);
 
-  const gate = await peekRateLimit(key, LOGIN_MAX_FAILURES, now);
-  if (!gate.allowed) {
-    return { ok: false, reason: "rate_limited", retryAfterSeconds: gate.retryAfterSeconds };
+  const gates = await Promise.all(
+    keys.map((key) => peekRateLimit(key, LOGIN_MAX_FAILURES, now)),
+  );
+  const blocked = gates.find((gate) => !gate.allowed);
+  if (blocked) {
+    return { ok: false, reason: "rate_limited", retryAfterSeconds: blocked.retryAfterSeconds };
   }
 
   const user = await authenticate(identifier, password);
   if (!user) {
-    await consumeRateLimit(key, LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, now);
+    await Promise.all(
+      keys.map((key) => consumeRateLimit(key, LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, now)),
+    );
     return { ok: false, reason: "invalid" };
   }
 
-  await clearRateLimit(key);
+  await Promise.all(keys.map((key) => clearRateLimit(key)));
   return { ok: true, user };
 }
 

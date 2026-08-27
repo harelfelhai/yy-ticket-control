@@ -32,6 +32,16 @@ export function r2Storage(config: R2Config): MediaStorage {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
+    // גגות מפורשים: `exists` נקרא **במסלול הבקשה** (‏`confirmUpload`), ולכן
+    // בלעדיהם R2 שאינו עונה משאיר את המשתמש תקוע על "מעלה…" בלי סוף. ‏`read`
+    // נקרא מהעובד, שם התור סדרתי וההיתקעות עוצרת גם את ההתראות.
+    requestHandler: {
+      connectionTimeout: 5_000,
+      requestTimeout: 60_000,
+    },
+    // ה-retry של התור (`MAX_ATTEMPTS`) הוא זה שאמור לנסות שוב, עם השהיות
+    // גדלות. שלושה ניסיונות פנימיים רק מכפילים את זמן ההיתקעות.
+    maxAttempts: 2,
   });
 
   return {
@@ -67,16 +77,20 @@ export function r2Storage(config: R2Config): MediaStorage {
       await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
     },
 
-    async exists(key) {
+    async head(key) {
       try {
-        await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
-        return true;
+        const response = await client.send(
+          new HeadObjectCommand({ Bucket: config.bucket, Key: key }),
+        );
+        // ‏ContentLength חסר פירושו שאי אפשר לאמת גודל; 0 ייפול ממילא
+        // בבדיקת "ריק" של הקורא, וזו התשובה הנכונה עבור אובייקט שלא נכתב.
+        return { sizeBytes: response.ContentLength ?? 0 };
       } catch (error) {
         // 404/NotFound = הקובץ לא הועלה. כל שגיאה אחרת (הרשאה, רשת) אינה
         // "חסר" אלא תקלה אמיתית — נזרקת כדי שתיתפס ולא תתחפש ל"לא קיים".
         const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata
           ?.httpStatusCode;
-        if (status === 404 || (error as { name?: string }).name === "NotFound") return false;
+        if (status === 404 || (error as { name?: string }).name === "NotFound") return null;
         throw error;
       }
     },

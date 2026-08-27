@@ -317,6 +317,55 @@ describe("getTagContractorLink — החוליה שסוגרת את הפתיחה",
     const owner: Viewer = { kind: "user", id: "u-owner", role: "OWNER", siteId: null };
     await expect(getTagContractorLink(owner, tag.id, electricianId)).rejects.toThrow(TagError);
   });
+
+  /**
+   * רגרסיה לעקיפת מידור האתרים.
+   *
+   * קישור הקסם הוא סוד גלובלי: הוא פותח את **כל** פניות הקבלן בכל האתרים.
+   * לפני התיקון די היה בכך שמנהל עבודה יפתח תגית לקבלן כלשהו — כל קבלן
+   * במערכת — כדי לקבל אותו, ואיתו גישת קריאה וכתיבה לאתרים שנחסמו בפניו.
+   */
+  it("מנהל עבודה אינו מקבל קישור של קבלן שאינו עובד באתר שלו", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    // הקבלן עובד באתר ב׳ בלבד — למנהל א׳ אין איתו שום קשר עבודה.
+    const ticketB = await makeTicket(siteBId, adminId);
+    await db.assignment.create({ data: { ticketId: ticketB.id, professionalId: plumberId } });
+
+    await grantTagAccess(managerAViewer, tag.id, [plumberId]);
+
+    await expect(getTagContractorLink(managerAViewer, tag.id, plumberId)).rejects.toThrow(TagError);
+  });
+
+  it("מנהל עבודה כן מקבל קישור של קבלן שמשויך לפנייה באתר שלו", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    const ticketA = await makeTicket(siteAId, managerAId);
+    await db.assignment.create({ data: { ticketId: ticketA.id, professionalId: electricianId } });
+
+    await grantTagAccess(managerAViewer, tag.id, [electricianId]);
+
+    const link = await getTagContractorLink(managerAViewer, tag.id, electricianId);
+    expect(link).toContain("/p/");
+  });
+
+  it("שיוך שהוסר אינו נחשב קשר עבודה", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    const ticketA = await makeTicket(siteAId, managerAId);
+    await db.assignment.create({
+      data: { ticketId: ticketA.id, professionalId: electricianId, status: "REMOVED" },
+    });
+
+    await grantTagAccess(managerAViewer, tag.id, [electricianId]);
+
+    await expect(getTagContractorLink(managerAViewer, tag.id, electricianId)).rejects.toThrow(
+      TagError,
+    );
+  });
+
+  it("מנהל מערכת אינו מוגבל בקשר עבודה", async () => {
+    const tag = await findOrCreateTag("בדק בית", adminId);
+    await grantTagAccess(adminViewer, tag.id, [plumberId]);
+    expect(await getTagContractorLink(adminViewer, tag.id, plumberId)).toContain("/p/");
+  });
 });
 
 describe("ביטול גישת תגית", () => {

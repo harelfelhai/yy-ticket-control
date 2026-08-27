@@ -214,6 +214,7 @@ export default async function BoardPage(props: PageProps<"/board">) {
           />
           <ArchiveSection
             cards={board.sections.ARCHIVE}
+            truncated={board.archiveTruncated}
             table={table}
             sort={sort}
             sortHref={sortHref}
@@ -379,10 +380,11 @@ function Section({
 
 function ArchiveSection({
   cards,
+  truncated,
   table,
   sort,
   sortHref,
-}: { cards: BoardCard[]; table: boolean } & SortProps) {
+}: { cards: BoardCard[]; truncated: boolean; table: boolean } & SortProps) {
   if (cards.length === 0) return null;
 
   return (
@@ -391,6 +393,11 @@ function ArchiveSection({
         <SectionHeading label={he.boardSection.ARCHIVE} count={cards.length} />
       </summary>
       <div className="mt-2 flex flex-col gap-2">
+        {/*
+          הקטיעה נאמרת בתוך הקבוצה שנקטעה, לפני הרשימה — ולא בתחתית: מי
+          שפותח את הארכיון ולא מוצא פנייה ישנה מפסיק לגלול הרבה לפני הסוף.
+        */}
+        {truncated && <p className="text-sm text-muted">{he.board.archiveTruncated}</p>}
         <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} />
       </div>
     </details>

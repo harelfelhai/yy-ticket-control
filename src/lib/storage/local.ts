@@ -41,13 +41,12 @@ export function localStorage(baseUrl: string): MediaStorage {
       await rm(resolveKey(key), { force: true });
     },
 
-    async exists(key) {
+    async head(key) {
       try {
-        await stat(resolveKey(key));
-        return true;
+        return { sizeBytes: (await stat(resolveKey(key))).size };
       } catch (error) {
-        // הקובץ לא נכתב (העלאה שנקטעה) → false. תקלה אחרת נזרקת.
-        if ((error as { code?: string }).code === "ENOENT") return false;
+        // הקובץ לא נכתב (העלאה שנקטעה) → null. תקלה אחרת נזרקת.
+        if ((error as { code?: string }).code === "ENOENT") return null;
         throw error;
       }
     },

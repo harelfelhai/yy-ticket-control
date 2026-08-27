@@ -9,6 +9,7 @@ import {
   canManageAdmin,
   canManageTagAccess,
   canPostTagChat,
+  canRevealPortalLink,
   canTagTicket,
   isUser,
 } from "@/lib/permissions";
@@ -439,7 +440,35 @@ export async function getTagContractorLink(
   });
   if (!grant) throw new TagError(he.common.notAllowed);
 
+  // ההרשאה לפתוח תגית אינה ההרשאה לחשוף את קישור הקסם — ראה
+  // `canRevealPortalLink`. הבדיקה כאן ולא ב-`grantTagAccess`: פתיחת התגית
+  // עצמה נשארת פתוחה למנהל עבודה, ומה שהוגבל הוא חשיפת הסוד הגלובלי.
+  denyUnless(canRevealPortalLink(viewer, await hasSiteWorkWith(viewer, professionalId)));
+
   return ensurePortalLink(professionalId);
+}
+
+/**
+ * האם לצופה יש קשר עבודה ממשי עם הקבלן — שיוך פעיל לפנייה **באתר שלו**.
+ *
+ * זהו התנאי שמחליף את "כל קבלן ברשימה" עבור מנהל עבודה. הוא נבחר מפני שהוא
+ * בדיוק מה שהמנהל כבר רואה ומנהל בפועל: קבלן שמשויך לפנייה באתר שלו הוא
+ * קבלן שהוא ממילא מתאם מולו, ושהקישור שלו היה מגיע אליו דרך מסך הפנייה.
+ *
+ * מדלג על השאילתה למי שאינו מנהל עבודה — מנהל מערכת רשאי בלי קשר, ולבעלים
+ * אין גישה לפעולה מלכתחילה.
+ */
+async function hasSiteWorkWith(viewer: Viewer, professionalId: string): Promise<boolean> {
+  if (!isUser(viewer) || viewer.role !== "SITE_MANAGER" || !viewer.siteId) return false;
+
+  const count = await db.assignment.count({
+    where: {
+      professionalId,
+      status: { not: "REMOVED" },
+      ticket: { siteId: viewer.siteId },
+    },
+  });
+  return count > 0;
 }
 
 /** רושם אירוע מערכת בצ׳אט התגית (נפתחה/בוטלה גישה) */

@@ -329,3 +329,85 @@ describe("getBoard — תוכן הכרטיס", () => {
     expect(board.sections.WITH_RECIPIENTS[0]?.ageDays).toBe(3);
   });
 });
+
+/**
+ * הארכיון גדל ללא גבול — פנייה אמיתית אינה נמחקת לעולם — בעוד מספר הפניות
+ * הפתוחות נשאר קבוע. לפני התיקון הלוח שלף את **כל** הפניות שנוצרו אי-פעם
+ * בכל טעינה, כדי להציג קבוצה שמקופלת ממילא כברירת מחדל.
+ */
+describe("תקרת הארכיון בלוח", () => {
+  /** יוצר פניות סגורות ישירות ב-DB — מהיר בהרבה ממסלול השירות המלא */
+  async function seedClosed(count: number) {
+    for (let i = 0; i < count; i++) {
+      await db.ticket.create({
+        data: {
+          siteId: siteA,
+          createdById: manager.id,
+          channel: "SELF",
+          description: `פנייה סגורה ${i}`,
+          closedAt: new Date(NOW.getTime() - i * 60_000),
+          closedById: manager.id,
+          lastActivityAt: new Date(NOW.getTime() - i * 60_000),
+        },
+      });
+    }
+  }
+
+  it("טוען לכל היותר את התקרה, ומסמן שנקטע", async () => {
+    await seedClosed(55);
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+
+    expect(board.sections.ARCHIVE.length).toBe(50);
+    expect(board.archiveTruncated).toBe(true);
+  });
+
+  it("ארכיון קטן מהתקרה אינו מסומן כקטוע", async () => {
+    await seedClosed(3);
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+
+    expect(board.sections.ARCHIVE.length).toBe(3);
+    expect(board.archiveTruncated).toBe(false);
+  });
+
+  it("הפניות הפעילות אינן נקטעות — הן מה שדורש טיפול", async () => {
+    await seedClosed(60);
+    for (let i = 0; i < 12; i++) {
+      await createTicket(manager, {
+        siteId: siteA,
+        ...base,
+        description: `פנייה פתוחה ${i}`,
+        recipients: [{ kind: "professional", id: electrician }],
+      });
+    }
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+    const active =
+      board.sections.ACTION_REQUIRED.length + board.sections.WITH_RECIPIENTS.length;
+
+    expect(active).toBe(12);
+    expect(board.sections.ARCHIVE.length).toBe(50);
+  });
+
+  it("החיפוש עדיין מגיע לארכיון שמעבר לתקרה", async () => {
+    await seedClosed(60);
+    await db.ticket.create({
+      data: {
+        siteId: siteA,
+        createdById: manager.id,
+        channel: "SELF",
+        description: "נזילה במרתף החניון",
+        closedAt: NOW,
+        closedById: manager.id,
+        // תנועה ישנה מאוד — נופלת הרבה מתחת לתקרת הארכיון בסדר הרגיל
+        lastActivityAt: new Date("2020-01-01T00:00:00Z"),
+      },
+    });
+
+    const board = await getBoard(asUser(manager), { query: "מרתף החניון" }, NOW);
+
+    expect(board.search).not.toBeNull();
+    expect(board.search?.cards.some((c) => c.descriptionLine.includes("מרתף החניון"))).toBe(true);
+  });
+});

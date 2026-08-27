@@ -26,6 +26,9 @@ const FALLBACK_MODEL = "whisper-1";
  */
 const LANGUAGE = "he";
 
+/** גג לתמלול בודד — ראה ההערה ליד ה-`signal` ב-`request` */
+const TRANSCRIBE_TIMEOUT_MS = 120_000;
+
 export function openaiTranscriber(apiKey: string): Transcriber {
   return {
     name: "openai",
@@ -57,6 +60,10 @@ async function request(
 
   const response = await fetch(ENDPOINT, {
     method: "POST",
+    // גג נדיב יותר מזה של המייל: העלאת קובץ אודיו ותמלולו לוקחים זמן אמיתי.
+    // אבל **גג חייב להיות**: התור סדרתי, ותמלול שאינו חוזר עוצר גם את כל
+    // ההתראות שממתינות אחריו. ראה `SEND_TIMEOUT_MS` ב-`notifier/email.ts`.
+    signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${apiKey}` },
     body: form,
   });

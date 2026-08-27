@@ -52,6 +52,41 @@ const MAX_JOBS_PER_TICK = 20;
 const ERROR_BACKOFF_MS = 10_000;
 
 /**
+ * גג לעבודה בודדת — **רשת הביטחון שמונעת מהעובד למות בשקט**.
+ *
+ * הכשל שזה סוגר: `tick` מתזמן את הסבב הבא ב-`finally`, וה-`finally` רץ רק
+ * כשה-`try` **מסתיים**. קריאה יוצאת שאינה נפתרת לעולם אינה מסתיימת ואינה
+ * זורקת, ולכן `await drainJobs()` היה תלוי לנצח, ה-`finally` לא היה רץ,
+ * והטיימר הבא **לא היה נקבע לעולם**. התוצאה: אין עוד התראות, אין הסלמה
+ * יומית ואין גיבוי לילי — עד ל-restart. ‏`try/catch` מטפל בכשל ואינו מטפל
+ * בהיתקעות; אלה שני מצבים שונים.
+ *
+ * הגג נמצא כאן ולא סביב `drainJobs` כולו, כדי שהכשל ייזקף ל**עבודה** שנתקעה:
+ * ה-`catch` הקיים ב-`processNextJob` קורא ל-`failJob`, הסיבה נשמרת
+ * ב-`Job.lastError`, והעבודה חוזרת לתור. הלולאה ממשיכה מיד לעבודה הבאה.
+ *
+ * הערך גבוה מכל גג של קריאה בודדת (‏120 שניות לתמלול ולחילוץ), כדי שהוא
+ * יירה רק כשמשהו באמת נתקע — ולא יקטע עבודה איטית אך תקינה.
+ */
+const JOB_TIMEOUT_MS = 180_000;
+
+/**
+ * מריץ הבטחה עם גג זמן. אינו מבטל את העבודה התלויה — אי אפשר — אבל משחרר
+ * את הקורא, וזה כל מה שנדרש כדי שהלולאה תמשיך לנשום.
+ */
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} לא הסתיים תוך ${Math.round(ms / 1000)} שניות`)),
+      ms,
+    );
+    // בלי unref התהליך מסרב להיסגר עד שהטיימר פג, כמו בלולאת ה-poll.
+    timer.unref?.();
+    work.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+/**
  * חלון throttle ללכידת כשל לולאה ל-Sentry. כשל בלולאה פירושו בדרך כלל
  * ש-DB למטה, והלולאה חוזרת כל 10 שניות — לכידה בכל פעם הייתה שורפת את
  * מכסת ה-5K שגיאות/חודש תוך שעה. Sentry ממזג ל-issue אחד, אבל נפח האירועים
@@ -62,6 +97,12 @@ let lastLoopErrorCaptureAt = 0;
 
 /** כל כמה זמן ה-watchdog בודק את ה-invariants ומדווח check-in ל-Sentry */
 const WATCHDOG_INTERVAL_MS = 6 * 60 * 60_000;
+
+/**
+ * כמה להמתין לריצת ה-watchdog הראשונה אחרי עלייה. מספיק כדי שזריעת
+ * פעימות-הלב שבאתחול תסתיים, וקצר מספיק כדי שכל עלייה תניב check-in.
+ */
+const WATCHDOG_STARTUP_DELAY_MS = 30_000;
 
 export type JobOutcome = DeliveryOutcome | AiOutcome | EscalationOutcome | BackupOutcome;
 
@@ -96,7 +137,9 @@ export async function processNextJob(
     // מחוץ ל-try, השגיאה הייתה נבלעת בלולאה, העבודות היו נשארות PENDING
     // לנצח, ואיש לא היה יודע למה ההודעות לא יוצאות. כך היא נרשמת על
     // העבודה עצמה, ב-`lastError`, וניתן לראות אותה.
-    const outcome = await runJob(job, deps, now);
+    // עטוף בגג זמן — ראה `JOB_TIMEOUT_MS`. בלעדיו קריאה יוצאת שנתקעת
+    // הורגת את לולאת העובד כולה, ולא רק את העבודה הזו.
+    const outcome = await withTimeout(runJob(job, deps, now), JOB_TIMEOUT_MS, `עבודה ${job.type}`);
     await completeJob(job.id);
     return { job, status: "done", outcome };
   } catch (error) {
@@ -297,8 +340,7 @@ export function startWorker(): void {
   setTimeout(tick, POLL_INTERVAL_MS).unref?.();
 
   // ה-watchdog רץ בטיימר **נפרד** כל 6 שעות, מחוץ ללולאת העבודות (2ש') כדי
-  // לא לעכב אותה. הריצה הראשונה אחרי 6 שעות — הזריעה בעלייה שומרת על
-  // הפעימות טריות עד אז. `.unref` כמו בלולאה, אחרת התהליך לא נסגר ב-Ctrl-C.
+  // לא לעכב אותה. `.unref` כמו בלולאה, אחרת התהליך לא נסגר ב-Ctrl-C.
   const watchdogTick = async () => {
     try {
       await runWatchdog();
@@ -312,5 +354,17 @@ export function startWorker(): void {
     }
   };
 
-  setTimeout(watchdogTick, WATCHDOG_INTERVAL_MS).unref?.();
+  /**
+   * **הריצה הראשונה בעלייה, ולא בעוד שש שעות.**
+   *
+   * קודם הטיימר נקבע ל-6 שעות ותו לא, וכל restart אִפֵּס אותו. בתקופה של
+   * פריסות תכופות — או בכל סביבה שבה התהליך עולה מחדש בתדירות גבוהה משש
+   * שעות — `runWatchdog` לא היה רץ **אף פעם**, ושלוש בדיקות ה-invariants
+   * (פעימת הסלמה, פעימת גיבוי, תור תקוע) לא היו מתבצעות כלל. זה החליש בדיוק
+   * את המנגנון שנועד לתפוס כשל שקט.
+   *
+   * ההשהיה הקצרה נותנת לאתחול שלמעלה לזרוע את הפעימות, כדי שהריצה הראשונה
+   * לא תתריע על שווא. ‏`unref` כי גם היא לא אמורה להחזיק את התהליך פתוח.
+   */
+  setTimeout(watchdogTick, WATCHDOG_STARTUP_DELAY_MS).unref?.();
 }

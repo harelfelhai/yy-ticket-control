@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { authenticateThrottled } from "@/lib/auth";
 import { he } from "@/lib/he";
+import { safeNextPath } from "@/lib/safe-next";
 import { createSession, destroySession } from "@/lib/session";
 
 export interface LoginState {
@@ -49,9 +50,9 @@ export async function loginAction(
   await createSession(result.user);
 
   // מקבלים רק יעד יחסי. `next` מגיע מכתובת ה-URL, וקבלה של כתובת מלאה
-  // הייתה הופכת את מסך ההתחברות למנוע הפניות לאתרים חיצוניים.
-  const target = parsed.data.next;
-  redirect(target?.startsWith("/") && !target.startsWith("//") ? target : "/board");
+  // הייתה הופכת את מסך ההתחברות למנוע הפניות לאתרים חיצוניים. הכלל עצמו
+  // חי ב-`safe-next.ts` — ראה שם למה בדיקת תווים אינה מספיקה.
+  redirect(safeNextPath(parsed.data.next));
 }
 
 export async function logoutAction() {

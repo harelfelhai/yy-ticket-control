@@ -70,6 +70,35 @@ describe("authenticateThrottled", () => {
     expect(r.ok).toBe(false);
   });
 
+  /**
+   * רגרסיה לפרצה שבה ההגבלה הייתה ניתנת לעקיפה מלאה.
+   *
+   * ‏`normalizePhone` מסיר כל תו שאינו ספרה, ולכן "0501234567@כלשהו" נפתר
+   * לאותו טלפון ומוצא את אותו משתמש — אבל מפתח ההגבלה נבנה קודם לכן לפי
+   * הסתעפות אחרת (`includes("@")` → מייל), וכל סיומת ייחודית קיבלה מכסה
+   * חדשה. כלומר מספר הניסיונות לא היה חסום כלל.
+   *
+   * הבדיקה שורפת את המכסה בצורה אחת ומוודאת שהווריאציות **אינן** פותחות
+   * מכסה נוספת מול אותו חשבון.
+   */
+  it("סיומת אחרי @ אינה פותחת מכסת ניסיונות חדשה (רגרסיית עקיפה)", async () => {
+    for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
+      await authenticateThrottled(PHONE, "wrong", T0);
+    }
+
+    for (const variant of [
+      `${PHONE}@a`,
+      `${PHONE}@b`,
+      "050-123-4567@q",
+      "+972501234567@k",
+    ]) {
+      const attempt = await authenticateThrottled(variant, PASSWORD, T0);
+      expect(attempt.ok, `הווריאציה ${variant} עקפה את ההגבלה`).toBe(false);
+      if (attempt.ok) throw new Error("ציפינו לחסימה");
+      expect(attempt.reason, `הווריאציה ${variant} קיבלה מכסה חדשה`).toBe("rate_limited");
+    }
+  });
+
   it("חסימה חולפת אחרי חלון הזמן", async () => {
     for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
       await authenticateThrottled(PHONE, "wrong", T0);

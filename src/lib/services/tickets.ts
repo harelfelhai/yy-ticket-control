@@ -20,7 +20,11 @@ import {
   isUser,
 } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
-import { assertLocationInSite, assertProfessionalsActive } from "./directory";
+import {
+  assertLocationInSite,
+  assertProfessionalsActive,
+  assertUsersAssignable,
+} from "./directory";
 import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
 
 /**
@@ -100,6 +104,8 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
   // ‏0.4: איש מקצוע מושבת אינו בבורר, אך המזהה מגיע מהלקוח (טופס שהיה
   // פתוח, טיוטה מקומית ששוגרה מאוחר). בלי זה ההשבתה קוסמטית.
   await assertProfessionalsActive(professionalIds(recipients));
+  // הצד הפנימי של אותה בדיקה — ראה `assertUsersAssignable`.
+  await assertUsersAssignable(userIds(recipients), input.siteId);
 
   return db.$transaction(async (tx) => {
     const ticket = await tx.ticket.create({
@@ -202,6 +208,7 @@ export async function submitDraft(
 
   const unique = dedupeRecipients(recipients);
   await assertProfessionalsActive(professionalIds(unique));
+  await assertUsersAssignable(userIds(unique), ticket.siteId);
   const missing = missingRequiredFields({
     siteId: ticket.siteId,
     buildingId: ticket.buildingId,
@@ -252,6 +259,11 @@ export function dedupeRecipients(recipients: RecipientRef[]): RecipientRef[] {
 /** מזהי אנשי המקצוע מתוך רשימת נמענים מעורבת */
 function professionalIds(recipients: RecipientRef[]): string[] {
   return recipients.filter((r) => r.kind === "professional").map((r) => r.id);
+}
+
+/** מזהי המשתמשים הפנימיים מתוך רשימת נמענים מעורבת */
+function userIds(recipients: RecipientRef[]): string[] {
+  return recipients.filter((r) => r.kind === "user").map((r) => r.id);
 }
 
 /**
@@ -698,6 +710,7 @@ export async function addAssignments(
   if (fresh.length === 0) return;
   // רק על ה**חדשים**: שיוך קיים לאיש מקצוע שהושבת מאז נשאר בתוקף.
   await assertProfessionalsActive(professionalIds(fresh));
+  await assertUsersAssignable(userIds(fresh), ticket.siteId);
 
   await db.$transaction(async (tx) => {
     const affected: string[] = [];

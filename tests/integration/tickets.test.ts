@@ -289,3 +289,100 @@ describe("deleteDraft", () => {
     expect(await db.ticket.findUnique({ where: { id: ticket.id } })).not.toBeNull();
   });
 });
+
+/**
+ * הצד הפנימי של אימות הנמענים (הכרעת 0.7).
+ *
+ * הבדיקה על אנשי מקצוע קיימת מאז 0.4, והצד המקביל — משתמשים פנימיים — לא
+ * נבדק כלל. מזהה משתמש מגיע מהלקוח כמו כל מזהה אחר, ובלי הבדיקה אפשר היה
+ * לשייך משתמש מאתר אחר ולגרום למערכת לשלוח לו את תוכן הפנייה במייל.
+ */
+describe("שיוך נמען פנימי — מידור ואימות", () => {
+  it("משתמש מאתר אחר אינו ניתן לשיוך", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
+    const outsider = await db.user.create({
+      data: {
+        role: "SITE_MANAGER",
+        name: "מנהל אתר אחר",
+        phone: "0509999999",
+        passwordHash: "x",
+        siteId: otherSite.id,
+      },
+    });
+
+    await expect(
+      createTicket(actor, fullInput({ recipients: [{ kind: "user", id: outsider.id }] })),
+    ).rejects.toThrow(he.directory.userNotAssignable);
+  });
+
+  it("משתמש מושבת אינו ניתן לשיוך", async () => {
+    const disabled = await db.user.create({
+      data: {
+        role: "SITE_MANAGER",
+        name: "עובד שעזב",
+        phone: "0508888888",
+        passwordHash: "x",
+        siteId,
+        active: false,
+      },
+    });
+
+    await expect(
+      createTicket(actor, fullInput({ recipients: [{ kind: "user", id: disabled.id }] })),
+    ).rejects.toThrow(he.directory.userNotAssignable);
+  });
+
+  it("מזהה משתמש שאינו קיים נדחה באותה הודעה", async () => {
+    await expect(
+      createTicket(actor, fullInput({ recipients: [{ kind: "user", id: "לא-קיים" }] })),
+    ).rejects.toThrow(he.directory.userNotAssignable);
+  });
+
+  it("משתמש של אותו אתר כן ניתן לשיוך", async () => {
+    const colleague = await db.user.create({
+      data: {
+        role: "SITE_MANAGER",
+        name: "עמית באותו אתר",
+        phone: "0507777777",
+        passwordHash: "x",
+        siteId,
+      },
+    });
+
+    const { ticket } = await createTicket(
+      actor,
+      fullInput({ recipients: [{ kind: "user", id: colleague.id }] }),
+    );
+    expect(await db.assignment.count({ where: { ticketId: ticket.id } })).toBe(1);
+  });
+
+  it("מנהל מערכת (חוצה-אתרים, siteId=null) ניתן לשיוך בכל אתר", async () => {
+    const admin = await db.user.create({
+      data: { role: "ADMIN", name: "מנהל מערכת", phone: "0506666666", passwordHash: "x" },
+    });
+
+    const { ticket } = await createTicket(
+      actor,
+      fullInput({ recipients: [{ kind: "user", id: admin.id }] }),
+    );
+    expect(await db.assignment.count({ where: { ticketId: ticket.id } })).toBe(1);
+  });
+
+  it("שיגור טיוטה אוכף את אותו כלל", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר שלישי" } });
+    const outsider = await db.user.create({
+      data: {
+        role: "SITE_MANAGER",
+        name: "זר",
+        phone: "0505555555",
+        passwordHash: "x",
+        siteId: otherSite.id,
+      },
+    });
+
+    const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
+    await expect(
+      submitDraft(toViewer(actor), ticket.id, [{ kind: "user", id: outsider.id }]),
+    ).rejects.toThrow(he.directory.userNotAssignable);
+  });
+});

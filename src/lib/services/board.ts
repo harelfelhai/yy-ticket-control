@@ -65,6 +65,14 @@ export interface BoardData {
    * לא סבל ממנו, ואין סיבה לרשת אותו יחד עם האיחוד.
    */
   search: { cards: BoardCard[]; truncated: boolean } | null;
+  /**
+   * האם יש בארכיון פניות מעבר למה שנטען (`ARCHIVE_LIMIT`).
+   *
+   * נאמר למשתמש במפורש ואינו נבלע: קטיעה שקטה היא בדיוק מה שהופך רשימה
+   * ל"מה שיש" בעיני הקורא. כשהוא true המסך מפנה לחיפוש, שסורק את הארכיון
+   * כולו ואינו מוגבל לחלון הזה.
+   */
+  archiveTruncated: boolean;
   /** האתרים שהצופה רשאי לסנן לפיהם — ריק למנהל עבודה (מקובע לאתרו) */
   sites: { id: string; name: string }[];
   buildings: { id: string; name: string }[];
@@ -77,11 +85,62 @@ export interface BoardData {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/**
+ * כמה פניות סגורות נטענות ללוח.
+ *
+ * הארכיון מקופל כברירת מחדל ומשמש לצפייה אחורה, לא לסריקה יומית — מי שמחפש
+ * פנייה מסוימת משתמש בחיפוש הטקסט, שסורק את הארכיון כולו. חמישים הן יותר
+ * ממה שנגללים בפועל, וקטנות מספיק כדי שמשקל המסך יישאר קבוע גם אחרי שנים
+ * של פניות שנסגרו ולא נמחקו.
+ */
+const ARCHIVE_LIMIT = 50;
+
+/**
+ * מה נטען לכל כרטיס בלוח. מוגדר פעם אחת ונצרך בשתי השאילתות (פעילות
+ * וארכיון), כדי ששתיהן לא תוכלנה להיפרד בשקט ולהחזיר צורות שונות.
+ */
+const TICKET_INCLUDE = {
+  building: { select: { name: true } },
+  apartment: { select: { number: true } },
+  domain: { select: { name: true } },
+  handler: { select: { name: true } },
+  assignments: {
+    include: {
+      professional: { select: { name: true } },
+      user: { select: { name: true } },
+    },
+  },
+  /*
+   * ההודעה האחרונה בלבד — לחישוב "ממתין למענה" (`deriveAwaitingReply`).
+   *
+   * ‏`take: 1` ולא שליפת השרשור: הלוח מציג עשרות פניות, וטעינת כל
+   * ההודעות שלהן רק כדי לקרוא את האחרונה הייתה מכפילה את המשקל של
+   * המסך הנפתח ביותר במערכת. אירועי מערכת מסוננים כאן ולא אחר כך —
+   * ‏"שויך לרונית" אינו הודעה של אדם, ואילו נכלל היה כל שיוך מסמן
+   * את הפנייה כממתינה למענה.
+   */
+  messages: {
+    where: { kind: { not: "EVENT" } },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    select: {
+      authorUserId: true,
+      authorProfessionalId: true,
+      authorUser: { select: { name: true } },
+      authorProfessional: { select: { name: true } },
+    },
+  },
+} satisfies Prisma.TicketInclude;
+
+/** פנייה כפי שהיא נשלפת ללוח, על כל מה ש-`TICKET_INCLUDE` מביא איתה */
+type BoardTicket = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
+
 /** לוח ריק לחלוטין — לתרחיש ה-fail-closed של מנהל עבודה ללא אתר */
 function emptyBoard(): BoardData {
   return {
     sections: { ACTION_REQUIRED: [], WITH_RECIPIENTS: [], ARCHIVE: [] },
     search: null,
+    archiveTruncated: false,
     sites: [],
     buildings: [],
     apartments: [],
@@ -148,53 +207,44 @@ export async function getBoard(
   const query = filters.query?.trim();
   if (query) conditions.push(textMatch(query));
 
-  const tickets = await db.ticket.findMany({
-    where: { AND: conditions },
-    orderBy: { lastActivityAt: "desc" },
-    /**
-     * תקרה **רק** כשיש חיפוש טקסט.
-     *
-     * הלוח עצמו נשאר בלי `take`: הוא מקובץ לפי "אצל מי הכדור", וקטיעה שלו
-     * הייתה מסתירה פניות שדורשות טיפול בלי שאיש ידע. חיפוש טקסט, לעומת
-     * זאת, סורק `contains` על ארבעה מקורות טקסט **בלי אינדקסי trigram**
-     * (הם נמחקו במיגרציה `20260724054950` ולא שוחזרו) — כלומר סריקה
-     * סדרתית. התקרה שומרת על המסך הזה שמיש, והקטיעה נאמרת למשתמש במפורש
-     * במקום להיבלע.
-     */
-    ...(query ? { take: SEARCH_CANDIDATE_LIMIT } : {}),
-    include: {
-      building: { select: { name: true } },
-      apartment: { select: { number: true } },
-      domain: { select: { name: true } },
-      handler: { select: { name: true } },
-      assignments: {
-        include: {
-          professional: { select: { name: true } },
-          user: { select: { name: true } },
-        },
-      },
-      /*
-       * ההודעה האחרונה בלבד — לחישוב "ממתין למענה" (`deriveAwaitingReply`).
-       *
-       * ‏`take: 1` ולא שליפת השרשור: הלוח מציג עשרות פניות, וטעינת כל
-       * ההודעות שלהן רק כדי לקרוא את האחרונה הייתה מכפילה את המשקל של
-       * המסך הנפתח ביותר במערכת. אירועי מערכת מסוננים כאן ולא אחר כך —
-       * ‏"שויך לרונית" אינו הודעה של אדם, ואילו נכלל היה כל שיוך מסמן
-       * את הפנייה כממתינה למענה.
-       */
-      messages: {
-        where: { kind: { not: "EVENT" } },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: {
-          authorUserId: true,
-          authorProfessionalId: true,
-          authorUser: { select: { name: true } },
-          authorProfessional: { select: { name: true } },
-        },
-      },
-    },
-  });
+  /**
+   * **הפניות הפעילות ללא תקרה, הארכיון עם תקרה.**
+   *
+   * קודם לא הייתה כאן שום תקרה כשאין חיפוש, והנימוק היה נכון למחצה: קטיעה
+   * של הלוח אכן הייתה מסתירה פניות שדורשות טיפול בלי שאיש ידע. אבל הוא
+   * חל על שתי הקבוצות הפעילות בלבד — **לא על הארכיון**, והארכיון הוא כל
+   * מה שגדל: פנייה אמיתית אינה נמחקת לעולם (ראה `schema.prisma`), ולכן
+   * מספר הפניות הפתוחות נשאר קבוע בעוד הסגורות מצטברות לאורך שנים. המסך
+   * הנפתח ביותר במערכת היה שולף את כולן, על כל שיוכיהן, בכל טעינה — כדי
+   * להציג קבוצה שמקופלת ממילא כברירת מחדל.
+   *
+   * ‏`ARCHIVE` הוא בדיוק `closedAt !== null` (ראה `deriveBoardSection`
+   * ו-`deriveTicketStatus`), ולכן ההפרדה ניתנת לביטוי בשאילתה ואינה דורשת
+   * לנחש. הקטיעה נאמרת למשתמש במפורש ואינה נבלעת — ראה `archiveTruncated`.
+   *
+   * במצב חיפוש אין הפרדה: החיפוש חייב להגיע גם לארכיון, ולכן נשארת תקרת
+   * המועמדים האחת על פני שתי הקבוצות.
+   */
+  const [activeTickets, archiveTickets] = await Promise.all([
+    db.ticket.findMany({
+      where: { AND: query ? conditions : [...conditions, { closedAt: null }] },
+      orderBy: { lastActivityAt: "desc" },
+      ...(query ? { take: SEARCH_CANDIDATE_LIMIT } : {}),
+      include: TICKET_INCLUDE,
+    }),
+    query
+      ? Promise.resolve([] as BoardTicket[])
+      : db.ticket.findMany({
+          where: { AND: [...conditions, { closedAt: { not: null } }] },
+          orderBy: { lastActivityAt: "desc" },
+          take: ARCHIVE_LIMIT + 1,
+          include: TICKET_INCLUDE,
+        }),
+  ]);
+
+  // שולפים אחד מעבר לתקרה כדי לדעת אם יש עוד, בלי ספירה נוספת.
+  const archiveTruncated = archiveTickets.length > ARCHIVE_LIMIT;
+  const tickets = [...activeTickets, ...archiveTickets.slice(0, ARCHIVE_LIMIT)];
 
   const sections: Record<BoardSection, BoardCard[]> = {
     ACTION_REQUIRED: [],
@@ -296,6 +346,7 @@ export async function getBoard(
             searchCards.length > SEARCH_RESULT_LIMIT || tickets.length === SEARCH_CANDIDATE_LIMIT,
         }
       : null,
+    archiveTruncated,
     sites,
     buildings,
     apartments: sortApartments(apartments),

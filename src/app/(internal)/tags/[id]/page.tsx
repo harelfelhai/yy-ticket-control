@@ -27,10 +27,25 @@ export default async function TagPage(props: PageProps<"/tags/[id]">) {
 
   // רשימת המועמדים לפתיחה נטענת רק למי שרשאי לפתוח — אין טעם לשלוף את כל
   // אנשי המקצוע כדי להציג אותם למי שאינו רשאי.
+  //
+  // **וממודרת לפי אתר עבור מנהל עבודה.** הרשימה הייתה כל הקבלנים במערכת,
+  // והיא זו שהפכה את המסך למקום שבו אפשר לבחור קבלן שאין לך איתו שום קשר
+  // ולבקש את קישור הגישה שלו (ראה `canRevealPortalLink`). הסינון כאן הוא
+  // בשאילתה ולא אחריה, לפי הכלל שבראש `permissions.ts`.
   const grantedIds = new Set(detail.granted.map((g) => g.id));
   const candidates = detail.canManageAccess
     ? // מושבת אינו מועמד לפתיחה (0.4) — אותו כלל כמו בבורר הנמענים.
-      (await db.professional.findMany({ where: { active: true }, orderBy: { name: "asc" } }))
+      (
+        await db.professional.findMany({
+          where: {
+            active: true,
+            ...(user.siteId
+              ? { assignments: { some: { status: { not: "REMOVED" }, ticket: { siteId: user.siteId } } } }
+              : {}),
+          },
+          orderBy: { name: "asc" },
+        })
+      )
         .filter((p) => !grantedIds.has(p.id))
         .map((p) => ({ id: p.id, label: p.name, hint: p.phone ?? p.email ?? undefined }))
     : [];

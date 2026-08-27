@@ -35,8 +35,15 @@ const PROMPT = [
 /** הנוסח שהמודל מתבקש להחזיר כשאין טקסט — מזוהה ומתורגם ל"אין תוצאה" */
 const NO_TEXT = "אין טקסט";
 
+/** גג לחילוץ בודד — דוח בדק בית ארוך לוקח זמן, אבל לא בלי גבול */
+const EXTRACT_TIMEOUT_MS = 120_000;
+
 export function claudeExtractor(apiKey: string): TextExtractor {
-  const client = new Anthropic({ apiKey });
+  // ‏timeout מפורש ולא ברירת המחדל של ה-SDK: התור מנוקז סדרתית, וחילוץ
+  // שאינו חוזר עוצר גם את ההתראות שממתינות אחריו. ‏maxRetries=1 כי
+  // ה-retry האמיתי הוא של התור עצמו (`MAX_ATTEMPTS`), עם השהיות גדלות —
+  // שכבת ניסיונות שנייה בתוך ה-SDK רק מכפילה את זמן ההיתקעות.
+  const client = new Anthropic({ apiKey, timeout: EXTRACT_TIMEOUT_MS, maxRetries: 1 });
 
   return {
     name: "claude",

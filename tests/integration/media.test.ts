@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { MediaError, confirmUpload, getViewableMedia, registerMedia } from "@/lib/services/media";
 import { addMessage, closeTicket, createTicket, removeAssignment } from "@/lib/services/tickets";
 import type { SessionUser } from "@/lib/session";
+import { MAX_FILE_BYTES } from "@/lib/storage";
 import { resolveKey, writeLocalObject } from "@/lib/storage/local";
 import type { Viewer } from "@/lib/permissions";
 import { resetDb } from "../helpers/reset-db";
@@ -352,5 +353,56 @@ describe("אחסון מקומי", () => {
     expect(await readFile(resolveKey(key))).toEqual(body);
 
     await rm(resolveKey(key), { force: true });
+  });
+});
+
+/**
+ * תקרת הגודל, כפי שהיא נאכפת **על הבתים בפועל** ולא על ההצהרה.
+ *
+ * ‏`registerMedia` בודק `sizeBytes` שהלקוח שלח, והכתובת החתומה של R2 נחתמת
+ * ללא אילוץ אורך — כלומר בפרודקשן אפשר היה להצהיר "1 בייט", לקבל כתובת,
+ * ולהעלות כמה שרוצים. הבדיקות כאן עוברות דרך `confirmUpload`, שהוא המקום
+ * היחיד שרואה את הגודל האמיתי.
+ */
+describe("אכיפת גודל על הבתים שנחתו", () => {
+  /** כותב בייטים בגודל מבוקש, בלי קשר למה שהוצהר ברישום */
+  async function putBytesOfSize(mediaId: string, bytes: number) {
+    const { storageKey } = await db.mediaFile.findUniqueOrThrow({
+      where: { id: mediaId },
+      select: { storageKey: true },
+    });
+    await writeLocalObject(storageKey, Buffer.alloc(bytes, 0x41));
+  }
+
+  it("קובץ שחורג מהתקרה נדחה, גם כשההצהרה ברישום הייתה קטנה", async () => {
+    const ticket = await makeTicket();
+    // מצהיר על קילובייט, מעלה מעל התקרה — בדיוק וקטור העקיפה.
+    const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
+    await putBytesOfSize(mediaId, MAX_FILE_BYTES + 1);
+
+    await expect(confirmUpload(managerViewer, mediaId)).rejects.toThrow(MediaError);
+
+    // הרשומה אינה נשארת מאחור כ"מאושרת" ואף לא כזבל
+    expect(await db.mediaFile.findUnique({ where: { id: mediaId } })).toBeNull();
+  });
+
+  it("הגודל שנשמר הוא הנמדד, ולא זה שהוצהר", async () => {
+    const ticket = await makeTicket();
+    const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
+    await putBytesOfSize(mediaId, 4096);
+
+    await confirmUpload(managerViewer, mediaId);
+
+    const stored = await db.mediaFile.findUniqueOrThrow({ where: { id: mediaId } });
+    expect(stored.sizeBytes).toBe(4096);
+    expect(stored.uploaded).toBe(true);
+  });
+
+  it("קובץ ריק נדחה — העלאה שנקטעה אינה העלאה", async () => {
+    const ticket = await makeTicket();
+    const { mediaId } = await registerMedia(managerViewer, { ticketId: ticket.id, ...photo });
+    await putBytesOfSize(mediaId, 0);
+
+    await expect(confirmUpload(managerViewer, mediaId)).rejects.toThrow(MediaError);
   });
 });

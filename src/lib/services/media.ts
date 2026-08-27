@@ -137,13 +137,34 @@ export async function confirmUpload(viewer: Viewer, mediaId: string) {
   // הלקוח הצהיר שההעלאה הושלמה — מוודאים שהבתים באמת נחתו באחסון לפני
   // שמסמנים uploaded ומפעילים ג'ובי AI בתשלום. אפליקציה שנסגרה באמצע
   // ההעלאה, או PUT שנדחה, הייתה משאירה רשומת מדיה שמצביעה על כלום.
-  const present = await selectStorage().exists(media.storageKey);
-  if (!present) throw new MediaError(he.media.uploadFailed);
+  const storage = selectStorage();
+  const stored = await storage.head(media.storageKey);
+  if (!stored || stored.sizeBytes === 0) throw new MediaError(he.media.uploadFailed);
+
+  /**
+   * **כאן נאכפת תקרת הגודל בפועל.**
+   *
+   * הבדיקה ב-`registerMedia` נעשית על `sizeBytes` שהלקוח הצהיר עליו, והכתובת
+   * החתומה של R2 נחתמת ללא אילוץ אורך — כלומר בפרודקשן שום דבר לא מנע העלאה
+   * גדולה מ-`MAX_FILE_BYTES`, ו-`MediaFile.sizeBytes` נשאר הצהרה. עכשיו
+   * המדידה גוברת: קובץ חורג נמחק מהאחסון ונדחה, וקובץ תקין נרשם בגודלו
+   * האמיתי. זו אותה הכרעה שה-route של האחסון המקומי כבר מיישם —
+   * "ההצהרה היא קלט, והמדידה כאן היא עובדה".
+   *
+   * המחיקה היא ניקוי ולא חלק מהעסקה: אם היא נכשלת, נשאר אובייקט יתום —
+   * מצב עדיף על רשומה שמסומנת כתקינה בזמן שהבתים חורגים.
+   */
+  if (stored.sizeBytes > MAX_FILE_BYTES) {
+    await storage.remove(media.storageKey).catch(() => undefined);
+    await db.mediaFile.delete({ where: { id: mediaId } });
+    throw new MediaError(he.media.tooLarge);
+  }
 
   return db.$transaction(async (tx) => {
     const updated = await tx.mediaFile.update({
       where: { id: mediaId },
-      data: { uploaded: true },
+      // הגודל האמיתי גובר על ההצהרה שנשמרה ברישום.
+      data: { uploaded: true, sizeBytes: stored.sizeBytes },
     });
 
     const jobType = aiJobFor(updated.mimeType);
