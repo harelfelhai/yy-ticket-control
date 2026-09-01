@@ -112,9 +112,30 @@ DESIGN.md על הקוד: כפתור שאינו `<Button>`, כותרת שקובע
 דרישה ← מימוש ← בדיקה ב-`docs/specs/conformance-matrix.md`.
 
 **מסמכים נוספים:** `MONITORING.md` (Sentry, watchdog, תקציב free-tier) ·
-`docs/deployment-status.md` (Railway: Railpack, `preDeployCommand` מריץ מיגרציות, worker
-דורש קונטיינר ער) · `.claude/skills/ship` (לולאת ה-push: push ל-`main` = פריסה; לא
-`railway up`).
+`docs/deployment-status.md` (Railway: `Dockerfile` עם לקוח PGDG,
+`preDeployCommand` מריץ מיגרציות, worker דורש קונטיינר ער) ·
+`.claude/skills/ship` (לולאת ההעלאה: ענף ← PR ← שער ← מיזוג; לא `railway up`).
+
+## השער: אין דחיפה ישירה ל-`main`
+
+מ-1.9.2026 הריפו **ציבורי** ועל `main` יש branch protection שדורש את שתי
+הבדיקות `verify` ו-`e2e`. המסלול הוא **ענף ← PR ← שער ירוק ← מיזוג**,
+והמיזוג הוא מה שפורס.
+
+`.github/workflows/verify.yml` — שלושה jobs: `verify` (typecheck+lint+vitest,
+כל push ו-PR) · `e2e` (אחרי verify, מול בניית פרודקשן) · `conformance`
+(לילי ב-04:00 ובהפעלה ידנית בלבד — 60 דקות).
+
+שני דברים שחשוב לדעת:
+
+- **הפריסה אינה מחכה ל-CI.** מתג ה-`Wait for CI` של Railway כבוי בהכרעת
+  בעל המוצר (1.9.2026) — 20 דקות לכל פריסה. ההגנה היא שער ה-PR
+  בלבד; מיזוג שעוקף אותו ייפרס בלי שדבר יעצור אותו.
+- **אירועי push של GitHub אובדים לעיתים.** ב-1.9.2026 שתי דחיפות מתוך
+  ארבע נחתו ברימוט בלי ליצור ריצה, בלי שום אירוע תקלה אצל GitHub.
+  לא להניח שריצה התחילה — לאמת עם
+  `gh api "repos/<owner>/<repo>/actions/runs?branch=<b>"`, ולאלץ בעת הצורך עם
+  `gh workflow run verify.yml --ref <branch>`.
 
 ## מוסכמות הפרויקט
 
