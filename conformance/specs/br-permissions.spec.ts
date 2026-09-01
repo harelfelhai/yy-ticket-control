@@ -277,28 +277,35 @@ test.describe("§5.ז — נמען פנימי", () => {
     await expect(page.getByText(description)).toBeVisible();
   });
 
-  test("A4-03 — נמען פנימי מאתר אחר אינו ניתן לשיוך כלל", async ({ page }) => {
+  test("A4-03 — נמען פנימי מאתר אחר ניתן לשיוך", async ({ page }) => {
     acceptDialogs(page);
     /**
      * §5.ז קובע על נמען לטיפול: "אך ורק פניות ששויכו אליו, **מכל האתרים**",
      * ו-§2.2 שלב 3 קובע ש"נמען פנימי רואה את הפנייה בלוח הרגיל שלו".
      *
-     * בפועל שני מנגנונים חוסמים את התרחיש: בורר הנמענים מציע רק משתמשים
-     * של אותו אתר (`tickets/new/page.tsx:62`), ו-`canViewTicket` עבור
-     * ‏SITE_MANAGER בודק אך ורק `viewer.siteId === ticket.siteId` בלי להביט
-     * בשיוכים כלל (`permissions.ts:64`). הבדיקה מתעדת את המצב בפועל; הפער
-     * מדווח ב-`conformance-report`.
+     * **הבדיקה הפכה כיוון ב-1.9.2026 (GAP-A2).** קודם היא תיעדה את המצב
+     * בפועל: שני מנגנונים חסמו את התרחיש — בורר הנמענים הציע רק משתמשים
+     * של אותו אתר, ו-`canViewTicket` עבור SITE_MANAGER לא הביט בשיוכים.
+     * השני היה הבאג; הראשון היה מעקף סביבו, שנועד למנוע שיוך "שנשבר בשקט".
+     * משתוקן הבאג, שניהם ירדו — והאפיון ניתן למימוש כלשונו.
      */
     await loginAs(page, "managerB");
     await page.goto("/tickets/new");
     await page.getByRole("button", { name: /^נמענים/ }).first().click();
+    /*
+     * הרווח בסוף העוגן אינו קוסמטי. השם הנגיש הוא "שם · תפקיד", ובצוות
+     * ההתאמה יש גם `מנהל עבודה א` וגם `מנהל עבודה א2` — כלומר `^מנהל עבודה א`
+     * תופס את שניהם. העמימות הזו **לא יכלה להתקיים לפני התיקון**, מפני
+     * ששניהם סוננו החוצה עבור מנהל ב׳; היא הופיעה יחד עם ההרחבה, וזו עדות
+     * בפני עצמה לכך שהיא פועלת.
+     */
     await expect(
-      page.getByRole("option", { name: new RegExp(`^${CAST.managerA.name}`) }),
-    ).toHaveCount(0);
-    // ‏ADMIN ו-OWNER (שאינם משויכים לאתר) כן מוצעים — ולכן ההגבלה היא על
-    // משתמשים משויכי-אתר בלבד.
+      page.getByRole("option", { name: new RegExp(`^${CAST.managerA.name} `) }),
+    ).toBeVisible();
+    // ‏ADMIN ו-OWNER (שאינם משויכים לאתר) היו מוצעים גם קודם — הם הרגרסיה
+    // שתיתפס אם הרשימה תצטמצם שוב.
     await expect(
-      page.getByRole("option", { name: new RegExp(`^${CAST.owner.name}`) }),
+      page.getByRole("option", { name: new RegExp(`^${CAST.owner.name} `) }),
     ).toBeVisible();
   });
 });

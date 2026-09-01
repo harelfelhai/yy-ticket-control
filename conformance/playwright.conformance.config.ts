@@ -98,6 +98,18 @@ export default defineConfig({
       SESSION_SECRET: process.env.SESSION_SECRET ?? "",
       NODE_ENV: PRODUCTION ? "production" : "development",
       NEXT_PUBLIC_SENTRY_DSN: "",
+      /**
+       * ריק במפורש — ולא "ממילא אין".
+       *
+       * החבילה מאמתת את המסלול **חסר-המנוע** (`media.spec.ts`: "שירות
+       * הקריאה אינו מוגדר"), ועד 1.9.2026 היא נשענה על כך שלמכונה אין
+       * מפתח. ברגע שהוגדר `GEMINI_API_KEY` ב-`.env` הבדיקה נכשלה — לא
+       * מפני שהקוד השתנה, אלא מפני שהיא לא שלטה בסביבה שהיא בודקת.
+       *
+       * שני רווחים נוספים: ריצת בדיקות אינה שורפת מכסה אמיתית, ואינה
+       * שולחת תמונות בדיקה לשרת חיצוני.
+       */
+      GEMINI_API_KEY: "",
       MEDIA_STORAGE: "local",
     },
   },

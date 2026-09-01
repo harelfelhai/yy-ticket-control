@@ -47,14 +47,14 @@ export interface BuildingWithApartments extends LearnedOption {
 /**
  * נמען פנימי, עם האתר שאליו הוא משויך.
  *
- * ‏`siteId: null` הוא מנהל מערכת או בעלים — הם אינם קשורים לאתר וזמינים
- * בכולם. השדה נשלח ללקוח כדי שהחלפת אתר תסנן מיד, בלי סבב רשת: **נמען
- * פנימי מאתר אחר יקבל את הפנייה אך לא יוכל לראות אותה** (`canViewTicket`
- * משווה `siteId`), כלומר שיוך שנשבר בשקט.
+ * **האתר חדל להיות רלוונטי ב-1.9.2026.** עד אז נשלח כאן `siteId`, והבורר
+ * סינן לפיו — מפני ש-`canViewTicket` לא הביטה בשיוכים, ונמען מאתר אחר היה
+ * מקבל מייל ונוחת על 404. הסינון הזה היה **מעקף סביב הבאג**, לא כלל עסקי:
+ * §5.ז קובע מפורשות שנמען רואה פניות ששויכו אליו **מכל האתרים**. משתוקן
+ * הבאג, המעקף ירד איתו.
  */
 export interface InternalRecipientOption extends RecipientOption {
   kind: "user";
-  siteId: string | null;
 }
 
 interface CreateTicketFormProps {
@@ -132,18 +132,14 @@ export function CreateTicketForm({
   const selectedBuilding = buildings.find((b) => b.id === buildingId) ?? null;
 
   /**
-   * הנמענים הזמינים לאתר הנבחר.
+   * הנמענים הזמינים.
    *
-   * אנשי מקצוע גלובליים; משתמשים פנימיים מסוננים לפי האתר, בדיוק כפי
-   * שהשרת סינן אותם קודם. בלי הסינון הזה מנהל מערכת יכול לשייך פנייה של
-   * אתר א׳ למנהל של אתר ב׳ — הוא יקבל אותה ולא יוכל לפתוח אותה.
+   * שני הסוגים גלובליים. עד 1.9.2026 סוננו המשתמשים הפנימיים לפי האתר
+   * הנבחר; הסינון ירד יחד עם הבאג שהצדיק אותו — ראה `InternalRecipientOption`.
    */
   const availableRecipients = useMemo<RecipientOption[]>(
-    () => [
-      ...professionals,
-      ...internalUsers.filter((u) => u.siteId === null || u.siteId === siteId),
-    ],
-    [professionals, internalUsers, siteId],
+    () => [...professionals, ...internalUsers],
+    [professionals, internalUsers],
   );
 
   const roomOptions = useMemo(
@@ -154,21 +150,16 @@ export function CreateTicketForm({
   /**
    * החלפת אתר.
    *
-   * מאפסת בניין ודירה (הם שייכים לאתר), ומשליכה נמענים פנימיים שאינם
-   * זמינים באתר החדש. השארתם הייתה משגרת פנייה לנמען שאינו רשאי לראותה —
-   * כישלון שקט, שהוא בדיוק מה שהמערכת נועדה למנוע.
+   * מאפסת בניין ודירה בלבד — הם היחידים ששייכים לאתר.
+   *
+   * עד 1.9.2026 הושלכו כאן גם נמענים פנימיים מאתר אחר. ההשלכה הזו לא הייתה
+   * כלל אלא פיצוי על כך שנמען כזה לא היה מצליח לפתוח את הפנייה. משתוקן
+   * השורש, השלכה שקטה של בחירה מפורשת של המשתמש היא ההפתעה — לא ההגנה.
    */
   function changeSite(next: string | null) {
     setSiteId(next);
     setBuildingId(null);
     setApartmentId(null);
-    setRecipients((prev) =>
-      prev.filter((r) => {
-        if (r.kind === "professional") return true;
-        const user = internalUsers.find((u) => u.id === r.id);
-        return user ? user.siteId === null || user.siteId === next : false;
-      }),
-    );
   }
 
   /** צילום המצב הנוכחי, בצורה שנשמרת בדפדפן */

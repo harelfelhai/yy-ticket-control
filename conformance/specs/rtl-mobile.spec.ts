@@ -194,13 +194,18 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
 
   test("S0-03 — כפתור הסרת נמען מצ׳יפ עומד בסף המגע", async ({ page }) => {
     /**
-     * ‏`DESIGN.md § Touch` מחייב 44px, ו-`e2e/mobile-qa.spec.ts` מודד זאת —
-     * אך על ארבעה מסכים בלבד, ואף אחד מהם אינו מסך היצירה.
-     * ‏`tests/unit/layout-guards.test.ts` סורק `min-h-*` בקוד המקור, ולכן
-     * אלמנט שאינו מצהיר `min-h` כלל **אינו נראה לו**. כפתור ה-"×" של צ׳יפ
-     * הנמען (`recipient-picker.tsx:66`) נופל בין שני האוכפים. מדווח.
+     * **היה `test.fail()` עד 1.9.2026 (GAP-A8).**
+     *
+     * הכפתור נפל **בין שני האוכפים**, וזה הלקח כאן.
+     * `e2e/mobile-qa.spec.ts` מודד גבהים בפועל — אך על ארבעה מסכים בלבד,
+     * ומסך היצירה אינו אחד מהם. `tests/unit/layout-guards.test.ts` סורק
+     * `min-h-*` בקוד המקור — ולכן אלמנט שאינו מצהיר `min-h` **כלל** אינו
+     * נראה לו. שתי הרשתות תופסות הרבה, ובחפיפה שביניהן שרד יעד של 16px.
+     *
+     * התיקון ב-`recipient-picker.tsx` הוא מה ש-DESIGN.md § אזורי מגע מורה:
+     * הרחבת אזור הלחיצה ל-28px דרך מרווחים שליליים שמבטלים את ריפוד הצ׳יפ —
+     * הסמל והצ׳יפ נשארים בגודלם.
      */
-    test.fail();
     await loginAs(page, "managerA");
     await page.goto("/tickets/new");
     await page.getByRole("button", { name: /^נמענים/ }).first().click();
@@ -208,9 +213,10 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
 
     const remove = page.getByRole("button", { name: /^הסר / }).first();
     const box = await remove.boundingBox();
-    // ‏16px נופל מתחת לשתי הרצפות, ולכן הטענה נשארת נכונה בשני הפרויקטים
-    // גם אחרי שהרצפה הפכה תלוית-מצביע.
+    // רצפה אחת לכל המכשירים מאז 0.7, ולכן אותה טענה בשני הפרויקטים.
+    // הרוחב נמדד יחד עם הגובה: יעד גבוה-אך-צר הוא אותה החטאה ביד אמיתית.
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(MIN_POINTER_FINE);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(MIN_POINTER_FINE);
   });
 
   test("S0-04 — מסך 404: המעטפת עברית ו-RTL", async ({ page }) => {

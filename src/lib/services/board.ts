@@ -164,8 +164,23 @@ export async function getBoard(
   // היה גורם למפתח השני לדרוס את הראשון ולאבד תנאי בשקט.
   const conditions: Prisma.TicketWhereInput[] = [];
 
-  // מנהל עבודה מוגבל לאתר שלו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז).
-  if (user.role === "SITE_MANAGER" && user.siteId) conditions.push({ siteId: user.siteId });
+  /**
+   * מנהל עבודה מוגבל לאתר שלו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז).
+   *
+   * ה-OR משקף את `canViewTicket` בדיוק: §5.ז מעניק לאותו אדם שני כובעים —
+   * האתר שלו, ופניות ששויכו אליו **מכל האתרים**. שאילתה שמסננת לפי
+   * אתר בלבד הייתה משאירה פנייה שהמשתמש **רשאי** לראות מחוץ ללוח שלו
+   * ומחוץ למסנן "קיבלתי" — נגישה דרך קישור במייל בלבד, והפרדה בין
+   * מה שנראה למה שמותר היא בדיוק הסוג של פער שאיש אינו מדווח עליו.
+   */
+  if (user.role === "SITE_MANAGER" && user.siteId) {
+    conditions.push({
+      OR: [
+        { siteId: user.siteId },
+        { assignments: { some: { userId: user.id, status: { not: "REMOVED" } } } },
+      ],
+    });
+  }
   // סינון אתר מפורש חל רק על מי שאינו מקובע לאתר — כך אינו עוקף את המידור.
   if (!user.siteId && filters.siteId) conditions.push({ siteId: filters.siteId });
 

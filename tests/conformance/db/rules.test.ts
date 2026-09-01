@@ -42,12 +42,18 @@ describe("§5.ז — אכיפת ההרשאות בשכבת השירות, לא ר�
     expect(canCloseTicket(toViewerFromUser(manager), ticket)).toBe(true);
   });
 
-  it("A3-01 — מנהל עבודה אינו רואה פנייה של אתר אחר, גם אם שויך אליה", async () => {
+  it("A3-01 — מנהל עבודה רואה פנייה של אתר אחר ששויכה אליו", async () => {
     /**
      * §5.ז על נמען לטיפול: "אך ורק פניות ששויכו אליו, **מכל האתרים**".
-     * ‏`canViewTicket` עבור SITE_MANAGER בודק אך ורק שייכות לאתר ואינו מביט
-     * בשיוכים כלל (`permissions.ts:64`), ולכן מנהל עבודה ששויך כנמען פנימי
-     * לפנייה באתר אחר אינו רואה אותה. מדווח ב-conformance-report.
+     *
+     * **הבדיקה הזו תיעדה את הפער עד 1.9.2026 והפכה כיוון (GAP-A2).** קודם
+     * היא הצהירה `false`: `canViewTicket` עבור SITE_MANAGER בדק אך ורק
+     * שייכות לאתר ולא הביט בשיוכים, ולכן מנהל ששויך כנמען פנימי לפנייה
+     * באתר אחר קיבל עליה מייל ונחת על 404.
+     *
+     * §5.ז מונה את מנהל העבודה ואת הנמען לטיפול כשני סעיפים נפרדים, ואותו
+     * אדם יכול לחבוש את שני הכובעים. ההרחבה אינה פורצת את המידור: היא
+     * נפתחת אך ורק על פנייה ששויך אליה במפורש, ונסגרת עם הסרת השיוך.
      */
     const siteA = await db.site.create({ data: { name: "אתר א" } });
     const siteB = await db.site.create({ data: { name: "אתר ב" } });
@@ -63,6 +69,9 @@ describe("§5.ז — אכיפת ההרשאות בשכבת השירות, לא ר�
     const assignments = [
       { professionalId: assignment.professionalId, userId: assignment.userId, status: assignment.status },
     ];
-    expect(canViewTicket(toViewerFromUser(managerA), ticket, assignments)).toBe(false);
+    expect(canViewTicket(toViewerFromUser(managerA), ticket, assignments)).toBe(true);
+
+    // המידור עצמו לא זז: בלי שיוך, אותה פנייה נשארת סגורה בפניו.
+    expect(canViewTicket(toViewerFromUser(managerA), ticket, [])).toBe(false);
   });
 });

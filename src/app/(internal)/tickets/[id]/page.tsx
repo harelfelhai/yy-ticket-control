@@ -113,7 +113,10 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           })),
         ...(
           await db.user.findMany({
-            where: { active: true, OR: [{ siteId: ticket.siteId }, { siteId: null }] },
+            // כל משתמש פעיל, מכל אתר: §5.ז מתיר לנמען לראות פניות ששויכו
+            // אליו מכל האתרים, ו-`canViewTicket` מכבד זאת מ-1.9.2026.
+            // הסינון לפי אתר שהיה כאן היה מעקף סביב הבאג ההוא.
+            where: { active: true },
             orderBy: { name: "asc" },
           })
         )

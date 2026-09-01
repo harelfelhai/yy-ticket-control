@@ -105,7 +105,7 @@ export async function createTicket(actor: SessionUser, input: CreateTicketInput)
   // פתוח, טיוטה מקומית ששוגרה מאוחר). בלי זה ההשבתה קוסמטית.
   await assertProfessionalsActive(professionalIds(recipients));
   // הצד הפנימי של אותה בדיקה — ראה `assertUsersAssignable`.
-  await assertUsersAssignable(userIds(recipients), input.siteId);
+  await assertUsersAssignable(userIds(recipients));
 
   return db.$transaction(async (tx) => {
     const ticket = await tx.ticket.create({
@@ -208,7 +208,7 @@ export async function submitDraft(
 
   const unique = dedupeRecipients(recipients);
   await assertProfessionalsActive(professionalIds(unique));
-  await assertUsersAssignable(userIds(unique), ticket.siteId);
+  await assertUsersAssignable(userIds(unique));
   const missing = missingRequiredFields({
     siteId: ticket.siteId,
     buildingId: ticket.buildingId,
@@ -710,7 +710,7 @@ export async function addAssignments(
   if (fresh.length === 0) return;
   // רק על ה**חדשים**: שיוך קיים לאיש מקצוע שהושבת מאז נשאר בתוקף.
   await assertProfessionalsActive(professionalIds(fresh));
-  await assertUsersAssignable(userIds(fresh), ticket.siteId);
+  await assertUsersAssignable(userIds(fresh));
 
   await db.$transaction(async (tx) => {
     const affected: string[] = [];

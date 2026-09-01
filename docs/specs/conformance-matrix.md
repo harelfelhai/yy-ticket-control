@@ -62,7 +62,7 @@
 
 | מזהה | § | הדרישה | מימוש | בדיקה חדשה | שכבה | ממצא |
 |---|---|---|---|---|---|---|
-| A3-01 | 27,401 | **"אך ורק האתר שלו"** | `permissions.ts:52` `viewer.siteId === ticket.siteId` | `br-permissions.spec.ts` — גישה ב-URL ישיר לאתר ב׳ | PW | ⏳ |
+| A3-01 | 27,401 | **"אך ורק האתר שלו"** | `permissions.ts` `canViewTicket`: האתר שלו **או** שיוך פעיל אליו אישית (‏GAP-A2, נסגר 1.9.2026 — §5.ז מונה את שני הכובעים בנפרד) | `br-permissions.spec.ts` — גישה ב-URL ישיר לאתר ב׳ | PW | ⏳ |
 | A3-02 | 27,401 | בתוך האתר — **כל** הפניות, לא רק שלו | `services/board.ts:62` scope לפי siteId | `br-permissions.spec.ts` | PW | ⏳ |
 | A3-03 | 401 | פותח, משייך, מגיב, עורך | `permissions.ts:74,118,134,161` | `br-permissions.spec.ts` | PW | ⏳ |
 | A3-04 | 27,401 | **סוגר ופותח מחדש רק פניות שהוא פתח** | `permissions.ts:85,91` | `br-permissions.spec.ts` | PW | ⏳ |
@@ -78,7 +78,7 @@
 |---|---|---|---|---|---|---|
 | A4-01 | 52 | רואה את הפנייה **בלוח הרגיל שלו**, לא בפורטל | `board.ts` direction=received | `br-permissions.spec.ts` | PW | ⏳ |
 | A4-02 | 311 | אינו משתמש בפורטל | `notifier/index.ts:115` — קישור קסם רק ל-professional | קיים: `self-reminder.spec.ts` + חדש | PW | ⏳ |
-| A4-03 | 402 | רואה פניות ששויכו אליו **מכל האתרים** (חוצה-אתרים) | `board.ts` direction filter | `br-permissions.spec.ts` | PW | ⏳ |
+| A4-03 | 402 | רואה פניות ששויכו אליו **מכל האתרים** (חוצה-אתרים) | `permissions.ts` `canViewTicket` + `board.ts` (‏OR על שיוך פעיל) + `directory.ts` `assertUsersAssignable` — שלושתם הורחבו ב-GAP-A2 | `br-permissions.spec.ts` · `v03-deltas.spec.ts` | PW | ⏳ |
 | A4-04 | 28,402 | קורא, מגיב, מסמן טופל | **חסר במימוש?** — פעולת DONE קיימת רק בפורטל (`p/[token]/[ticketId]/actions.ts`) | `br-permissions.spec.ts` — **בדיקת פער** | PW | ⏳ |
 | A4-05 | 289,380,402 | צ׳אט קבוצתי רק בתגית שנפתחה לו | `permissions.ts:189` — **`canViewTagChat` מחזיר true לכל משתמש פנימי, ללא בדיקת TagAccess** | `s6-tag-chat.spec.ts` — **בדיקת פער** | PW | ⏳ |
 | A4-06 | 28,62,355,402 | **"לעולם אינו סוגר פנייה"** | `permissions.ts:85` | `prohibitions.spec.ts` PROH-01 | PW | ⏳ |
