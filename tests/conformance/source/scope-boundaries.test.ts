@@ -58,8 +58,23 @@ describe("§6 — מה שנדחה במפורש אינו קיים במערכת", 
     expect(source).not.toMatch(/webhook.*whatsapp|whatsapp.*webhook/i);
   });
 
+  /**
+   * **התבנית צומצמה ב-1.9.2026, וזה חידוד ולא ריכוך.**
+   *
+   * הניסוח הקודם אסר `googleapis` כמחרוזת חופשית, ותפס את
+   * ‏`generativelanguage.googleapis.com` — נקודת הקצה של Gemini, שמשמשת
+   * לתמלול ולחילוץ טקסט ואין לה דבר עם יומן. איסור שמתנגש עם דרישה
+   * קיימת אינו שומר על הגבול אלא מזמין את ביטולו כשמישהו ימהר.
+   *
+   * מה שנאסר הוא **היומן**: המארח שלו, הספרייה שלו, ושמות ה-scope שלו.
+   * ‏`googleapis` נשאר אסור בכל הקשר שאינו Gemini.
+   */
   it("SC-OUT-02 — אין אינטגרציית יומן גוגל", () => {
-    expect(source).not.toMatch(/googleapis|calendar\.google|google-auth-library/i);
+    expect(source).not.toMatch(
+      /calendar\.google|google-auth-library|googleapis\.com\/calendar|auth\/calendar|calendar\.events|google\.calendar/i,
+    );
+    // וגם הכיוון החיובי: אם Gemini ייעלם, האיסור לא ייבדק על ריק.
+    expect(source).toMatch(/generativelanguage\.googleapis\.com/);
   });
 
   it("SC-OUT-03 — אין סטופרים, ימי עיכוב או סגירה רטרואקטיבית", () => {

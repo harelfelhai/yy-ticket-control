@@ -1,7 +1,7 @@
 import { enqueue } from "@/jobs/queue";
 import { JOB_TYPES, type JobType } from "@/jobs/types";
 import { UserFacingError } from "@/lib/action-result";
-import { canExtractText } from "@/lib/ai/extract";
+import { canExtractText } from "@/lib/ai/gemini";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import {

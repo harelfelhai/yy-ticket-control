@@ -71,10 +71,16 @@ export const env = {
    */
   forceLocalStorage: () => optional("MEDIA_STORAGE") === "local",
 
-  /** מפתח OpenAI לתמלול עברית. בלעדיו התמלול מדולג ואינו נכשל. */
-  openaiApiKey: () => optional("OPENAI_API_KEY"),
-  /** מפתח Anthropic לחילוץ טקסט מתמונות ומ-PDF */
-  anthropicApiKey: () => optional("ANTHROPIC_API_KEY"),
+  /**
+   * מפתח Gemini — **לתמלול העברית ולחילוץ הטקסט כאחד**.
+   *
+   * החליף ב-1.9.2026 את `OPENAI_API_KEY` ו-`ANTHROPIC_API_KEY`: שני
+   * הספקים עשו שתי משימות שספק אחד עושה בנקודת קצה אחת, והפיצול קנה שני
+   * חשבונות ושתי נקודות כשל בלי לקנות יכולת. ראה `ai/gemini.ts`.
+   *
+   * בלעדיו שני העיבודים מדולגים ואינם נכשלים.
+   */
+  geminiApiKey: () => optional("GEMINI_API_KEY"),
 
   /**
    * נתיב ל-pg_dump ול-pg_restore. בפרודקשן הם על ה-PATH (מותקנים בקונטיינר),

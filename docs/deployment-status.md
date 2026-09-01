@@ -199,8 +199,7 @@ railway run npx tsx prisma/seed.ts
 | `R2_SECRET_ACCESS_KEY` | ✅ בפרודקשן | R2. |
 | `R2_BUCKET` | ✅ בפרודקשן | ‏bucket המדיה של פרודקשן (למשל `yy-media-prod`). |
 | `R2_BACKUP_BUCKET` | ✅ בפרודקשן | ‏bucket שני לגיבוי הלילי. בלעדיו ג'וב הגיבוי נכשל בקול במקום לכתוב לדיסק שנמחק. |
-| `OPENAI_API_KEY` | אופציונלי | תמלול עברית. בלעדיו התמלול מדולג (‏SKIPPED), לא נכשל. |
-| `ANTHROPIC_API_KEY` | אופציונלי | חילוץ טקסט מתמונות/PDF. בלעדיו מדולג, לא נכשל. |
+| `GEMINI_API_KEY` | אופציונלי | **תמלול עברית וחילוץ טקסט כאחד** (`gemini-3.7-flash`). החליף ב-1.9.2026 את `OPENAI_API_KEY` ואת `ANTHROPIC_API_KEY` — ספק אחד לשתי המשימות. בלעדיו שניהם מדולגים (‏SKIPPED), לא נכשלים. |
 | `PG_DUMP_PATH` / `PG_RESTORE_PATH` | ❌ להשאיר ריק | ברירת המחדל `pg_dump`/`pg_restore` על ה-PATH בקונטיינר (מותקנים דרך ה-`Dockerfile`, מ-PGDG, בגרסה 18). |
 | `MEDIA_STORAGE` | ❌ להשאיר ריק | ריק → שימוש ב-R2. `local` היה שומר לדיסק זמני שנמחק בפריסה הבאה. |
 | `SHADOW_DATABASE_URL`, `TEST_*`, `E2E_*`, `SEED_ADMIN_PASSWORD` | ❌ לא בפרודקשן | רלוונטיים לפיתוח/בדיקות/seed בלבד. |

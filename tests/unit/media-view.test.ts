@@ -10,7 +10,7 @@ import { type MediaRecord, toMediaView } from "@/lib/media-view";
  * וזו הסיבה ש-`SKIPPED` חזר `null` בשקט: אין מי שיגלה שתיקה, כי היא עוברת.
  *
  * הדיווח מהשטח: "חיפשתי משהו שהקלטתי וזה לא מצא". התמלול אכן לא רץ (אין
- * ‏`OPENAI_API_KEY`), אבל שום דבר במסך לא אמר זאת.
+ * ‏`GEMINI_API_KEY`), אבל שום דבר במסך לא אמר זאת.
  */
 
 const audio: MediaRecord = {

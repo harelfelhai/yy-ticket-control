@@ -1,5 +1,5 @@
 import type { AiStatus } from "@/generated/prisma/enums";
-import { canExtractText } from "@/lib/ai/extract";
+import { canExtractText } from "@/lib/ai/gemini";
 import type { TextExtractor, Transcriber } from "@/lib/ai/types";
 import { db } from "@/lib/db";
 import { normalizeText } from "@/lib/normalize";

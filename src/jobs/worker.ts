@@ -1,6 +1,5 @@
 import type { Job } from "@/generated/prisma/client";
-import { selectTextExtractor } from "@/lib/ai/extract";
-import { selectTranscriber } from "@/lib/ai/transcribe";
+import { selectTextExtractor, selectTranscriber } from "@/lib/ai/gemini";
 import type { TextExtractor, Transcriber } from "@/lib/ai/types";
 import { selectEmailTransport } from "@/lib/notifier/email";
 import { type DeliveryOutcome, sendNotification } from "@/lib/notifier";
