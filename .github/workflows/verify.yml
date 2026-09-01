@@ -93,9 +93,32 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_test
       APP_BASE_URL: http://localhost:3100
+      # מפורש ולא הסתמכות על ה-PATH: ה-runner מגיע עם לקוח 16 ב-`/usr/bin`,
+      # והעטיפה של דביאן בוחרת גרסה לפי הקשר. נתיב מלא אינו משאיר מקום לספק.
+      PG_DUMP_PATH: /usr/lib/postgresql/18/bin/pg_dump
+      PG_RESTORE_PATH: /usr/lib/postgresql/18/bin/pg_restore
 
     steps:
       - uses: actions/checkout@v4
+
+      # **‏`pg_dump` חייב להיות בגרסת השרת או חדשה ממנה.** ה-runner מגיע עם
+      # לקוח 16, שירות ה-Postgres כאן הוא 18, ו-`tests/integration/backup.test.ts`
+      # מריץ `pg_dump` אמיתי מול מסד אמיתי. בריצה הראשונה של ה-CI הוא נכשל
+      # עם **בדיוק ההודעה** שהפילה 32 גיבויים ברצף בפרודקשן:
+      # `aborting because of server version mismatch`.
+      #
+      # זו אותה תקלה ואותו תיקון כמו ב-`Dockerfile`: מאגר PGDG הרשמי, גרסה
+      # מקובעת במפורש. לקוח שמשתדרג לבד הוא אותה תקלה בכיוון ההפוך.
+      - name: לקוח Postgres 18 (PGDG)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          "$PG_DUMP_PATH" --version
 
       - uses: actions/setup-node@v4
         with:
