@@ -1,0 +1,85 @@
+# שער האימות על כל push ל-main ועל כל PR.
+#
+# **למה זה קיים.** הפריסה ל-Railway אוטומטית מ-`main` מאז 15.8.2026, ועד
+# 31.8 שום בדיקה לא רצה אוטומטית — 1,249 הצהרות בדיקה, כולן ידניות במכונה
+# אחת. כלומר קומיט שבור נפרס, ומה שעצר אותו היה healthcheck בלבד: בדיקה
+# שהשרת עונה, לא שהוא נכון.
+#
+# **מה כאן ומה לא.** כאן `typecheck + lint + vitest` — כל מה שרץ בלי דפדפן
+# ובלי בניית פרודקשן, ומכסה את שתי חבילות ה-Vitest כולל האינטגרציה מול
+# Postgres אמיתי. חבילות ה-Playwright (`test:e2e`, `test:conformance`)
+# **אינן** כאן בכוונה: הן דורשות בניית פרודקשן ושרת חי, והן איטיות בסדר
+# גודל. הן נשארות שער ידני לפני פריסה — והוספתן היא הצעד הבא, לא תנאי
+# לצעד הזה.
+#
+# ‏`CI=true` נקבע אוטומטית ע"י GitHub, ושתי תצורות ה-Playwright כבר קוראות
+# אותו (`forbidOnly`, `retries`, `reporter`). גם פלאגין Sentry ב-
+# `next.config.ts` מפסיק להיות שקט תחתיו — התנהגות רצויה כאן.
+
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ריצה חדשה על אותו ענף מבטלת את הקודמת: התוצאה של קומיט שכבר הוחלף
+# אינה מעניינת, ואין טעם להחזיק שני runners.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # בדיקות האינטגרציה רצות מול Postgres אמיתי ולא מול mock — זו הכרעה
+    # קיימת של הפרויקט, ולכן ה-CI חייב לספק מסד.
+    #
+    # **‏`icu` ו-`he-IL` אינם קישוט.** `pg_trgm` מסווג תווים לפי `LC_CTYPE`,
+    # ותחת `C` כל בית מעל 0x80 אינו נחשב אות — כלומר `show_trgm` על מילה
+    # עברית מחזיר קבוצה ריקה, החיפוש שבור בשקט, ואף בדיקה לא נכשלת. זה קרה
+    # בפועל בפרויקט הזה (ראה `AGENTS.md`). התמונה הרשמית של Postgres מאתחלת
+    # עם `en_US.utf8`, וזה מספיק כדי ש-`tests/integration/search-indexes.test.ts`
+    # יעבור; המסד המקומי הוא זה שנוצר עם `C`.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yy_test
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_test
+      SESSION_SECRET: ci-session-secret-not-used-anywhere-else-32
+      APP_BASE_URL: http://localhost:3100
+      # ריק במפורש: בלי DSN ה-SDK אינו שולח, וריצת CI אינה מזהמת את
+      # הפרויקט בשגיאות של בדיקות.
+      NEXT_PUBLIC_SENTRY_DSN: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # ‏`npm ci` ולא `npm install`: נעילה מדויקת, וזו כל הנקודה של שער.
+      # ‏`postinstall` מריץ `prisma generate` — `src/generated/prisma` אינו
+      # בגיט, ובלעדיו שום דבר לא מתקמפל.
+      - run: npm ci
+
+      - run: npm run verify

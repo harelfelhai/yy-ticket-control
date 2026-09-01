@@ -84,3 +84,46 @@ describe("queue-not-stuck", () => {
     await expect(check("queue-not-stuck").run(now)).resolves.toBeUndefined();
   });
 });
+
+/**
+ * ה-check שנולד מהכשל האמיתי: 14 ג'ובי מייל ו-32 ג'ובי גיבוי נכשלו סופית
+ * בפרודקשן לאורך חודש, ואף אחת משלוש הבדיקות הקודמות לא ראתה אותם —
+ * התור לא היה תקוע, וההסלמה המשיכה לרשום פעימות.
+ */
+describe("jobs-not-failing", () => {
+  async function failed(type: string, runAt: Date) {
+    await db.job.create({
+      data: { type, payload: {}, status: "FAILED", attempts: 3, runAt },
+    });
+  }
+
+  it("אין כשלים — עובר", async () => {
+    await expect(check("jobs-not-failing").run(now)).resolves.toBeUndefined();
+  });
+
+  it("כשל סופי בחלון זורק, וההודעה נוקבת בסוג", async () => {
+    await failed(JOB_TYPES.notify, new Date(now.getTime() - 2 * HOUR));
+    await expect(check("jobs-not-failing").run(now)).rejects.toThrow(JOB_TYPES.notify);
+  });
+
+  it("כשל ישן מ-24 שעות מתיישן ואינו מתריע עוד", async () => {
+    // אזעקה שאי אפשר לכבות נלמדת להתעלם. כשל בודד שנפתר חייב להיסגר מעצמו.
+    await failed(JOB_TYPES.notify, new Date(now.getTime() - 30 * HOUR));
+    await expect(check("jobs-not-failing").run(now)).resolves.toBeUndefined();
+  });
+
+  it("ג'וב שנכשל זמנית וממתין לניסיון חוזר אינו נחשב כשל", async () => {
+    // ‏PENDING עם `lastError` הוא retry בדרך, לא עבודה שאבדה.
+    await db.job.create({
+      data: {
+        type: JOB_TYPES.notify,
+        payload: {},
+        status: "PENDING",
+        attempts: 1,
+        lastError: "timeout",
+        runAt: new Date(now.getTime() + 60_000),
+      },
+    });
+    await expect(check("jobs-not-failing").run(now)).resolves.toBeUndefined();
+  });
+});

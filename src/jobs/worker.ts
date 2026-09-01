@@ -25,7 +25,7 @@ import {
 } from "./handlers/escalation";
 import { cleanupRateLimits } from "@/lib/rate-limit";
 import { captureError } from "@/lib/observability/log";
-import { HEARTBEAT, setHeartbeat } from "@/watchdog/heartbeat";
+import { HEARTBEAT, seedHeartbeat } from "@/watchdog/heartbeat";
 import { runWatchdog } from "@/watchdog/runner";
 import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob, reclaimOrphanedJobs } from "./queue";
 import { JOB_TYPES, type NotifyJobPayload } from "./types";
@@ -42,8 +42,14 @@ import { JOB_TYPES, type NotifyJobPayload } from "./types";
  * שתלויה בשינה של שתי שניות היא בדיקה שנעשית לא יציבה ואז מבוטלת.
  */
 
-/** כל כמה זמן העובד בודק אם יש עבודה. */
-const POLL_INTERVAL_MS = 2_000;
+/**
+ * כל כמה זמן העובד בודק אם יש עבודה.
+ *
+ * בפיתוח הקצב מואט פי חמישה: הבדיקה פוגעת ב-DB גם כשהתור ריק, ועל שרת dev
+ * ארוך-ריצה היא עומס רקע מצטבר (אבחון 27.8.2026). הבדיקות אינן מושפעות —
+ * הן קוראות ל-`processNextJob` ישירות ואינן ממתינות לטיימר.
+ */
+const POLL_INTERVAL_MS = process.env.NODE_ENV === "development" ? 10_000 : 2_000;
 
 /** כמה עבודות לכל היותר בסבב אחד — ראה `drainJobs` */
 const MAX_JOBS_PER_TICK = 20;
@@ -300,11 +306,14 @@ export function startWorker(): void {
     const now = new Date();
     await ensureDailyEscalationScheduled(now);
     await ensureDailyBackupScheduled(now);
-    // זריעת פעימות-לב בעלייה: בהפעלה ראשונה (או אחרי restart) הג'וב היומי
-    // עדיין לא רץ, וה-watchdog היה מתריע על "פעימה חסרה" על שווא. מרגע זה
-    // ואילך פעימה ישנה פירושה באמת שהג'וב היומי הפסיק לרוץ.
-    await setHeartbeat(HEARTBEAT.escalation, now);
-    await setHeartbeat(HEARTBEAT.backup, now);
+    // זריעת פעימות-לב בעלייה: בהפעלה ראשונה הג'וב היומי עדיין לא רץ,
+    // וה-watchdog היה מתריע על "פעימה חסרה" על שווא.
+    //
+    // ‏`seedHeartbeat` ולא `setHeartbeat` — ההבדל הוא שלא דורסים פעימה
+    // קיימת. הגרסה הקודמת החזירה את שעון ההתיישנות ל-`now` בכל פריסה, ולכן
+    // השתיקה את ה-watchdog ל-27 שעות אחרי כל push ל-main. ראה `heartbeat.ts`.
+    await seedHeartbeat(HEARTBEAT.escalation, now);
+    await seedHeartbeat(HEARTBEAT.backup, now);
   })().catch((error) => {
     // אתחול שנכשל פירושו שהגיבוי וההסלמה היומיים אולי לא תוזמנו כלל —
     // כשל שקט של כל מנגנון ההתראות. קריטי, ולכן ל-Sentry.

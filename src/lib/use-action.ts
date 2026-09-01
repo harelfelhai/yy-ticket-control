@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import type { ActionResult } from "./action-result";
 import { useHydrated } from "./use-hydrated";
@@ -87,4 +88,29 @@ export function useAction(): ActionState {
     run,
     start: startTransition,
   };
+}
+
+/**
+ * ניווט-כמעבר למסכים שמצבם חי בכתובת (הלוח) — עם `pending` לחיווי.
+ *
+ * ‏`router.replace` לבדו אינו חושף מתי הסבב הסתיים, ולכן שינוי מסנן נראה
+ * כמסך קפוא עד שהשרת עונה (ספק #39). עטיפת הניווט ב-`useTransition` נותנת
+ * ‏`pending` שנשאר דלוק עד שעץ ה-RSC החדש עלה על המסך — וזה בדיוק החלון
+ * שבו אזור התוצאות מעומעם (§ FilterBar — חיווי עדכון).
+ *
+ * גר כאן ולא במסך, מפני שהחוק — "אין `useTransition` מחוץ לקובץ הזה"
+ * (§ useAction, נאכף ב-`tests/unit/primitives.test.ts`) — חל גם על ניווט.
+ */
+export function useNavigation(): { pending: boolean; navigate: (href: string) => void } {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const navigate = useCallback(
+    (href: string) => {
+      startTransition(() => router.replace(href));
+    },
+    [router],
+  );
+
+  return { pending, navigate };
 }

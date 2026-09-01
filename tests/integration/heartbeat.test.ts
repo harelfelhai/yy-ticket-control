@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runDailyEscalation } from "@/jobs/handlers/escalation";
 import { db } from "@/lib/db";
-import { HEARTBEAT, getHeartbeat, setHeartbeat } from "@/watchdog/heartbeat";
+import { HEARTBEAT, getHeartbeat, seedHeartbeat, setHeartbeat } from "@/watchdog/heartbeat";
 import { resetDb } from "../helpers/reset-db";
 
 /**
@@ -30,6 +30,31 @@ describe("setHeartbeat / getHeartbeat", () => {
     const second = new Date("2026-07-02T03:00:00.000Z");
     await setHeartbeat(HEARTBEAT.backup, second);
     expect((await getHeartbeat(HEARTBEAT.backup))?.toISOString()).toBe(second.toISOString());
+    expect(await db.heartbeat.count()).toBe(1);
+  });
+});
+
+describe("seedHeartbeat — זריעה שאינה דורסת", () => {
+  it("זורעת כשאין פעימה", async () => {
+    const at = new Date("2026-07-01T00:00:00.000Z");
+    await seedHeartbeat(HEARTBEAT.backup, at);
+    expect((await getHeartbeat(HEARTBEAT.backup))?.toISOString()).toBe(at.toISOString());
+  });
+
+  /**
+   * **הרגרסיה שהסתירה 32 לילות גיבוי כושלים בפרודקשן.**
+   *
+   * העלייה קראה ל-`setHeartbeat`, ולכן כל פריסה החזירה את הפעימה ל-`now`
+   * והשתיקה את ה-watchdog ל-27 שעות. בפרויקט שנפרס על כל push, זו השתקה
+   * כמעט תמידית. הבדיקה קובעת את ההיפך: פעימה ישנה **נשארת ישנה**.
+   */
+  it("אינה דורסת פעימה קיימת — גם לא ישנה מאוד", async () => {
+    const old = new Date("2026-07-01T03:00:00.000Z");
+    await setHeartbeat(HEARTBEAT.backup, old);
+
+    await seedHeartbeat(HEARTBEAT.backup, new Date("2026-08-15T09:00:00.000Z"));
+
+    expect((await getHeartbeat(HEARTBEAT.backup))?.toISOString()).toBe(old.toISOString());
     expect(await db.heartbeat.count()).toBe(1);
   });
 });

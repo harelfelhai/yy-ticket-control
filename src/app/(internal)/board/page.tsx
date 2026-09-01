@@ -6,11 +6,16 @@ import { TicketTable } from "@/components/ticket-table";
 import { requireUser } from "@/lib/auth";
 import {
   type BoardCard,
+  SECTION_MORE_PARAM,
+  SECTION_PAGE_SIZE,
   type SortDirection,
   type SortKey,
+  boardHref,
   isSortKey,
   nextSort,
-  sortCards,
+  sectionLimit,
+  singleParam,
+  visibleCards,
 } from "@/lib/board-view";
 import { he } from "@/lib/he";
 import { type BoardFilters as Filters, getBoard } from "@/lib/services/board";
@@ -72,8 +77,8 @@ export default async function BoardPage(props: PageProps<"/board">) {
   const user = await requireUser();
   const params = await props.searchParams;
 
-  const single = (value: string | string[] | undefined) =>
-    typeof value === "string" && value ? value : undefined;
+  // ערך יחיד מהכתובת — ההגדרה עברה ל-`board-view.ts` כשגם `boardHref` נזקק לה.
+  const single = singleParam;
 
   const filters: Filters = {
     query: single(params.q),
@@ -121,26 +126,32 @@ export default async function BoardPage(props: PageProps<"/board">) {
   /**
    * הכתובת שאליה מובילה לחיצה על כותרת — המצב הבא במחזור.
    *
-   * נבנית מהכתובת הנוכחית ולא מאפס, כדי שהמיון לא ימחק מסננים או את
-   * `view=table` עצמו. המצב השלישי **מסיר** את שני הפרמטרים, וזו החזרה
-   * לסדר המערכת.
+   * נבנית מהכתובת הנוכחית ולא מאפס (דרך `boardHref`), כדי שהמיון לא ימחק
+   * מסננים או את `view=table` עצמו. המצב השלישי **מסיר** את שני הפרמטרים,
+   * וזו החזרה לסדר המערכת.
    */
   const sortHref = (key: SortKey): string => {
-    const next = new URLSearchParams();
-    for (const [name, value] of Object.entries(params)) {
-      const one = single(value);
-      if (one && name !== "sort" && name !== "dir") next.set(name, one);
-    }
-
     const target = nextSort(sort, key);
-    if (target) {
-      next.set("sort", target.key);
-      next.set("dir", target.direction);
-    }
-
-    const query = next.toString();
-    return query ? `/board?${query}` : "/board";
+    return boardHref(params, {
+      sort: target ? target.key : null,
+      dir: target ? target.direction : null,
+    });
   };
+
+  /**
+   * תקרת התצוגה של כל קבוצה (ספק #38): 20 כברירת מחדל, ו"טען עוד" מעלה
+   * אותה דרך הכתובת — כמו כל שאר מצב הלוח. הסינון והמיון חלים על הרשימה
+   * המלאה; רק הרינדור נחתך, והמונה בכותרת נשאר מלא.
+   */
+  const limits: Record<BoardSection, number> = {
+    ACTION_REQUIRED: sectionLimit(single(params[SECTION_MORE_PARAM.ACTION_REQUIRED])),
+    WITH_RECIPIENTS: sectionLimit(single(params[SECTION_MORE_PARAM.WITH_RECIPIENTS])),
+    ARCHIVE: sectionLimit(single(params[SECTION_MORE_PARAM.ARCHIVE])),
+  };
+  const moreHref = (section: BoardSection): string =>
+    boardHref(params, {
+      [SECTION_MORE_PARAM[section]]: String(limits[section] + SECTION_PAGE_SIZE),
+    });
 
   // צלילה ממוקדת-מדד מתצוגת הבעלים (אפיון מסך 10): "ממתינות למנהל" מציג רק
   // את "דורש ממך", ו"ללא תנועה" רק את המוסלמות.
@@ -161,6 +172,12 @@ export default async function BoardPage(props: PageProps<"/board">) {
 
   return (
     <div className={`flex flex-col gap-3 py-3 pb-24 ${PAGE_X} ${FULL_WIDTH}`}>
+      {/*
+       * תוכן הלוח יושב **בתוך** `BoardFilters` (כ-children, כלומר נשאר
+       * רינדור-שרת): כך חיווי ה-pending של הרצועה יכול לעמעם אותו בזמן
+       * סבב הסינון (ספק #39). הכפתור הצף נשאר בחוץ — המעטפת המעומעמת
+       * יוצרת containing block שהיה כולא את ה-`fixed` שלו.
+       */}
       <Suspense>
         <BoardFilters
           sites={board.sites}
@@ -169,58 +186,64 @@ export default async function BoardPage(props: PageProps<"/board">) {
           domains={board.domains}
           recipients={board.recipients}
           tags={board.tags}
-        />
-      </Suspense>
-
-      {board.search ? (
-        <SearchResults cards={board.search.cards} truncated={board.search.truncated} table={table} sort={sort} sortHref={sortHref} />
-      ) : focus && focusCards ? (
-        <>
-          {/*
-           * פערים 33 ו-34: הבאנר נכתב ביד עם `bg-brand/5` — ערך שקיפות שאינו
-           * קיים בתקן — ובלי `role`, כלומר אילם לקורא מסך. השורש היה **וריאנט
-           * חסר**, ולכן נוסף `brand` ל-`Banner` במקום לחזור על המחלקות.
-           * ‏"הצג הכול" נצמד לטקסט ואינו נדחף לקצה הנגדי (§ Layout).
-           */}
-          <Banner tone="info" className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>{focus === "awaiting" ? he.board.focusAwaiting : he.board.focusStale}</span>
-            <Link href={clearFocusHref} className="underline">
-              {he.board.showAll}
-            </Link>
-          </Banner>
-          {focusCards.length === 0 ? (
+        >
+          {board.search ? (
+            <SearchResults cards={board.search.cards} truncated={board.search.truncated} table={table} sort={sort} sortHref={sortHref} />
+          ) : focus && focusCards ? (
+            <div className="flex flex-col gap-3">
+              {/*
+               * פערים 33 ו-34: הבאנר נכתב ביד עם `bg-brand/5` — ערך שקיפות שאינו
+               * קיים בתקן — ובלי `role`, כלומר אילם לקורא מסך. השורש היה **וריאנט
+               * חסר**, ולכן נוסף `brand` ל-`Banner` במקום לחזור על המחלקות.
+               * ‏"הצג הכול" נצמד לטקסט ואינו נדחף לקצה הנגדי (§ Layout).
+               */}
+              <Banner tone="info" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>{focus === "awaiting" ? he.board.focusAwaiting : he.board.focusStale}</span>
+                <Link href={clearFocusHref} className="underline">
+                  {he.board.showAll}
+                </Link>
+              </Banner>
+              {focusCards.length === 0 ? (
+                <EmptyState>{he.board.empty}</EmptyState>
+              ) : (
+                <CardList cards={focusCards} table={table} sort={sort} sortHref={sortHref} />
+              )}
+            </div>
+          ) : total === 0 ? (
             <EmptyState>{he.board.empty}</EmptyState>
           ) : (
-            <CardList cards={focusCards} table={table} sort={sort} sortHref={sortHref} />
+            <div className="flex flex-col gap-3">
+              <Section
+                id="ACTION_REQUIRED"
+                cards={board.sections.ACTION_REQUIRED}
+                table={table}
+                sort={sort}
+                sortHref={sortHref}
+                limit={limits.ACTION_REQUIRED}
+                moreHref={moreHref("ACTION_REQUIRED")}
+              />
+              <Section
+                id="WITH_RECIPIENTS"
+                cards={board.sections.WITH_RECIPIENTS}
+                table={table}
+                sort={sort}
+                sortHref={sortHref}
+                limit={limits.WITH_RECIPIENTS}
+                moreHref={moreHref("WITH_RECIPIENTS")}
+              />
+              <ArchiveSection
+                cards={board.sections.ARCHIVE}
+                truncated={board.archiveTruncated}
+                table={table}
+                sort={sort}
+                sortHref={sortHref}
+                limit={limits.ARCHIVE}
+                moreHref={moreHref("ARCHIVE")}
+              />
+            </div>
           )}
-        </>
-      ) : total === 0 ? (
-        <EmptyState>{he.board.empty}</EmptyState>
-      ) : (
-        <>
-          <Section
-            id="ACTION_REQUIRED"
-            cards={board.sections.ACTION_REQUIRED}
-            table={table}
-            sort={sort}
-            sortHref={sortHref}
-          />
-          <Section
-            id="WITH_RECIPIENTS"
-            cards={board.sections.WITH_RECIPIENTS}
-            table={table}
-            sort={sort}
-            sortHref={sortHref}
-          />
-          <ArchiveSection
-            cards={board.sections.ARCHIVE}
-            truncated={board.archiveTruncated}
-            table={table}
-            sort={sort}
-            sortHref={sortHref}
-          />
-        </>
-      )}
+        </BoardFilters>
+      </Suspense>
 
       {/*
         כפתור צף: יצירת פנייה היא הפעולה השכיחה ביותר בשטח, והיא חייבת
@@ -298,15 +321,20 @@ function CardList({
   table,
   sort,
   sortHref,
-}: { cards: BoardCard[]; table: boolean } & SortProps) {
+  limit,
+}: { cards: BoardCard[]; table: boolean; limit?: number } & SortProps) {
   /*
    * המיון חל על **שתי** התצוגות ולא על הטבלה בלבד.
    *
    * הפקד קיים רק בטבלה, אבל `?sort=` נגיש מקישור שנשמר — ובנייד הטבלה
    * מוחלפת בכרטיסים. אילו הכרטיסים היו מתעלמים מהמיון, אותה כתובת הייתה
    * מציגה שני סדרים שונים בלי לומר זאת. זו רשימה אחת, וסדר אחד.
+   *
+   * התקרה (ספק #38) נחתכת **אחרי** המיון — "20 הראשונים" הם לפי הסדר
+   * שהמשתמש רואה — ובנקודה אחת עבור שתי התצוגות, כך שהטבלה והכרטיסים
+   * לעולם אינם מציגים חלונות שונים של אותה רשימה.
    */
-  const ordered = sortCards(cards, sort);
+  const ordered = visibleCards(cards, sort, limit);
   const asCards = (
     /**
      * **הריסון של הרוחב יושב כאן, ולא על העמוד.**
@@ -356,10 +384,14 @@ function Section({
   table,
   sort,
   sortHref,
+  limit,
+  moreHref,
 }: {
   id: Exclude<BoardSection, "ARCHIVE">;
   cards: BoardCard[];
   table: boolean;
+  limit: number;
+  moreHref: string;
 } & SortProps) {
   return (
     <section className="flex flex-col gap-3">
@@ -372,9 +404,35 @@ function Section({
       {cards.length === 0 ? (
         <p className="px-1 text-sm text-muted">{he.board.emptySection}</p>
       ) : (
-        <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} />
+        <>
+          <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} limit={limit} />
+          {cards.length > limit ? (
+            <LoadMore remaining={cards.length - limit} href={moreHref} />
+          ) : null}
+        </>
       )}
     </section>
+  );
+}
+
+/**
+ * "טען עוד · N" (ספק #38) — קישור RSC טהור: התקרה חיה בכתובת ולא ב-state,
+ * ולכן חזרה מפנייה משמרת את ההרחבה, בדיוק כמו מסנן או מיון.
+ *
+ * ‏`prefetch={false}`: הקישור יושב בתחתית רשימה, וכניסתו ל-viewport בגלילה
+ * הייתה מריצה רינדור לוח מלא ספקולטיבי — בדיוק העומס שהתקרה באה לחסוך.
+ */
+function LoadMore({ remaining, href }: { remaining: number; href: string }) {
+  return (
+    <ButtonLink
+      variant="quiet"
+      size="compact"
+      prefetch={false}
+      href={href}
+      className="self-start"
+    >
+      {he.board.loadMore(remaining)}
+    </ButtonLink>
   );
 }
 
@@ -384,7 +442,15 @@ function ArchiveSection({
   table,
   sort,
   sortHref,
-}: { cards: BoardCard[]; truncated: boolean; table: boolean } & SortProps) {
+  limit,
+  moreHref,
+}: {
+  cards: BoardCard[];
+  truncated: boolean;
+  table: boolean;
+  limit: number;
+  moreHref: string;
+} & SortProps) {
   if (cards.length === 0) return null;
 
   return (
@@ -398,7 +464,10 @@ function ArchiveSection({
           שפותח את הארכיון ולא מוצא פנייה ישנה מפסיק לגלול הרבה לפני הסוף.
         */}
         {truncated && <p className="text-sm text-muted">{he.board.archiveTruncated}</p>}
-        <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} />
+        <CardList cards={cards} table={table} sort={sort} sortHref={sortHref} limit={limit} />
+        {cards.length > limit ? (
+          <LoadMore remaining={cards.length - limit} href={moreHref} />
+        ) : null}
       </div>
     </details>
   );

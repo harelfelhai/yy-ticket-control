@@ -56,12 +56,15 @@ test.describe("§5.ד — מי מטפל", () => {
     /**
      * ‏§5.ד (הכרעת 0.2): "החלפת מטפל נעשית **מפורשות דרך הכפתור**".
      *
-     * במימוש הכפתור "סמן: אני מטפל" מוצג רק כש**אין** מטפל
-     * (`ticket-actions.tsx:101` — `canSetHandler && !hasHandler`), ולכן ברגע
-     * שנקבע מטפל ראשון אין שום דרך להחליף אותו — לא בכפתור ולא בכלל.
-     * זהו הפער שהסייג של 0.2 נכתב בדיוק כדי למנוע. מדווח ב-conformance-report.
+     * **היה `test.fail()` עד 31.8.2026 (GAP-A1).** התנאי במימוש היה
+     * `canSetHandler && !hasHandler`, ולכן ברגע שנקבע מטפל ראשון הכפתור
+     * נעלם **מכולם** ולא נותרה שום דרך להחליף מטפל — בדיוק המצב שהסייג של
+     * 0.2 נכתב כדי למנוע. כעת התנאי הוא `!isHandler`: הכפתור יורד מהמטפל
+     * עצמו בלבד, ונשאר גלוי לכל מנהל אחר.
+     *
+     * שני חצאי הכלל נבדקים כאן יחד, וזה העיקר: ההיעלמות אצל א׳ מוכיחה
+     * שהסימון נקבע, וההופעה אצל ב׳ מוכיחה שיש מסלול החלפה.
      */
-    test.fail();
     await loginAs(page, "managerA");
     const description = uniq("החלפת-מטפל");
     const path = await createTicket(page, {
@@ -72,8 +75,8 @@ test.describe("§5.ד — מי מטפל", () => {
       recipients: [PROS.full.name],
     });
     await page.getByRole("button", { name: TICKET_SCREEN.markHandler }).click();
-    // הכפתור נעלם ברגע שנקבע מטפל — זו ההמתנה לסיום ה-Server Action, וגם
-    // ההוכחה להיעדר מנגנון ההחלפה.
+    // הכפתור נעלם **מא׳** ברגע שהוא עצמו נעשה המטפל — זו ההמתנה לסיום
+    // ה-Server Action, וגם ההוכחה שהסימון אכן נקבע עליו.
     await expect(page.getByRole("button", { name: TICKET_SCREEN.markHandler })).toHaveCount(0);
 
     await page.goto("/board");
@@ -83,7 +86,7 @@ test.describe("§5.ד — מי מטפל", () => {
 
     await loginAs(page, "managerA2");
     await page.goto(path);
-    // כאן אמור להיות הכפתור שהאפיון מחייב. הוא אינו קיים.
+    // וכאן הכפתור שהאפיון מחייב — גלוי למנהל שאינו המטפל, ודרכו ההחלפה.
     await expect(page.getByRole("button", { name: TICKET_SCREEN.markHandler })).toBeVisible();
   });
 });

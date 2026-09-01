@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { HEARTBEAT, getHeartbeat } from "./heartbeat";
-import { heartbeatStale, queueStuck } from "./predicates";
+import { heartbeatStale, jobsFailing, queueStuck } from "./predicates";
 
 /**
  * ה-invariants שה-watchdog בודק. כל בדיקה זורקת כשהיא נכשלת, וה-runner
@@ -20,6 +20,9 @@ const HOUR_MS = 60 * 60_000;
 /** כמה זמן PENDING יכול להיות באיחור לפני שזה "תור תקוע". גדול מספיק כדי
  *  לא להיתפס ל-backoff של retry (1/5/15 דק'), קטן מספיק כדי לזהות לולאה מתה. */
 const QUEUE_OVERDUE_MS = 20 * 60_000;
+
+/** חלון ההסתכלות על ג'ובים שנכשלו סופית. ראה `jobsFailing` ב-`predicates.ts`. */
+const FAILED_WINDOW_MS = 24 * HOUR_MS;
 
 export interface WatchdogCheck {
   name: string;
@@ -57,6 +60,32 @@ export const checks: WatchdogCheck[] = [
       });
       if (queueStuck(overdue)) {
         throw new Error(`${overdue} עבודות ממתינות באיחור מעל 20 דקות — לולאת התור כנראה מתה`);
+      }
+    },
+  },
+  {
+    // עבודה שהמערכת התחייבה לעשות, מיצתה שלושה ניסיונות, ולא נעשתה.
+    // הסיגנל היחיד שתופס תקלת **תצורה** מתמשכת — מפתח חסר, כלי בגרסה
+    // שגויה — שאינה מייצרת לא תור תקוע ולא פעימה ישנה.
+    name: "jobs-not-failing",
+    async run(now) {
+      const since = new Date(now.getTime() - FAILED_WINDOW_MS);
+      // ‏`runAt` ולא חותמת עדכון: ל-`Job` אין `updatedAt`, ובכשל **סופי**
+      // ‏`failJob` אינו נוגע ב-`runAt` — כלומר הוא נשאר על מועד הניסיון
+      // האחרון, לכל היותר 15 דקות לפני הכשל. בחלון של 24 שעות זהו קירוב
+      // מדויק דיו, והשאילתה נופלת בדיוק על `@@index([status, runAt])`.
+      const failed = await db.job.groupBy({
+        by: ["type"],
+        where: { status: "FAILED", runAt: { gte: since } },
+        _count: true,
+      });
+
+      const total = failed.reduce((sum, row) => sum + row._count, 0);
+      if (jobsFailing(total)) {
+        // פירוט לפי סוג ולא מספר יחיד: "SEND_NOTIFICATION×3" אומר מה לתקן,
+        // ו-"3 עבודות נכשלו" מחייב לפתוח את בסיס הנתונים כדי לדעת זאת.
+        const detail = failed.map((row) => `${row.type}×${row._count}`).join(", ");
+        throw new Error(`${total} עבודות נכשלו סופית ב-24 השעות האחרונות: ${detail}`);
       }
     },
   },

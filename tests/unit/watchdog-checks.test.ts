@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heartbeatStale, queueStuck } from "@/watchdog/predicates";
+import { heartbeatStale, jobsFailing, queueStuck } from "@/watchdog/predicates";
 
 /**
  * הפרדיקטים של ה-watchdog הם עכשיו load-bearing — התראה על גיבוי שנעצר
@@ -35,5 +35,17 @@ describe("queueStuck", () => {
 
   it("ולו עבודה אחת באיחור — התור תקוע", () => {
     expect(queueStuck(1)).toBe(true);
+  });
+});
+
+describe("jobsFailing", () => {
+  it("אין כשלים בחלון — עובר", () => {
+    expect(jobsFailing(0)).toBe(false);
+  });
+
+  it("ולו כשל סופי אחד — מתריע", () => {
+    // כשל סופי הוא שלושה ניסיונות שמוצו. אין כאן סף "כמה זה יותר מדי":
+    // עבודה אחת שלא נעשתה היא קבלן אחד שלא קיבל הודעה.
+    expect(jobsFailing(1)).toBe(true);
   });
 });

@@ -1,8 +1,8 @@
 "use client";
 
 import { Search, X } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import {
@@ -10,8 +10,11 @@ import {
   FilterDate,
   FilterSelect,
 } from "@/components/ui/filter-bar";
+import { PendingNotice } from "@/components/ui/message";
+import { SECTION_MORE_PARAM } from "@/lib/board-view";
 import { he } from "@/lib/he";
 import type { DerivedTicketStatus } from "@/lib/ticket-status";
+import { useNavigation } from "@/lib/use-action";
 
 interface Option {
   id: string;
@@ -26,6 +29,12 @@ interface BoardFiltersProps {
   domains: Option[];
   recipients: Option[];
   tags: Option[];
+  /**
+   * תוכן הלוח עצמו (Server Components), עטוף כאן כדי שחיווי ה-pending של
+   * הניווט יוכל לעמעם אותו (ספק #39). ה-children נשארים רינדור-שרת —
+   * רכיב לקוח שמקבל אותם כ-prop אינו הופך אותם ללקוח.
+   */
+  children: ReactNode;
 }
 
 /**
@@ -76,10 +85,13 @@ export function BoardFilters({
   domains,
   recipients,
   tags,
+  children,
 }: BoardFiltersProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  // בעל ה-pending היחיד של המסך: גם הרצועה וגם שורת החיפוש מנווטים דרכו,
+  // כך שכל סבב שרת — מכל פקד — מדליק את אותו חיווי אחד.
+  const { pending, navigate } = useNavigation();
 
   /**
    * מקבל זוגות ולא מפתח יחיד: "נקה מסננים" מאפס שישה מהם בבת אחת, וקריאה
@@ -92,8 +104,13 @@ export function BoardFilters({
       if (value) next.set(key, value);
       else next.delete(key);
     }
+    // שינוי מסנן מאפס את הרחבת "טען עוד" (ספק #38): התקרה שייכת לרשימה
+    // שהוצגה, והרשימה מתחלפת. מתג התצוגה אינו מסנן ולכן אינו מאפס.
+    if (pairs.some(([key]) => FILTER_PARAMS.includes(key))) {
+      for (const param of Object.values(SECTION_MORE_PARAM)) next.delete(param);
+    }
     const query = next.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname);
+    navigate(query ? `${pathname}?${query}` : pathname);
   }
 
   /**
@@ -110,191 +127,207 @@ export function BoardFilters({
   const activeCount = FILTER_PARAMS.filter((key) => params.get(key)).length;
 
   return (
-    /*
-     * שתי שורות ולא אחת: חיפוש מעל, מסננים מתחת.
-     *
-     * ‏`gap-2` ולא `gap-3` — שתי השורות הן אזור אחד של פקדים מעל הלוח,
-     * ורווח גדול מדי היה מפריד ביניהן לשני בלוקים שאינם קשורים.
-     */
-    <div className="flex flex-col gap-2">
-      <BoardSearch />
-      <FilterBar
-        trailing={
-          <>
-            {/*
-             * מתג התצוגה (0.3). **מוסתר מתחת ל-`md`**: טבלה ברוחב 390px היא
-             * גלישה אופקית או טקסט קטוע, ומשתמש נייד שלוחץ ולא רואה שינוי
-             * לומד שהמערכת לא מגיבה.
-             *
-             * ‏`view` אינו מסנן ולכן הוא ב-`trailing` ואינו מתקפל לתוך
-             * הרצועה — "מה שאינו מסנן אינו מתקפל" (§ FilterBar).
-             */}
-            <Button
-              variant="secondary"
-              size="compact"
-              className="hidden md:inline-flex"
-              onClick={() => update([["view", table ? "" : "table"]])}
-            >
-              {table ? he.board.viewCards : he.board.viewTable}
-            </Button>
-
-            {activeCount > 0 ? (
+    <div className="flex flex-col gap-3">
+      {/*
+       * שתי שורות ולא אחת: חיפוש מעל, מסננים מתחת.
+       *
+       * ‏`gap-2` ולא `gap-3` — שתי השורות הן אזור אחד של פקדים מעל הלוח,
+       * ורווח גדול מדי היה מפריד ביניהן לשני בלוקים שאינם קשורים.
+       */}
+      <div className="flex flex-col gap-2">
+        <BoardSearch navigate={navigate} />
+        <FilterBar
+          trailing={
+            <>
+              {/*
+               * מתג התצוגה (0.3). **מוסתר מתחת ל-`md`**: טבלה ברוחב 390px היא
+               * גלישה אופקית או טקסט קטוע, ומשתמש נייד שלוחץ ולא רואה שינוי
+               * לומד שהמערכת לא מגיבה.
+               *
+               * ‏`view` אינו מסנן ולכן הוא ב-`trailing` ואינו מתקפל לתוך
+               * הרצועה — "מה שאינו מסנן אינו מתקפל" (§ FilterBar).
+               */}
               <Button
-                variant="quiet"
+                variant="secondary"
                 size="compact"
-                className="shrink-0"
-                onClick={() => update(FILTER_PARAMS.map((key) => [key, ""]))}
+                className="hidden md:inline-flex"
+                onClick={() => update([["view", table ? "" : "table"]])}
               >
-                {he.board.clearFilters}
+                {table ? he.board.viewCards : he.board.viewTable}
               </Button>
-            ) : null}
-          </>
-        }
-      >
-        {/* בורר האתר מוצג רק למי שרואה יותר מאחד (בעלים, מנהל מערכת). מנהל
-          עבודה מקובע לאתרו, ואין לו מה לסנן. */}
-        {sites.length > 1 ? (
-          <FilterSelect
-            key={`site-${syncKey}`}
-            aria-label={he.ticket.site}
-            defaultValue={params.get("site") ?? ""}
-            onChange={(e) => update([["site", e.target.value]])}
-          >
-            <option value="">{he.board.allSites}</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </FilterSelect>
-        ) : null}
 
-        <FilterSelect
-          key={`direction-${syncKey}`}
-          aria-label={he.board.opened}
-          defaultValue={params.get("direction") ?? ""}
-          onChange={(e) => update([["direction", e.target.value]])}
-        >
-          <option value="">{he.board.allDirections}</option>
-          <option value="opened">{he.board.opened}</option>
-          <option value="received">{he.board.received}</option>
-        </FilterSelect>
-
-        <FilterSelect
-          key={`building-${syncKey}`}
-          aria-label={he.directory.building}
-          defaultValue={params.get("building") ?? ""}
-          // החלפת בניין מאפסת את הדירה: דירה 7 בבניין א׳ אינה דירה 7 בבניין ב׳,
-          // ומזהה שנשאר מהבחירה הקודמת היה מרוקן את הלוח בלי הסבר.
-          onChange={(e) =>
-            update([
-              ["building", e.target.value],
-              ["apartment", ""],
-            ])
+              {activeCount > 0 ? (
+                <Button
+                  variant="quiet"
+                  size="compact"
+                  className="shrink-0"
+                  onClick={() => update(FILTER_PARAMS.map((key) => [key, ""]))}
+                >
+                  {he.board.clearFilters}
+                </Button>
+              ) : null}
+            </>
           }
         >
-          <option value="">{he.board.allBuildings}</option>
-          {buildings.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </FilterSelect>
+          {/* בורר האתר מוצג רק למי שרואה יותר מאחד (בעלים, מנהל מערכת). מנהל
+            עבודה מקובע לאתרו, ואין לו מה לסנן. */}
+          {sites.length > 1 ? (
+            <FilterSelect
+              key={`site-${syncKey}`}
+              aria-label={he.ticket.site}
+              defaultValue={params.get("site") ?? ""}
+              onChange={(e) => update([["site", e.target.value]])}
+            >
+              <option value="">{he.board.allSites}</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </FilterSelect>
+          ) : null}
 
-        {/*
-        בורר הדירה מופיע **רק אחרי בחירת בניין**, וזה גם הסדר שבו מנהל עבודה
-        חושב: קודם איפה, אחר כך איזו. בורר שמציג את כל הדירות בכל האתרים הוא
-        רשימה של מאות פריטים בלי הקשר.
-      */}
-        {apartments.length > 0 ? (
           <FilterSelect
-            key={`apartment-${syncKey}`}
-            aria-label={he.directory.apartment}
-            defaultValue={params.get("apartment") ?? ""}
-            onChange={(e) => update([["apartment", e.target.value]])}
+            key={`direction-${syncKey}`}
+            aria-label={he.board.opened}
+            defaultValue={params.get("direction") ?? ""}
+            onChange={(e) => update([["direction", e.target.value]])}
           >
-            <option value="">{he.search.allApartments}</option>
-            {apartments.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
+            <option value="">{he.board.allDirections}</option>
+            <option value="opened">{he.board.opened}</option>
+            <option value="received">{he.board.received}</option>
+          </FilterSelect>
+
+          <FilterSelect
+            key={`building-${syncKey}`}
+            aria-label={he.directory.building}
+            defaultValue={params.get("building") ?? ""}
+            // החלפת בניין מאפסת את הדירה: דירה 7 בבניין א׳ אינה דירה 7 בבניין ב׳,
+            // ומזהה שנשאר מהבחירה הקודמת היה מרוקן את הלוח בלי הסבר.
+            onChange={(e) =>
+              update([
+                ["building", e.target.value],
+                ["apartment", ""],
+              ])
+            }
+          >
+            <option value="">{he.board.allBuildings}</option>
+            {buildings.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
               </option>
             ))}
           </FilterSelect>
-        ) : null}
 
-        <FilterSelect
-          key={`domain-${syncKey}`}
-          aria-label={he.directory.domain}
-          defaultValue={params.get("domain") ?? ""}
-          onChange={(e) => update([["domain", e.target.value]])}
-        >
-          <option value="">{he.board.allDomains}</option>
-          {domains.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </FilterSelect>
+          {/*
+          בורר הדירה מופיע **רק אחרי בחירת בניין**, וזה גם הסדר שבו מנהל עבודה
+          חושב: קודם איפה, אחר כך איזו. בורר שמציג את כל הדירות בכל האתרים הוא
+          רשימה של מאות פריטים בלי הקשר.
+        */}
+          {apartments.length > 0 ? (
+            <FilterSelect
+              key={`apartment-${syncKey}`}
+              aria-label={he.directory.apartment}
+              defaultValue={params.get("apartment") ?? ""}
+              onChange={(e) => update([["apartment", e.target.value]])}
+            >
+              <option value="">{he.search.allApartments}</option>
+              {apartments.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </FilterSelect>
+          ) : null}
 
-        <FilterSelect
-          key={`recipient-${syncKey}`}
-          aria-label={he.directory.professional}
-          defaultValue={params.get("recipient") ?? ""}
-          onChange={(e) => update([["recipient", e.target.value]])}
-        >
-          <option value="">{he.board.allRecipients}</option>
-          {recipients.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </FilterSelect>
-
-        {/* מסנן התגית מוצג רק כשיש תגיות: מסך ריק של בורר בלי אפשרויות הוא
-          רעש למי שעדיין לא התחיל לתייג. */}
-        {tags.length > 0 ? (
           <FilterSelect
-            key={`tag-${syncKey}`}
-            aria-label={he.tag.label}
-            defaultValue={params.get("tag") ?? ""}
-            onChange={(e) => update([["tag", e.target.value]])}
+            key={`domain-${syncKey}`}
+            aria-label={he.directory.domain}
+            defaultValue={params.get("domain") ?? ""}
+            onChange={(e) => update([["domain", e.target.value]])}
           >
-            <option value="">{he.board.allTags}</option>
-            {tags.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            <option value="">{he.board.allDomains}</option>
+            {domains.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
               </option>
             ))}
           </FilterSelect>
+
+          <FilterSelect
+            key={`recipient-${syncKey}`}
+            aria-label={he.directory.professional}
+            defaultValue={params.get("recipient") ?? ""}
+            onChange={(e) => update([["recipient", e.target.value]])}
+          >
+            <option value="">{he.board.allRecipients}</option>
+            {recipients.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </FilterSelect>
+
+          {/* מסנן התגית מוצג רק כשיש תגיות: מסך ריק של בורר בלי אפשרויות הוא
+            רעש למי שעדיין לא התחיל לתייג. */}
+          {tags.length > 0 ? (
+            <FilterSelect
+              key={`tag-${syncKey}`}
+              aria-label={he.tag.label}
+              defaultValue={params.get("tag") ?? ""}
+              onChange={(e) => update([["tag", e.target.value]])}
+            >
+              <option value="">{he.board.allTags}</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </FilterSelect>
+          ) : null}
+
+          <FilterSelect
+            key={`status-${syncKey}`}
+            aria-label={he.search.allStatuses}
+            defaultValue={params.get("status") ?? ""}
+            onChange={(e) => update([["status", e.target.value]])}
+          >
+            <option value="">{he.search.allStatuses}</option>
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {he.ticketStatus[status]}
+              </option>
+            ))}
+          </FilterSelect>
+
+          <FilterDate
+            key={`from-${syncKey}`}
+            label={he.search.from}
+            defaultValue={params.get("from") ?? ""}
+            onChange={(e) => update([["from", e.target.value]])}
+          />
+          <FilterDate
+            key={`to-${syncKey}`}
+            label={he.search.to}
+            defaultValue={params.get("to") ?? ""}
+            onChange={(e) => update([["to", e.target.value]])}
+          />
+        </FilterBar>
+      </div>
+
+      {/*
+       * חיווי העדכון (ספק #39, § FilterBar — חיווי עדכון): בזמן הסבב התוכן
+       * הקיים נשאר מוצג, מעומעם, וצ'יפ "טוען…" צף מעליו. הפקדים נשארים
+       * פעילים — בחירת שני מסננים ברצף אסור שתיחסם על הסבב של הראשון.
+       * הצ'יפ `absolute` וצף כדי לא להזיז את התוכן; ‏`z-[2]` מעל כותרות
+       * הקיבוץ הדביקות (`z-[1]`) ומתחת לכותרת האפליקציה.
+       */}
+      <div className="relative" aria-busy={pending}>
+        {pending ? (
+          <PendingNotice className="absolute inset-x-0 top-2 z-[2] mx-auto w-fit" />
         ) : null}
-
-        <FilterSelect
-          key={`status-${syncKey}`}
-          aria-label={he.search.allStatuses}
-          defaultValue={params.get("status") ?? ""}
-          onChange={(e) => update([["status", e.target.value]])}
-        >
-          <option value="">{he.search.allStatuses}</option>
-          {STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {he.ticketStatus[status]}
-            </option>
-          ))}
-        </FilterSelect>
-
-        <FilterDate
-          key={`from-${syncKey}`}
-          label={he.search.from}
-          defaultValue={params.get("from") ?? ""}
-          onChange={(e) => update([["from", e.target.value]])}
-        />
-        <FilterDate
-          key={`to-${syncKey}`}
-          label={he.search.to}
-          defaultValue={params.get("to") ?? ""}
-          onChange={(e) => update([["to", e.target.value]])}
-        />
-      </FilterBar>
+        <div className={pending ? "opacity-60" : undefined}>{children}</div>
+      </div>
     </div>
   );
 }
@@ -331,8 +364,7 @@ export function BoardFilters({
  * היה מרנדר פעם אחת עם הערך הישן ואז מתקן, כלומר הבהוב; התבנית כאן היא זו
  * ש-React ממליץ עליה לאיפוס state לפי prop, והיא גם מה שהלינטר אוכף.
  */
-function BoardSearch() {
-  const router = useRouter();
+function BoardSearch({ navigate }: { navigate: (href: string) => void }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const current = params.get("q") ?? "";
@@ -360,8 +392,11 @@ function BoardSearch() {
     // `focus` הוא צלילה ממדד בסקירה, והוא סותר חיפוש: שניהם מחליפים
     // את תוכן המסך, והשארתו הייתה מציגה תוצאות מסוננות פעמיים.
     next.delete("focus");
+    // חיפוש מחליף את תוכן המסך, ולכן גם הרחבות "טען עוד" של הלוח מתאפסות —
+    // אותו כלל כמו שינוי מסנן (ספק #38).
+    for (const param of Object.values(SECTION_MORE_PARAM)) next.delete(param);
     const search = next.toString();
-    router.replace(search ? `${pathname}?${search}` : pathname);
+    navigate(search ? `${pathname}?${search}` : pathname);
   }
 
   /**

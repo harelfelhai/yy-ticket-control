@@ -1,5 +1,6 @@
 import { hash, verify } from "@node-rs/argon2";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { db } from "./db";
 import { normalizeEmail, normalizePhone } from "./normalize";
 import { clearRateLimit, consumeRateLimit, peekRateLimit } from "./rate-limit";
@@ -205,8 +206,13 @@ export const SESSION_ENDED_PATH = "/api/auth/session-ended";
  * מקור האמת היחיד לשאלה "האם הסשן הזה עדיין תקף": גם שער המסכים
  * (`requireUser`) וגם ה-Route Handler שמסיים את הסשן נשענים עליו, כך שאין
  * שתי הגדרות שיכולות להיפרד בשקט ולהכריע הפוך זו מזו.
+ *
+ * עטוף ב-`cache()` של React: גם ה-layout הפנימי וגם המסך שבתוכו קוראים
+ * ‏`requireUser()`, ובלי זה כל ניווט שילם פעמיים פענוח עוגייה ופעמיים
+ * ‏`findUnique`. ההיקף של `cache()` הוא בקשת שרת אחת, ולכן הריענון מול
+ * ה-DB בכל מסך — מה שחוסם משתמש שהושבת — נשמר במלואו.
  */
-export async function activeSessionUser(): Promise<SessionUser | null> {
+export const activeSessionUser = cache(async (): Promise<SessionUser | null> => {
   const sessionUser = await getSessionUser();
   if (!sessionUser) return null;
 
@@ -214,7 +220,7 @@ export async function activeSessionUser(): Promise<SessionUser | null> {
   if (!user || !user.active) return null;
 
   return { id: user.id, name: user.name, role: user.role, siteId: user.siteId };
-}
+});
 
 /**
  * שער הכניסה לכל מסך פנימי: מחזיר את המשתמש המחובר או מפנה החוצה.

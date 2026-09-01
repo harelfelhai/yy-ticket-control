@@ -13,7 +13,8 @@ interface TicketHeaderActionsProps {
   isClosed: boolean;
   canClose: boolean;
   canSetHandler: boolean;
-  hasHandler: boolean;
+  /** הצופה **הוא** המטפל הרשום — ורק לו הכפתור מיותר. ראה `showHandler`. */
+  isHandler: boolean;
 }
 
 /**
@@ -37,7 +38,7 @@ export function TicketHeaderActions({
   isClosed,
   canClose,
   canSetHandler,
-  hasHandler,
+  isHandler,
 }: TicketHeaderActionsProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const { busy, error, run } = useAction();
@@ -54,7 +55,20 @@ export function TicketHeaderActions({
     run(action, onSuccess);
   }
 
-  const showHandler = canSetHandler && !hasHandler && !isClosed;
+  /**
+   * **הכפתור נעלם רק מהמטפל עצמו** (אפיון §5.ד, הכרעת 0.2).
+   *
+   * עד כאן התנאי היה `!hasHandler` — כלומר ברגע שנקבע מטפל ראשון, בין אם
+   * ידנית ובין אם אוטומטית מתגובה, הכפתור נעלם **מכולם** ולא נותרה שום דרך
+   * להחליף מטפל. זה בדיוק המצב שהסייג של 0.2 נכתב כדי למנוע: הוא מנע ממנהל
+   * שני "לגנוב" את הסימון בכל תגובה, מתוך הנחה שהמנגנון המפורש — הכפתור —
+   * קיים במקומו. הצד האוטומטי מומש; הידני לא.
+   *
+   * למנהל שאינו המטפל הכפתור נשאר גלוי ולוקח את הסימון אליו. הוא **אינו
+   * נועל** את הפנייה ומעולם לא נעל — לכן אין כאן אישור: זה סימון תיאום בין
+   * מנהלים, לא פעולה הרסנית. למטפל הרשום עצמו הכפתור הוא no-op, ולכן ירד.
+   */
+  const showHandler = canSetHandler && !isHandler && !isClosed;
   if (!showHandler && !canClose) return null;
 
   return (

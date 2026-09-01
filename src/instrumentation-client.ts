@@ -28,6 +28,11 @@ import { scrubEvent } from "@/lib/observability/redact";
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   environment: process.env.NODE_ENV,
+  // כבוי בפיתוח: דגימת 100% של כל בקשה ומעבר-ראוטר היא תקורה מצטברת על שרת
+  // dev ארוך-ריצה (אבחון 27.8.2026), ואירועי dev ממילא רעש בדשבורד.
+  // ‏NEXT_PUBLIC_SENTRY_DEV=1 מחזיר אותו כשצריך לדבג את Sentry עצמו מקומית.
+  enabled:
+    process.env.NODE_ENV !== "development" || process.env.NEXT_PUBLIC_SENTRY_DEV === "1",
   tracesSampleRate: 1.0,
   enableLogs: true,
   beforeSend: scrubEvent,

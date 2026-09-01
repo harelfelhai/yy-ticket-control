@@ -131,3 +131,72 @@ export function nextSort(
   if (current.direction === "asc") return { key: clicked, direction: "desc" };
   return null;
 }
+
+// ──────────────────── תקרת תצוגה לקבוצה — "טען עוד" (0.9) ────────────────────
+
+/** כמה פניות קבוצה מציגה לפני "טען עוד" (ספק #38) */
+export const SECTION_PAGE_SIZE = 20;
+
+/**
+ * פרמטר הכתובת שמחזיק את התקרה המורחבת של כל קבוצה.
+ *
+ * מקור אמת אחד לשלושת השמות: גם בונה הכתובת (`board/page.tsx`) וגם איפוס
+ * ההרחבה בשינוי מסנן (`board-filters.tsx`) קוראים מכאן, ואינם יכולים
+ * להיפרד בשקט.
+ */
+export const SECTION_MORE_PARAM = {
+  ACTION_REQUIRED: "moreAction",
+  WITH_RECIPIENTS: "moreRecipients",
+  ARCHIVE: "moreArchive",
+} as const satisfies Record<BoardSection, string>;
+
+/** ערך יחיד מפרמטרי הכתובת של Next — מערך, ריק או חסר נקראים כחסר */
+export function singleParam(value: string | string[] | undefined): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+/**
+ * תקרת התצוגה של קבוצה, מהכתובת. ערך פגום נקרא כברירת המחדל — אותו כלל
+ * סלחני כמו `isSortKey`: הכתובת היא קלט חיצוני, וקישור שבור אינו מפיל מסך.
+ */
+export function sectionLimit(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : SECTION_PAGE_SIZE;
+}
+
+/**
+ * הכרטיסים המוצגים בקבוצה: **מיון ואז חיתוך**, והסדר הזה קשיח.
+ *
+ * חיתוך לפני מיון היה מציג "20 הראשונים לפי סדר המערכת" ממוינים מחדש —
+ * כלומר רשימה שמתחזה לראש הרשימה הממוינת ואינה. המונה בכותרת נשאר אורך
+ * הרשימה המלאה; החיתוך הוא ברינדור בלבד (ספק #38).
+ */
+export function visibleCards(
+  cards: readonly BoardCard[],
+  sort: { key: SortKey; direction: SortDirection } | null,
+  limit?: number,
+): BoardCard[] {
+  const ordered = sortCards(cards, sort);
+  return limit === undefined ? ordered : ordered.slice(0, limit);
+}
+
+/**
+ * כתובת לוח שמשמרת את המצב הקיים ומחילה דריסות; `null` (או ריק) מוחק
+ * פרמטר. ההכללה של מה ש-`sortHref` עשה ביד — כל בוני הכתובות של הלוח
+ * עוברים כאן, כדי שאף אחד מהם לא ימחק בשוגג מצב של אחר.
+ */
+export function boardHref(
+  params: Record<string, string | string[] | undefined>,
+  overrides: Record<string, string | null>,
+): string {
+  const next = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    const one = singleParam(value);
+    if (one && !(name in overrides)) next.set(name, one);
+  }
+  for (const [name, value] of Object.entries(overrides)) {
+    if (value) next.set(name, value);
+  }
+  const query = next.toString();
+  return query ? `/board?${query}` : "/board";
+}

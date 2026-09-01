@@ -296,7 +296,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
                 isClosed={ticket.closedAt !== null}
                 canClose={canCloseTicket(viewer, ticket)}
                 canSetHandler={canSetHandler(viewer, ticket, ticket.assignments)}
-                hasHandler={ticket.handlerId !== null}
+                isHandler={ticket.handlerId === user.id}
               />
             )}
 
