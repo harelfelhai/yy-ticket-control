@@ -21,7 +21,7 @@
 > | ג'וב | הצליח | נכשל | הסיבה |
 > |---|---|---|---|
 > | `DAILY_ESCALATION` | 32 | 0 | — |
-> | `SEND_NOTIFICATION` | **0** | **14** | `RESEND_API_KEY`/`NOTIFY_FROM_EMAIL` אינם מוגדרים |
+> | `SEND_NOTIFICATION` | **0** | **14** | ערוץ המייל לא היה מוגדר כלל (אז Resend; מ-1.9 Gmail SMTP) |
 > | `DAILY_BACKUP` | **0** | **32** | ‏pg_dump 15/17 מול שרת 18 (§3) |
 > | `TRANSCRIBE`/`EXTRACT` | 15 "DONE" | — | **0 תומללו, 0 חולצו** — אין מפתחות AI |
 >
@@ -177,7 +177,7 @@ railway run npx tsx prisma/seed.ts
 - [ ] `https://<app>/api/health` מחזיר `200 {status:"ok"}`.
 - [ ] כניסה עם המנהל הראשוני מהטלפון האמיתי (‏`APP_BASE_URL` ציבורי).
 - [ ] יצירת פנייה, שיוך קבלן, ולחיצת "שלח בוואטסאפ" — הקישור נפתח מהטלפון.
-- [ ] מייל אמיתי נשלח ומתקבל דרך Resend (דומיין מאומת).
+- [ ] מייל אמיתי נשלח ומתקבל דרך Gmail SMTP (סיסמת אפליקציה תקפה).
 - [ ] קבלן פותח קישור קסם מהנייד ורואה את הפנייה.
 - [ ] העלאת תמונה/הקלטה — נשמרת ב-R2 ומוצגת (ה-CSP כבר מתיר `https:` למדיה, אין חסם צפוי).
 - [ ] **ריצת הגיבוי הראשונה (03:00) הצליחה** — לבדוק בלוג ובאובייקטים ב-`R2_BACKUP_BUCKET`. אם יש שגיאת גרסת pg_dump — לתקן לפי §3.
@@ -192,8 +192,9 @@ railway run npx tsx prisma/seed.ts
 | `DATABASE_URL` | ✅ קריטי | `${{Postgres.DATABASE_URL}}` — reference variable. נדרש בבנייה ובריצה. |
 | `SESSION_SECRET` | ✅ קריטי | 32+ תווים, ייחודי לפרודקשן. ליצירה: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
 | `APP_BASE_URL` | ✅ קריטי | הכתובת הציבורית של האפליקציה (למשל `https://<app>.up.railway.app` או דומיין מותאם). בסיס קישורי הקסם — חייב להיות נגיש לקבלנים. |
-| `RESEND_API_KEY` | ✅ בפרודקשן | מפתח Resend. בלעדיו ג'וב שליחת המייל נכשל בקול. |
-| `NOTIFY_FROM_EMAIL` | ✅ בפרודקשן | כתובת שולח **בדומיין מאומת ב-Resend**, אחרת השליחה נדחית. |
+| `GMAIL_USER` | ✅ בפרודקשן | חשבון ה-Gmail של העסק, שממנו נשלחות ההתראות. |
+| `GMAIL_APP_PASSWORD` | ✅ בפרודקשן | **סיסמת אפליקציה** בת 16 תווים (‏[myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords), דורש אימות דו-שלבי). סיסמת החשבון הרגילה נדחית. בלעדיה ג'וב השליחה נכשל בקול. |
+| `NOTIFY_FROM_EMAIL` | ❌ אופציונלי | ברירת המחדל היא `GMAIL_USER` — הכתובת היחידה ש-Gmail מתיר לשלוח ממנה. קיים רק לשם תצוגה: `"בקרת פניות Y&Y <...>"`. |
 | `R2_ACCOUNT_ID` | ✅ בפרודקשן | Cloudflare R2 — ארבעת משתני R2 הולכים יחד. |
 | `R2_ACCESS_KEY_ID` | ✅ בפרודקשן | R2. |
 | `R2_SECRET_ACCESS_KEY` | ✅ בפרודקשן | R2. |

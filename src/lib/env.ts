@@ -44,7 +44,15 @@ export const env = {
    * ובלי לשלוח דואר לאיש. בפרודקשן ההיעדר שלהם הוא כשל — ראה
    * `selectEmailTransport`.
    */
-  resendApiKey: () => optional("RESEND_API_KEY"),
+  gmailUser: () => optional("GMAIL_USER"),
+  gmailAppPassword: () => optional("GMAIL_APP_PASSWORD"),
+  /**
+   * כתובת השולח. אופציונלית — ברירת המחדל היא `GMAIL_USER` עצמו.
+   *
+   * ‏Gmail מתיר לשלוח רק מהחשבון המאומת (או מכתובת שהוגדרה בו כ-alias),
+   * ולכן ערך אחר כאן אינו "עיצוב" אלא דרך להיכשל. היא נשארת נפרדת מפני
+   * ששם תצוגה מותר — `"בקרת פניות Y&Y <...@gmail.com>"`.
+   */
   notifyFromEmail: () => optional("NOTIFY_FROM_EMAIL"),
 
   /**

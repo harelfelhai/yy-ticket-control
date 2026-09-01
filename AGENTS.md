@@ -18,6 +18,104 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **`revalidateTag` דורש ארגומנט שני** (פרופיל `cacheLife`). לקריאה-אחרי-כתיבה יש `updateTag`.
 - טיפוסים ל-props אסינכרוניים: `npx next typegen` מייצר `PageProps<'/route'>`, `LayoutProps`, `RouteContext`.
 
+## פקודות
+
+ההקמה המלאה (`db:up` → `db:migrate` → `db:seed`, מילוי `.env`) מתועדת ב-`README.md`.
+
+| פקודה | מה היא עושה |
+|---|---|
+| `npm run dev` | שרת פיתוח על 3100 מול `yy_dev` |
+| `npm run verify` | typecheck + lint + vitest — השער לפני push |
+| `npm run typecheck` | `next typegen && tsc --noEmit` (הטיפוסים `PageProps` וכו׳ נוצרים כאן) |
+| `npm run test:unit` / `test:integration` | Vitest: jsdom בלי DB / node מול `yy_test` (סדרתי, הבסיס מרוקן בין בדיקות) |
+| `npx vitest run tests/unit/permissions.test.ts` | קובץ בודד; `-t "שם"` לבדיקה בודדת |
+| `npm run test:e2e` | Playwright על 3101 מול `yy_e2e`, מובייל + דסקטופ |
+| `npx playwright test e2e/board.spec.ts --project=desktop --reporter=line` | spec בודד |
+| `npm run test:e2e:prod` | אותן בדיקות מול `next build && next start` — **חובה** לכל שינוי בהודעות שגיאה של Server Actions (ראו "חוזה ה-Server Actions") |
+| `npm run test:conformance[:prod]` | חבילת ההתאמה לאפיון, 3102, 30+ דקות |
+| `npm run visual` | צילומי מסך לביקורת עיצוב אל `.visual/` (לא snapshot diff) |
+| `npm run design:lint` | אימות `docs/DESIGN.md` |
+| `npm run smoke:prod` | קריאה-בלבד מול הפרודקשן: האם מה שמוגש תואם לקוד בריפו |
+| `npx tsx scripts/measure-board.mts` | מדידת זמן החלפת מסנן בלוח — לפני ואחרי שינוי שנוגע בביצועי הלוח |
+
+**שלושה שרתים, ארבעה בסיסי נתונים.** 3100/`yy_dev` פיתוח · 3101/`yy_e2e` ‏E2E ו-visual ·
+3102/`yy_e2e` ‏conformance · `yy_test` אינטגרציה · `yy_shadow` ל-`migrate dev`. כולם על
+Postgres 18 מקומי (`embedded-postgres`, פורט 5433, נתונים ב-`.localdb/`), בלי דוקר.
+
+**‏E2E ו-conformance אינם רצים לצד שרת הפיתוח.** Next 16 חוסם `next dev` שני באותה תיקייה
+(לא באותו פורט). לפני `test:e2e` יש לעצור את שרת ה-dev — או להריץ `test:e2e:prod`, שעליו
+החסימה אינה חלה. E2E ו-conformance חולקים את `yy_e2e` ומרוקנים אותו בעלייה, ולכן גם הם
+רצים בזה אחר זה בלבד.
+
+**‏`prod-qa/` כותב לפרודקשן החי.** אין לו `globalSetup` בכוונה — ה-setup של `e2e/` מרוקן
+כל טבלה, והפנייתו לכתובת הפרודקשן הייתה מוחקת את המערכת.
+
+**‏PostToolUse hook** ב-`.claude/settings.json` מריץ `tsc --noEmit` על כל הפרויקט אחרי כל
+עריכת `.ts`/`.tsx`. שגיאת טיפוסים חוזרת מיד — אין צורך להריץ typecheck ידנית אחרי עריכה.
+
+## ארכיטקטורה — מה שלא נראה מקובץ בודד
+
+**מסלול בקשה.** `src/proxy.ts` בודק רק את *קיום* עוגיית הסשן (בדיקה אופטימית, מפנה
+ל-`/login?next=`). ההרשאה האמיתית היא `requireUser()` ב-`src/lib/auth.ts`, שמרענן את
+המשתמש מול ה-DB בכל מסך מוגן — עוגייה תקפה אינה מוכיחה שהמשתמש עדיין פעיל. הפורטל החיצוני
+`/p/[token]` אינו בסשן כלל: הטוקן מזהה *מי* (`services/portal.ts`), והשיוכים הפעילים קובעים
+*מה רואים* — לכן הקישור יציב וללא תפוגה, והסרת נמען חוסמת אותו מיידית.
+`services/viewer.ts` מאחד את שני המסלולים ל-`Viewer` אחד, ו-`src/lib/permissions.ts` הוא
+המקום היחיד שעונה "מי רשאי מה" — פונקציות טהורות, כל ההקשר בפרמטרים.
+
+**חוזה ה-Server Actions** (`src/lib/action-result.ts`). כל action מחזיר
+`ActionResult<T>` — שגיאה **כערך, לא כחריגה** — דרך `guard()`, שממיר `UserFacingError`
+להודעה וזורק מחדש כל דבר אחר (זה באג שצריך להגיע ל-Sentry). הסיבה: Next מצנזר הודעות
+שגיאה זרוקות בפרודקשן ל"משהו השתבש", ובפיתוח לא — ולכן הפרה של החוזה **עוברת את כל הבדיקות
+המקומיות** ונתפסת רק ב-`test:e2e:prod`. בצד הלקוח `useAction()` (`src/lib/use-action.ts`)
+הוא הדרך היחידה להפעיל action: הוא מחזיק `busy` (=`pending || !hydrated`), `error` ו-`run`.
+לא לכתוב `useTransition` + `useState<string>` ידנית בקומפוננטה.
+
+**שכבות.** `app/**/actions.ts` (דק: אימות zod, `guard`, קריאה לשירות) →
+`src/lib/services/*` (הלוגיקה העסקית, זורק `UserFacingError` עם נוסח מ-`he.ts`) →
+`src/lib/db.ts` (Prisma 7 דרך `@prisma/adapter-pg`, singleton, timeouts מפורשים על הבריכה).
+הלקוח המחולל יושב ב-`src/generated/prisma` — לייבא משם, לא מ-`@prisma/client`.
+
+**סטטוס פנייה הוא נגזר, לא שמור.** `src/lib/ticket-status.ts` מחשב
+`DerivedTicketStatus` ו-`BoardSection` מתוך סטטוסי השיוכים, טהור לחלוטין (גם "עכשיו" הוא
+פרמטר). אין שדה סטטוס על `Ticket` ואין להוסיף כזה.
+
+**תור ו-worker בתוך תהליך השרת.** התור הוא טבלת `Job` ב-Postgres (`src/jobs/queue.ts`),
+בלי Redis; ה-worker עולה מ-`src/instrumentation.ts` עם השרת (זו הסיבה שהאירוח הוא Node
+קבוע ולא serverless, וש-App Sleeping ב-Railway חייב להיות כבוי). שני כללים: ג׳וב נוצר
+**באותה טרנזאקציה** של הפעולה שיצרה אותו, והמטען מכיל **מזהים בלבד** — הטקסט מנוסח בזמן
+השליחה. סוגי הג׳ובים ב-`src/jobs/types.ts` (מחרוזת, לא enum — כדי לא לדרוש מיגרציה).
+הג׳ובים היומיים (הסלמה 06:00, גיבוי 03:00 שעון ישראל) מתזמנים את עצמם מחדש;
+`src/jobs/schedule.ts` הוא החישוב הטהור של שעון-הקיץ.
+
+**כשלים שקטים.** `src/watchdog/` רץ כל 6 שעות מתוך ה-worker, מאמת invariants
+(`checks.ts`, על בסיס פעימות `Heartbeat`) ומדווח ל-cron monitor **יחיד** ב-Sentry — מגבלת
+free-tier, אין ליצור שני. הוספת invariant: `MONITORING.md`. כל לוג ותפיסת שגיאה עוברים דרך
+`src/lib/observability/log.ts` — לא `console.error` ולא `Sentry.*` ישירות. בפיתוח Sentry
+מנוטרל (`SENTRY_DEV=1` מחזיר אותו).
+
+**בחירת ספק לפי סביבה — תבנית אחת.** `storage/index.ts` (R2 / דיסק מקומי),
+`notifier/email.ts` (‏Gmail SMTP / לוג), `ai/gemini.ts` (‏Gemini — תמלול וחילוץ טקסט / SKIPPED):
+בפיתוח חוסר הגדרה נופל ל-fallback שקט; בפרודקשן הוא **כשל רועש**, אלא אם נאמר במפורש
+(`MEDIA_STORAGE=local`). משתני סביבה נקראים רק דרך `src/lib/env.ts` (עצל), לא
+`process.env` בלוגיקה.
+
+**בדיקות שקוראות את קוד המקור כטקסט.** `tests/unit/{primitives,typography,spacing,
+layout-guards,touch-variant,palette}.test.ts` (על `tests/unit/source-scan.ts`) אוכפות את
+DESIGN.md על הקוד: כפתור שאינו `<Button>`, כותרת שקובעת גודל בעצמה, `gap-1.5`, `max-w-*`
+ישיר — כולם מפילים את `test:unit`. `tests/conformance/source/scope-boundaries.test.ts`
+אוכף את **היעדר** הפיצ׳רים שהאפיון §6 הוציא מהתחולה. כשאחת מהן נכשלת התיקון הוא בקוד, לא
+ברשימת ההחרגות — הרשימות קצרות בכוונה וכל חריג נושא נימוק.
+
+**חבילת ההתאמה** (`conformance/`) משווה מול מחרוזות שהועתקו מהאפיון
+(`conformance/fixtures/spec-text.ts`), **לעולם לא** מול import מ-`he.ts`. המיפוי
+דרישה ← מימוש ← בדיקה ב-`docs/specs/conformance-matrix.md`.
+
+**מסמכים נוספים:** `MONITORING.md` (Sentry, watchdog, תקציב free-tier) ·
+`docs/deployment-status.md` (Railway: Railpack, `preDeployCommand` מריץ מיגרציות, worker
+דורש קונטיינר ער) · `.claude/skills/ship` (לולאת ה-push: push ל-`main` = פריסה; לא
+`railway up`).
+
 ## מוסכמות הפרויקט
 
 - **מקור אמת פונקציונלי:** `docs/specs/ticket-control-pre-plan.md`. אין להמציא התנהגות שלא כתובה שם.
@@ -31,6 +129,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - שרת פיתוח על פורט **3100** (פורט 3000 תפוס במכונה על ידי פרויקט אחר).
 - סודות רק ב-`.env.local` וב-Railway Variables. לעולם לא בקוד ולא בגיט.
 - אין להשתמש בתו `&` בשמות נתיבים בפרויקט — הוא שובר את ה-shims של npm ב-Windows.
+
+## בדיקות ארוכות (conformance)
+
+- חבילת ה-conformance (`npm run test:conformance`) רצה **יותר מ-30 דקות**. להריץ אותה עם
+  `--reporter=line` ולהזרים פלט מצטבר; לדווח למשתמש התקדמות כל כמה דקות — לא לשתוק לאורך הריצה.
+- קודם להריץ את קובצי ה-spec הממוקדים לאזור שהשתנה, ואת החבילה המלאה רק לפני push.
 
 ## בסיס הנתונים חייב locale מודע ל-UTF-8 — אחרת החיפוש שבור בשקט
 

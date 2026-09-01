@@ -7,6 +7,10 @@ import { isEmailConfigured, selectEmailTransport } from "@/lib/notifier/email";
  * החלטה קטנה עם השלכה גדולה: מערכת שנראית עובדת אך בשקט אינה מודיעה
  * לאיש היא בדיוק הכישלון שהמערכת הזו נבנתה כדי למנוע. לכן חוסר הגדרה
  * בפרודקשן חייב לזעוק, ובפיתוח חייב דווקא **לא** לחסום עבודה.
+ *
+ * **הערוץ עבר ל-SMTP של Gmail ב-1.9.2026** (ראה `email.ts`), ואיתו שני
+ * המשתנים. הבדיקות כאן על **הבחירה**, לא על השליחה עצמה — ולכן הן לא
+ * השתנו במהותן, רק בשמות.
  */
 
 // ‏vi.stubEnv ולא השמה ישירה: NODE_ENV מוגדר לקריאה בלבד בטיפוסים של Node,
@@ -15,39 +19,56 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("selectEmailTransport", () => {
-  it("בוחר ב-Resend כשיש מפתח וכתובת שולח", () => {
-    vi.stubEnv("RESEND_API_KEY", "re_test");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "no-reply@example.com");
+function configured() {
+  vi.stubEnv("GMAIL_USER", "office@example.com");
+  vi.stubEnv("GMAIL_APP_PASSWORD", "abcd efgh ijkl mnop");
+}
 
-    expect(selectEmailTransport().name).toBe("resend");
+function unconfigured() {
+  vi.stubEnv("GMAIL_USER", "");
+  vi.stubEnv("GMAIL_APP_PASSWORD", "");
+}
+
+describe("selectEmailTransport", () => {
+  it("בוחר ב-Gmail כשיש חשבון וסיסמת אפליקציה", () => {
+    configured();
+
+    expect(selectEmailTransport().name).toBe("gmail");
   });
 
-  it("בפיתוח בלי מפתח — כותב ללוג ואינו חוסם", () => {
+  it("בפיתוח בלי הגדרה — כותב ללוג ואינו חוסם", () => {
     // כך אפשר להריץ את כל צינור השליחה מקומית, בלי חשבון חיצוני ובלי
     // לשלוח דואר לאיש.
-    vi.stubEnv("RESEND_API_KEY", "");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "");
+    unconfigured();
     vi.stubEnv("NODE_ENV", "development");
 
     expect(selectEmailTransport().name).toBe("console");
   });
 
-  it("בפרודקשן בלי מפתח — נכשל ברעש", () => {
-    vi.stubEnv("RESEND_API_KEY", "");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "");
+  it("בפרודקשן בלי הגדרה — נכשל ברעש", () => {
+    unconfigured();
     vi.stubEnv("NODE_ENV", "production");
 
-    expect(() => selectEmailTransport()).toThrow(/RESEND_API_KEY/);
+    expect(() => selectEmailTransport()).toThrow(/GMAIL_USER/);
   });
 
-  it("מפתח בלי כתובת שולח אינו נחשב מוגדר", () => {
-    // ‏Resend דוחה שליחה בלי `from` מאומת. נפילה כאן עדיפה על ג'וב אדום.
-    vi.stubEnv("RESEND_API_KEY", "re_test");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "");
+  it("חשבון בלי סיסמת אפליקציה אינו נחשב מוגדר", () => {
+    // סיסמת החשבון הרגילה נדחית ע"י Gmail; חצי הגדרה היא ג'וב אדום.
+    vi.stubEnv("GMAIL_USER", "office@example.com");
+    vi.stubEnv("GMAIL_APP_PASSWORD", "");
     vi.stubEnv("NODE_ENV", "production");
 
-    expect(() => selectEmailTransport()).toThrow(/NOTIFY_FROM_EMAIL/);
+    expect(() => selectEmailTransport()).toThrow(/GMAIL_APP_PASSWORD/);
+  });
+
+  it("‏NOTIFY_FROM_EMAIL אופציונלי — בלעדיו השולח הוא החשבון עצמו", () => {
+    // ‏Gmail מתיר לשלוח רק מהחשבון המאומת, ולכן ברירת המחדל הזו היא
+    // הערך היחיד שאינו יכול להיכשל.
+    configured();
+    vi.stubEnv("NOTIFY_FROM_EMAIL", "");
+
+    expect(selectEmailTransport().name).toBe("gmail");
+    expect(isEmailConfigured()).toBe(true);
   });
 });
 
@@ -59,16 +80,14 @@ describe("selectEmailTransport", () => {
  */
 describe("simulated", () => {
   it("ערוץ הקונסולה מצהיר על עצמו כמדומה", () => {
-    vi.stubEnv("RESEND_API_KEY", "");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "");
+    unconfigured();
     vi.stubEnv("NODE_ENV", "development");
 
     expect(selectEmailTransport().simulated).toBe(true);
   });
 
   it("ערוץ אמיתי אינו מדומה", () => {
-    vi.stubEnv("RESEND_API_KEY", "re_test");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "no-reply@example.com");
+    configured();
 
     expect(selectEmailTransport().simulated).toBeFalsy();
   });
@@ -80,20 +99,19 @@ describe("simulated", () => {
  */
 describe("isEmailConfigured", () => {
   it("מסכים עם בחירת הערוץ בשני הכיוונים", () => {
-    vi.stubEnv("RESEND_API_KEY", "re_test");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "no-reply@example.com");
+    configured();
     expect(isEmailConfigured()).toBe(true);
     expect(selectEmailTransport().simulated).toBeFalsy();
 
-    vi.stubEnv("RESEND_API_KEY", "");
+    unconfigured();
     vi.stubEnv("NODE_ENV", "development");
     expect(isEmailConfigured()).toBe(false);
     expect(selectEmailTransport().simulated).toBe(true);
   });
 
-  it("מפתח בלי כתובת שולח אינו 'מוגדר'", () => {
-    vi.stubEnv("RESEND_API_KEY", "re_test");
-    vi.stubEnv("NOTIFY_FROM_EMAIL", "");
+  it("חשבון בלי סיסמת אפליקציה אינו 'מוגדר'", () => {
+    vi.stubEnv("GMAIL_USER", "office@example.com");
+    vi.stubEnv("GMAIL_APP_PASSWORD", "");
 
     expect(isEmailConfigured()).toBe(false);
   });
