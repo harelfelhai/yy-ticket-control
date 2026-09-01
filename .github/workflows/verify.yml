@@ -1,20 +1,27 @@
-# שער האימות על כל push ל-main ועל כל PR.
+# שער האימות האוטומטי.
 #
 # **למה זה קיים.** הפריסה ל-Railway אוטומטית מ-`main` מאז 15.8.2026, ועד
 # 31.8 שום בדיקה לא רצה אוטומטית — 1,249 הצהרות בדיקה, כולן ידניות במכונה
 # אחת. כלומר קומיט שבור נפרס, ומה שעצר אותו היה healthcheck בלבד: בדיקה
 # שהשרת עונה, לא שהוא נכון.
 #
-# **מה כאן ומה לא.** כאן `typecheck + lint + vitest` — כל מה שרץ בלי דפדפן
-# ובלי בניית פרודקשן, ומכסה את שתי חבילות ה-Vitest כולל האינטגרציה מול
-# Postgres אמיתי. חבילות ה-Playwright (`test:e2e`, `test:conformance`)
-# **אינן** כאן בכוונה: הן דורשות בניית פרודקשן ושרת חי, והן איטיות בסדר
-# גודל. הן נשארות שער ידני לפני פריסה — והוספתן היא הצעד הבא, לא תנאי
-# לצעד הזה.
+# **שלוש חבילות, שלושה משטרי הרצה.** ההפרדה אינה שרירותית — היא נגזרת מעלות
+# הזמן של כל חבילה מול התדירות שבה היא מגלה משהו:
 #
-# ‏`CI=true` נקבע אוטומטית ע"י GitHub, ושתי תצורות ה-Playwright כבר קוראות
-# אותו (`forbidOnly`, `retries`, `reporter`). גם פלאגין Sentry ב-
-# `next.config.ts` מפסיק להיות שקט תחתיו — התנהגות רצויה כאן.
+#   | job          | מתי                          | כמה |
+#   |--------------|------------------------------|-----|
+#   | `verify`     | כל push וכל PR               | ~5 דק׳ |
+#   | `e2e`        | כל push וכל PR, אחרי verify  | ~20 דק׳ |
+#   | `conformance`| לילי + הפעלה ידנית           | ~60 דק׳ |
+#
+# חבילת ההתאמה **אינה** רצה על כל push בכוונה. היא בודקת את המערכת מול טקסט
+# האפיון — ביקורת תקופתית, לא שער. הרצתה על כל דחיפה הייתה מכפילה את זמן
+# ההמתנה פי ארבעה ושורפת את מכסת הדקות של ריפו פרטי, כדי לגלות רגרסיה
+# באפיון שממילא משתנה בקצב של פעם בשבוע. היא רצה כל לילה, ואפשר להפעילה
+# ידנית מלשונית Actions (`Run workflow` → לסמן את התיבה).
+#
+# **‏`needs: verify`** על שתי החבילות הכבדות: אין טעם להעלות שרת ולהריץ
+# דפדפנים על קומיט שלא עובר typecheck. זה חוסך את רוב הדקות בקומיטים שבורים.
 
 name: verify
 
@@ -23,6 +30,18 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # הפעלה ידנית — גם כשער חירום וגם כדרך היחידה להריץ את חבילת ההתאמה
+  # מחוץ לריצה הלילית.
+  workflow_dispatch:
+    inputs:
+      conformance:
+        description: "להריץ גם את חבילת ההתאמה (ארוכה)"
+        type: boolean
+        default: false
+  # 01:00 UTC = 04:00 שעון ישראל. אחרי הגיבוי הלילי (03:00) ולפני ההסלמה
+  # (06:00) — חלון שקט שבו כשל אינו מתחרה בשום דבר אחר.
+  schedule:
+    - cron: "0 1 * * *"
 
 # ריצה חדשה על אותו ענף מבטלת את הקודמת: התוצאה של קומיט שכבר הוחלף
 # אינה מעניינת, ואין טעם להחזיק שני runners.
@@ -30,7 +49,18 @@ concurrency:
   group: verify-${{ github.ref }}
   cancel-in-progress: true
 
+# ‏CI=true נקבע אוטומטית ע"י GitHub, ושתי תצורות ה-Playwright כבר קוראות
+# אותו (`forbidOnly`, `retries`, `reporter`). גם פלאגין Sentry ב-
+# `next.config.ts` מפסיק להיות שקט תחתיו — התנהגות רצויה כאן.
+env:
+  # ערך קבוע ולא סוד: הסשנים היחידים שנחתמים בו הם של הבדיקות עצמן.
+  SESSION_SECRET: ci-session-secret-not-used-anywhere-else-32
+  # ריק במפורש: בלי DSN ה-SDK אינו שולח, וריצת CI אינה מזהמת את הפרויקט
+  # בשגיאות של בדיקות.
+  NEXT_PUBLIC_SENTRY_DSN: ""
+
 jobs:
+  # ── טיפוסים, לינט, ו-1,067 בדיקות Vitest ────────────────────────────────
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -38,12 +68,11 @@ jobs:
     # בדיקות האינטגרציה רצות מול Postgres אמיתי ולא מול mock — זו הכרעה
     # קיימת של הפרויקט, ולכן ה-CI חייב לספק מסד.
     #
-    # **‏`icu` ו-`he-IL` אינם קישוט.** `pg_trgm` מסווג תווים לפי `LC_CTYPE`,
+    # **‏`en_US.utf8` אינו קישוט.** `pg_trgm` מסווג תווים לפי `LC_CTYPE`,
     # ותחת `C` כל בית מעל 0x80 אינו נחשב אות — כלומר `show_trgm` על מילה
     # עברית מחזיר קבוצה ריקה, החיפוש שבור בשקט, ואף בדיקה לא נכשלת. זה קרה
-    # בפועל בפרויקט הזה (ראה `AGENTS.md`). התמונה הרשמית של Postgres מאתחלת
-    # עם `en_US.utf8`, וזה מספיק כדי ש-`tests/integration/search-indexes.test.ts`
-    # יעבור; המסד המקומי הוא זה שנוצר עם `C`.
+    # בפועל בפרויקט הזה (ראה `AGENTS.md`), ו-`tests/integration/search-indexes.test.ts`
+    # הוא מה שתופס את זה.
     services:
       postgres:
         image: postgres:18
@@ -63,11 +92,7 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_test
-      SESSION_SECRET: ci-session-secret-not-used-anywhere-else-32
       APP_BASE_URL: http://localhost:3100
-      # ריק במפורש: בלי DSN ה-SDK אינו שולח, וריצת CI אינה מזהמת את
-      # הפרויקט בשגיאות של בדיקות.
-      NEXT_PUBLIC_SENTRY_DSN: ""
 
     steps:
       - uses: actions/checkout@v4
@@ -83,3 +108,123 @@ jobs:
       - run: npm ci
 
       - run: npm run verify
+
+  # ── חבילת ה-E2E: 104 בדיקות, מובייל + דסקטופ + WebKit ───────────────────
+  e2e:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yy_e2e
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_e2e
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_e2e
+      APP_BASE_URL: http://localhost:3101
+      # בבנייה של פרודקשן אין חשבון Cloudflare, והמערכת מסרבת לנחש. זהו
+      # ויתור מפורש: זו בנייה ולא פריסה, והקבצים יושבים על הדיסק המקומי.
+      MEDIA_STORAGE: local
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # ‏chromium משרת את `mobile` ואת `desktop`; `webkit` את `safari-qa`,
+      # שהוא הקירוב היחיד ל-iOS Safari — ושם נמצאו בפועל פערי רינדור שאינם
+      # קיימים ב-Chromium.
+      - run: npx playwright install --with-deps chromium webkit
+
+      # ‏`:prod` ולא ההרצה הרגילה. שתי סיבות, שתיהן מהותיות:
+      # 1. ‏Next מצנזר הודעות שגיאה של Server Actions בפרודקשן. הפרת חוזה
+      #    `ActionResult` עוברת את כל הבדיקות מול שרת פיתוח ונתפסת רק כאן.
+      # 2. מול `next dev` כל route מתקמפל בפעם הראשונה שמבקשים אותו, ועל
+      #    runner בן שני ליבות זה הופך timeouts לרעש. בנייה אחת מראש יציבה
+      #    בהרבה.
+      - run: npm run test:e2e:prod
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-e2e
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # ── חבילת ההתאמה: המערכת מול טקסט האפיון ────────────────────────────────
+  #
+  # לא רצה על push. ראה הנימוק בראש הקובץ.
+  conformance:
+    needs: verify
+    if: github.event_name == 'schedule' || inputs.conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yy_e2e
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_e2e
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_e2e
+      APP_BASE_URL: http://localhost:3102
+      MEDIA_STORAGE: local
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # רק chromium: החבילה מריצה `mobile` ו-`desktop` בלבד.
+      - run: npx playwright install --with-deps chromium
+
+      # ‏`:prod` מאותה סיבה שב-E2E, ובחבילה הזו היא **קריטית**: כל נוסחי
+      # ההודעות שהאפיון מחייב עוברים דרך מסלול ה-Server Actions, ובדיקת
+      # נוסח מול שרת פיתוח אינה מוכיחה דבר על מה שהמשתמש יראה.
+      - run: npm run test:conformance:prod
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-report
+          path: |
+            test-results/conformance-results.json
+            test-results/conformance/
+          retention-days: 30
