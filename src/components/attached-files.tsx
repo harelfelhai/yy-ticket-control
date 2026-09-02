@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cardClasses } from "@/components/ui/card";
 import { he } from "@/lib/he";
+import { mediaKind } from "@/lib/media-view";
 import type { MediaUpload } from "@/lib/use-media-upload";
 
 /**
@@ -30,7 +31,13 @@ export function AttachedFiles({ media }: { media: MediaUpload }) {
           key={file.mediaId}
           className={cardClasses("flex items-center gap-2", { padding: "compact" })}
         >
-          {file.previewUrl ? (
+          {/*
+           * ‏`mediaKind` ולא `previewUrl` לבדו: מאז מסך 5 גם ל-PDF יש
+           * ‏object URL מקומי (‏`canPreviewLocally`), ו-`previewUrl ?` היה
+           * מרנדר עליו `<img>` שבור. ה-`<img>` שואל "האם זו תמונה", וזו
+           * שאלה על הסוג — לא על קיומה של כתובת.
+           */}
+          {mediaKind(file.mimeType) === "image" && file.previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- blob: מקומי, next/image אינו מטפל בו
             <img
               src={file.previewUrl}

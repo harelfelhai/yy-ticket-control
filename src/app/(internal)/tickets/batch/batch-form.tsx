@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
+import { SourcePreview } from "@/components/source-preview";
 import type { Room } from "@/generated/prisma/enums";
 import { unwrapOrThrow } from "@/lib/action-result";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -232,6 +233,12 @@ export function BatchForm({
             <h2 className={TITLE_DESCRIPTIVE}>{he.batch.sourceHeading}</h2>
             <p className="text-xs text-muted">{he.batch.sourceHint}</p>
             <MediaPicker files={files} onChange={setFiles} disabled={busy} />
+            {/*
+             * **מה שהופך את הפאנל הזה ל"הקשר קבוע" ולא לרשימת קבצים.**
+             * ‏`MediaPicker` מציג צ׳יפ עם שם הקובץ; האפיון (שורה 271) דורש
+             * שהקובץ עצמו יהיה על המסך בזמן ההזנה.
+             */}
+            <SourcePreview files={files} />
           </section>
         </aside>
 

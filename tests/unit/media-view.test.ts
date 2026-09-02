@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { he } from "@/lib/he";
-import { type MediaRecord, toMediaView } from "@/lib/media-view";
+import { type MediaRecord, canPreviewLocally, isPdf, toMediaView } from "@/lib/media-view";
 
 /**
  * מה נאמר למשתמש על עיבוד ה-AI של קובץ שהעלה.
@@ -86,5 +86,37 @@ describe("aiNote — שאר המצבים לא נפגעו", () => {
 
   it("תמונה שנקראה בלי טקסט אינה מתלוננת", () => {
     expect(noteFor({ ...image, aiStatus: "DONE" })).toBeNull();
+  });
+});
+
+/**
+ * ‏`canPreviewLocally` קובעת אם נוצר `URL.createObjectURL` בזמן בחירת הקובץ,
+ * ומכאן אם דוח הבדק מוצג בצד מסך 5 (אפיון שורה 271) או שאין מה להציג.
+ *
+ * הבדיקה כאן משמרת גם את **מה שאסור** להחזיר `true`: וידאו והקלטה מועלים
+ * באותו בורר, וכל object URL שנוצר ואינו נצרך דולף עד לרענון הדף.
+ */
+describe("isPdf / canPreviewLocally", () => {
+  it.each([
+    ["application/pdf", true],
+    ["application/PDF", true],
+    // הדפדפן שולח לעיתים פרמטרים אחרי `;` — הסיווג חייב להתעלם מהם.
+    ["application/pdf; charset=binary", true],
+    ["application/x-pdf", false],
+    ["image/png", false],
+    ["", false],
+  ])("‏isPdf(%s) = %s", (mimeType, expected) => {
+    expect(isPdf(mimeType)).toBe(expected);
+  });
+
+  it.each([
+    ["image/jpeg", true],
+    ["image/png", true],
+    ["application/pdf", true],
+    ["video/mp4", false],
+    ["audio/webm", false],
+    ["application/octet-stream", false],
+  ])("‏canPreviewLocally(%s) = %s", (mimeType, expected) => {
+    expect(canPreviewLocally(mimeType)).toBe(expected);
   });
 });
