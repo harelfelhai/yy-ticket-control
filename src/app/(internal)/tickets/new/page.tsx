@@ -83,14 +83,13 @@ export default async function NewTicketPage(props: PageProps<"/tickets/new">) {
         kind: "professional" as const,
       }))}
       // נמענים פנימיים כוללים את המשתמש עצמו — כך נוצר תזכורן אישי.
-      // ‏`siteId` נשלח כדי שהסינון לפי האתר הנבחר ייעשה בלי סבב רשת:
-      // ‏null פירושו מנהל מערכת או בעלים, שזמינים בכל האתרים.
+      // כולם, מכל האתרים: §5.ז מתיר לנמען לראות פניות ששויכו אליו מכל אתר,
+      // ולכן אין למה לסנן כאן (עד 1.9.2026 נשלח `siteId` לצורך סינון כזה).
       internalUsers={internalUsers.map((u) => ({
         id: u.id,
         label: u.name,
         hint: he.role[u.role],
         kind: "user" as const,
-        siteId: u.siteId,
       }))}
       tags={tags.map((t) => ({ id: t.id, label: t.name }))}
     />

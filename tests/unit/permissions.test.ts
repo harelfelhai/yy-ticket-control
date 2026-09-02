@@ -55,8 +55,31 @@ describe("canViewTicket", () => {
     expect(canViewTicket(managerA2, ticket({ createdById: managerA.id }))).toBe(true);
   });
 
-  it("מנהל עבודה אינו רואה פניות מאתר אחר", () => {
+  it("מנהל עבודה אינו רואה פניות מאתר אחר שלא שויך אליהן", () => {
     expect(canViewTicket(managerB, ticket({ siteId: SITE_A }))).toBe(false);
+  });
+
+  /**
+   * שני הכובעים של §5.ז (GAP-A2, תוקן 1.9.2026).
+   *
+   * הסעיף מונה את מנהל העבודה ואת הנמען לטיפול בנפרד, ואותו אדם יכול להיות
+   * שניהם: "אך ורק האתר שלו" כמנהל, ו"פניות ששויכו אליו, **מכל האתרים**"
+   * כנמען. עד לתיקון נבדק הכובע הראשון בלבד, ולכן מנהל ששויך לפנייה באתר
+   * אחר קיבל עליה מייל ונחת על 404.
+   */
+  it("מנהל עבודה רואה פנייה מאתר אחר ששויכה אליו אישית", () => {
+    expect(canViewTicket(managerB, ticket({ siteId: SITE_A }), [assignedTo(managerB)])).toBe(true);
+  });
+
+  it("...ומאבד אותה ברגע שהשיוך מוסר", () => {
+    // אותו כלל דינמי שחל על נמען חיצוני — ההרשאה נגזרת מהשיוך, לא מהעבר.
+    expect(
+      canViewTicket(managerB, ticket({ siteId: SITE_A }), [assignedTo(managerB, "REMOVED")]),
+    ).toBe(false);
+  });
+
+  it("שיוך של מנהל אחר אינו פותח את הפנייה למנהל שלא שויך", () => {
+    expect(canViewTicket(managerB, ticket({ siteId: SITE_A }), [assignedTo(managerA)])).toBe(false);
   });
 
   it("מנהל עבודה בלי אתר משויך אינו רואה דבר", () => {

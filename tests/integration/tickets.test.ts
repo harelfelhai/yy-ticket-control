@@ -291,14 +291,18 @@ describe("deleteDraft", () => {
 });
 
 /**
- * הצד הפנימי של אימות הנמענים (הכרעת 0.7).
+ * הצד הפנימי של אימות הנמענים (הכרעת 0.7, צומצם 1.9.2026).
  *
  * הבדיקה על אנשי מקצוע קיימת מאז 0.4, והצד המקביל — משתמשים פנימיים — לא
- * נבדק כלל. מזהה משתמש מגיע מהלקוח כמו כל מזהה אחר, ובלי הבדיקה אפשר היה
- * לשייך משתמש מאתר אחר ולגרום למערכת לשלוח לו את תוכן הפנייה במייל.
+ * נבדק כלל. מזהה משתמש מגיע מהלקוח כמו כל מזהה אחר.
+ *
+ * **מה שנשאר נאכף הוא "פעיל", ולא "מאותו אתר".** תנאי האתר נוסף ב-0.7 מפני
+ * ש-`canViewTicket` לא הביטה בשיוכים, ולכן שיוך חוצה-אתרים היה שולח מייל
+ * ומוביל ל-404. משתוקן השורש (GAP-A2), התנאי הפך לחסימה של מה ש-§5.ז מחייב
+ * במפורש: "אך ורק פניות ששויכו אליו, **מכל האתרים**".
  */
 describe("שיוך נמען פנימי — מידור ואימות", () => {
-  it("משתמש מאתר אחר אינו ניתן לשיוך", async () => {
+  it("משתמש מאתר אחר כן ניתן לשיוך, ומקבל גישה לפנייה", async () => {
     const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
     const outsider = await db.user.create({
       data: {
@@ -310,9 +314,13 @@ describe("שיוך נמען פנימי — מידור ואימות", () => {
       },
     });
 
-    await expect(
-      createTicket(actor, fullInput({ recipients: [{ kind: "user", id: outsider.id }] })),
-    ).rejects.toThrow(he.directory.userNotAssignable);
+    const { ticket } = await createTicket(
+      actor,
+      fullInput({ recipients: [{ kind: "user", id: outsider.id }] }),
+    );
+    expect(
+      await db.assignment.count({ where: { ticketId: ticket.id, userId: outsider.id } }),
+    ).toBe(1);
   });
 
   it("משתמש מושבת אינו ניתן לשיוך", async () => {
@@ -368,21 +376,23 @@ describe("שיוך נמען פנימי — מידור ואימות", () => {
     expect(await db.assignment.count({ where: { ticketId: ticket.id } })).toBe(1);
   });
 
-  it("שיגור טיוטה אוכף את אותו כלל", async () => {
-    const otherSite = await db.site.create({ data: { name: "אתר שלישי" } });
-    const outsider = await db.user.create({
+  it("שיגור טיוטה אוכף את אותו כלל — משתמש מושבת נדחה גם שם", async () => {
+    // ‏`submitDraft` הוא מסלול שיוך שני ונפרד מ-`createTicket`. אכיפה שקיימת
+    // באחד ולא בשני היא בדיוק החור שהבדיקה הזו קיימת כדי למנוע.
+    const gone = await db.user.create({
       data: {
         role: "SITE_MANAGER",
         name: "זר",
         phone: "0505555555",
         passwordHash: "x",
-        siteId: otherSite.id,
+        siteId,
+        active: false,
       },
     });
 
     const { ticket } = await createTicket(actor, fullInput({ saveAsDraft: true }));
     await expect(
-      submitDraft(toViewer(actor), ticket.id, [{ kind: "user", id: outsider.id }]),
+      submitDraft(toViewer(actor), ticket.id, [{ kind: "user", id: gone.id }]),
     ).rejects.toThrow(he.directory.userNotAssignable);
   });
 });

@@ -46,7 +46,7 @@ test.describe("V03 — האתר הוא שדה בטופס (§7 #19)", () => {
     await expect(page.getByRole("option", { name: "בניין א", exact: true })).toHaveCount(0);
   });
 
-  test("V03-02 — החלפת אתר מסירה נמען פנימי שאינו שייך לאתר החדש", async ({ page }) => {
+  test("V03-02 — החלפת אתר משאירה נמען פנימי מאתר אחר", async ({ page }) => {
     acceptDialogs(page);
     await loginAs(page, "admin");
     await page.goto("/tickets/new");
@@ -66,14 +66,17 @@ test.describe("V03 — האתר הוא שדה בטופס (§7 #19)", () => {
     await pick(page, "אתר", SITE_B);
 
     /*
-     * זה הליבה של הכלל: מנהל של אתר א׳ **אינו יכול לראות** פנייה של אתר
-     * ב׳ (`canViewTicket` משווה `siteId`). השארתו כנמען הייתה משגרת אליו
-     * פנייה שתיעלם לו מהלוח — שיוך שנשבר בלי שאיש יידע.
+     * **הבדיקה הפכה כיוון ב-1.9.2026 (GAP-A2).** קודם היא דרשה שהנמען
+     * **יוסר**, מפני שמנהל של אתר א׳ לא היה יכול לראות פנייה של אתר ב׳
+     * (`canViewTicket` השווה `siteId` בלבד) — השארתו הייתה משגרת אליו
+     * פנייה שתיעלם לו מהלוח.
+     *
+     * ‏§5.ז קובע שנמען רואה פניות ששויכו אליו **מכל האתרים**, ומשתוקן
+     * `canViewTicket` הנימוק להסרה נעלם. מה שנשאר הוא הכלל הכללי יותר:
+     * **בחירה מפורשת של המשתמש אינה נמחקת בשקט מתחת לידיו.** בניין ודירה
+     * כן מתאפסים (הבדיקה שמעל) מפני שהם שייכים לאתר; נמען אינו.
      */
-    // ‏`filter(...).toHaveCount(0)` ולא `not.toContainText`: כשהנמען היחיד
-    // מוסר הרשימה **נעלמת מה-DOM** (`RecipientPicker` אינו מרנדר `<ul>` ריק),
-    // ו-`not.toContainText` על אלמנט שאינו קיים נכשל במקום לעבור.
-    await expect(recipients.filter({ hasText: CAST.managerA.name })).toHaveCount(0);
+    await expect(recipients).toContainText(CAST.managerA.name);
   });
 });
 

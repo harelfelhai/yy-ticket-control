@@ -94,7 +94,7 @@ export async function assertProfessionalsActive(professionalIds: string[]): Prom
 }
 
 /**
- * מאמת שנמען **פנימי** רשאי לקבל פנייה באתר נתון (הכרעת 0.7).
+ * מאמת שנמען **פנימי** רשאי לקבל פנייה (הכרעת 0.7, הורחב 1.9.2026).
  *
  * **התאום החסר של `assertProfessionalsActive`.** הבדיקה על אנשי מקצוע קיימת
  * מפני שהמזהה מגיע מהלקוח, ובלעדיה ההשבתה קוסמטית — והנימוק הזה חל מילה
@@ -103,17 +103,19 @@ export async function assertProfessionalsActive(professionalIds: string[]): Prom
  * מייל עם הבניין, הדירה, התחום והתיאור המלא — בדיוק המידע ש-`canViewTicket`
  * קיימת כדי למנוע ממנו — ואז מציגה לו 404 כשילחץ.
  *
- * הכלל זהה לזה שהממשק כבר מיישם בבורר הנמענים
- * (`tickets/[id]/page.tsx`): פעיל, ושייך לאתר הפנייה או חוצה-אתרים
- * (`siteId: null` — מנהל מערכת ובעלים). כאן הוא נאכף בשרת, ששם הוא נחוץ.
+ * **המגבלה על האתר הוסרה ב-1.9.2026.** עד אז נדרש שהמשתמש יהיה שייך
+ * לאתר הפנייה או חוצה-אתרים (`siteId: null`), מפני ש-`canViewTicket` לא הביטה
+ * בשיוכים — כלומר שיוך חוצה-אתרים היה שולח מייל ומוביל ל-404. משנותקן,
+ * §5.ז על נמען לטיפול — "אך ורק פניות ששויכו אליו, **מכל האתרים**" —
+ * הופך לבר-מימוש, והמגבלה הפכה לחסימה של מה שהאפיון מחייב.
+ *
+ * מה שנשאר הוא התנאי שבגללו הפונקציה נכתבה מלכתחילה: **פעיל**. השבתת
+ * משתמש חייבת להפסיק להגיע אליו מידע, והמזהה מגיע מהלקוח.
  *
  * הבדיקה היא על הספירה ולא על השמות: מזהה שאינו קיים כלל נופל באותו תנאי,
  * ואין טעם בשתי הודעות שגיאה למצב אחד.
  */
-export async function assertUsersAssignable(
-  userIds: string[],
-  siteId: string,
-): Promise<void> {
+export async function assertUsersAssignable(userIds: string[]): Promise<void> {
   const unique = [...new Set(userIds)];
   if (unique.length === 0) return;
 
@@ -121,7 +123,6 @@ export async function assertUsersAssignable(
     where: {
       id: { in: unique },
       active: true,
-      OR: [{ siteId }, { siteId: null }],
     },
   });
 

@@ -63,11 +63,23 @@ export function RecipientPicker({
             <li key={`${recipient.kind}:${recipient.id}`}>
               <span className={chipClasses("brand", "solid", "large")}>
                 {recipient.label}
+                {/*
+                  ‏28px של אזור לחיצה סביב סמל שנשאר קטן — בדיוק הכלל
+                  ב-DESIGN.md § אזורי מגע: "כשהיעד הטבעי קטן מהגובה הזה
+                  (אייקון, קישור בשורה) — מרחיבים את אזור הלחיצה, לא את הסמל".
+                  עד 1.9.2026 עמד כאן `px-1` בלבד, כלומר יעד של כ-16px —
+                  מתחת לרצפה שהמסמך קובע **לכל מכשיר**, ולא רק למגע.
+
+                  המרווחים השליליים הם מה שמאפשר את זה בלי להשמין את הצ׳יפ:
+                  `-my-1` ו-`-me-2` מבטלים את הריפוד של הצ׳יפ (`px-2 py-1`),
+                  כך שהכפתור נמתח עד קצוותיו ונשאר 28px — והצ׳יפ עצמו נשאר
+                  בגובהו. הרחבת הסמל במקום אזור הלחיצה הייתה משנה את המראה.
+                */}
                 <button
                   type="button"
                   onClick={() => remove(recipient)}
                   aria-label={`${he.ticket.removeRecipient} ${recipient.label}`}
-                  className="px-1 text-base leading-none"
+                  className="-my-1 -me-2 inline-flex min-h-7 min-w-7 items-center justify-center text-base leading-none"
                 >
                   ×
                 </button>
