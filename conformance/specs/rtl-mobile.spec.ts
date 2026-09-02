@@ -229,15 +229,17 @@ test.describe("S0 — RTL, מובייל ואזורי מגע בכל המסכים"
 
   test("S0-04 — תוכן מסך 404 בעברית", async ({ page }) => {
     /**
-     * ‏§4 שורה 176: "שפת הממשק: עברית" — ללא חריג.
+     * **היה `test.fail()` עד 1.9.2026 (GAP-A4).**
      *
-     * המעטפת אכן עברית ו-RTL (הבדיקה שמעל), אך **הטקסט** הוא מסך ברירת
-     * המחדל של Next באנגלית: "This page could not be found". לפרויקט אין
-     * ‏`not-found.tsx` ואין `error.tsx` בשום מקום, בעוד `notFound()` נקרא
-     * מ-`/tickets/[id]` ומ-`/tags/[id]` — כלומר כל חסימת הרשאה חוצת-אתרים
-     * מגיעה לשם. מדווח ב-conformance-report.
+     * §4 שורה 176: "שפת הממשק: עברית" — ללא חריג. המעטפת אכן הייתה
+     * עברית ו-RTL (הבדיקה שמעל), אך **הטקסט** היה מסך ברירת המחדל של
+     * Next באנגלית: "This page could not be found". לפרויקט לא היו
+     * `not-found.tsx` ו-`error.tsx` בשום מקום.
+     *
+     * זה לא היה מקרה קצה: `notFound()` הוא המנגנון שבו המערכת חוסמת
+     * גישה — פנייה של אתר אחר, תגית שאינה פתוחה, מזהה שגוי — ולכן
+     * המסך הנפוץ ביותר שמשתמש פוגש כשמשהו אסור לו היה באנגלית.
      */
-    test.fail();
     await loginAs(page, "managerA");
     await page.goto("/tickets/lokayamlokayam");
     await expect(page.locator("body")).not.toContainText("could not be found");
