@@ -10,6 +10,7 @@ import { canEditAssignments } from "@/lib/permissions";
 import { ROOMS } from "@/lib/rooms";
 import { toViewer } from "@/lib/session";
 import type { SelectOption } from "@/lib/options";
+import { claimWhatsAppAutoOpen } from "@/lib/services/delivery";
 import { ensurePortalLink, rotatePortalLink } from "@/lib/services/portal";
 import { addTagToTicket, removeTagFromTicket } from "@/lib/services/tags";
 import { TicketError, getTicketDetail } from "@/lib/services/tickets";
@@ -114,13 +115,28 @@ const recipientsSchema = z.array(
   z.object({ kind: z.enum(["professional", "user"]), id: z.string().min(1) }),
 );
 
+/**
+ * מחזירה את מזהה השיוך שעבורו נפתחה הלשונית — הנמען הראשון שלא יקבל שום
+ * הודעה אוטומטית. ‏`hasOpenTab` מגיע מהמסך: רק הוא יודע אם `window.open`
+ * הצליח, וסימון עבור לשונית שנחסמה היה מסתיר את המשימה שנשארה.
+ */
 export async function addRecipientsAction(
   ticketId: string,
   recipients: z.infer<typeof recipientsSchema>,
-): Promise<ActionResult> {
+  hasOpenTab = false,
+): Promise<ActionResult<string | null>> {
   return guard(async () => {
-    await addAssignments(await viewer(), ticketId, recipientsSchema.parse(recipients));
+    const waPending = await addAssignments(
+      await viewer(),
+      ticketId,
+      recipientsSchema.parse(recipients),
+    );
+    const waAutoOpen = await claimWhatsAppAutoOpen(
+      waPending.map((p) => p.assignmentId),
+      z.boolean().parse(hasOpenTab),
+    );
     refresh(ticketId);
+    return waAutoOpen;
   });
 }
 
@@ -279,3 +295,4 @@ export async function resendEmailAction(
     refresh(ticketId);
   });
 }
+

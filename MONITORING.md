@@ -40,6 +40,13 @@
 מייל), `notify.skipped`, `portal.action`, `escalation.done`, `backup.done`.
 מקור אמת: `src/lib/observability/log.ts`.
 
+> **‏`notify.no-address` חדל להיות "אין מה לעשות" (2.9.2026).** עד §5.ה2 הוא
+> היה הסימן **היחיד** לכך שקבלן בלי מייל לא יודע על הפנייה — סימן שיושב
+> ב-Sentry ולא מול מנהל העבודה. היום המסך מציג "נותר לשלוח בוואטסאפ",
+> והשדה `Assignment.waOpenedAt` מתעד את הפתיחה. הלוג נשאר כפי שהוא: הוא
+> עדיין מודד **כמה** פניות תלויות בפעולה ידנית, וזו המדידה שתגיד אם SMS
+> הפך לנחוץ.
+
 ### 4. הגנת silent-failure — ה-watchdog
 כשל שקט אינו זורק חריגה. ה-watchdog רץ **in-process כל 6 שעות**
 (`src/jobs/worker.ts` → `runWatchdog`), מאמת invariants, ומדווח check-in

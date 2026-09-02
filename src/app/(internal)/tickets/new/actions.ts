@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { type ActionResult, guard } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
@@ -17,6 +16,7 @@ import {
   findOrCreateDomain,
   findOrCreateProfessional,
 } from "@/lib/services/directory";
+import { claimWhatsAppAutoOpen } from "@/lib/services/delivery";
 import { findOrCreateTag } from "@/lib/services/tags";
 import { createTicket } from "@/lib/services/tickets";
 
@@ -88,10 +88,18 @@ const professionalSchema = z.object({
   email: z.string().optional(),
 });
 
+/**
+ * ‏`needsWhatsApp` מוחזר מהשרת ולא מחושב בלקוח מהשדות שהוקלדו, **ובכוונה**.
+ *
+ * ‏`findOrCreateProfessional` מחזירה איש מקצוע **קיים** כשהטלפון כבר במערכת
+ * (זיהוי כפילות לפי טלפון), ולזה עשוי להיות מייל שהמקליד לא ידע עליו. חישוב
+ * בלקוח מתוך הטופס היה פותח וואטסאפ למי שיקבל ממילא מייל — ובכיוון ההפוך,
+ * מדלג עליו למי שלא.
+ */
 export async function createProfessionalAction(
   siteId: string,
   input: z.infer<typeof professionalSchema>,
-): Promise<ActionResult<SelectOption>> {
+): Promise<ActionResult<SelectOption & { needsWhatsApp: boolean }>> {
   return guard(async () => {
     await requireSiteAccess(siteId);
     const professional = await findOrCreateProfessional(professionalSchema.parse(input));
@@ -99,6 +107,7 @@ export async function createProfessionalAction(
       id: professional.id,
       label: professional.name,
       hint: professional.phone ?? professional.email ?? undefined,
+      needsWhatsApp: Boolean(professional.phone) && !professional.email,
     };
   });
 }
@@ -131,25 +140,46 @@ const createTicketSchema = z.object({
   mediaIds: z.array(idSchema).max(20).optional(),
   tagIds: z.array(idSchema).max(10).optional(),
   saveAsDraft: z.boolean(),
+  /**
+   * האם ללקוח יש לשונית פתוחה שממתינה ליעד.
+   *
+   * מגיע מהלקוח מפני שרק הוא יודע: `window.open` נחסם בחלק מהדפדפנים,
+   * וסימון "נפתח" עבור לשונית שלא נפתחה היה מסתיר את המשימה שנשארה.
+   */
+  autoOpenWhatsApp: z.boolean().optional(),
 });
 
 /**
- * יוצר את הפנייה ומעביר למסך שלה.
+ * **הפעולה מחזירה ואינה מנווטת בעצמה, מאז שהוואטסאפ נפתח אוטומטית.**
  *
- * ‏redirect בהצלחה ולא החזרת מזהה: המשתמש בשטח צריך לראות מיד שהפנייה
- * קיימת ולמי היא נשלחה. `redirect` זורק חריגה מיוחדת ב-Next, ולכן הוא
- * נמצא מחוץ ל-`guard` — אחרת היא הייתה נתפסת ומדווחת כשגיאה.
+ * ‏`redirect()` בשרת גורם ללקוח לנווט, וההבטחה שהלקוח המתין לה אינה נפתרת
+ * לעולם — כלומר הטופס לעולם אינו מקבל את התשובה. זה היה תקין כל עוד לא היה
+ * מה לעשות איתה, אבל הלשונית שנפתחה בלחיצה **ממתינה ליעד**, והיעד מגיע רק
+ * מכאן. הניווט עבר ל-`router.push` בטופס; מבחינת המשתמש דבר לא השתנה.
  */
 export async function createTicketAction(
   input: z.infer<typeof createTicketSchema>,
-): Promise<ActionResult<string>> {
-  const result = await guard(async () => {
+): Promise<ActionResult<{ ticketId: string; waAutoOpen: string | null }>> {
+  return guard(async () => {
     const parsed = createTicketSchema.parse(input);
     const user = await requireSiteAccess(parsed.siteId);
     const { ticket } = await createTicket(user, parsed);
-    return ticket.id;
-  });
 
-  if (!result.ok) return result;
-  redirect(`/tickets/${result.data}`);
+    return {
+      ticketId: ticket.id,
+      /*
+       * הנמען הראשון שלא יקבל שום הודעה — ורק הוא.
+       *
+       * חוסם החלונות הקופצים מתיר לשונית אחת למחווה ומפיל בשקט את כל מה
+       * שאחריה, ולכן פתיחת חמש לשוניות הייתה נראית כשליחה לחמישה ומגיעה
+       * לאחד. השאר מופיעים ב"נותר לשלוח" במסך שאליו המנהל נוחת.
+       *
+       * בטיוטה הרשימה ריקה ממילא: טיוטה אינה משויכת לאיש.
+       */
+      waAutoOpen: await claimWhatsAppAutoOpen(
+        ticket.assignments.map((a) => a.id),
+        parsed.autoOpenWhatsApp === true,
+      ),
+    };
+  });
 }

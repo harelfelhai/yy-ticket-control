@@ -95,10 +95,32 @@ test.describe("מסך 5 — הזנה מרוכזת", () => {
     const frame = preview.locator('iframe[title="דוח-בדק.pdf"]');
     await expect(frame).toBeVisible();
 
+    /*
+     * ‏192px היא **הרצפה המתועדת** (‏`min-h-48`, ‏DESIGN.md § תצוגת המקור),
+     * ולא מספר שנבחר כדי שהבדיקה תעבור. הגובה נגזר מהחלון, וחבילה זו רצה
+     * על 1280×720 — כלומר בדיוק בתחום שבו הרצפה נכנסת לפעולה. הסף היה
+     * ‏200 ונכשל כאן, וזה היה ממצא אמיתי: הוא חשף שבחלון נמוך הפאנל הדביק
+     * גלש מהמסך, ומכאן `lg:overflow-y-auto` על ה-aside.
+     */
     const box = await frame.boundingBox();
     expect(box, "למסגרת הדוח אין מקום על המסך").not.toBeNull();
-    expect(box?.height ?? 0).toBeGreaterThan(200);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(192);
     expect(box?.width ?? 0).toBeGreaterThan(200);
+
+    /*
+     * **תחתית הפאנל חייבת להיות ברת-הישג.** הוא דביק, ולכן גלילת העמוד אינה
+     * מזיזה אותו: אם הוא גבוה מהחלון ואין בו גלילה פנימית, החלק התחתון שלו
+     * פשוט אינו נגיש. הטענה היא "נכנס בחלון **או** ניתן לגלילה", ולא אחת
+     * מהן בנפרד — שתי התוצאות תקינות, ומה שאסור הוא הצירוף השלישי.
+     */
+    const reachable = await preview.evaluate(() => {
+      const el = document.querySelector("aside");
+      if (!el) return false;
+      const fits = el.scrollHeight <= el.clientHeight + 1;
+      const scrolls = ["auto", "scroll"].includes(getComputedStyle(el).overflowY);
+      return fits || scrolls;
+    });
+    expect(reachable, "תחתית פאנל המקור אינה נגישה: גבוה מהחלון ובלי גלילה").toBe(true);
 
     expect(violations, `ה-CSP חסם את תצוגת הדוח:\n${violations.join("\n")}`).toEqual([]);
   });

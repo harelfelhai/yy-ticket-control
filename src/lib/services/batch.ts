@@ -1,6 +1,8 @@
 import type { Room } from "@/generated/prisma/enums";
 import { UserFacingError } from "@/lib/action-result";
 import { he } from "@/lib/he";
+import type { WaPendingRecipient } from "@/lib/notifier/wa-share";
+import { pendingWhatsAppRecipients } from "./delivery";
 import { normalizeName, normalizeText } from "@/lib/normalize";
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
@@ -55,6 +57,15 @@ export interface BatchResult {
   professionals: number;
   /** האם שוגר בכלל, או שהכול נשמר כטיוטה */
   dispatched: boolean;
+  /**
+   * נמענים שלא יקבלו שום הודעה עד שהמנהל ישלח להם בוואטסאפ.
+   *
+   * **מאוחדים לפי נמען ולא לפי פנייה.** דוח בדק בית מפזר עשרות ליקויים
+   * לחמישה בעלי מקצוע, ורשימה של 28 שורות — שש מהן לאותו חשמלאי — אינה
+   * רשימת משימות אלא רעש. הקישור הוא לפנייה הראשונה שלו; משם הוא רואה
+   * את כולן דרך התגית המשותפת.
+   */
+  waPending: WaPendingRecipient[];
 }
 
 /**
@@ -89,6 +100,7 @@ export async function createTicketBatch(
   const tag = await findOrCreateTag(tagName, actor.id);
 
   const dispatchedProfessionals = new Set<string>();
+  const assignmentIds: string[] = [];
   let created = 0;
   let drafts = 0;
 
@@ -100,7 +112,7 @@ export async function createTicketBatch(
     // את כולן לטיוטות ללא קשר לנמען.
     const saveAsDraft = !input.dispatch || !row.recipient;
 
-    const { isDraft } = await createTicket(actor, {
+    const { ticket, isDraft } = await createTicket(actor, {
       siteId: input.siteId,
       buildingId: input.buildingId,
       apartmentId: input.apartmentId,
@@ -116,6 +128,7 @@ export async function createTicketBatch(
       drafts += 1;
     } else {
       created += 1;
+      assignmentIds.push(...ticket.assignments.map((a) => a.id));
       if (row.recipient?.kind === "professional") dispatchedProfessionals.add(row.recipient.id);
     }
   }
@@ -126,11 +139,23 @@ export async function createTicketBatch(
     await addTagMessage(toViewer(actor), tag.id, "", input.sourceMediaIds);
   }
 
+  /*
+   * איחוד לפי נמען: `pendingWhatsAppRecipients` מחזיר שורה לכל שיוך, ובדוח
+   * בדק בית אותו קבלן חוזר בשש שורות. ‏`Map` על השם שומר את הראשון — כלומר
+   * את הפנייה הראשונה שלו — וזו נקודת הכניסה הנכונה: משם התגית המשותפת
+   * מציגה לו את כל השאר.
+   */
+  const byRecipient = new Map<string, WaPendingRecipient>();
+  for (const pending of await pendingWhatsAppRecipients(assignmentIds)) {
+    if (!byRecipient.has(pending.name)) byRecipient.set(pending.name, pending);
+  }
+
   return {
     tagId: tag.id,
     created,
     drafts,
     professionals: dispatchedProfessionals.size,
     dispatched: input.dispatch,
+    waPending: [...byRecipient.values()],
   };
 }

@@ -127,3 +127,34 @@ export async function makeMinimalDraft(page: Page): Promise<string> {
   await expect(page.getByRole("button", { name: "שגר", exact: true })).toBeEnabled();
   return new URL(page.url()).pathname;
 }
+
+/**
+ * תופס את `/api/wa/…` שלנו, בודק לאן הוא מפנה, ועוצר שם.
+ *
+ * **שני דברים שנלמדו בדרך הקשה:**
+ *
+ * 1. **אי אפשר ליירט את `wa.me` עצמו.** ‏Playwright אינו מיירט הפניות
+ *    שהדפדפן עוקב אחריהן אוטומטית, והבקשה יצאה החוצה בכל מקרה. מה שכן
+ *    ניתן ליירוט הוא הנתיב **שלנו** — וזה גם מה שנכון לבדוק: התפקיד שלנו
+ *    מסתיים בכתובת שאליה הפנינו.
+ * 2. **‏`wa.me` מפנה הלאה ל-`api.whatsapp.com`.** הכתובת הסופית של הלשונית
+ *    לעולם אינה `wa.me`, והמתנה לה לא הייתה נגמרת לעולם.
+ *
+ * ‏`maxRedirects: 0` מריץ את הבקשה האמיתית מול השרת — כלומר התיעוד ב-DB
+ * קורה בפועל — ועוצר על ה-302 במקום לעקוב אחריו.
+ */
+export function captureWhatsAppRedirects(page: Page): string[] {
+  const targets: string[] = [];
+
+  void page.context().route("**/api/wa/*", async (route) => {
+    const response = await route.fetch({ maxRedirects: 0 });
+    targets.push(response.headers()["location"] ?? "");
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<html><body>wa stub</body></html>",
+    });
+  });
+
+  return targets;
+}

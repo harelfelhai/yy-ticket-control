@@ -19,6 +19,8 @@ import {
   saveDraft,
 } from "@/lib/offline-draft";
 import { useAction } from "@/lib/use-action";
+import { useRouter } from "next/navigation";
+import { openWhatsAppTab } from "@/components/wa-pending-panel";
 import { unwrapOrThrow } from "@/lib/action-result";
 import { CONTENT_WIDTH, PAGE_BLEED, PAGE_X, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import { chipClasses } from "@/components/ui/chip";
@@ -127,6 +129,7 @@ export function CreateTicketForm({
    * שהמטפלים חוברו נבלעת בשקט, והמנהל בשטח מניח שהפנייה נשלחה.
    */
   const { busy, pending, error, setError, start } = useAction();
+  const router = useRouter();
 
   const buildings = siteId ? (buildingsBySite[siteId] ?? []) : [];
   const selectedBuilding = buildings.find((b) => b.id === buildingId) ?? null;
@@ -289,6 +292,22 @@ export function CreateTicketForm({
       // שהות שבה טיימר ממתין עלול לירות ולכתוב טיוטה שכבר אינה רלוונטית.
       submittedRef.current = true;
 
+      /*
+       * **הלשונית נפתחת כאן, לפני ה-`await`, וזו כל הנקודה.**
+       *
+       * ‏`window.open` מותר רק בזמן טיפול באירוע משתמש. אחרי `await` של
+       * ‏Server Action כבר יצאנו מהחלון הזה, והדפדפן חוסם — דווקא בנייד,
+       * שבו כל התרחיש הזה חי. לכן הלשונית נפתחת ריקה ומקבלת יעד בהמשך.
+       *
+       * **ורק כשיש בשבילה נמען.** ‏`needsWhatsApp` נבדק כאן ולא בשרת, מפני
+       * שההחלטה חייבת להתקבל לפני הקריאה: בלעדיו כל שיגור — גם לנמען שיש
+       * לו מייל — היה פותח לשונית ריקה וסוגר אותה, כלומר הבהוב בכל פנייה.
+       *
+       * בשמירה כטיוטה אין למי לשלוח: טיוטה אינה משויכת לאיש.
+       */
+      const needsWhatsApp = !saveAsDraft && recipients.some((r) => r.needsWhatsApp);
+      const settleWhatsApp = needsWhatsApp ? openWhatsAppTab() : null;
+
       try {
         const result = await createTicketAction({
           siteId,
@@ -301,17 +320,30 @@ export function CreateTicketForm({
           mediaIds: files.map((f) => f.mediaId),
           tagIds: tags.map((t) => t.id),
           saveAsDraft,
+          autoOpenWhatsApp: settleWhatsApp?.opened === true,
         });
 
-        if (result && !result.ok) {
+        if (!result.ok) {
           // שגיאה עסקית — משהו שרק המשתמש יכול לתקן. ניסיון חוזר עליה הוא
           // לולאה אינסופית שקטה, ולכן הטיוטה נשארת אך אינה מסומנת כממתינה.
           // השמירה השוטפת חוזרת לפעול: הוא עומד לתקן ולנסות שוב.
           submittedRef.current = false;
           setError(result.error);
           setRestored(null);
+          // הלשונית שנפתחה בלחיצה נסגרת: לא נוצרה פנייה, ואין למה להפנות.
+          settleWhatsApp?.(null);
           return;
         }
+
+        /*
+         * **הנמען הראשון בלבד, והשאר ברשימה במסך הפנייה.**
+         *
+         * חוסם החלונות הקופצים מתיר לשונית אחת למחווה ומפיל בשקט את כל
+         * מה שאחריה. פתיחת חמש לשוניות הייתה נראית כמו שליחה לחמישה
+         * ומגיעה לאחד — כלומר בדיוק הכשל שהפיצ׳ר הזה נועד למנוע, בגרסה
+         * גרועה יותר: כזו שהמנהל **מאמין** שהסתיימה.
+         */
+        settleWhatsApp?.(result.data.waAutoOpen);
 
         // אין שגיאה — הפנייה נשמרה, והשרת מנווט למסך שלה. מכאן והלאה אין
         // מה לשחזר, והשארת הטיוטה הייתה גורמת לפנייה הבאה להיפתח מלאה
@@ -322,7 +354,12 @@ export function CreateTicketForm({
         // את הטיוטה.
         await lastSaveRef.current;
         await clearDraft();
+
+        // הניווט עבר לכאן מ-`redirect()` בשרת: פעולה שמנווטת בשרת אינה
+        // מחזירה תשובה, ובלי התשובה אין ללשונית שנפתחה יעד.
+        router.push(`/tickets/${result.data.ticketId}`);
       } catch (failure) {
+        settleWhatsApp?.(null);
         if (!isNetworkFailure(failure)) {
           submittedRef.current = false;
           throw failure;
@@ -345,6 +382,7 @@ export function CreateTicketForm({
       tags,
       files,
       snapshot,
+      router,
       // יציבים לכל אורך חיי הרכיב (setter של useState, ו-startTransition),
       // ולכן אינם משנים את זהות `submit` — נרשמים כדי שהכלל יישאר נאכף.
       setError,

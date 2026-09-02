@@ -5,6 +5,7 @@ import { LearnedSelect, type LearnedOption } from "@/components/learned-select";
 import { type AttachedFile, MediaPicker } from "@/components/media-picker";
 import { RecipientPicker, type RecipientOption } from "@/components/recipient-picker";
 import { SourcePreview } from "@/components/source-preview";
+import { WaPendingPanel } from "@/components/wa-pending-panel";
 import type { Room } from "@/generated/prisma/enums";
 import { unwrapOrThrow } from "@/lib/action-result";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -174,7 +175,20 @@ export function BatchForm({
          * המחרוזת `lg:top-11` אינה מופיעה בשום קובץ. ‏`top` על אלמנט `static`
          * הוא ממילא חסר משמעות, ולכן במסך צר הוא פשוט אינו עושה דבר.
          */}
-        <aside className={`flex flex-col gap-3 ${STICKY_UNDER_HEADER} lg:sticky lg:self-start`}>
+        {/*
+         * ‏`lg:max-h` + `lg:overflow-y-auto` — **רשת הביטחון של תצוגת המקור.**
+         *
+         * גובה התצוגה נגזר מהחלון (`source-preview.tsx`), אבל יש לו רצפה של
+         * ‏192px — ומתחת לחלון של 768px הסכום עובר את המסך. חבילת ההתאמה
+         * רצה על 1280×720 ותפסה בדיוק את זה, וזה אינו מקרה מלאכותי: לפטופ
+         * של 1366×768 מגיע לאותו אזור אחרי סרגלי הדפדפן.
+         *
+         * בלי זה תחתית הפאנל הדביק **אינה נגישה בשום גלילה** — לא גלילת
+         * העמוד, כי הפאנל דבוק, ולא גלילה פנימית, כי לא הייתה כזו.
+         */}
+        <aside
+          className={`flex flex-col gap-3 ${STICKY_UNDER_HEADER} lg:sticky lg:max-h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto`}
+        >
           <section className={cardClasses("flex flex-col gap-3")}>
             <h2 className={TITLE_DESCRIPTIVE}>{he.batch.contextHeading}</h2>
 
@@ -387,6 +401,16 @@ function Summary({ summary, onReset }: { summary: BatchResult; onReset: () => vo
           </p>
         ))}
       </div>
+
+      {/*
+       * **בלי פתיחה אוטומטית כאן, בשונה ממסך היצירה.**
+       *
+       * שיגור מרוכז יוצר עשרות פניות לחמישה בעלי מקצוע בלחיצה אחת, וחוסם
+       * החלונות הקופצים מתיר לשונית אחת למחווה. פתיחה של הראשון בלבד הייתה
+       * מסמנת קבלן אחד כמטופל ומשאירה את השאר — כלומר הופכת רשימת משימות
+       * ברורה לרשימה שחסרה בה שורה אחת בלי סימן. כאן הרשימה **היא** התשובה.
+       */}
+      <WaPendingPanel recipients={summary.waPending} />
       <div className="flex flex-wrap gap-2">
         {/* היה `leading-[3rem]` כדי למרכז אנכית — הפרימיטיב עושה זאת ב-flex,
             בלי לקשור את גובה השורה לגובה הכפתור. */}

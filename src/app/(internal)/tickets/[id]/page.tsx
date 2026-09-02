@@ -37,6 +37,7 @@ import {
 } from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
+import { WaPendingPanel } from "@/components/wa-pending-panel";
 import { RecipientEditor } from "./recipient-editor";
 import { ResidentName } from "./resident-name";
 import { TicketActions } from "./ticket-actions";
@@ -110,6 +111,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
             label: p.name,
             hint: p.phone ?? p.email ?? undefined,
             kind: "professional" as const,
+            needsWhatsApp: Boolean(p.phone) && !p.email,
           })),
         ...(
           await db.user.findMany({
@@ -349,6 +351,25 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           </div>
         </div>
       </header>
+
+      {/*
+       * **"נותר לשלוח בוואטסאפ" יושב על המסך, ולא בתוך דיאלוג "פרטים".**
+       *
+       * זו משימה פתוחה שאסור לפספס — הנמענים האלה לא יקבלו שום הודעה עד
+       * שמישהו ישלח להם (§5.ה2) — ומשימה שמחייבת פתיחת חלון כדי לגלות
+       * שהיא קיימת אינה שונה בהרבה מהמצב שלפני התיקון.
+       *
+       * הצילום הראשון הראה גם כפילות: הפאנל ישב **בתוך** עורך הנמענים,
+       * ולכן אותו קבלן הופיע פעמיים במרחק 40px — פעם כמשימה ופעם כשורה
+       * ברשימה, עם אותו כפתור בדיוק.
+       */}
+      {ticket.isDraft || !canEdit ? null : (
+        <WaPendingPanel
+          recipients={assignmentRows
+            .filter((row) => row.waPending)
+            .map((row) => ({ assignmentId: row.id, name: row.name }))}
+        />
+      )}
 
       {/*
        * **טיוטה נשארת פרושה על המסך** (אפיון מסך 7).

@@ -5,6 +5,8 @@ import { JOB_TYPES, type NotifyJobPayload } from "@/jobs/types";
 import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
 import { he } from "@/lib/he";
+import type { WaPendingRecipient } from "@/lib/notifier/wa-share";
+import { pendingWhatsAppRecipients } from "./delivery";
 import { normalizeText } from "@/lib/normalize";
 import { logInfo } from "@/lib/observability/log";
 import {
@@ -694,7 +696,7 @@ export async function addAssignments(
   viewer: Viewer,
   ticketId: string,
   recipients: RecipientRef[],
-) {
+): Promise<WaPendingRecipient[]> {
   const ticket = await loadForAction(ticketId);
   denyUnless(canEditAssignments(viewer, ticket));
   // בטיוטה עורכים נמענים דרך מסך ההשלמה, לא כאן: הוספת שיוך משגרת התראה
@@ -707,10 +709,14 @@ export async function addAssignments(
       .map((a) => `${a.professionalId ? "professional" : "user"}:${a.professionalId ?? a.userId}`),
   );
   const fresh = dedupeRecipients(recipients).filter((r) => !existing.has(`${r.kind}:${r.id}`));
-  if (fresh.length === 0) return;
+  if (fresh.length === 0) return [];
   // רק על ה**חדשים**: שיוך קיים לאיש מקצוע שהושבת מאז נשאר בתוקף.
   await assertProfessionalsActive(professionalIds(fresh));
   await assertUsersAssignable(userIds(fresh));
+
+  // נאסף מתוך הטרנזאקציה ונקרא אחריה: השאילתה שמחשבת "מי לא יקבל הודעה"
+  // אינה חלק מהכתיבה, ואין סיבה להאריך בה את הנעילה.
+  let created: string[] = [];
 
   await db.$transaction(async (tx) => {
     const affected: string[] = [];
@@ -728,7 +734,21 @@ export async function addAssignments(
       if (previous) {
         await tx.assignment.update({
           where: { id: previous.id },
-          data: { status: "SENT", statusChangedAt: new Date(), viewedAt: null },
+          data: {
+            status: "SENT",
+            statusChangedAt: new Date(),
+            viewedAt: null,
+            /*
+             * **‏`waOpenedAt` מתאפס, ו-`notifiedAt` לא — ובכוונה.**
+             *
+             * הודעת המייל תישלח שוב מ-`applyNewAssignments`, והג'וב יעדכן
+             * את `notifiedAt` בעצמו. לוואטסאפ אין ג'וב: אם החותמת הישנה
+             * תישאר, הנמען שהוחזר לא יופיע ב"נותר לשלוח" — כלומר הוא
+             * ישויך מחדש ואיש לא יידע אותו, וזה בדיוק הכשל שהשדה קיים
+             * כדי למנוע.
+             */
+            waOpenedAt: null,
+          },
         });
         affected.push(previous.id);
       } else {
@@ -746,7 +766,10 @@ export async function addAssignments(
 
     await tx.ticket.update({ where: { id: ticketId }, data: touchData() });
     await applyNewAssignments(tx, ticketId, fresh, affected);
+    created = affected;
   });
+
+  return pendingWhatsAppRecipients(created);
 }
 
 /**
