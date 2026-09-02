@@ -110,9 +110,42 @@ export type MediaKind = "image" | "video" | "audio" | "file";
  * מעלה לעיתים קובץ בלי סיומת כלל.
  */
 export function mediaKind(mimeType: string): MediaKind {
-  const base = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  const base = baseMimeType(mimeType);
   if (base.startsWith("image/")) return "image";
   if (base.startsWith("video/")) return "video";
   if (base.startsWith("audio/")) return "audio";
   return "file";
+}
+
+/** סוג ה-MIME בלי הפרמטרים שאחרי `;` (למשל `charset`) */
+function baseMimeType(mimeType: string): string {
+  return mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+/**
+ * ‏PDF אינו `MediaKind` משלו, ובכוונה.
+ *
+ * בשרשור הוא קובץ ככל קובץ — קישור להורדה — ולכן הוספת ערך חמישי ל-`MediaKind`
+ * הייתה מחייבת כל `switch` להתייחס למקרה שאין לו התנהגות נפרדת. מה שכן ייחודי
+ * ל-PDF הוא ש**הדפדפן יודע להציג אותו בעצמו**, וזו שאלה נפרדת מ"איך הוא נראה
+ * בבועה" — ולכן פרדיקט ולא ענף.
+ */
+export function isPdf(mimeType: string): boolean {
+  return baseMimeType(mimeType) === "application/pdf";
+}
+
+/**
+ * האם הדפדפן יכול להציג את הקובץ מכתובת `blob:` מקומית, לפני שהועלה.
+ *
+ * זו השאלה שקובעת אם כדאי ליצור `URL.createObjectURL` בזמן הבחירה. תמונה
+ * ו-PDF כן; וידאו ואודיו לא — לא מפני שהדפדפן אינו יודע, אלא מפני שאיש אינו
+ * מציג אותם לפני העלאה, ו-object URL שנוצר ולא נצרך הוא דליפת זיכרון עד
+ * לרענון הדף.
+ *
+ * **‏PDF נוסף כאן במסך 5**, שבו הדוח מוצג בצד כהקשר קבוע (אפיון מסך 5,
+ * שורה 271) — והתצוגה חייבת להיות מקומית: הקובץ עדיין אינו מצורף לשום
+ * פנייה, ולכן `getViewableMedia` מחזיר עליו `null` בכוונה.
+ */
+export function canPreviewLocally(mimeType: string): boolean {
+  return mediaKind(mimeType) === "image" || isPdf(mimeType);
 }

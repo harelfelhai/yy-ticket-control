@@ -27,6 +27,21 @@ const OUT = ".visual";
 const WEBM_BASE64 =
   "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwEAAAAAAAHTEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHGTbuMU6uEElTDZ1OsggEXTbuMU6uEHFO7a1OsggG97AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
+/**
+ * ‏PDF מינימלי בן עמוד אחד, לצילום פאנל המקור במסך ההזנה המרוכזת.
+ *
+ * העתק של הקבוע ב-`conformance/specs/s5-batch.spec.ts`, מאותה סיבה שבגללה
+ * ‏`WEBM_BASE64` מוכפל: החבילות אינן מייבאות זו מזו.
+ */
+const MINIMAL_PDF = [
+  "%PDF-1.4",
+  "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
+  "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
+  "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj",
+  "trailer<</Root 1 0 R/Size 4>>",
+  "%%EOF",
+].join("\n");
+
 /** תרחישים לצילום: פנייה לכל שילוב שהאפיון מבחין ביניהם. */
 const TICKETS = [
   { building: "בניין א", apartment: "1", domain: "חשמל", text: "אין חשמל בממ״ד, הפאזה קופצת" },
@@ -271,6 +286,22 @@ async function captureBatchAndTag(page: Page, device: string): Promise<void> {
   await pickIn(aside, "בניין", "בניין א");
   await pickIn(aside, "דירה", "1");
   await aside.getByLabel("תגית משותפת").fill("בדק בית · בניין א דירה 1");
+
+  /*
+   * **דוח המקור עולה כאן, ולא רק השורות.**
+   *
+   * הפאנל הצדדי צולם עד כה בלי קובץ, ולכן הדבר הגדול ביותר שיושב בו היום —
+   * תצוגת הדוח (§ תצוגת המקור) — לא הופיע באף צילום. אלמנט בגובה 384px
+   * בתוך פאנל דביק הוא בדיוק מה שסבב עיצוב צריך לראות.
+   */
+  await page
+    .locator('input[type="file"][accept="image/*,application/pdf,video/*"]')
+    .setInputFiles({
+      name: "דוח-בדק-בית.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from(MINIMAL_PDF, "latin1"),
+    });
+  await expect(aside.getByRole("group", { name: "תצוגת המקור" })).toBeVisible();
 
   const row = (n: number) => page.getByRole("group", { name: `שורה ${n}`, exact: true });
 

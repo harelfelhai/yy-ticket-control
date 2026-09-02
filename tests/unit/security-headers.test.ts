@@ -33,6 +33,19 @@ describe("buildContentSecurityPolicy", () => {
       expect(csp).toContain("form-action 'self'");
       // המדיה מ-R2 עוברת ב-https, ולכן חייבת להיות מותרת לתמונות ולחיבור.
       expect(csp).toContain("img-src 'self' data: blob: https:");
+      /**
+       * ‏`frame-src` מפורש — **חייב להיכתב, גם אם הוא מרשה פחות מ-`default-src`.**
+       *
+       * בהיעדרו חלה נסיגה ל-`default-src 'self'`, ואז ה-`<iframe>` של דוח
+       * הבדק במסך 5 נחסם **בשקט**: הדוח פשוט אינו מופיע, בלי שגיאה בממשק
+       * ובלי שבדיקה פונקציונלית נכשלת. הבדיקה כאן היא מה שיתפוס מחיקה
+       * "מנקה" של השורה הזו.
+       *
+       * ‏`https:` **אינו** ברשימה, בשונה מ-`img-src`: אין לנו הטמעה של אתר
+       * חיצוני, ורק המקור שלנו ו-blob: מקומי מותרים.
+       */
+      expect(csp).toContain("frame-src 'self' blob:");
+      expect(csp).not.toContain("frame-src 'self' blob: https:");
     },
   );
 });

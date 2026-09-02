@@ -4,14 +4,21 @@ import * as Sentry from "@sentry/nextjs";
 import { useState } from "react";
 import { confirmUploadAction, registerMediaAction } from "@/app/media-actions";
 import { he } from "@/lib/he";
-import { mediaKind } from "@/lib/media-view";
+import { canPreviewLocally } from "@/lib/media-view";
 import { useHydrated } from "@/lib/use-hydrated";
 
 export interface AttachedFile {
   mediaId: string;
   name: string;
   mimeType: string;
-  /** כתובת מקומית לתצוגה מקדימה, לפני שהקובץ בכלל נשמר בשרת */
+  /**
+   * כתובת מקומית לתצוגה מקדימה, לפני שהקובץ בכלל נשמר בשרת.
+   *
+   * קיימת לתמונה ול-PDF (‏`canPreviewLocally`) — **מי שקורא אותה חייב לבדוק
+   * את `mimeType` לפני שהוא בוחר תגית**. עד מסך 5 היא הייתה קיימת לתמונות
+   * בלבד, ולכן `previewUrl ? <img> : <span>` היה נכון במקרה; היום אותו
+   * תנאי היה מרנדר `<img>` שבור על דוח PDF.
+   */
   previewUrl: string | null;
 }
 
@@ -145,8 +152,9 @@ export function useMediaUpload({
       name: file.name || he.media.audioLabel,
       mimeType: file.type,
       // ‏URL מקומי ולא כתובת מהשרת: התצוגה המקדימה מופיעה מיד, בלי סבב
-      // רשת נוסף אחרי העלאה שכבר עלתה.
-      previewUrl: mediaKind(file.type) === "image" ? URL.createObjectURL(file) : null,
+      // רשת נוסף אחרי העלאה שכבר עלתה. במסך 5 זו גם הדרך **היחידה**: הדוח
+      // עדיין אינו מצורף לשום פנייה, ו-`getViewableMedia` חוסם אותו בכוונה.
+      previewUrl: canPreviewLocally(file.type) ? URL.createObjectURL(file) : null,
     };
   }
 

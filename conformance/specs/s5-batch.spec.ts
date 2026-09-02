@@ -11,6 +11,22 @@ import { pick, uniq, uniqPhone } from "../fixtures/world";
  * ליקויים בדירה אחת.
  */
 
+/**
+ * ‏PDF מינימלי בן עמוד אחד — קטלוג, עץ עמודים, ועמוד ריק.
+ *
+ * מספיק כדי שהשרת יסווג את הקובץ כ-`application/pdf` ושהדפדפן יטען אותו
+ * במסגרת. תוכן העמוד אינו חלק מהנבדק: הדרישה היא שהקובץ **מוצג**, ולא מה
+ * כתוב בו.
+ */
+const MINIMAL_PDF = [
+  "%PDF-1.4",
+  "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
+  "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
+  "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj",
+  "trailer<</Root 1 0 R/Size 4>>",
+  "%%EOF",
+].join("\n");
+
 /** בורר רשימה נלמדת בתוך שורה: תחום או נמען */
 async function pickInRow(row: Locator, label: string, option: string) {
   await row.getByRole("button", { name: new RegExp(`^${label}`) }).first().click();
@@ -29,7 +45,7 @@ test.describe("מסך 5 — הזנה מרוכזת", () => {
     await page.goto("/tickets/batch");
   });
 
-  test("S5-02/S5-05/S5-07 — הקשר משותף: מקור, בניין ודירה קבועים, ותגית אחת", async ({
+  test("S5-05/S5-07 — הקשר משותף: מקור, בניין ודירה קבועים, ותגית אחת", async ({
     page,
   }) => {
     const aside = page.getByRole("complementary");
@@ -40,6 +56,51 @@ test.describe("מסך 5 — הזנה מרוכזת", () => {
     // בניין ודירה נבחרים פעם אחת — בהקשר המשותף ולא בכל שורה.
     await expect(aside.getByRole("button", { name: /^בניין/ })).toBeVisible();
     await expect(aside.getByRole("button", { name: /^דירה/ })).toBeVisible();
+  });
+
+  /**
+   * ‏S5-01/S5-02 — *"הקובץ מוצג בצד המסך כהקשר קבוע"* (שורה 271).
+   *
+   * עד לתיקון הזה השורה הזו נחשבה מכוסה מפני שהפאנל הצדדי קיים ודביק —
+   * אבל **הקובץ עצמו מעולם לא הוצג בו**, רק שמו. הבדיקה הישנה בדקה את
+   * הפאנל; זו בודקת את מה שכתוב בשורה.
+   *
+   * שלוש טענות, ולא אחת:
+   * 1. נוצרת מסגרת שנושאת את שם הקובץ — כלומר הדוח, ולא צ׳יפ.
+   * 2. יש לה גובה ורוחב אמיתיים על המסך.
+   * 3. **‏CSP אינו חוסם אותה.** זה החלק שאי אפשר לוותר עליו: הצגת `blob:`
+   *    ב-`<iframe>` נחסמת בנסיגה ל-`default-src 'self'`, והכישלון **שקט
+   *    לחלוטין** — האלמנט נשאר במקומו, בגודלו, וריק. בלי האזנה לקונסולה
+   *    הבדיקה הייתה עוברת על מסך שאינו מציג דבר.
+   */
+  test("S5-01/S5-02 — דוח שהועלה מוצג בצד המסך, ו-CSP אינו חוסם אותו", async ({ page }) => {
+    const violations: string[] = [];
+    page.on("console", (message) => {
+      const text = message.text();
+      if (/Content Security Policy|Refused to frame/i.test(text)) violations.push(text);
+    });
+
+    await page
+      .locator('input[type="file"][accept="image/*,application/pdf,video/*"]')
+      .setInputFiles({
+        name: "דוח-בדק.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from(MINIMAL_PDF, "latin1"),
+      });
+
+    const aside = page.getByRole("complementary");
+    const preview = aside.getByRole("group", { name: "תצוגת המקור" });
+    await expect(preview).toBeVisible();
+
+    const frame = preview.locator('iframe[title="דוח-בדק.pdf"]');
+    await expect(frame).toBeVisible();
+
+    const box = await frame.boundingBox();
+    expect(box, "למסגרת הדוח אין מקום על המסך").not.toBeNull();
+    expect(box?.height ?? 0).toBeGreaterThan(200);
+    expect(box?.width ?? 0).toBeGreaterThan(200);
+
+    expect(violations, `ה-CSP חסם את תצוגת הדוח:\n${violations.join("\n")}`).toEqual([]);
   });
 
   test("S5-06/S5-08 — כל שורה היא פנייה: תיאור · חדר · תחום · נמען", async ({ page }) => {

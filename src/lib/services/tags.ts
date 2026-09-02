@@ -192,22 +192,30 @@ export async function listTagOverviews(user: SessionUser): Promise<TagOverview[]
 
   const scoped = user.role === "SITE_MANAGER";
 
-  return tags
-    .map((tag) => {
-      const visible = tag.tickets.filter((t) => ticketInScope(user, t.ticket.siteId));
-      return {
+  /*
+   * הסינון קורה **בתוך** ה-`flatMap` ולא בשלב נפרד אחריו.
+   *
+   * הניסוח הקודם החזיק שדה עזר `visibleCount` על כל שורה, סינן לפיו, ואז
+   * קילף אותו בפירוק — כלומר הוסיף שדה לצורת ההחזרה כדי למחוק אותו מיד.
+   * כאן `visible.length` נבדק במקום שבו הוא מחושב, ואינו נוסע הלאה.
+   *
+   * תגית בלי אף פנייה גלויה אינה מוסתרת מטעמי סוד בלבד — היא גם מובילה
+   * למסך ריק. ‏ADMIN ובעלים אינם מסוננים: אצלם תגית ריקה היא רשומה לניהול.
+   */
+  return tags.flatMap((tag) => {
+    const visible = tag.tickets.filter((t) => ticketInScope(user, t.ticket.siteId));
+    if (scoped && visible.length === 0) return [];
+
+    return [
+      {
         id: tag.id,
         name: tag.name,
         openCount: visible.filter((t) => t.ticket.closedAt === null).length,
         closedCount: visible.filter((t) => t.ticket.closedAt !== null).length,
         grantedCount: tag._count.access,
-        visibleCount: visible.length,
-      };
-    })
-    // תגית בלי אף פנייה גלויה אינה מוסתרת מטעמי סוד בלבד — היא גם מובילה
-    // למסך ריק. ‏ADMIN ובעלים אינם מסוננים: אצלם תגית ריקה היא רשומה לניהול.
-    .filter((tag) => !scoped || tag.visibleCount > 0)
-    .map(({ visibleCount: _visibleCount, ...tag }) => tag);
+      },
+    ];
+  });
 }
 
 /** מנהל עבודה רואה רק את אתרו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז) */

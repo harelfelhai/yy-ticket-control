@@ -46,6 +46,21 @@ export function buildContentSecurityPolicy(isDev: boolean): string {
     // ‏https: להעלאת/משיכת מדיה מול כתובות presigned של R2.
     `connect-src ${connectSrc}`,
     "object-src 'none'",
+    /*
+     * ‏`frame-src` — נדרש כדי שמסך 5 יציג את דוח הבדק ב-`<iframe>`.
+     *
+     * **בלי הדירקטיבה הזו ה-iframe נחסם בשקט:** בהיעדרה חלה נסיגה ל-
+     * ‏`default-src 'self'`, ו-`blob:` אינו `'self'` — הדוח פשוט אינו מופיע,
+     * בלי שגיאה בממשק. הדרך היחידה להציג אותו לפני שהפניות נוצרו היא כתובת
+     * ‏`blob:` מקומית (ראו `canPreviewLocally`), ולכן היא מותרת כאן.
+     *
+     * ‏`blob:` והמקור שלנו בלבד — ולא `https:` כמו ב-`img-src`. כתובת
+     * ‏`blob:` נוצרת רק על ידי סקריפט שכבר רץ בדף שלנו, ולכן היא אינה
+     * מרחיבה את משטח התקיפה: מי שמסוגל ליצור אותה כבר מריץ קוד אצלנו.
+     * ‏`object-src 'none'` נשאר — ‏`<embed>`/`<object>` הם וקטור נפרד, ואין
+     * לנו שימוש בהם.
+     */
+    "frame-src 'self' blob:",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
