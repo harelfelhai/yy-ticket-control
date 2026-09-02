@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { canManageAdmin } from "@/lib/permissions";
+import { toViewer } from "@/lib/session";
 import { he } from "@/lib/he";
 import { FULL_WIDTH, PAGE_X, TITLE_DESCRIPTIVE, RECORD_CARD_GRID, RECORD_NAME} from "@/lib/ui";
 import { listTagOverviews } from "@/lib/services/tags";
@@ -20,9 +22,23 @@ export const metadata = { title: `${he.tag.listTitle} — ${he.app.name}` };
  */
 export default async function TagsPage() {
   const user = await requireUser();
+
+  /**
+   * **הרשימה פתוחה לכל משתמש פנימי — אך מסוננת** (GAP-A7, הכרעת 2.9.2026).
+   *
+   * ‏§4 מונה את **תגיות** (שם, נראות, למי פתוחה) בין מסכי ניהול הרשומות,
+   * ולכן שינוי שם ומחיקה שמורים ל-ADMIN. אבל **מסך 6 — צ׳אט התגית —
+   * מיועד ל"מנהלים"** במפורש, ומנהל עבודה צריך דרך להגיע אליו. חסימת
+   * הרשימה כולה הייתה משאירה אותו בלי שום אינדקס, ומחייבת אותו לזכור
+   * פנייה שנושאת את התגית.
+   *
+   * הפער האמיתי שנסגר כאן צר יותר מ"המסך פתוח": עד 2.9.2026 החזיר
+   * `listTagOverviews` את **כל** התגיות במערכת, ורק המונים מודרו לפי
+   * אתר — כלומר מנהל עבודה ראה שמות של תגיות מאתרים אחרים עם "0 פתוחות".
+   * הסינון עבר לשירות, ששם ממילא נחתך ההיקף.
+   */
   const tags = await listTagOverviews(user);
-  // שינוי שם תגית שמור למנהל המערכת, כמו שאר ניהול הרשומות.
-  const canManage = user.role === "ADMIN";
+  const canManage = canManageAdmin(toViewer(user));
 
   // ‏`FULL_WIDTH` ולא רוחב קריאה: זהו מסך ניהול שסורקים בו רשומות, ואין בו
   // שורת טקסט אחת שנקראת ברצף. עמודה ממורכזת כאן רק קונה גלילה.

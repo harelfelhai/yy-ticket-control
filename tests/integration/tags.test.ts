@@ -163,6 +163,39 @@ describe("listTagOverviews — מונה פתוחות/סגורות ממודר ל�
     expect(managerView).toMatchObject({ openCount: 1, closedCount: 1 });
   });
 
+  /**
+   * ‏GAP-A7 (2.9.2026): הרשימה עצמה ממודרת, ולא רק המונים שבה.
+   *
+   * עד לתיקון הוחזרו כל התגיות במערכת, ומנהל עבודה ראה שמות של תגיות
+   * מאתרים אחרים עם "0 פתוחות · 0 סגורות". שם תגית הוא מידע, והשורה גם
+   * לא הובילה לשום מקום — מסך התגית היה נפתח לו ריק.
+   */
+  it("מנהל עבודה אינו רואה כלל תגית שכל פניותיה באתר אחר", async () => {
+    const mine = await findOrCreateTag("נזילות אתר א", adminId);
+    const theirs = await findOrCreateTag("צנרת אתר ב", adminId);
+    const ticketA = await makeTicket(siteAId, managerAId);
+    const ticketB = await makeTicket(siteBId, adminId);
+    await db.ticketTag.create({ data: { ticketId: ticketA.id, tagId: mine.id } });
+    await db.ticketTag.create({ data: { ticketId: ticketB.id, tagId: theirs.id } });
+
+    const names = (await listTagOverviews(managerAUser)).map((t) => t.name);
+    expect(names).toContain("נזילות אתר א");
+    expect(names).not.toContain("צנרת אתר ב");
+
+    // ‏ADMIN רואה את שתיהן — הרשימה היא רשומת ניהול שלו.
+    const adminNames = (await listTagOverviews(adminUser)).map((t) => t.name);
+    expect(adminNames).toEqual(expect.arrayContaining(["נזילות אתר א", "צנרת אתר ב"]));
+  });
+
+  it("תגית בלי פניות כלל מוסתרת ממנהל עבודה ונשארת אצל מנהל המערכת", async () => {
+    // תגית שנוצרה ואז הוסרה מכל הפניות: למנהל היא שורה שמובילה למסך ריק,
+    // ולמנהל המערכת היא רשומה שצריך לתחזק (שינוי שם, מחיקה).
+    await findOrCreateTag("תגית יתומה", adminId);
+
+    expect((await listTagOverviews(managerAUser)).map((t) => t.name)).not.toContain("תגית יתומה");
+    expect((await listTagOverviews(adminUser)).map((t) => t.name)).toContain("תגית יתומה");
+  });
+
   it("סופר את מספר הקבלנים שנפתחו", async () => {
     const tag = await findOrCreateTag("בדק בית", adminId);
     await grantTagAccess(adminViewer, tag.id, [electricianId, plumberId]);

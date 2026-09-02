@@ -170,6 +170,16 @@ export interface TagOverview {
  *
  * המונים ממודרים לפי הרשאת הצופה: מנהל עבודה סופר רק את פניות האתר שלו,
  * כדי שהמספר יתאים לרשימה שהוא רואה במסך התגית ולא יסתור אותה.
+ *
+ * **והרשימה עצמה ממודרת יחד איתם (GAP-A7, 2.9.2026).** עד אז הוחזרו כל
+ * התגיות במערכת ורק המונים נחתכו — כלומר מנהל עבודה ראה שמות של תגיות
+ * מאתרים אחרים, כל אחת עם "0 פתוחות · 0 סגורות". שם של תגית הוא מידע
+ * ("צנרת בניין ג׳"), והשורה הזו גם הייתה חסרת שימוש: לחיצה עליה מובילה
+ * למסך שאין בו ולו פנייה אחת שהוא רשאי לראות.
+ *
+ * הסינון הוא לפי אותו `ticketInScope` בדיוק, ולכן הרשימה והמונים אינם
+ * יכולים להיפרד: תגית נשארת אך ורק אם נותרה בה לפחות פנייה אחת גלויה.
+ * ‏ADMIN ובעלים רואים הכול, וגם תגית ריקה — היא רשומת ניהול שלהם.
  */
 export async function listTagOverviews(user: SessionUser): Promise<TagOverview[]> {
   const tags = await db.tag.findMany({
@@ -180,16 +190,24 @@ export async function listTagOverviews(user: SessionUser): Promise<TagOverview[]
     },
   });
 
-  return tags.map((tag) => {
-    const visible = tag.tickets.filter((t) => ticketInScope(user, t.ticket.siteId));
-    return {
-      id: tag.id,
-      name: tag.name,
-      openCount: visible.filter((t) => t.ticket.closedAt === null).length,
-      closedCount: visible.filter((t) => t.ticket.closedAt !== null).length,
-      grantedCount: tag._count.access,
-    };
-  });
+  const scoped = user.role === "SITE_MANAGER";
+
+  return tags
+    .map((tag) => {
+      const visible = tag.tickets.filter((t) => ticketInScope(user, t.ticket.siteId));
+      return {
+        id: tag.id,
+        name: tag.name,
+        openCount: visible.filter((t) => t.ticket.closedAt === null).length,
+        closedCount: visible.filter((t) => t.ticket.closedAt !== null).length,
+        grantedCount: tag._count.access,
+        visibleCount: visible.length,
+      };
+    })
+    // תגית בלי אף פנייה גלויה אינה מוסתרת מטעמי סוד בלבד — היא גם מובילה
+    // למסך ריק. ‏ADMIN ובעלים אינם מסוננים: אצלם תגית ריקה היא רשומה לניהול.
+    .filter((tag) => !scoped || tag.visibleCount > 0)
+    .map(({ visibleCount: _visibleCount, ...tag }) => tag);
 }
 
 /** מנהל עבודה רואה רק את אתרו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז) */
