@@ -27,6 +27,13 @@ const ARGON2_OPTIONS = {
   parallelism: 1,
 } as const;
 
+/**
+ * אורך מינימלי לסיסמה. גר כאן, לצד הגיבוב, ולא בשירות שבמקרה נזקק לו ראשון:
+ * מ-1.1 שלוש דרכים קובעות סיסמה — הקמת משתמש בידי מנהל, איפוס בידי מנהל,
+ * והחלפה עצמית — ומדיניות שיושבת באחת מהן היא מדיניות שתיפרד מהשתיים.
+ */
+export const MIN_PASSWORD_LENGTH = 8;
+
 export function hashPassword(password: string): Promise<string> {
   return hash(password, ARGON2_OPTIONS);
 }

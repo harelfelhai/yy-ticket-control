@@ -22,6 +22,7 @@ import {
   renameBuilding,
   renameDomain,
   renameSite,
+  resetUserPassword,
   setProfessionalActive,
   setSiteManagers,
   setUserActive,
@@ -197,6 +198,20 @@ export async function setUserActiveAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     await setUserActive(await requireUser(), z.string().min(1).parse(userId), z.boolean().parse(active));
+    revalidatePath("/admin/users");
+  });
+}
+
+/**
+ * איפוס סיסמה בידי מנהל (1.1) — מסלול השחזור היחיד למשתמש ששכח את סיסמתו.
+ * מדיניות האורך נאכפת בשירות, כמו בהקמה ובהחלפה העצמית.
+ */
+export async function resetUserPasswordAction(
+  userId: string,
+  newPassword: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await resetUserPassword(await requireUser(), id(userId), z.string().min(1).parse(newPassword));
     revalidatePath("/admin/users");
   });
 }
