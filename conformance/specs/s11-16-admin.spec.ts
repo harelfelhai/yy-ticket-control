@@ -4,11 +4,16 @@ import { loginAs } from "../fixtures/roles";
 import { acceptDialogs, createTicket, gotoNewTicket, uniq, uniqPhone } from "../fixtures/world";
 
 /**
- * מסכים 11–16 — ניהול הרשומות (הכרעות 0.3, §7 שורות 23–25).
+ * מסכים 11–16 — ניהול הרשומות (הכרעות 0.3 ו-1.0, §7 שורות 23–25 ו-40).
  *
- * האפיון קובע: "בכל אחת מהרשימות אפשר לערוך ולמחוק", עם שני כללים חוצים —
- * **המחיקה נחסמת כשקיימות הפניות וההודעה אומרת מה חוסם ובכמה**, ו**משתמש
- * אינו נמחק לעולם**. שלושת אלה נבדקים כאן מקצה לקצה.
+ * האפיון קובע: "בכל אחת מהרשימות אפשר לערוך ולמחוק", עם כלל חוצה אחד —
+ * **המחיקה נחסמת כשקיימות הפניות וההודעה אומרת מה חוסם ובכמה**.
+ *
+ * **המשתמש היה חריג לכלל עד 1.0, ואינו עוד** (§7 שורה 40). הנוסח הקודם כאן
+ * אכף "משתמש אינו נמחק לעולם"; החריג בוטל מפני שהחסימה סופרת במפורש גם את
+ * שלוש ההפניות ה-`SetNull` שהולידו אותו — "מי מטפל", "מי סגר" ומעלה הקובץ —
+ * ולכן משתמש שנגע במשהו חסום ממילא, ומה שנמחק הוא רק רשומה שנוצרה בטעות.
+ * ההשבתה נשארת מסלול ההוצאה למי שעזב, ו-S16-04 בודק את **שתי** הדרכים.
  *
  * **כל בדיקת מחיקה יוצרת את הרשומה שלה ומוחקת אותה.** מחיקה שנוגעת בנתוני
  * ה-cast הייתה מרעילה את ההרצה הבאה — `provision-cast` עושה upsert לפי שם,
@@ -156,7 +161,7 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
     await expect(page.getByRole("listitem").filter({ hasText: domain })).toHaveCount(0);
   });
 
-  test("S16-04 — משתמש נערך ומושבת, ואין לו מחיקה בשום מקום במסך", async ({ page }) => {
+  test("S16-04 — משתמש נערך, מושבת, ונמחק כשאין אליו הפניות", async ({ page }) => {
     acceptDialogs(page);
     await loginAs(page, "admin");
     await page.goto("/admin/users");
@@ -184,15 +189,21 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
     await details.getByLabel("שם", { exact: true }).fill(renamed);
     await details.getByRole("button", { name: "שמור", exact: true }).click();
 
-    // מחיקה — אינה קיימת, וזו ההכרעה: `SetNull` היה מוחק "מי מטפל"/"מי סגר".
-    // מסלול ההוצאה הוא ההשבתה. הטענה על **הדיאלוג**, שהוא המקום היחיד
-    // שבו פעולות משתמש קיימות מ-0.7 — ולכן היעדר מחיקה בו הוא היעדר מחיקה.
-    await expect(details.getByRole("button", { name: /^מחק/ })).toHaveCount(0);
+    // שתי דרכי ההוצאה חיות זו לצד זו בדיאלוג, שהוא המקום היחיד שבו פעולות
+    // משתמש קיימות מ-0.7. ראשונה ההשבתה — מסלול מי שעזב, שמשאיר אותו ברשימה.
     await details.getByRole("button", { name: "השבת" }).click();
     await expect(details.getByText("מושבת")).toBeVisible();
-
     await details.getByRole("button", { name: "סגור", exact: true }).click();
     await expect(page.getByRole("button", { name: renamed, exact: true })).toBeVisible();
+
+    // ואז המחיקה (1.0). המשתמש הזה נוצר בבדיקה ולא נגע בשום פנייה, ולכן
+    // אין אליו הפניה שתחסום — וזה בדיוק המקרה שהמחיקה נועדה לו.
+    await page.getByRole("button", { name: renamed, exact: true }).click();
+    const reopened = page.getByRole("dialog");
+    await reopened.getByRole("button", { name: `מחק ${renamed}` }).click();
+
+    await expect(reopened).toBeHidden();
+    await expect(page.getByRole("button", { name: renamed, exact: true })).toHaveCount(0);
   });
 
   test("S16-05 — אתר עם בניינים ומשתמשים אינו נמחק, וההודעה מונה את שניהם", async ({ page }) => {

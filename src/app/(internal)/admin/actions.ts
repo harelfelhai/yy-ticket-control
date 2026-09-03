@@ -16,6 +16,7 @@ import {
   deleteDomain,
   deleteProfessional,
   deleteSite,
+  deleteUser,
   mergeProfessionals,
   renameApartment,
   renameBuilding,
@@ -179,10 +180,7 @@ const updateUserSchema = z.object({
   email: z.string().optional(),
 });
 
-/**
- * עריכת פרטי קשר בלבד. אין `deleteUserAction` — ראה `updateUser` בשירות:
- * מחיקת משתמש הייתה מוחקת בשקט "מי מטפל" ו"מי סגר" מפניות קיימות.
- */
+/** עריכת פרטי קשר בלבד — תפקיד ואתר אינם נערכים. ראה `updateUser` בשירות. */
 export async function updateUserAction(
   userId: string,
   input: z.infer<typeof updateUserSchema>,
@@ -199,6 +197,18 @@ export async function setUserActiveAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     await setUserActive(await requireUser(), z.string().min(1).parse(userId), z.boolean().parse(active));
+    revalidatePath("/admin/users");
+  });
+}
+
+/**
+ * מוחק משתמש שאין אליו הפניות (הכרעת מימוש 1.0). החסימה, ההגנה מפני מחיקה
+ * עצמית וההגנה על המנהל האחרון — כולן בשירות, כי Server Action היא נקודת
+ * כניסה ציבורית ובדיקה שיושבת רק כאן ניתנת לעקיפה בנתיב חדש.
+ */
+export async function deleteUserAction(userId: string): Promise<ActionResult> {
+  return guard(async () => {
+    await deleteUser(await requireUser(), id(userId));
     revalidatePath("/admin/users");
   });
 }

@@ -24,7 +24,14 @@ import { he } from "@/lib/he";
 
 export class DeletionBlockedError extends UserFacingError {}
 
-export type DeletableEntity = "site" | "building" | "apartment" | "domain" | "professional" | "tag";
+export type DeletableEntity =
+  | "site"
+  | "building"
+  | "apartment"
+  | "domain"
+  | "professional"
+  | "tag"
+  | "user";
 
 /**
  * סוג ההפניה החוסמת. המפתח הוא נתון; הניסוח בעברית נגזר ממנו ב-`he.ts`,
@@ -38,7 +45,9 @@ export type BlockingKind =
   | "assignments"
   | "messages"
   | "taggedTickets"
-  | "tagMessages";
+  | "tagMessages"
+  | "createdTags"
+  | "uploadedMedia";
 
 export interface BlockingReference {
   kind: BlockingKind;
@@ -91,6 +100,34 @@ const COUNTERS: Record<DeletableEntity, Counter> = {
     Promise.all([
       count("taggedTickets", db.ticketTag.count({ where: { tagId: id } })),
       count("tagMessages", db.message.count({ where: { tagId: id } })),
+    ]),
+
+  // ⚠️ המשתמש הוא הישות היחידה שההפניות אליה אינן `Restrict` בלבד:
+  // `Ticket.handlerId`, `Ticket.closedById` ו-`MediaFile.uploaderUserId` הם
+  // `SetNull`. זו בדיוק הסיבה שהאפיון אסר עליו מחיקה עד הכרעת 1.0 — מחיקה
+  // שנשענת על ה-DB בלבד הייתה מוחקת בשקט את "מי מטפל" ואת "מי סגר" מפניות
+  // קיימות. הספירה כאן היא מה שמייתר את האיסור: היא חוסמת על שלוש ההפניות
+  // האלה בדיוק כמו על השאר, ולכן מה שנמחק הוא רק משתמש שלא נגע בכלום.
+  //
+  // שלושת התפקידים בפנייה נספרים כמונה **אחד**: המנהל צריך לדעת בכמה פניות
+  // הוא מעורב, ואותה פנייה שהוא גם פתח, גם טיפל בה וגם סגר הייתה נספרת
+  // שלוש פעמים ונקראת כשלוש פניות שונות.
+  user: (id) =>
+    Promise.all([
+      count(
+        "tickets",
+        db.ticket.count({
+          where: { OR: [{ createdById: id }, { handlerId: id }, { closedById: id }] },
+        }),
+      ),
+      count("assignments", db.assignment.count({ where: { userId: id } })),
+      count("messages", db.message.count({ where: { authorUserId: id } })),
+      count("createdTags", db.tag.count({ where: { createdById: id } })),
+      // המדיה נספרת במפורש, בשונה מ-`professional` שם היא הושמטה במכוון:
+      // קבלן שהעלה קובץ היה בהכרח משויך לפנייה ולכן נחסם דרך השיוך, אבל
+      // מנהל מערכת יכול להעלות קובץ לכל פנייה בלי שיוך ובלי הודעה — ואז
+      // לא היה נשאר מונה שחוסם, והקובץ היה מתייתם ב-SetNull.
+      count("uploadedMedia", db.mediaFile.count({ where: { uploaderUserId: id } })),
     ]),
 };
 
