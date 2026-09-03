@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AssignmentStatusChip } from "@/components/status-chip";
 import { LearnedSelect } from "@/components/learned-select";
 import { ProfessionalCreateForm } from "@/components/professional-create-form";
+import { openWhatsAppTab } from "@/components/wa-pending-panel";
 import type { AssignmentStatus } from "@/generated/prisma/enums";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -34,6 +35,8 @@ export interface AssignmentRow {
   waUrl: string | null;
   /** האם יש כתובת מייל שאפשר לשלוח אליה שוב */
   canResendEmail: boolean;
+  /** לא יקבל שום הודעה עד שמישהו יפתח עבורו את הוואטסאפ */
+  waPending: boolean;
   /** מתי השתנה הסטטוס האישי לאחרונה, כטקסט מוכן */
   statusChangedAt: string;
 }
@@ -43,6 +46,8 @@ export interface AvailableRecipient {
   label: string;
   hint?: string;
   kind: "professional" | "user";
+  /** אין לו מייל — הוספתו פותחת וואטסאפ (§5.ה2, ראה `RecipientOption`) */
+  needsWhatsApp?: boolean;
 }
 
 interface RecipientEditorProps {
@@ -105,7 +110,23 @@ export function RecipientEditor({
     if (!option) return;
     // האזהרה מהאפיון (מסך 3): נמען שנוסף רואה את כל ההיסטוריה שקדמה לו.
     if (!window.confirm(he.ticket.confirmAddRecipient)) return;
-    run(() => addRecipientsAction(ticketId, [{ kind: option.kind, id: option.id }]));
+
+    // הלשונית נפתחת לפני הקריאה לשרת — ראה `openWhatsAppTab` — ורק כשלנמען
+    // הזה באמת אין מייל. אחרת היה נפתח ונסגר חלון ריק בכל הוספת נמען.
+    const settleWhatsApp = option.needsWhatsApp ? openWhatsAppTab() : null;
+
+    run(
+      async () => {
+        const result = await addRecipientsAction(
+          ticketId,
+          [{ kind: option.kind, id: option.id }],
+          settleWhatsApp?.opened === true,
+        );
+        if (!result.ok) settleWhatsApp?.(null);
+        return result;
+      },
+      (assignmentId) => settleWhatsApp?.(assignmentId),
+    );
   }
 
   function remove(assignmentId: string, name: string) {
@@ -130,11 +151,45 @@ export function RecipientEditor({
    * קיים מהרשימה, שם טעות-בחירה אפשרית. זורק כדי שהטופס יציג את השגיאה.
    */
   async function createAndAdd(input: { name: string; phone: string; email: string }) {
-    const created = unwrapOrThrow(await createProfessionalAction(siteId, input));
-    unwrapOrThrow(
-      await addRecipientsAction(ticketId, [{ kind: "professional", id: created.id }]),
-    );
-    setShowCreate(false);
+    /*
+     * **הלשונית נפתחת בשורה הראשונה, לפני כל `await`.**
+     *
+     * ‏`ProfessionalCreateForm` קורא ל-`onCreate` בלי המתנה שקדמה לו,
+     * ולכן השורה הזו עדיין רצה בתוך אירוע הלחיצה — החלון היחיד שבו הדפדפן
+     * מתיר `window.open`. שורה אחת למטה, אחרי ה-`await` הראשון, זה כבר
+     * חלון קופץ חסום.
+     *
+     * וזה **המסלול שהכי צריך אותו**: איש מקצוע שנוצר כאן בשטח נרשם לרוב
+     * עם טלפון בלבד.
+     */
+    /*
+     * **הלשונית נפתחת לפי מה שהוקלד, והשרת מכריע אחריו.**
+     *
+     * ‏`window.open` חייב לרוץ לפני ה-`await` הראשון, ובאותו רגע התשובה
+     * היחידה שיש היא הטופס. ‏`findOrCreateProfessional` עשויה להחזיר איש
+     * מקצוע **קיים** עם מייל שהמקליד לא ידע עליו — ואז `needsWhatsApp`
+     * חוזר `false`, `claimWhatsAppAutoOpen` אינו מסמן דבר, והלשונית
+     * נסגרת. כלומר: פותחים בספק, וסוגרים בידיעה.
+     */
+    const settleWhatsApp = input.email.trim() ? null : openWhatsAppTab();
+
+    try {
+      const created = unwrapOrThrow(await createProfessionalAction(siteId, input));
+      if (!created.needsWhatsApp) settleWhatsApp?.(null);
+      const waAutoOpen = unwrapOrThrow(
+        await addRecipientsAction(
+          ticketId,
+          [{ kind: "professional", id: created.id }],
+          created.needsWhatsApp && settleWhatsApp?.opened === true,
+        ),
+      );
+      if (created.needsWhatsApp) settleWhatsApp?.(waAutoOpen);
+      setShowCreate(false);
+    } catch (failure) {
+      settleWhatsApp?.(null);
+      // נזרק הלאה כדי שהטופס יציג את השגיאה, כפי שהיה לפני הלשונית.
+      throw failure;
+    }
   }
 
   return (

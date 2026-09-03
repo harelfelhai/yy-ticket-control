@@ -94,9 +94,28 @@ test.describe("V02 — קישור הקבלן יציב, וההחלפה מפורש
       name: TICKET_SCREEN.sendWhatsApp,
     });
     await expect(link).toBeVisible();
+
+    /*
+     * **הדרישה לא השתנתה, המימוש כן** (§5.ה2, 2.9.2026).
+     *
+     * שורה 259 באפיון קובעת ש"שלח בוואטסאפ" **פותח את wa.me עם ההודעה** —
+     * וזה עדיין מה שקורה. מה שהתחלף הוא הדרך: ה-`href` היה כתובת `wa.me`
+     * מלאה שנבנתה בשרת ונשלחה ללקוח, **ובתוכה קישור הקסם של הקבלן** —
+     * כלומר סוד גישה שנסע ב-payload של המסך לכל נמען ובכל טעינה. היום
+     * ה-`href` הוא מזהה שיוך, וה-`wa.me` נבנה ברגע הלחיצה מאחורי בדיקת
+     * הרשאה.
+     *
+     * הבדיקה עוקבת אחרי ההפניה במקום לקרוא את ה-`href`, ולכן היא בודקת את
+     * **הדרישה** ולא את הצורה שבה היא מומשה במקרה.
+     */
     const href = await link.getAttribute("href");
-    expect(href).toMatch(/^https:\/\/wa\.me\/972\d+\?text=/);
-    const text = decodeURIComponent(href?.split("?text=")[1] ?? "");
+    expect(href).toMatch(/^\/api\/wa\/[a-z0-9]+$/);
+
+    const response = await page.request.get(href as string, { maxRedirects: 0 });
+    const target = response.headers()["location"] ?? "";
+    expect(target).toMatch(/^https:\/\/wa\.me\/972\d+\?text=/);
+
+    const text = decodeURIComponent(target.split("?text=")[1] ?? "");
     expect(text).toContain(contractor);
     expect(text).toContain("בניין א");
     expect(text).toContain(description);

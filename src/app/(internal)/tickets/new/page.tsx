@@ -81,6 +81,7 @@ export default async function NewTicketPage(props: PageProps<"/tickets/new">) {
         label: p.name,
         hint: p.phone ?? p.email ?? undefined,
         kind: "professional" as const,
+        needsWhatsApp: Boolean(p.phone) && !p.email,
       }))}
       // נמענים פנימיים כוללים את המשתמש עצמו — כך נוצר תזכורן אישי.
       // כולם, מכל האתרים: §5.ז מתיר לנמען לראות פניות ששויכו אליו מכל אתר,

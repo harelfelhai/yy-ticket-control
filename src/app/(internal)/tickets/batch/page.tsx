@@ -90,6 +90,8 @@ export default async function BatchPage(props: PageProps<"/tickets/batch">) {
           label: p.name,
           hint: p.phone ?? p.email ?? undefined,
           kind: "professional" as const,
+          // מסך 5 אינו פותח לשונית אוטומטית (§5.ה2), אבל הטיפוס משותף.
+          needsWhatsApp: Boolean(p.phone) && !p.email,
         })),
         ...internalUsers.map((u) => ({
           id: u.id,

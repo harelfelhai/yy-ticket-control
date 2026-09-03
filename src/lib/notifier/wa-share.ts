@@ -49,3 +49,20 @@ export function waShareUrl(phone: string | null | undefined, text: string): stri
   if (!number) return null;
   return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
 }
+
+/**
+ * הנתיב הפנימי שמתעד את הפתיחה ומפנה ל-`wa.me` — מקור אמת יחיד.
+ *
+ * יושב כאן, במודול הטהור, ולא לצד `openWhatsApp`: הוא נבנה גם בשרת (מסך
+ * הפנייה) וגם בקומפוננטת לקוח (הפאנל "נותר לשלוח"), וקובץ ה-service מייבא
+ * ‏`db` — כלומר ייבוא ממנו בלקוח היה גורר את Prisma לחבילת הדפדפן.
+ */
+export function whatsAppPath(assignmentId: string): string {
+  return `/api/wa/${encodeURIComponent(assignmentId)}`;
+}
+
+/** נמען שלא יקבל שום הודעה עד שמישהו יפתח עבורו את הוואטסאפ */
+export interface WaPendingRecipient {
+  assignmentId: string;
+  name: string;
+}

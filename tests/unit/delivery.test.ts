@@ -14,12 +14,38 @@ const at = (time: Date) => `${time.getUTCHours()}:00`;
 const noon = new Date("2026-07-22T12:00:00Z");
 
 /** ברירת המחדל של הבדיקות היא סביבה שבה **יש** ערוץ מייל — המצב בפרודקשן. */
-const configured = { emailConfigured: true };
+const configured = { emailConfigured: true, waOpenedAt: null };
 
 describe("deliveryNote", () => {
   it("מדווח מתי נשלח מייל בפועל", () => {
     const note = deliveryNote(
       { ...configured, notifiedAt: noon, hasEmail: true, hasPhone: true },
+      at,
+    );
+    expect(note).toBe(he.ticket.notifiedAt("12:00"));
+  });
+
+  it("פתיחת וואטסאפ מדווחת כפתיחה — ולעולם לא כשליחה", async () => {
+    const note = deliveryNote(
+      { ...configured, notifiedAt: null, waOpenedAt: noon, hasEmail: false, hasPhone: true },
+      at,
+    );
+
+    expect(note).toBe(he.ticket.waOpenedAt("12:00"));
+    /*
+     * **הטענה החשובה כאן היא השלילה.**
+     *
+     * ‏`wa.me` פותח שיחה עם הטקסט מוכן; השליחה היא לחיצה נוספת באפליקציה
+     * שאין לנו גישה אליה. מנהל שיקרא כאן "נשלח" יסיק שהקבלן יודע — וזו
+     * בדיוק ההנחה שכל שורת המצב הזו קיימת כדי לשבור.
+     */
+    expect(note).not.toContain("נשלח");
+  });
+
+  it("מייל שיצא בפועל גובר על פתיחת וואטסאפ", () => {
+    // עדות חזקה (ה-SMTP קיבל) אינה נדחקת בפני עדות חלשה (המנהל פתח).
+    const note = deliveryNote(
+      { ...configured, notifiedAt: noon, waOpenedAt: noon, hasEmail: true, hasPhone: true },
       at,
     );
     expect(note).toBe(he.ticket.notifiedAt("12:00"));
@@ -66,7 +92,7 @@ describe("deliveryNote", () => {
    * נוסף, ושום דבר לא הגיע אליו — בעוד שהמסך הצהיר שההודעה בדרך.
    */
   describe("אין ערוץ מייל בסביבה", () => {
-    const unconfigured = { emailConfigured: false };
+    const unconfigured = { emailConfigured: false, waOpenedAt: null };
 
     it("אומר שלא נשלח, ולא 'בתור לשליחה'", () => {
       // "בתור לשליחה" על מערכת שאין לה דרך לשלוח היא הבטחה שלא תתקיים.

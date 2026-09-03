@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { E2E_ADMIN } from "./global-setup";
+import { captureWhatsAppRedirects } from "./helpers";
 import { openDetails, recipientRow, showLink, shownText } from "./ticket-screen";
 
 /**
@@ -213,6 +214,8 @@ test("כפתור וואטסאפ מוכן לשליחה, וחיווי השליחה
   const contractor = `קבלן ${stamp}`;
   const digits = String(stamp).slice(-7);
 
+  const waRedirects = captureWhatsAppRedirects(page);
+
   await loginAsManager(page);
   await page.goto("/tickets/new");
   await pick(page, "בניין", "בניין א");
@@ -223,19 +226,32 @@ test("כפתור וואטסאפ מוכן לשליחה, וחיווי השליחה
   await page.getByRole("button", { name: "שלח לנמענים" }).click();
   await expect(page.getByRole("region", { name: "שרשור" })).toBeVisible();
 
-  // לקבלן הזה אין מייל, ולכן המערכת לא שלחה לו דבר — וזה נאמר במפורש.
-  // "נשלח" בסטטוס פירושו ששייכנו אותו, לא שהוא יודע.
+  /*
+   * **הבדיקה הזו תיעדה עולם שהשתנה ב-§5.ה2, ושני חלקיה התהפכו:**
+   *
+   * 1. הנוסח היה "אין מייל — שלח בוואטסאפ", כלומר משימה פתוחה. היום
+   *    הוואטסאפ **נפתח מעצמו** בשיגור, ולכן השורה מדווחת שהוא נפתח.
+   * 2. ה-`href` היה כתובת `wa.me` מלאה — ובתוכה קישור הקסם של הקבלן,
+   *    כלומר סוד גישה שנסע ללקוח ב-payload של כל נמען. היום הוא מזהה
+   *    שיוך, וה-`wa.me` נבנה בשרת ברגע הלחיצה.
+   *
+   * מה ש**לא** השתנה, וזו הטענה שהבדיקה קיימת בשבילה: ההודעה עצמה מוכנה
+   * ומלאה — שם, מיקום, תיאור וקישור אישי.
+   */
   await openDetails(page);
   const row = recipientRow(page, contractor);
-  await expect(row).toContainText("אין מייל — שלח בוואטסאפ");
+  await expect(row).toContainText("נפתח בוואטסאפ");
+  await expect(row).not.toContainText("אין מייל — שלח בוואטסאפ");
 
   const whatsapp = row.getByRole("link", { name: `שלח בוואטסאפ ${contractor}` });
-  const href = await whatsapp.getAttribute("href");
+  expect(await whatsapp.getAttribute("href")).toMatch(/^\/api\/wa\/[a-z0-9]+$/);
 
-  expect(href).toContain(`https://wa.me/97255${digits}?text=`);
+  // הפתיחה האוטומטית כבר עברה בנתיב, ואיתה נבנתה ההודעה.
+  await expect.poll(() => waRedirects).toHaveLength(1);
+  const target = waRedirects[0] ?? "";
+  expect(target).toContain(`https://wa.me/97255${digits}?text=`);
 
-  // ההודעה מוכנה בכתובת: שם הקבלן, המיקום, התיאור, והקישור האישי שלו.
-  const text = decodeURIComponent(new URL(href as string).searchParams.get("text") ?? "");
+  const text = decodeURIComponent(new URL(target).searchParams.get("text") ?? "");
   expect(text).toContain(`שלום ${contractor}`);
   expect(text).toContain("בניין א דירה 1, חשמל");
   expect(text).toContain(description);

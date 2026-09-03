@@ -14,6 +14,14 @@ import { he } from "./he";
 export interface DeliveryFacts {
   /** מתי יצאה הודעה אוטומטית בפועל */
   notifiedAt: Date | null;
+  /**
+   * מתי המנהל פתח את הוואטסאפ עבור הנמען הזה.
+   *
+   * **אינו מסירה.** ‏`wa.me` פותח שיחה עם הטקסט מוכן, והשליחה היא לחיצה
+   * נוספת באפליקציה שאין לנו גישה אליה. לכן הנוסח כאן אומר "נפתח" ולא
+   * "נשלח" — ראה `he.ticket.waOpenedAt`.
+   */
+  waOpenedAt: Date | null;
   hasEmail: boolean;
   hasPhone: boolean;
   /** האם בכלל קיים ערוץ מייל בסביבה הזו (`isEmailConfigured`) */
@@ -22,6 +30,16 @@ export interface DeliveryFacts {
 
 export function deliveryNote(facts: DeliveryFacts, formatTime: (value: Date) => string): string {
   if (facts.notifiedAt) return he.ticket.notifiedAt(formatTime(facts.notifiedAt));
+
+  /**
+   * הוואטסאפ נבדק **אחרי** המייל ולא לפניו.
+   *
+   * כשיצא מייל, הוא הערוץ שהמערכת יכולה להעיד עליו — היא ראתה את ה-SMTP
+   * מקבל את ההודעה. פתיחת וואטסאפ היא עדות חלשה יותר (המנהל פתח; לא ידוע
+   * אם שלח), ולכן היא אינה דוחקת אמירה חזקה ממנה. כשאין מייל היא האמירה
+   * היחידה שיש — ובדיוק בשבילה השדה קיים.
+   */
+  if (facts.waOpenedAt) return he.ticket.waOpenedAt(formatTime(facts.waOpenedAt));
 
   /**
    * יש כתובת, וטרם יצאה הודעה — שתי סיבות שונות לחלוטין.
