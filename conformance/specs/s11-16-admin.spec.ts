@@ -191,7 +191,9 @@ test.describe("מסכים 11–16 — מחיקה חסומה ומוסברת", () 
 
     // שתי דרכי ההוצאה חיות זו לצד זו בדיאלוג, שהוא המקום היחיד שבו פעולות
     // משתמש קיימות מ-0.7. ראשונה ההשבתה — מסלול מי שעזב, שמשאיר אותו ברשימה.
-    await details.getByRole("button", { name: "השבת" }).click();
+    // ‏`exact` מאותו טעם כמו ב-S16-06: שם הרשומה נכנס ל-`aria-label` של
+    // כפתור המחיקה, והתאמה חלקית של "השבת" הייתה יכולה לתפוס גם אותו.
+    await details.getByRole("button", { name: "השבת", exact: true }).click();
     await expect(details.getByText("מושבת")).toBeVisible();
     await details.getByRole("button", { name: "סגור", exact: true }).click();
     await expect(page.getByRole("button", { name: renamed, exact: true })).toBeVisible();
