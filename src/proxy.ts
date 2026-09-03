@@ -31,5 +31,17 @@ export const config = {
    * - `/p/...` — פורטל הנמען החיצוני, שנכנס בקישור אישי ולא בסשן.
    * - `/api/...` — מאמת בעצמו, ומחזיר 401 במקום הפניה למסך.
    */
-  matcher: ["/board/:path*", "/tickets/:path*", "/tags/:path*", "/search/:path*", "/overview/:path*", "/admin/:path*"],
+  matcher: [
+    "/board/:path*",
+    "/tickets/:path*",
+    "/tags/:path*",
+    "/search/:path*",
+    "/overview/:path*",
+    "/admin/:path*",
+    // ‏`/account` (1.1). מסך פנימי שנשכח כאן אינו נשאר בלי הגנה — `requireUser`
+    // ב-layout תופס אותו — אבל הוא **מאבד את `?next=`**: המסלול דרך
+    // `SESSION_ENDED_PATH` מפנה ל-`/login` בלי היעד, ולכן המשתמש נוחת ב-`/board`
+    // אחרי ההתחברות במקום לחזור לאן שניסה להגיע.
+    "/account/:path*",
+  ],
 };

@@ -14,6 +14,7 @@ import {
 import { canManageAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
+import { assertPasswordAllowed } from "./account";
 import { assertDeletable } from "./deletion";
 import {
   createProfessional,
@@ -32,9 +33,6 @@ import {
  */
 
 export class AdminError extends UserFacingError {}
-
-/** אורך מינימלי לסיסמה ראשונית שמנהל קובע למשתמש */
-const MIN_PASSWORD_LENGTH = 8;
 
 function assertAdmin(actor: SessionUser): void {
   if (!canManageAdmin(toViewer(actor))) throw new AdminError(he.admin.forbidden);
@@ -375,9 +373,7 @@ export async function createInternalUser(actor: SessionUser, input: CreateUserIn
   const email = normalizeEmail(input.email ?? "");
   if (email && !looksLikeEmail(email)) throw new AdminError(he.directory.invalidEmail);
 
-  if (input.password.length < MIN_PASSWORD_LENGTH) {
-    throw new AdminError(he.admin.passwordTooShort(MIN_PASSWORD_LENGTH));
-  }
+  assertPasswordAllowed(input.password, (message) => new AdminError(message));
 
   // מנהל עבודה מחייב אתר; שאר התפקידים לא משויכים לאף אתר.
   const siteId = input.role === "SITE_MANAGER" ? (input.siteId ?? null) : null;
@@ -456,6 +452,37 @@ export async function updateUser(
   }
 
   return db.user.update({ where: { id }, data: { name, phone, email: email || null } });
+}
+
+/**
+ * מנהל קובע סיסמה חדשה למשתמש (הכרעת מימוש 1.1).
+ *
+ * **למה זה נוסף יחד עם ההחלפה העצמית ולא אחריה.** עד 1.1 סיסמה נקבעה פעם
+ * אחת בהקמה ולא השתנתה לעולם — מצב גרוע, אבל אחיד: הסיסמה של כל משתמש
+ * הייתה ידועה למי שהקים אותו. ההחלפה העצמית שוברת את האחידות הזו לטובה,
+ * ובאותה נשימה יוצרת כשל חדש: משתמש שהחליף לסיסמה פרטית ושכח אותה נעול
+ * בחוץ לצמיתות. אין איפוס בדוא״ל (`session.ts`), ומחיקה-והקמה-מחדש נחסמת
+ * ברגע שיש לו היסטוריה. הפונקציה הזו היא מסלול השחזור היחיד.
+ *
+ * **אין כאן דרישה לסיסמה הנוכחית**, בשונה מההחלפה העצמית: מנהל שמאפס
+ * למישהו אחר אינו יודע אותה — זו כל הנקודה. ההרשאה היא השער.
+ */
+export async function resetUserPassword(
+  actor: SessionUser,
+  userId: string,
+  newPassword: string,
+): Promise<void> {
+  assertAdmin(actor);
+
+  const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AdminError(he.admin.userNotFound);
+
+  assertPasswordAllowed(newPassword, (message) => new AdminError(message));
+
+  await db.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(newPassword) },
+  });
 }
 
 export async function setUserActive(actor: SessionUser, userId: string, active: boolean) {

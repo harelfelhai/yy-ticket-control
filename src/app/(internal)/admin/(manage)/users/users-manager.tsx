@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { chipClasses } from "@/components/ui/chip";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/field";
-import { FormError } from "@/components/ui/message";
+import { FormError, FormNotice } from "@/components/ui/message";
 import { he } from "@/lib/he";
 import {
   DIALOG_SCROLL_BODY,
@@ -21,6 +21,7 @@ import { RecordCard } from "../../record-card";
 import {
   createUserAction,
   deleteUserAction,
+  resetUserPasswordAction,
   setUserActiveAction,
   updateUserAction,
 } from "../../actions";
@@ -358,6 +359,8 @@ function UserDetailsDialog({ user, onClose }: { user: UserRow; onClose: () => vo
 
             {error ? <FormError>{error}</FormError> : null}
 
+            <ResetPasswordRow userId={user.id} userName={user.name} />
+
             {/*
              * השבתה ומחיקה זו לצד זו, כמו בדיאלוג איש המקצוע — שתי דרכי
              * הוצאה עם גבול ברור ביניהן: השבתה למי שעזב, ומחיקה לרשומה
@@ -383,6 +386,78 @@ function UserDetailsDialog({ user, onClose }: { user: UserRow; onClose: () => vo
         )}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * איפוס סיסמה בידי מנהל (1.1).
+ *
+ * **מקופל מאחורי כפתור ואינו שדה פתוח בדיאלוג.** הדיאלוג הזה נפתח בכל
+ * לחיצה על כרטיס משתמש — כלומר בעיקר כדי *לקרוא* פרטים — ושדה סיסמה פתוח
+ * בכל פתיחה כזו מזמין הקלדה בהיסח הדעת לתוך הפעולה ההרסנית ביותר במסך.
+ * הכפתור הוא הכוונה המפורשת, והשדה נפתח רק אחריו.
+ *
+ * אין כאן `window.confirm` כמו במחיקה: המשתמש כבר הקליד סיסמה שלמה, וזו
+ * כוונה מפורשת דיה. אישור נוסף היה הרגל של לחיצה אוטומטית.
+ */
+function ResetPasswordRow({ userId, userName }: { userId: string; userName: string }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [done, setDone] = useState(false);
+  const { busy, error, run } = useAction();
+
+  if (!open) {
+    return (
+      <div className="border-t border-border pt-3">
+        <Button variant="secondary" size="compact" onClick={() => setOpen(true)}>
+          {he.admin.resetPassword}
+        </Button>
+        {done ? <FormNotice className="mt-2">{he.admin.resetPasswordDone}</FormNotice> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-3">
+      <Field label={he.admin.resetPasswordFor(userName)}>
+        <Input
+          type="password"
+          autoComplete="new-password"
+          dir="ltr"
+          size="compact"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={busy}
+        />
+      </Field>
+      {error ? <FormError>{error}</FormError> : null}
+      <div className="flex gap-2">
+        <Button
+          size="compact"
+          disabled={busy || !password}
+          onClick={() =>
+            run(() => resetUserPasswordAction(userId, password), () => {
+              setPassword("");
+              setOpen(false);
+              setDone(true);
+            })
+          }
+        >
+          {he.common.save}
+        </Button>
+        <Button
+          variant="secondary"
+          size="compact"
+          disabled={busy}
+          onClick={() => {
+            setPassword("");
+            setOpen(false);
+          }}
+        >
+          {he.common.cancel}
+        </Button>
+      </div>
+    </div>
   );
 }
 
