@@ -119,8 +119,15 @@ test("עובד שהושבת מוחזר למסך ההתחברות, ואינו מ�
     // ‏0.7: ההשבתה ירדה מהשורה לדיאלוג הפרטים שנפתח בלחיצה על הכרטיס.
     await page.getByRole("button", { name: employeeName, exact: true }).click();
     const details = page.getByRole("dialog");
-    await details.getByRole("button", { name: "השבת" }).click();
-    await expect(details.getByRole("button", { name: "הפעל" })).toBeVisible();
+    /*
+     * ‏`exact: true` ואינו קישוט. ‏`getByRole` מתאים שם נגיש כמחרוזת
+     * **חלקית**, ושם העובד כאן הוא "עובד להשבתה …" — כלומר `aria-label`
+     * של כפתור המחיקה שנוסף לדיאלוג ב-1.0, "מחק עובד להשבתה …", מכיל את
+     * המילה "השבת" והבורר נעשה דו-משמעי. אותו זוג כפתורים כבר מאותר
+     * ב-`exact` ב-S16-06 של חבילת ההתאמה, מאותו טעם.
+     */
+    await details.getByRole("button", { name: "השבת", exact: true }).click();
+    await expect(details.getByRole("button", { name: "הפעל", exact: true })).toBeVisible();
     await details.getByRole("button", { name: "סגור", exact: true }).click();
 
     // ── ומכאן: הפניה למסך ההתחברות, לא 500 ───────────────────────────

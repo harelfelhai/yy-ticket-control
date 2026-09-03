@@ -3,6 +3,7 @@
 import { Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Role } from "@/generated/prisma/enums";
+import { DeleteButton } from "@/components/delete-button";
 import { Button } from "@/components/ui/button";
 import { chipClasses } from "@/components/ui/chip";
 import { Dialog } from "@/components/ui/dialog";
@@ -17,7 +18,12 @@ import {
 } from "@/lib/ui";
 import { useAction } from "@/lib/use-action";
 import { RecordCard } from "../../record-card";
-import { createUserAction, setUserActiveAction, updateUserAction } from "../../actions";
+import {
+  createUserAction,
+  deleteUserAction,
+  setUserActiveAction,
+  updateUserAction,
+} from "../../actions";
 
 interface SiteOption {
   id: string;
@@ -352,7 +358,13 @@ function UserDetailsDialog({ user, onClose }: { user: UserRow; onClose: () => vo
 
             {error ? <FormError>{error}</FormError> : null}
 
-            <div className="border-t border-border pt-3">
+            {/*
+             * השבתה ומחיקה זו לצד זו, כמו בדיאלוג איש המקצוע — שתי דרכי
+             * הוצאה עם גבול ברור ביניהן: השבתה למי שעזב, ומחיקה לרשומה
+             * שנוצרה בטעות. המחיקה נחסמת מהשרת ברגע שיש ולו הפניה אחת,
+             * וההודעה נוקבת במה חוסם ובכמה.
+             */}
+            <div className="flex items-start gap-2 border-t border-border pt-3">
               <Button
                 variant="secondary"
                 size="compact"
@@ -361,6 +373,11 @@ function UserDetailsDialog({ user, onClose }: { user: UserRow; onClose: () => vo
               >
                 {user.active ? he.admin.deactivate : he.admin.activate}
               </Button>
+              <DeleteButton
+                name={user.name}
+                action={deleteUserAction.bind(null, user.id)}
+                disabled={busy}
+              />
             </div>
           </>
         )}

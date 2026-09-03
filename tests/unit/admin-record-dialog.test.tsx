@@ -28,6 +28,7 @@ const actions = vi.hoisted(() => ({
   createUserAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   updateUserAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   setUserActiveAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
+  deleteUserAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   createProfessionalAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   updateProfessionalAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   setProfessionalActiveAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
@@ -254,15 +255,35 @@ describe("דיאלוג פרטי משתמש", () => {
     });
   });
 
-  it("אין מחיקת משתמש — ההיסטוריה ב-SetNull ומחיקה הייתה מוחקת אותה בשקט", async () => {
+  /**
+   * הפוך מהבדיקה שעמדה כאן עד 1.0, שאכפה את **היעדר** המחיקה.
+   * ההיפוך מכוון: החסימה-בהסבר סופרת מפורשות גם את שלוש ההפניות ה-SetNull
+   * שהולידו את האיסור, ולכן משתמש שנגע במשהו חסום ממילא (אפיון §7 שורה 40).
+   * שתי דרכי ההוצאה חיות זו לצד זו — השבתה למי שעזב, מחיקה לרשומה שנוצרה
+   * בטעות — ולכן הבדיקה טוענת על **שתיהן** ולא רק על החדשה.
+   */
+  it("מחיקה והשבתה חיות זו לצד זו בדיאלוג המשתמש", async () => {
     render(<UsersManager sites={[]} users={USERS} />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "שירה לוי" }));
 
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).queryByRole("button", { name: /^מחק/ })).toBeNull();
-    // ההשבתה היא המסלול, והיא כן קיימת.
+    expect(within(dialog).getByRole("button", { name: `${he.admin.delete} שירה לוי` })).toBeVisible();
     expect(within(dialog).getByRole("button", { name: he.admin.deactivate })).toBeVisible();
+  });
+
+  it("המחיקה עוברת דרך אישור, ולחיצה בטעות אינה מוחקת", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<UsersManager sites={[]} users={USERS} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "שירה לוי" }));
+
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: `${he.admin.delete} שירה לוי` }));
+
+    expect(confirm).toHaveBeenCalledWith(he.admin.deleteConfirm("שירה לוי"));
+    expect(actions.deleteUserAction).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });
 

@@ -465,6 +465,44 @@ export async function setUserActive(actor: SessionUser, userId: string, active: 
   return db.user.update({ where: { id: userId }, data: { active } });
 }
 
+/**
+ * מוחק משתמש שאין אליו שום הפניה (הכרעת מימוש 1.0, אפיון §7 שורה 25).
+ *
+ * **מה השתנה מ-0.3.** עד כאן קבע האפיון שמשתמש אינו נמחק לעולם, "גם כשאין
+ * אליו הפניות", והנימוק היה שמחיקתו הייתה מוחקת בשקט את "מי מטפל" ואת
+ * "מי סגר" דרך ה-`SetNull`. הנימוק נכון — אבל הוא נוסח לפני ש-`deletion.ts`
+ * הפך למנגנון אחד לכל הישויות. `assertDeletable("user")` סופר את שלוש
+ * ההפניות ה-`SetNull` במפורש וחוסם עליהן, ולכן מה שנשאר מחיק הוא רק משתמש
+ * שלא נגע בכלום — בדיוק "ניקוי טעות הקלדה" שהאפיון מתיר לכל רשומת עזר
+ * (§4). משתמש אמיתי שעזב עדיין מושבת ואינו נמחק, כי הוא נחסם.
+ *
+ * **שתי הגנות שאינן ספירת הפניות.** מחיקה עצמית, ומחיקת מנהל המערכת הפעיל
+ * האחרון: אין אליהם בהכרח שום הפניה, ולכן `assertDeletable` היה מתיר
+ * אותם — ושתיהן נועלות את המשתמש מחוץ למסכי הניהול בלי דרך חזרה בממשק.
+ */
+export async function deleteUser(actor: SessionUser, userId: string): Promise<void> {
+  assertAdmin(actor);
+
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, active: true },
+  });
+  if (!user) throw new AdminError(he.admin.userNotFound);
+
+  if (userId === actor.id) throw new AdminError(he.admin.cannotDeleteSelf);
+
+  // רק מנהל **פעיל** נספר: מנהל מושבת אינו יכול להתחבר, ולכן אינו דרך חזרה.
+  if (user.role === "ADMIN" && user.active) {
+    const otherActiveAdmins = await db.user.count({
+      where: { role: "ADMIN", active: true, id: { not: userId } },
+    });
+    if (otherActiveAdmins === 0) throw new AdminError(he.admin.cannotDeleteLastAdmin);
+  }
+
+  await assertDeletable("user", userId);
+  await db.user.delete({ where: { id: userId } });
+}
+
 // ────────────────────────────── אנשי מקצוע ──────────────────────────────
 
 /** אנשי מקצוע עם מספר הפניות הפעילות של כל אחד — עוזר לזהות כפילויות */

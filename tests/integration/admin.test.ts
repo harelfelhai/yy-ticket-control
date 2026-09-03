@@ -15,6 +15,7 @@ import {
   deleteDomain,
   deleteProfessional,
   deleteSite,
+  deleteUser,
   listAssignableSiteManagers,
   listDomains,
   listProfessionalsForAdmin,
@@ -564,7 +565,211 @@ describe("מחיקה — נחסמת כשקיימות הפניות, ומסביר�
   });
 });
 
-describe("updateUser — עריכה בלבד, בלי מחיקה", () => {
+/**
+ * הכרעת מימוש 1.0 (אפיון §7 שורה 40). עד כאן משתמש לא נמחק לעולם, והנימוק
+ * היה ששלוש הפניות SetNull — handler, closedBy, uploaderUser — היו נמחקות
+ * בשקט. הבדיקות כאן מוכיחות את הטענה שהחליפה אותו: שלושתן נספרות במפורש
+ * ולכן חוסמות, ומה שנמחק בפועל הוא רק רשומה שלא נגעה בכלום.
+ */
+describe("deleteUser — נמחק רק כשלא נגע בכלום (1.0)", () => {
+  async function freshUser(phone: string, role: "OWNER" | "ADMIN" = "OWNER") {
+    return createInternalUser(admin, {
+      name: "משתמש שנוצר בטעות",
+      phone,
+      role,
+      password: "password1",
+    });
+  }
+
+  it("משתמש שלא נגע בכלום נמחק, והטלפון והמייל משתחררים", async () => {
+    const target = await createInternalUser(admin, {
+      name: "טעות הקלדה",
+      phone: "0531111111",
+      email: "typo@example.com",
+      role: "OWNER",
+      password: "password1",
+    });
+
+    await deleteUser(admin, target.id);
+    expect(await db.user.findUnique({ where: { id: target.id } })).toBeNull();
+
+    // ‏@unique על טלפון ומייל: בלי מחיקה הם היו תפוסים לנצח ברשומה מתה.
+    const reused = await createInternalUser(admin, {
+      name: "הפעם נכון",
+      phone: "0531111111",
+      email: "typo@example.com",
+      role: "OWNER",
+      password: "password1",
+    });
+    expect(reused.phone).toBe("0531111111");
+  });
+
+  it("פנייה שפתח חוסמת", async () => {
+    const target = await freshUser("0532222222");
+    await db.ticket.create({
+      data: { siteId, createdById: target.id, channel: "SELF", description: "פנייה שפתח" },
+    });
+
+    await expect(deleteUser(admin, target.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.tickets(1)),
+    );
+    expect(await db.user.findUnique({ where: { id: target.id } })).not.toBeNull();
+  });
+
+  it("SetNull אינו חור: 'מי מטפל' ו'מי סגר' חוסמים בדיוק כמו שאר ההפניות", async () => {
+    const handler = await freshUser("0533333333");
+    const closer = await freshUser("0534444444");
+
+    await db.ticket.create({
+      data: {
+        siteId,
+        createdById: admin.id,
+        channel: "SELF",
+        description: "פנייה שמישהו אחר פתח",
+        handlerId: handler.id,
+      },
+    });
+    await db.ticket.create({
+      data: {
+        siteId,
+        createdById: admin.id,
+        channel: "SELF",
+        description: "פנייה סגורה",
+        closedById: closer.id,
+        closedAt: new Date(),
+      },
+    });
+
+    for (const target of [handler, closer]) {
+      await expect(deleteUser(admin, target.id)).rejects.toThrow(
+        he.admin.deleteBlocked(he.admin.blockedBy.tickets(1)),
+      );
+    }
+  });
+
+  it("אותה פנייה שהוא פתח, טיפל בה וסגר נספרת פעם אחת ולא שלוש", async () => {
+    const target = await freshUser("0535555555");
+    await db.ticket.create({
+      data: {
+        siteId,
+        createdById: target.id,
+        handlerId: target.id,
+        closedById: target.id,
+        closedAt: new Date(),
+        channel: "SELF",
+        description: "הכול הוא",
+      },
+    });
+
+    expect(await countBlockingReferences("user", target.id)).toEqual([
+      { kind: "tickets", count: 1 },
+    ]);
+  });
+
+  it("שיוך, הודעה, תגית שיצר וקובץ שהעלה — כל אחד חוסם בנפרד", async () => {
+    const ticket = await ticketAt({});
+
+    const assigned = await freshUser("0536666666");
+    await db.assignment.create({ data: { ticketId: ticket.id, userId: assigned.id } });
+    await expect(deleteUser(admin, assigned.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.assignments(1)),
+    );
+
+    const author = await freshUser("0537777777");
+    await db.message.create({
+      data: { ticketId: ticket.id, kind: "TEXT", text: "בטיפול", authorUserId: author.id },
+    });
+    await expect(deleteUser(admin, author.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.messages(1)),
+    );
+
+    const tagger = await freshUser("0538888888");
+    await db.tag.create({ data: { name: "נזילות חורף", createdById: tagger.id } });
+    await expect(deleteUser(admin, tagger.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.createdTags(1)),
+    );
+
+    // ‏MediaFile.uploaderUserId הוא SetNull, וזה המקרה שבו הוא ההפניה
+    // **היחידה**: הקובץ נרשם לפני שההודעה נוצרת, ולכן העלאה שנקטעה משאירה
+    // רשומה שאין לה messageId — ובלי הספירה הזו איש לא היה חוסם עליה.
+    const uploader = await freshUser("0539999999");
+    await db.mediaFile.create({
+      data: {
+        storageKey: "k/1",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        uploaderUserId: uploader.id,
+      },
+    });
+    await expect(deleteUser(admin, uploader.id)).rejects.toThrow(
+      he.admin.deleteBlocked(he.admin.blockedBy.uploadedMedia(1)),
+    );
+  });
+
+  it("החסימות מצטברות להודעה אחת שנוקבת בכל אחת מהן", async () => {
+    const target = await freshUser("0540000001");
+    const ticket = await db.ticket.create({
+      data: { siteId, createdById: target.id, channel: "SELF", description: "פנייה" },
+    });
+    await db.message.create({
+      data: { ticketId: ticket.id, kind: "TEXT", text: "היי", authorUserId: target.id },
+    });
+
+    await expect(deleteUser(admin, target.id)).rejects.toThrow(
+      he.admin.deleteBlocked(
+        `${he.admin.blockedBy.tickets(1)}, ${he.admin.blockedBy.messages(1)}`,
+      ),
+    );
+  });
+
+  it("אי אפשר למחוק את עצמך, גם כשאין אליך שום הפניה", async () => {
+    const solo = await freshUser("0540000002", "ADMIN");
+    const actor: SessionUser = { id: solo.id, name: solo.name, role: "ADMIN", siteId: null };
+
+    await expect(deleteUser(actor, solo.id)).rejects.toThrow(he.admin.cannotDeleteSelf);
+  });
+
+  it("מנהל המערכת הפעיל האחרון מוגן — ונפתח למחיקה ברגע שיש אחר", async () => {
+    // ‏`admin` של הבדיקות הוא ADMIN פעיל, ולכן המנהל שנוצר כאן אינו האחרון.
+    const second = await freshUser("0540000003", "ADMIN");
+    await deleteUser(admin, second.id);
+    expect(await db.user.findUnique({ where: { id: second.id } })).toBeNull();
+
+    // עכשיו `admin` הוא האחרון. מנהל אחר (לא הוא עצמו) מנסה למחוק אותו.
+    const other = await freshUser("0540000004", "ADMIN");
+    const actor: SessionUser = { id: other.id, name: other.name, role: "ADMIN", siteId: null };
+    await db.user.update({ where: { id: other.id }, data: { active: false } });
+
+    await expect(deleteUser(actor, admin.id)).rejects.toThrow(he.admin.cannotDeleteLastAdmin);
+    expect(await db.user.findUnique({ where: { id: admin.id } })).not.toBeNull();
+  });
+
+  it("מנהל עבודה שאינו מנהל מערכת נמחק גם כשהוא היחיד בתפקידו", async () => {
+    const target = await createInternalUser(admin, {
+      name: "מנהל עבודה בודד",
+      phone: "0540000005",
+      role: "SITE_MANAGER",
+      siteId,
+      password: "password1",
+    });
+
+    await deleteUser(admin, target.id);
+    expect(await db.user.findUnique({ where: { id: target.id } })).toBeNull();
+    // האתר עצמו לא נגרר איתו.
+    expect(await db.site.findUnique({ where: { id: siteId } })).not.toBeNull();
+  });
+
+  it("מנהל עבודה אינו רשאי למחוק אף אחד", async () => {
+    const target = await freshUser("0540000006");
+    await expect(deleteUser(manager, target.id)).rejects.toThrow(he.admin.forbidden);
+  });
+
+  it("משתמש שאינו קיים מחזיר הודעה מובנת ולא כשל גולמי", async () => {
+    await expect(deleteUser(admin, "לא-קיים")).rejects.toThrow(he.admin.userNotFound);
+  });
+});
+
+describe("updateUser — עריכה בלבד, בלי שינוי תפקיד", () => {
   it("מעדכן שם, טלפון ומייל", async () => {
     const target = await createInternalUser(admin, {
       name: "יעל",
