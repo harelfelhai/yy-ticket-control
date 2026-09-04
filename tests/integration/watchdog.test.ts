@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JOB_TYPES } from "@/jobs/types";
 import { db } from "@/lib/db";
 import { checks } from "@/watchdog/checks";
@@ -125,5 +125,53 @@ describe("jobs-not-failing", () => {
       },
     });
     await expect(check("jobs-not-failing").run(now)).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * ‏invariant של **תצורה** ולא של מצב (1.2).
+ *
+ * זהו הכשל שאף אחד מארבעת ה-checks האחרים אינו תופס: התחברות בגוגל שאינה
+ * מוגדרת אינה ג׳וב, ולכן היא אינה מייצרת כשל, לא פעימה ישנה ולא תור תקוע.
+ * היא פשוט **אינה קורית** — והכפתור שאינו מוצג אינו מדווח על עצמו.
+ */
+describe("google-login-configured", () => {
+  /**
+   * ‏`vi.stubEnv` ולא הצבה ישירה: `process.env` ב-Node אינו מקבל
+   * ‏`defineProperty` חלקי, ו-`NODE_ENV` הוא readonly בטיפוסים. ‏Vitest
+   * מטפל בשניהם ומשחזר לבד ב-`unstubAllEnvs`.
+   */
+  function setEnv(id: string | undefined, secret: string | undefined, nodeEnv: string) {
+    vi.stubEnv("GOOGLE_CLIENT_ID", id);
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", secret);
+    vi.stubEnv("NODE_ENV", nodeEnv);
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("פרודקשן עם שני המשתנים — עובר", async () => {
+    setEnv("client-id", "client-secret", "production");
+    await expect(check("google-login-configured").run(now)).resolves.toBeUndefined();
+  });
+
+  it("פרודקשן בלי תצורה — זורק", async () => {
+    setEnv(undefined, undefined, "production");
+    await expect(check("google-login-configured").run(now)).rejects.toThrow(
+      /GOOGLE_CLIENT_ID/,
+    );
+  });
+
+  it("פרודקשן עם מפתח אחד מתוך שניים — זורק", async () => {
+    // כול-או-כלום: "כמעט מוגדר" הוא כפתור שמפנה לגוגל וחוזר בשגיאה.
+    setEnv("client-id", undefined, "production");
+    await expect(check("google-login-configured").run(now)).rejects.toThrow();
+  });
+
+  it("מחוץ לפרודקשן היעדר תצורה אינו כשל", async () => {
+    // בפיתוח ובבדיקות זה המצב הרגיל, וההתחברות בסיסמה מכסה את הכול.
+    setEnv(undefined, undefined, "development");
+    await expect(check("google-login-configured").run(now)).resolves.toBeUndefined();
   });
 });

@@ -56,6 +56,11 @@ export default defineConfig({
       APP_BASE_URL: BASE_URL,
       SESSION_SECRET: process.env.SESSION_SECRET ?? "",
       NEXT_PUBLIC_SENTRY_DSN: "",
+      // ערכי דמה, כדי שמסך ההתחברות ייצלם **עם** המסלול הנוסף (1.2). בלעדיהם
+      // הכפתור אינו מוצג, וסבב הביקורת העיצובי היה סוקר מסך שאינו הנוכחי.
+      GOOGLE_CLIENT_ID:
+        process.env.GOOGLE_CLIENT_ID ?? "visual-client.apps.googleusercontent.com",
+      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? "visual-client-secret",
       MEDIA_STORAGE: "local",
     },
   },

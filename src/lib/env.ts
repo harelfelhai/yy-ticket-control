@@ -91,6 +91,28 @@ export const env = {
   geminiApiKey: () => optional("GEMINI_API_KEY"),
 
   /**
+   * זוג המפתחות של "התחברות עם Google" (1.2).
+   *
+   * **כול-או-כלום כמו `r2()`, ומאותו נימוק:** מפתח אחד מתוך שניים אינו "כמעט
+   * מוגדר" אלא כפתור שמפנה לגוגל וחוזר בשגיאה. `undefined` → הכפתור אינו
+   * מוצג כלל, וההתחברות בטלפון/מייל ובסיסמה אינה נוגעת בזה.
+   *
+   * **‏`optional()` ולא `required()` גם בפרודקשן — בשונה מ-R2 וממייל.** שם
+   * ההיעדר הוא כשל, כי בלי אחסון אין איפה לשמור קובץ ובלי SMTP אף אחד אינו
+   * מקבל הודעה. כאן ההיעדר הוא **ויתור**: המערכת שלמה בלי המסלול הזה, שכן
+   * הסיסמה המקומית ממשיכה לעבוד. מה שמונע "ויתור שהוא בעצם שכחה" אינו כשל
+   * בעלייה אלא invariant ב-watchdog (`google-login-configured`), שמדווח
+   * ל-Sentry בפרודקשן בלי לסכן את ה-healthcheck של הפריסה.
+   */
+  googleOauth: () => {
+    const clientId = optional("GOOGLE_CLIENT_ID");
+    const clientSecret = optional("GOOGLE_CLIENT_SECRET");
+
+    if (!clientId || !clientSecret) return undefined;
+    return { clientId, clientSecret };
+  },
+
+  /**
    * נתיב ל-pg_dump ול-pg_restore. בפרודקשן הם על ה-PATH (מותקנים בקונטיינר),
    * ולכן ברירת המחדל היא השם בלבד. מקומית, ב-Windows, embedded-postgres אינו
    * כולל אותם — מצביעים ל-scoop דרך .env (ראה .env.example).

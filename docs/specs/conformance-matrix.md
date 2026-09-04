@@ -102,6 +102,28 @@
 | A5-11 | 386 | תגובה על פנייה שנסגרה נחסמת | `permissions.ts:161` | `br-edge-cases.spec.ts` BR-32 | PW | ⏳ |
 | A5-12 | 329 | "הקישור אינו בתוקף. פנה למנהל העבודה שלך." | `p/[token]/expired-link.tsx` | `s8-portal.spec.ts` S8-15 | PW | ⏳ |
 
+### 1.4 התחברות (מסך התחברות · §7 שורה 42)
+
+> **הסעיף נוסף ב-1.2, והוא סוגר פער שקדם לו.** עד כאן לא הייתה במטריצה אף שורת
+> אימות — ההתחברות היא המסך היחיד שכל משתמש עובר בו, והיא לא הייתה ממופה כלל.
+> ‏AUTH-01 מתעד את מה שהיה קיים; השאר את מה שנוסף.
+
+| מזהה | § | הדרישה | מימוש | בדיקה | שכבה | ממצא |
+|---|---|---|---|---|---|---|
+| AUTH-01 | מסך התחברות | המזהה הוא טלפון **או** מייל, עם סיסמה מקומית | `lib/auth.ts` `identifierCandidates` | `tests/integration/auth.test.ts` | IT | ✅ |
+| AUTH-02 | §7 #42 | **כניסה עם Google לצד הסיסמה** — מסלול נוסף ולא מחליף; הכפתור אינו מוצג כשההגדרה חסרה | `app/login/page.tsx` · `app/login/google-button.tsx` · `services/google-login.ts` | `e2e/google-login.spec.ts` | PW | ✅ |
+| AUTH-03 | §7 #42 | ההתאמה היא ל-`User.email` של משתמש **קיים ופעיל**; אין הרשמה עצמית ואין יצירת משתמש | `services/google-login.ts` `resolveGoogleUser` | `tests/integration/google-login.test.ts` | IT | ✅ |
+| AUTH-04 | §7 #42 | הודעה **אחת** ל"אין משתמש", ל"אין מייל" ול"מושבת" — אין מיפוי מי רשום | `he.login.googleErrors.no_account` | `tests/integration/google-login.test.ts` | IT | ✅ |
+| AUTH-05 | §7 #42 | `email_verified` חובה — כתובת שגוגל לא אימתה אינה מזהה | `lib/google-oauth.ts` `readGoogleIdentity` | `tests/unit/google-oauth.test.ts` | SRC | ✅ |
+| AUTH-06 | §7 #42 | `state` + `nonce` + PKCE S256, ועוגיית state חד-פעמית בת 10 דקות | `lib/oauth-state.ts` · `lib/google-oauth.ts` | `tests/unit/oauth-state.test.ts` · `e2e/google-login.spec.ts` | SRC/PW | ✅ |
+| AUTH-07 | §7 #42 | `?next=` עובר `safeNextPath` בשני הקצוות — אין open redirect | `api/auth/google/{start,callback}/route.ts` | `e2e/google-login.spec.ts` | PW | ✅ |
+| AUTH-08 | §6 / SC-OUT-02 | ההיקף מגוגל הוא זהות בסיסית בלבד — אין scope של יומן ואין `google-auth-library` | `lib/google-oauth.ts` `GOOGLE_SCOPES` | `tests/conformance/source/scope-boundaries.test.ts` | SRC | ✅ |
+| AUTH-09 | §5.ז | סשן שנוצר בגוגל מתנהג כמו כל סשן: ריענון מול ה-DB בכל מסך, והשבתה מוציאה מיד | `createSession` + `lib/auth.ts` `activeSessionUser` | קיים: `e2e/auth.spec.ts` "עובד שהושבת" | PW | ✅ |
+
+> **‏AUTH-09 היא השורה שמסבירה למה התכנון בטוח.** מסלול גוגל נגמר בקריאה לאותו
+> `createSession()` עם אותו `SessionUser`, ולכן כל ערובת ההרשאה הקיימת חלה עליו
+> בלי מימוש שני — ובלי שהיא צריכה לדעת שהוא קיים.
+
 ---
 
 ## 2. איסורים מפורשים (PROH) — 24 בדיקות שליליות
