@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 import { HEARTBEAT, getHeartbeat } from "./heartbeat";
 import { heartbeatStale, jobsFailing, queueStuck } from "./predicates";
 
@@ -86,6 +87,36 @@ export const checks: WatchdogCheck[] = [
         // ו-"3 עבודות נכשלו" מחייב לפתוח את בסיס הנתונים כדי לדעת זאת.
         const detail = failed.map((row) => `${row.type}×${row._count}`).join(", ");
         throw new Error(`${total} עבודות נכשלו סופית ב-24 השעות האחרונות: ${detail}`);
+      }
+    },
+  },
+  {
+    /**
+     * **‏invariant של תצורה, ולא של מצב — וזה הבית הנכון לו.**
+     *
+     * ההערה על `jobs-not-failing` מעליי כבר קובעת שה-watchdog הוא "הסיגנל
+     * היחיד שתופס תקלת **תצורה** מתמשכת". ההתחברות בגוגל (1.2) היא המקרה
+     * שאותו סיגנל אינו מכסה: היא אינה ג׳וב, ולכן היעדר תצורה שלה אינו
+     * מייצר כשל, לא פעימה ישנה ולא תור תקוע. הוא פשוט **אינו קורה** —
+     * הכפתור אינו מוצג, ואיש אינו מדווח על כפתור שלא היה.
+     *
+     * זה הכשל השקט שהתגלה בפועל בפרודקשן הזה: מייל, גיבוי ו-AI לא עבדו
+     * חודש שלם מפני שאין מסך שאומר "לא מוגדר".
+     *
+     * **למה כאן ולא כשל באתחול השרת.** כשל באתחול היה מפיל את ה-healthcheck
+     * (`railway.toml` → `/login`) ומגלגל אחורה כל פריסה שקדמה להזנת
+     * המשתנים ב-Railway. ההודעה כאן רועשת בדיוק באותה מידה — issue נפרד
+     * ב-Sentry, כל שש שעות — בלי להחזיק את הפריסה כבן ערובה.
+     *
+     * ‏`isProduction()` בלבד: בפיתוח ובבדיקות היעדר התצורה הוא המצב הרגיל,
+     * וההתחברות בסיסמה מכסה את הכול.
+     */
+    name: "google-login-configured",
+    async run() {
+      if (env.isProduction() && !env.googleOauth()) {
+        throw new Error(
+          "התחברות עם Google אינה מוגדרת: חסרים GOOGLE_CLIENT_ID או GOOGLE_CLIENT_SECRET",
+        );
       }
     },
   },

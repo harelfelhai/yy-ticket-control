@@ -69,6 +69,10 @@ test("מסך ההתחברות: RTL, בלי גלישה, וגדלי מגע", async
   await expectTouchTarget(page.getByLabel("טלפון או מייל"));
   await expectTouchTarget(page.getByLabel("סיסמה"));
   await expectTouchTarget(page.getByRole("button", { name: "כניסה" }));
+
+  // המסלול הנוסף (1.2). זו המדידה היחידה בדפדפן של פקדי מסך ההתחברות,
+  // ופקד חדש שאיש אינו מודד הוא בדיוק איך שרצפת המגע נשחקת בשקט.
+  await expectTouchTarget(page.getByRole("link", { name: "התחברות עם Google" }));
 });
 
 test("הלוח: RTL ובלי גלישה אופקית", async ({ page }) => {
