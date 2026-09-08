@@ -9,6 +9,7 @@ import {
   PAGE_BLEED,
   PAGE_X,
   RECORD_CARD_GRID,
+  SCROLL_FOCUS_ROOM,
   TICKET_CARD_GRID,
 } from "@/lib/ui";
 import { SRC, scan } from "./source-scan";
@@ -260,5 +261,58 @@ describe("אלמנט אינו נדחף לקצה הנגדי", () => {
       offenders,
       `תווית שנמתחת דוחפת את שכניה לקצה — זהו justify-between בשם אחר (DESIGN.md § Layout):\n${offenders.join("\n")}`,
     ).toEqual([]);
+  });
+});
+
+/**
+ * מיכל גולל חותך את טבעת המיקוד של מה שבתוכו, וזה נראה כמו באג בשדה.
+ *
+ * **הפער שנולד מזה בפועל.** בדיאלוג "אתר חדש" הטבעת הופיעה מעל השדה
+ * ומתחתיו ונעדרה בצדדים. הקריאה הטבעית היא "הפקד מצייר טבעת חלקית", והיא
+ * שגויה: הטבעת שלמה, והמיכל חותך אותה. `outline-offset: 2px` מציב אותה
+ * 2–4 פיקסלים **מחוץ** לתיבת הגבול, פקד `w-full` ממלא בדיוק את תיבת
+ * התוכן של הוריו, ולפי מפרט CSS Overflow ציר `visible` שיושב לצד ציר שאינו
+ * `visible` **מחושב ל-`auto`** — כלומר `overflow-y-auto` לבדו חותך גם
+ * אופקית, בתיבת הריפוד, שריפודה היה אפס.
+ *
+ * **למה אוכף ולא תיקון של שישה קבצים.** הסטייה בלתי נראית בכל מסך בנפרד:
+ * המיכל נראה תקין, השדה נראה תקין, ורק ניווט מקלדת חושף אותה. שישה מיכלים
+ * כאלה כבר הצטברו במערכת — ארבעה מהם נכתבו אחרי שהתקלה תוקנה בדיאלוג —
+ * וזו בדיוק המחלה ש-`layout-guards` קיים בשבילה: "תוקן" אינו "נסגר" כל
+ * עוד אין מי שאוכף.
+ */
+describe("טבעת מיקוד במיכל גולל", () => {
+  /**
+   * `reply-field.tsx` הוא ההחרגה היחידה, והיא מהותית: שם ה-`overflow`
+   * יושב על ה-`<textarea>` **עצמו** ולא על מיכל שעוטף פקדים. אלמנט אינו
+   * חותך את הטבעת של עצמו — היא מצוירת מחוץ לתיבת הגבול שלו, ואילו
+   * ה-`overflow` חל על התוכן שבתוכה.
+   */
+  const EXEMPT = ["components/reply-field.tsx"];
+
+  it("כל `overflow-*` שחותך נושא את `SCROLL_FOCUS_ROOM`", () => {
+    // `overflow-visible` הוא היחיד שאינו חותך, ולכן היחיד שאינו נדרש.
+    const offenders = scan(
+      /^(?=.*\boverflow-(?:x-|y-)?(?:auto|hidden|clip|scroll)\b)(?!.*SCROLL_FOCUS_ROOM).*$/,
+      EXEMPT,
+    );
+
+    expect(
+      offenders,
+      `מיכל גולל חותך את טבעת המיקוד של מה שבתוכו — יש לצרף SCROLL_FOCUS_ROOM מ-@/lib/ui (DESIGN.md § Focus ring):\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * הערך עצמו נאכף ולא רק נוכחותו: `p-1`/`-m-1` הם 4px, שהם **בדיוק**
+   * היקף הטבעת (2px ריווח + 2px עובי, `globals.css`). ריפוד קטן יותר חותך
+   * שוב, וגדול יותר מזיז את התוכן — ולכן זה מספר מדוד ולא טעם.
+   */
+  it("המקום שווה בדיוק להיקף הטבעת, והמרג׳ין הנגדי מבטל אותו", () => {
+    expect(SCROLL_FOCUS_ROOM).toBe("p-1 -m-1");
+
+    const css = readFileSync(join(ROOT, "src/app/globals.css"), "utf8");
+    expect(css).toContain("outline: 2px solid var(--color-focus)");
+    expect(css).toContain("outline-offset: 2px");
   });
 });

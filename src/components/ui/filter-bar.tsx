@@ -8,6 +8,7 @@ import {
   Select,
   type SelectProps,
 } from "@/components/ui/field";
+import { SCROLL_FOCUS_ROOM } from "@/lib/ui";
 
 /**
  * רצועת מסננים — מקור אמת אחד ללוח ולחיפוש.
@@ -50,7 +51,9 @@ export function FilterBar({ trailing, children }: FilterBarProps) {
   return (
     // ‏`items-center` ולא `items-stretch`: שדה התאריך נושא תווית גלויה
     // ולכן גבוה משכניו, וללא היישור הוא היה מותח את כל השורה.
-    <div className="flex items-center gap-1 overflow-x-auto">
+    // `SCROLL_FOCUS_ROOM` — הגלילה האופקית חותכת את טבעת המיקוד של כל
+    // בורר ברצועה מלמעלה ומלמטה. ראו הנימוק בקבוע.
+    <div className={`flex items-center gap-1 overflow-x-auto ${SCROLL_FOCUS_ROOM}`}>
       {children}
       {trailing}
     </div>

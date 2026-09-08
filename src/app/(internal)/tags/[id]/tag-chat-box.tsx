@@ -49,7 +49,12 @@ export function TagChatBox({ tagId }: { tagId: string }) {
 
         {recording ? null : (
           <div className="flex-1">
-            <ReplyField value={text} onChange={setText} />
+            {/* אותו תנאי בדיוק שמפעיל את כפתור השליחה שלצדו */}
+            <ReplyField
+              value={text}
+              onChange={setText}
+              onSubmit={canSend && !busy ? send : undefined}
+            />
           </div>
         )}
 

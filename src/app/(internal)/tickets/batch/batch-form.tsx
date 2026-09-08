@@ -25,6 +25,7 @@ import {
   FULL_WIDTH,
   PAGE_X,
   PANEL_WIDTH,
+  SCROLL_FOCUS_ROOM,
   STICKY_UNDER_HEADER,
   TITLE_DESCRIPTIVE,
 } from "@/lib/ui";
@@ -186,8 +187,14 @@ export function BatchForm({
          * בלי זה תחתית הפאנל הדביק **אינה נגישה בשום גלילה** — לא גלילת
          * העמוד, כי הפאנל דבוק, ולא גלילה פנימית, כי לא הייתה כזו.
          */}
+        {/*
+         * `SCROLL_FOCUS_ROOM` נלווה לגלילה: ב-`lg` הפאנל הופך למיכל חותך
+         * גם אופקית, וטבעת המיקוד של הפקדים שבתוכו נחתכת בצדדים. הקבוע
+         * חסר תחילית `lg:` מאותו נימוק שמופיע למעלה על `STICKY_UNDER_HEADER` —
+         * ריפוד של 4px ומרג׳ין נגדי אינם עושים דבר במסך צר.
+         */}
         <aside
-          className={`flex flex-col gap-3 ${STICKY_UNDER_HEADER} lg:sticky lg:max-h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto`}
+          className={`flex flex-col gap-3 ${STICKY_UNDER_HEADER} ${SCROLL_FOCUS_ROOM} lg:sticky lg:max-h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto`}
         >
           <section className={cardClasses("flex flex-col gap-3")}>
             <h2 className={TITLE_DESCRIPTIVE}>{he.batch.contextHeading}</h2>

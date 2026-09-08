@@ -51,7 +51,7 @@ test("מנהל פותח פנייה ומשייך את עצמו — הפנייה �
   await openDetails(page);
   const strip = page.getByRole("list", { name: "נמענים", exact: true });
   await expect(strip).toContainText(E2E_ADMIN.name);
-  await expect(strip.getByText("נשלח", { exact: true })).toHaveCount(1);
+  await expect(strip.getByText("שויך", { exact: true })).toHaveCount(1);
 
   // ואין לו קישור גישה — הוא נכנס עם סיסמה.
   //

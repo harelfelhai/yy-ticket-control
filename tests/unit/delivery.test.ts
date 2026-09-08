@@ -5,7 +5,7 @@ import { he } from "@/lib/he";
 /**
  * שורת מצב השליחה שמופיעה מתחת לכל נמען.
  *
- * היא קיימת כדי לשבור הנחה אחת מסוכנת: ש"נשלח" בסטטוס פירושו שמישהו יודע.
+ * היא קיימת כדי לשבור הנחה אחת מסוכנת: שסטטוס השיוך פירושו שמישהו יודע.
  * הבדיקות כאן מוודאות שכל מצב מקבל נוסח נכון — במיוחד המצבים שבהם **לא**
  * יצאה הודעה, כי הם היחידים שדורשים מהמנהל לעשות משהו.
  */
@@ -14,7 +14,7 @@ const at = (time: Date) => `${time.getUTCHours()}:00`;
 const noon = new Date("2026-07-22T12:00:00Z");
 
 /** ברירת המחדל של הבדיקות היא סביבה שבה **יש** ערוץ מייל — המצב בפרודקשן. */
-const configured = { emailConfigured: true, waOpenedAt: null };
+const configured = { emailConfigured: true, waOpenedAt: null, notifyFailedAt: null };
 
 describe("deliveryNote", () => {
   it("מדווח מתי נשלח מייל בפועל", () => {
@@ -92,7 +92,7 @@ describe("deliveryNote", () => {
    * נוסף, ושום דבר לא הגיע אליו — בעוד שהמסך הצהיר שההודעה בדרך.
    */
   describe("אין ערוץ מייל בסביבה", () => {
-    const unconfigured = { emailConfigured: false, waOpenedAt: null };
+    const unconfigured = { emailConfigured: false, waOpenedAt: null, notifyFailedAt: null };
 
     it("אומר שלא נשלח, ולא 'בתור לשליחה'", () => {
       // "בתור לשליחה" על מערכת שאין לה דרך לשלוח היא הבטחה שלא תתקיים.
@@ -142,6 +142,74 @@ describe("deliveryNote", () => {
         at,
       );
       expect(note).toBe(he.ticket.notifiedAt("12:00"));
+    });
+  });
+  /**
+   * **הכשל הסופי — המצב שהמסך לא ידע לתאר עד 1.1.**
+   *
+   * ג׳וב שמיצה את שלושת ניסיונותיו ננעל ל-`FAILED` ואינו רץ שוב לעולם
+   * (`src/jobs/queue.ts`), אבל `deliveryNote` לא ידע דבר על התור — ולכן
+   * המשיך לומר "ההודעה בתור לשליחה" **לנצח**. הנוסח הישן אף נימק את עצמו
+   * ב"הג׳וב ממתין או נכשל ויחזור", הנחה שפשוט אינה נכונה.
+   *
+   * זה קרה בפרודקשן ב-7.9.2026: Railway חוסם SMTP יוצא, ארבעה ג׳ובים
+   * נכשלו סופית, והמסך הציג חיווי תקין לצדם.
+   */
+  describe("השליחה נכשלה סופית", () => {
+    const failed = { emailConfigured: true, waOpenedAt: null, notifyFailedAt: noon };
+
+    it("אומר שנכשל, ולא 'בתור לשליחה'", () => {
+      const note = deliveryNote(
+        { ...failed, notifiedAt: null, hasEmail: true, hasPhone: false },
+        at,
+      );
+
+      expect(note).toBe(he.ticket.notifyFailed("12:00"));
+      // הטענה החשובה היא השלילה: זו בדיוק ההבטחה שלא תתקיים.
+      expect(note).not.toBe(he.ticket.notifyQueued);
+    });
+
+    it("מפנה לוואטסאפ כשיש טלפון — מסלול יציאה שקיים בפועל", () => {
+      const note = deliveryNote(
+        { ...failed, notifiedAt: null, hasEmail: true, hasPhone: true },
+        at,
+      );
+      expect(note).toBe(he.ticket.notifyFailedWithPhone("12:00"));
+    });
+
+    /**
+     * `notifiedAt` גובר, ובכוונה: זהו המצב אחרי "שלח שוב במייל" שהצליח.
+     * `markNotifyFailed` מאפס את השדה בהצלחה, אבל הסדר כאן הוא רשת הביטחון
+     * — בלעדיו רגע מרוץ בין שתי הכתיבות היה מחזיר "השליחה נכשלה" מתחת
+     * לשורה שאומרת "נשלח מייל".
+     */
+    it("שליחה שהצליחה אחר כך גוברת על הכשל", () => {
+      const note = deliveryNote(
+        { ...failed, notifiedAt: noon, hasEmail: true, hasPhone: true },
+        at,
+      );
+      expect(note).toBe(he.ticket.notifiedAt("12:00"));
+    });
+
+    /**
+     * הכשל נרשם על השיוך, אבל **הסיבה** שאין מה לשלוח קודמת לו: קבלן בלי
+     * מייל אינו צריך לשמוע "השליחה נכשלה" אלא "אין מייל". אותו נימוק בדיוק
+     * שהוליד את סדר הענפים בבדיקה שמעל.
+     */
+    it("קבלן בלי מייל שומע שאין לו מייל, ולא שהשליחה נכשלה", () => {
+      const note = deliveryNote(
+        { ...failed, notifiedAt: null, hasEmail: false, hasPhone: true },
+        at,
+      );
+      expect(note).toBe(he.ticket.notifyNoEmail);
+    });
+
+    it("היעדר ערוץ גובר — הוא הסיבה, והכשל רק תוצאתה", () => {
+      const note = deliveryNote(
+        { emailConfigured: false, waOpenedAt: null, notifyFailedAt: noon, notifiedAt: null, hasEmail: true, hasPhone: false },
+        at,
+      );
+      expect(note).toBe(he.ticket.notifyNotConfigured);
     });
   });
 });

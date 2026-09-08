@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import { listSiteDirectory } from "@/lib/services/directory";
 import { listTags } from "@/lib/services/tags";
-import { CONTENT_WIDTH, PAGE_X } from "@/lib/ui";
+import { NoSites } from "../no-sites";
 import { CreateTicketForm } from "./create-ticket-form";
 
 export const metadata = { title: `${he.ticket.createTitle} — ${he.app.name}` };
@@ -32,12 +32,8 @@ export default async function NewTicketPage(props: PageProps<"/tickets/new">) {
     ? await db.site.findMany({ where: { id: user.siteId } })
     : await db.site.findMany({ orderBy: { name: "asc" } });
 
-  if (sites.length === 0) {
-    // ענף הכשל יורש את הרוחב של המסך שהוא מחליף. בלי קבוע הוא היה משפט
-    // בודד שנמתח על מסך שלם מאז שה-`<main>` חדל להגביל — טקסט שנקרא, ולכן
-    // ‏`CONTENT_WIDTH` בדיוק כמו הטופס עצמו.
-    return <p className={`py-3 ${PAGE_X} ${CONTENT_WIDTH} text-muted`}>{he.ticket.noSite}</p>;
-  }
+  // אין אתרים במערכת — לא "המשתמש אינו משויך". הנימוק המלא ב-`NoSites`.
+  if (sites.length === 0) return <NoSites user={user} />;
 
   const [directories, internalUsers, tags] = await Promise.all([
     Promise.all(sites.map((site) => listSiteDirectory(site.id))),

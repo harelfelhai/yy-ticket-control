@@ -3,21 +3,35 @@
 import { useLayoutEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/field";
 import { he } from "@/lib/he";
+import { useHasKeyboard } from "@/lib/use-has-keyboard";
 
 interface ReplyFieldProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  /**
+   * שליחה במקש Enter. **מושמט כשאין מה לשלוח, או כשהממשק נעול** — הרכיב
+   * אינו יודע מה התנאי בכל מסך, וזו בדיוק הסיבה שהוא מקבל פונקציה ולא
+   * דגלים.
+   */
+  onSubmit?: () => void;
 }
 
 /**
  * שדה כתיבת התגובה — משותף לשרשור הפנייה, לצ׳אט התגית ולשני מסכי הפורטל.
  *
- * **הרכיב מכוון להיות מינימלי, ולא לגדול.** אין לו `className`, אין לו
- * `children`, ואין לו props נוספים — כדי שלא יוכל להפוך ל"קומפוזר תגובה"
- * גנרי. ההחלטה **לא** לבנות קומפוזר כזה מתועדת ב-DESIGN.md § "לא כל כפילות
- * היא רכיב": ארבעת המסכים נבדלים במבנה (כרטיס, באנרים, מדיה בשלוש תצורות,
- * ואפס עד שלושה כפתורים נוספים), ורכיב יחיד היה מקודד את זה כתשעה פרופס.
+ * **הרכיב מכוון להיות מינימלי, ולא לגדול.** אין לו `className` ואין לו
+ * `children` — כדי שלא יוכל להפוך ל"קומפוזר תגובה" גנרי. ההחלטה **לא**
+ * לבנות קומפוזר כזה מתועדת ב-DESIGN.md § "לא כל כפילות היא רכיב": ארבעת
+ * המסכים נבדלים במבנה (כרטיס, באנרים, מדיה בשלוש תצורות, ואפס עד שלושה
+ * כפתורים נוספים), ורכיב יחיד היה מקודד את זה כתשעה פרופס.
+ *
+ * > **`onSubmit` נוסף ב-1.0, וזו חריגה מודעת מהפסקה שמעליה.** הכלל שם
+ * > אסר על הרכיב לגדול, והנימוק היה **מתגים מבניים** — פרופס שקובעים מה
+ * > מרונדר, כלומר שפת תצורה שכל קורא נאלץ לפענח. `onSubmit` אינו כזה: הוא
+ * > אינו משנה שום דבר במה שמצויר, והוא חייב לשבת כאן דווקא מפני
+ * > ש-`primitives.test.ts` **אוסר** על ארבעת המסכים לבנות שדה משלהם. הגבול
+ * > נשאר מה שהיה: פונקציה אחת — כן; דגל שמצייר — לא.
  *
  * נאכף ב-`tests/unit/primitives.test.ts` — `he.ticket.reply` מופיע כאן ורק כאן.
  *
@@ -39,8 +53,9 @@ interface ReplyFieldProps {
  * מסך בשביל "אוקיי", ופסקה ארוכה גוללת בתוך חלון של שלוש שורות. עכשיו
  * המספר אינו קבוע כלל, ולכן גם אינו יכול לסטות.
  */
-export function ReplyField({ value, onChange, disabled }: ReplyFieldProps) {
+export function ReplyField({ value, onChange, disabled, onSubmit }: ReplyFieldProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const hasKeyboard = useHasKeyboard();
 
   /**
    * גדילה לפי התוכן.
@@ -68,6 +83,29 @@ export function ReplyField({ value, onChange, disabled }: ReplyFieldProps) {
       ref={ref}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      /**
+       * Enter שולח, Shift+Enter יורד שורה — במחשב בלבד (`useHasKeyboard`).
+       *
+       * שלושת התנאים אינם הגנה יתרה, ולכל אחד יש תרחיש שהוא מונע:
+       *
+       * - **`isComposing`** — מקלדת שמרכיבה תו (ניקוד, IME) שולחת Enter
+       *   כדי **לאשר את התו**, לא כדי לשלוח הודעה. בלי הבדיקה, משתמש שמנקד
+       *   מוצא את עצמו שולח באמצע מילה. אין לזה שום ביטוי ב-Playwright,
+       *   ולכן זה נבדק ביחידה.
+       * - **`onSubmit` שהושמט** — אתר הקריאה מעביר אותו רק כשיש מה לשלוח
+       *   והממשק אינו נעול. כאן זה נקרא כ"אין פעולה", ולכן Enter נופל חזרה
+       *   להתנהגות הטבעית של השדה ויורד שורה.
+       * - **`preventDefault` לפני הקריאה** — בלעדיו הדפדפן מוסיף את השורה
+       *   **וגם** שולח, והשדה שנוקה בהצלחה חוזר עם `\n` בודד בתוכו.
+       */
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" || event.shiftKey) return;
+        if (event.nativeEvent.isComposing) return;
+        if (!hasKeyboard || !onSubmit) return;
+
+        event.preventDefault();
+        onSubmit();
+      }}
       rows={1}
       disabled={disabled}
       // התווית שירדה מהמסך — ראו החריג בראש הקובץ. אותה מחרוזת בדיוק.

@@ -181,7 +181,11 @@ export async function sendNotification(
     try {
       await db.assignment.update({
         where: { id: assignment.id },
-        data: { notifiedAt: new Date() },
+        // `notifyFailedAt: null` באותה כתיבה, ולא בקריאה נפרדת: השדה עונה
+        // על "מה המצב עכשיו" ולא על "האם אי פעם נכשל", ושליחה שהצליחה
+        // אחרי כשל היא בדיוק המצב שבו החיווי היה נשאר תקוע על "השליחה
+        // נכשלה" לצד שורת "נשלח מייל" — שוב שתי שורות שסותרות זו את זו.
+        data: { notifiedAt: new Date(), notifyFailedAt: null },
       });
     } catch (error) {
       captureError(error, {
@@ -198,6 +202,37 @@ export async function sendNotification(
     event: input.event,
   });
   return { status: "sent", to: address, via: transport.name };
+}
+
+/**
+ * מסמן שההתראה לנמען **הפסיקה לנסות** — נקרא רק אחרי שנגמרו הניסיונות.
+ *
+ * ההפרדה זהה לזו של `markAiFailed`: ניסיון שנכשל יחזור בעוד דקה, ואין
+ * סיבה שהמנהל יראה "השליחה נכשלה" על משהו שייפתר לבדו. רק כשלא נותר
+ * ניסיון נוסף זו עובדה — ומאותו רגע היא **חייבת** להיראות, אחרת המסך
+ * ממשיך להבטיח "ההודעה בתור לשליחה" על ג׳וב שננעל ל-`FAILED`.
+ *
+ * **רק כשהיעד הוא הנמען**, בדיוק כמו `notifiedAt`. התראה שיעדה הפותח היא
+ * הודעה פנימית על מה שקרה בשרשור, ולא הניסיון להשיג את הקבלן — וסימונה
+ * על השיוך היה טוען שהקבלן אינו יודע, בזמן שהוא זה שכתב.
+ *
+ * הכתיבה עטופה כמו זו שמסמנת הצלחה: כשל בעדכון החיווי אינו אמור להחליף
+ * את סיבת הכשל המקורית, שהיא מה שבאמת צריך להגיע ל-Sentry.
+ */
+export async function markNotifyFailed(input: NotifyInput): Promise<void> {
+  if (notificationTarget(input.event, input.target) !== "recipient") return;
+
+  try {
+    await db.assignment.update({
+      where: { id: input.assignmentId },
+      data: { notifyFailedAt: new Date() },
+    });
+  } catch (error) {
+    captureError(error, {
+      tags: { assignmentId: input.assignmentId, phase: "notify-mark-failed" },
+      fingerprint: ["notify-mark-failed-failed"],
+    });
+  }
 }
 
 /** ממיר את הפנייה כפי שהיא במסד לצורה שהניסוח מכיר */

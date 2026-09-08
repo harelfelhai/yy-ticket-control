@@ -84,5 +84,5 @@ test("מצב ההשלמה שורד רענון דף: תחום, תיאור ונמ�
   await openDetails(page);
   const recipients = page.getByRole("list", { name: "נמענים", exact: true });
   await expect(recipients).toContainText(electrician);
-  await expect(recipients).toContainText("נשלח");
+  await expect(recipients).toContainText("שויך");
 });

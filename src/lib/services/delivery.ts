@@ -70,6 +70,7 @@ export async function describeDelivery(
     {
       notifiedAt: assignment.notifiedAt,
       waOpenedAt: assignment.waOpenedAt,
+      notifyFailedAt: assignment.notifyFailedAt,
       // נמען פנימי: גם בלי מייל הוא נכנס למערכת ורואה את הפנייה בלוח שלו.
       // החיווי נוגע לשליחה החוצה.
       hasEmail: Boolean(email) || assignment.userId !== null,

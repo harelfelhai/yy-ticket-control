@@ -6,6 +6,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { InlineRename } from "@/components/inline-rename";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input } from "@/components/ui/field";
 import { FormError } from "@/components/ui/message";
 import { he } from "@/lib/he";
@@ -43,11 +44,21 @@ export interface SiteRow {
 export function SitesManager({
   sites,
   managers,
+  openCreate = false,
 }: {
   sites: SiteRow[];
   managers: ManagerOption[];
+  /**
+   * נחיתה עם `?new=1` — הדיאלוג נפתח מיד.
+   *
+   * הקישור היחיד שמגיע כך הוא הכפתור שבמצב הריק של "פנייה חדשה": במערכת
+   * שאין בה אף אתר, "לך למסך האתרים" אינו פעולה אלא הפניה. **ערך התחלתי
+   * ולא שליטה מלאה** — אחרי הפתיחה הראשונה המצב שייך לרכיב, כדי שסגירת
+   * הדיאלוג לא תדרוש ניווט שיאבד את מיקום הגלילה.
+   */
+  openCreate?: boolean;
 }) {
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(openCreate);
   const [openId, setOpenId] = useState<string | null>(null);
 
   /*
@@ -86,6 +97,14 @@ export function SitesManager({
           {he.admin.newSiteButton}
         </Button>
       </div>
+
+      {/*
+       * מצב ריק, שלא היה כאן: במערכת טרייה רונדרה `<ul>` ריקה, ומנהל
+       * המערכת ראה כותרת וכפתור ותו לא — מסך שאי אפשר לדעת ממנו אם הוא
+       * ריק או שבור. בלי `action`, ובצדק (§ EmptyState): הפעולה שממלאת
+       * אותו עומדת שורה אחת מעליו, וכפתור שני שם הוא כפילות ולא הזמנה.
+       */}
+      {sites.length === 0 ? <EmptyState>{he.admin.noSites}</EmptyState> : null}
 
       <ul className={RECORD_CARD_GRID}>
         {sites.map((site) => (

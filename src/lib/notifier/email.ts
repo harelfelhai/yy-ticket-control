@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env } from "@/lib/env";
+import { gmailApiTransport } from "./gmail-api";
 import type { EmailTransport } from "./types";
 
 /**
@@ -36,6 +37,11 @@ const SEND_TIMEOUT_MS = 10_000;
 /**
  * ‏587 עם STARTTLS (`secure: false` פירושו "שדרג לאחר החיבור", לא "בלי
  * הצפנה") — ההמלצה של Google, ועדיף על 465 בסביבות ענן שחוסמות אותו.
+ *
+ * > **ובפרודקשן הנוכחית שני הפורטים חסומים.** נמדד מתוך הקונטיינר של
+ * > Railway ב-7.9.2026: 25, 465 ו-587 נבלעים בשקט אל כל מארח, ו-443 נענה
+ * > במילישניות בודדות. המסלול הזה נשאר למי שמריץ במקום שבו SMTP פתוח —
+ * > ובפועל, `selectEmailTransport` מעדיף על פניו את `gmail-api`.
  */
 const SMTP_HOST = "smtp.gmail.com";
 const SMTP_PORT = 587;
@@ -113,21 +119,38 @@ export function consoleTransport(): EmailTransport {
  * על אותו תנאי אחד — אחרת הממשק והשליחה היו יכולים לחלוק על עצם קיומו.
  */
 export function isEmailConfigured(): boolean {
-  return Boolean(env.gmailUser() && env.gmailAppPassword());
+  return Boolean(env.gmailUser() && (env.gmailApi() || env.gmailAppPassword()));
 }
 
+/**
+ * בוחר ערוץ לפי מה שמוגדר, ו-**Gmail API קודם ל-SMTP**.
+ *
+ * הסדר אינו העדפה אסתטית: SMTP יוצא חסום בפרודקשן (ראה `gmail-api.ts`),
+ * ולכן סביבה שבה שניהם מוגדרים היא סביבה שבה אחד מהם פשוט לא יעבוד. 443
+ * הוא זה שעובד, ולכן הוא נבחר. SMTP נשאר כמסלול שני למי שמריץ במקום שבו
+ * הוא פתוח, ובלעדיו הייתה נמחקת אפשרות עובדת בשביל תקלה של ספק אחד.
+ *
+ * **`GMAIL_USER` נדרש בשני המסלולים**, ומסיבות שונות: ב-SMTP הוא שם
+ * המשתמש לאימות, וב-API הוא כתובת השולח. משום כך גם `isEmailConfigured`
+ * דורש אותו תמיד — היא חייבת לענות בדיוק כמו הבחירה כאן, אחרת הממשק
+ * יכריז "אין ערוץ" על מערכת ששולחת, או להפך.
+ */
 export function selectEmailTransport(): EmailTransport {
   const user = env.gmailUser();
   const appPassword = env.gmailAppPassword();
+  const api = env.gmailApi();
 
   // ‏`NOTIFY_FROM_EMAIL` אופציונלי: ברירת המחדל היא החשבון עצמו, שהוא
   // ממילא הכתובת היחידה ש-Gmail מתיר לשלוח ממנה. הוא קיים רק כדי להוסיף
   // שם תצוגה.
-  if (user && appPassword) return gmailTransport(user, appPassword, env.notifyFromEmail() ?? user);
+  const from = env.notifyFromEmail() ?? user;
+
+  if (user && api && from) return gmailApiTransport(api, from);
+  if (user && appPassword && from) return gmailTransport(user, appPassword, from);
 
   if (env.isProduction()) {
     throw new Error(
-      "שליחת מייל אינה מוגדרת: חסרים GMAIL_USER או GMAIL_APP_PASSWORD. ראה .env.example",
+      "שליחת מייל אינה מוגדרת: נדרש GMAIL_USER, ולצדו GMAIL_REFRESH_TOKEN (מומלץ) או GMAIL_APP_PASSWORD. ראה .env.example",
     );
   }
 

@@ -194,7 +194,8 @@ railway run npx tsx prisma/seed.ts
 | `SESSION_SECRET` | ✅ קריטי | 32+ תווים, ייחודי לפרודקשן. ליצירה: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
 | `APP_BASE_URL` | ✅ קריטי | הכתובת הציבורית של האפליקציה (למשל `https://<app>.up.railway.app` או דומיין מותאם). בסיס קישורי הקסם — חייב להיות נגיש לקבלנים. |
 | `GMAIL_USER` | ✅ בפרודקשן | חשבון ה-Gmail של העסק, שממנו נשלחות ההתראות. |
-| `GMAIL_APP_PASSWORD` | ✅ בפרודקשן | **סיסמת אפליקציה** בת 16 תווים (‏[myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords), דורש אימות דו-שלבי). סיסמת החשבון הרגילה נדחית. בלעדיה ג'וב השליחה נכשל בקול. |
+| `GMAIL_APP_PASSWORD` | ⚠️ מוגדר, **ואינו עובד כאן** | **סיסמת אפליקציה** בת 16 תווים ל-SMTP. נמדד ב-7.9.2026 מתוך הקונטיינר: Railway חוסם כל SMTP יוצא — 25, 465 ו-587 נבלעים בשקט ל-8 שניות אל כל מארח, בעוד ש-443 נענה ב-16ms. המסלול נשאר בקוד למי שמריץ במקום שבו SMTP פתוח. |
+| `GMAIL_REFRESH_TOKEN` | ✅ נדרש בפרודקשן | **הערוץ שעובד:** Gmail API מעל HTTPS. `refresh token` של חשבון השליחה עם ה-scope `gmail.send`, מונפק ב-`npx tsx scripts/gmail-oauth.mts`. משתמש ב-`GOOGLE_CLIENT_ID`/`SECRET` הקיימים. גובר על `GMAIL_APP_PASSWORD` כששניהם מוגדרים. |
 | `NOTIFY_FROM_EMAIL` | ❌ אופציונלי | ברירת המחדל היא `GMAIL_USER` — הכתובת היחידה ש-Gmail מתיר לשלוח ממנה. קיים רק לשם תצוגה: `"בקרת פניות Y&Y <...>"`. |
 | `R2_ACCOUNT_ID` | ✅ בפרודקשן | Cloudflare R2 — ארבעת משתני R2 הולכים יחד. |
 | `R2_ACCESS_KEY_ID` | ✅ בפרודקשן | R2. |

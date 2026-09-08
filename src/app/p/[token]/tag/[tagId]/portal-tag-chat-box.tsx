@@ -39,7 +39,16 @@ export function PortalTagChatBox({ token, tagId }: { token: string; tagId: strin
        */}
       <div className="flex items-end gap-2">
         <div className="flex-1">
-          <ReplyField value={text} onChange={setText} />
+          {/*
+           * אותו תנאי בדיוק שמפעיל את כפתור השליחה שלצדו — וכאן הוא נכתב
+           * במפורש ולא נגזר מ-`canSend`, מפני שהקומפוזר הזה הוא טקסט בלבד
+           * ואין לו קבצים שיצדיקו שליחה בלי טקסט.
+           */}
+          <ReplyField
+            value={text}
+            onChange={setText}
+            onSubmit={!busy && text.trim().length > 0 ? send : undefined}
+          />
         </div>
 
         <Button
