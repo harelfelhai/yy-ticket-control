@@ -58,6 +58,28 @@ authUrl.searchParams.set("scope", SCOPE);
 authUrl.searchParams.set("access_type", "offline");
 authUrl.searchParams.set("prompt", "consent");
 
+/**
+ * פותח כתובת בדפדפן ברירת המחדל של Windows.
+ *
+ * **המרכאות סביב הכתובת אינן קישוט.** `cmd.exe` מפרש `&` כמפריד פקודות,
+ * וכתובת ההרשאה של גוגל בנויה כולה מפרמטרים מופרדים ב-`&`. Node אינו
+ * עוטף במרכאות ארגומנט שאין בו רווח, ולכן `cmd /c start "" <url>` העביר
+ * לדפדפן את `...?client_id=...` בלבד — וגוגל ענתה
+ * `Required parameter is missing: response_type`, שגיאה שנראית כמו תקלת
+ * הגדרות ואינה כזו. `windowsVerbatimArguments` מוסר את הציטוט האוטומטי של
+ * Node כדי שהמרכאות שכתובות כאן יגיעו ל-cmd כפי שהן.
+ *
+ * הארגומנט הריק אחרי `start` הוא כותרת החלון: בלעדיו `start` היה מפרש את
+ * המחרוזת המצוטטת הראשונה ככותרת ולא פותח דבר.
+ */
+function openInBrowser(url: string): void {
+  spawn("cmd", ["/c", "start", '""', `"${url}"`], {
+    stdio: "ignore",
+    detached: true,
+    windowsVerbatimArguments: true,
+  }).unref();
+}
+
 const code = await new Promise<string>((resolve, reject) => {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", `http://localhost:${PORT}`);
@@ -84,8 +106,7 @@ const code = await new Promise<string>((resolve, reject) => {
   server.listen(PORT, () => {
     console.log("פותח את הדפדפן לאישור ההרשאה…");
     console.log(`אם הוא לא נפתח, פתח ידנית:\n${authUrl}\n`);
-    // `start` דרך cmd — הדרך של Windows לפתוח כתובת בדפדפן ברירת המחדל.
-    spawn("cmd", ["/c", "start", "", authUrl.toString()], { stdio: "ignore", detached: true }).unref();
+    openInBrowser(authUrl.toString());
   });
 });
 

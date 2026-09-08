@@ -10,6 +10,7 @@ import {
   PAGE_X,
   RECORD_CARD_GRID,
   SCROLL_FOCUS_ROOM,
+  SCROLL_FOCUS_ROOM_X,
   TICKET_CARD_GRID,
 } from "@/lib/ui";
 import { SRC, scan } from "./source-scan";
@@ -314,5 +315,21 @@ describe("טבעת מיקוד במיכל גולל", () => {
     const css = readFileSync(join(ROOT, "src/app/globals.css"), "utf8");
     expect(css).toContain("outline: 2px solid var(--color-focus)");
     expect(css).toContain("outline-offset: 2px");
+  });
+
+  /**
+   * **הגרסה האופקית קיימת בגלל מחיר שנמדד, לא בגלל העדפה.**
+   *
+   * הריפוד שומר על התיבה החיצונית של המיכל ומקטין את הפנימית ב-8px בכל
+   * ציר. ילד שנמדד מתיבת התוכן (`h-full`, אחוזים) מתכווץ איתה — ובפועל
+   * מסגרת ה-PDF ב-`source-preview.tsx` ירדה מ-192px המתועדים ל-184px,
+   * ו-`S5-01` בחבילת ההתאמה נכשלה על ההפרש הזה.
+   *
+   * לכן שני קבועים, ולא אחד: המלא כברירת מחדל, והאופקי למיכל `overflow-y`
+   * שגובה ילדיו תלוי בו. שניהם נושאים את אותה מחרוזת בשמם, ולכן סריקת
+   * האכיפה שלמעלה מקבלת את שניהם.
+   */
+  it("הגרסה האופקית נותנת אותם 4px, ובציר אחד בלבד", () => {
+    expect(SCROLL_FOCUS_ROOM_X).toBe("px-1 -mx-1");
   });
 });

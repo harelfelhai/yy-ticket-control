@@ -2,7 +2,7 @@
 
 import { he } from "@/lib/he";
 import { isPdf } from "@/lib/media-view";
-import { SCROLL_FOCUS_ROOM } from "@/lib/ui";
+import { SCROLL_FOCUS_ROOM_X } from "@/lib/ui";
 import type { AttachedFile } from "@/lib/use-media-upload";
 
 /**
@@ -65,9 +65,14 @@ export function SourcePreview({ files }: { files: AttachedFile[] }) {
     <div
       role="group"
       aria-label={he.batch.sourcePreview}
-      /* `SCROLL_FOCUS_ROOM` — `<iframe>` הוא אלמנט ממוקד, והגלילה האנכית
-         הייתה חותכת את טבעת המיקוד שלו בצדדים. ראו הנימוק בקבוע. */
-      className={`flex h-[calc(100vh-36rem)] min-h-48 flex-col gap-2 overflow-y-auto ${SCROLL_FOCUS_ROOM}`}
+      /*
+       * `SCROLL_FOCUS_ROOM_X` ולא הקבוע המלא, וזו אינה קוסמטיקה.
+       * `<iframe>` הוא אלמנט ממוקד, והגלילה האנכית חותכת את טבעתו בצדדים —
+       * ולכן המקום האופקי נדרש. מקום **אנכי**, לעומת זאת, היה גוזל 8px
+       * מתיבת התוכן, ומסגרת ה-PDF היא `h-full`: הרצפה של 192px שמתועדת
+       * למעלה הייתה יורדת ל-184px. `S5-01` בחבילת ההתאמה נכשלה על כך בדיוק.
+       */
+      className={`flex h-[calc(100vh-36rem)] min-h-48 flex-col gap-2 overflow-y-auto ${SCROLL_FOCUS_ROOM_X}`}
     >
       {previewable.map((file) =>
         isPdf(file.mimeType) ? (
