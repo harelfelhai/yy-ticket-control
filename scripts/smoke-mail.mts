@@ -5,12 +5,23 @@
  * מול פרודקשן זה מזהם את בסיס הנתונים. כאן נבדק רק מה ש-`smoke-notify`
  * אינו יכול לבדוק בנפרד — שהאימות מול Gmail עובר ושההודעה יוצאת.
  *
- * הרצה מול פרודקשן, בלי לחשוף את הסיסמה:
+ * הרצה מול פרודקשן, בלי לחשוף את הסוד:
  *   railway run --service web -- npx tsx scripts/smoke-mail.mts
  *
- * ‏`railway run` מזריק את משתני הסביבה לתהליך הבן. הסיסמה אינה מודפסת
- * ואינה נכתבת לשום מקום.
+ * `railway run` מזריק את משתני הסביבה לתהליך הבן. הסוד אינו מודפס
+ * ואינו נכתב לשום מקום.
+ *
+ * הרצה מקומית:
+ *   npx tsx scripts/smoke-mail.mts <כתובת>
  */
+
+// סדר הטעינה של Next: `.env.local` גובר על `.env`. בלי זה הסקריפט עבד רק
+// תחת `railway run` — שמזריק את הסביבה בעצמו — ומקומית טען כאילו הערוץ
+// אינו מוגדר, אף שההגדרות יושבות ב-`.env.local`. dotenv אינו דורס משתנה
+// קיים, ולכן ערכי הפרודקשן ממשיכים לגבור תחת `railway run`.
+const { config } = await import("dotenv");
+config({ path: ".env.local" });
+config();
 
 const { selectEmailTransport, isEmailConfigured } = await import("../src/lib/notifier/email");
 const { env } = await import("../src/lib/env");
@@ -18,7 +29,9 @@ const { env } = await import("../src/lib/env");
 const to = process.argv[2] ?? env.gmailUser();
 
 if (!isEmailConfigured()) {
-  console.error("✖ ערוץ המייל אינו מוגדר: חסרים GMAIL_USER או GMAIL_APP_PASSWORD");
+  console.error(
+    "✖ ערוץ המייל אינו מוגדר: נדרש GMAIL_USER, ולצדו GMAIL_REFRESH_TOKEN (מומלץ) או GMAIL_APP_PASSWORD",
+  );
   process.exit(1);
 }
 if (!to) {
