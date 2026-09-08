@@ -59,6 +59,17 @@ export function PortalActions({
     setFiles([]);
   }
 
+  /**
+   * חולץ מתוך ה-JSX כדי ש-Enter וכפתור השליחה יריצו את אותו קוד.
+   *
+   * חשוב במיוחד במסך הזה: מתחת לקומפוזר יושב כפתור "סיימתי — טופל" ברוחב
+   * מלא. מסלול שליחה שני שנכתב בנפרד היה מזמין בדיוק את סוג הטעות שבה
+   * Enter מפעיל את הפעולה הלא נכונה.
+   */
+  function send() {
+    run(() => replyAction(token, ticketId, text, files.map((f) => f.mediaId)), clear);
+  }
+
   if (isClosed) {
     return (
       <p className={cardClasses("text-sm text-muted")}>
@@ -90,7 +101,12 @@ export function PortalActions({
 
         {recording ? null : (
           <div className="flex-1">
-            <ReplyField value={text} onChange={setText} />
+            {/* אותו תנאי בדיוק שמפעיל את כפתור השליחה שלצדו */}
+            <ReplyField
+              value={text}
+              onChange={setText}
+              onSubmit={canReply && !busy ? send : undefined}
+            />
           </div>
         )}
 
@@ -99,12 +115,7 @@ export function PortalActions({
             size="compact"
             disabled={busy}
             aria-label={he.ticket.send}
-            onClick={() =>
-              run(
-                () => replyAction(token, ticketId, text, files.map((f) => f.mediaId)),
-                clear,
-              )
-            }
+            onClick={send}
           >
             <Send className="size-3" aria-hidden="true" />
           </Button>

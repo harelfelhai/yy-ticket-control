@@ -84,6 +84,44 @@ test.describe("פעולות על פנייה", () => {
     await expect(page.getByText(`${E2E_ADMIN.name} מטפל`).first()).toBeVisible();
   });
 
+  /**
+   * ההתנהגות היחידה במערכת שמותנית בסוג המכשיר, ולכן היא נבדקת **בשני
+   * הפרופילים** ולא באחד.
+   *
+   * `testInfo.project.name` ולא `isMobile` מהתצורה: מה שנבדק כאן הוא
+   * שאמולציית המכשיר של Chromium אכן משנה את `any-pointer`, וקריאת אותו
+   * דגל שממנו נגזרת ההתנהגות הייתה מסתירה בדיוק את מה שנבדק.
+   *
+   * זו גם התשובה לטענה ב-`tests/unit/touch-variant.test.ts` — "אין בדיקת
+   * דפדפן שיכולה לתפוס את זה". היא נכונה ל-`pointer-coarse:` שנאסר שם,
+   * שהוא כלל CSS שמשנה גדלים בשקט. התניה שמשנה **מה קורה בלחיצת מקש** כן
+   * נצפית, ולכן היא נאכפת.
+   */
+  test("Enter שולח במחשב, יורד שורה בטלפון", async ({ page }, testInfo) => {
+    await createTicket(page);
+
+    const box = page.getByLabel("תגובה");
+    const desktop = testInfo.project.name === "desktop";
+
+    // Shift+Enter יורד שורה בשני המכשירים — זה הצד היציב של החוזה.
+    await box.fill("שורה");
+    await box.press("Shift+Enter");
+    await expect(box).toHaveValue("שורה\n");
+
+    await box.fill("נשלח במקלדת");
+    await box.press("Enter");
+
+    if (desktop) {
+      // התיבה מתרוקנת רק אחרי שההודעה נשמרה — זו ההמתנה האמיתית.
+      await expect(box).toHaveValue("");
+      await expect(page.getByText("נשלח במקלדת")).toBeVisible();
+    } else {
+      await expect(box).toHaveValue("נשלח במקלדת\n");
+      // ההודעה לא יצאה, וכפתור השליחה עדיין עומד שם ומחכה.
+      await expect(page.getByRole("button", { name: "שלח", exact: true })).toBeVisible();
+    }
+  });
+
   test("סגירה מעבירה את הפנייה לסטטוס סגור וחוסמת תגובה של נמען", async ({ page }) => {
     await createTicket(page);
 

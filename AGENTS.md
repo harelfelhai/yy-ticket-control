@@ -50,6 +50,16 @@ Postgres 18 מקומי (`embedded-postgres`, פורט 5433, נתונים ב-`.lo
 **‏`prod-qa/` כותב לפרודקשן החי.** אין לו `globalSetup` בכוונה — ה-setup של `e2e/` מרוקן
 כל טבלה, והפנייתו לכתובת הפרודקשן הייתה מוחקת את המערכת.
 
+**שרת נשכח שמחובר ל-`yy_e2e` מריץ את הג׳ובים של הבדיקות.** לכל שרת של המערכת יש עובד
+תור **בתוך התהליך** (`src/instrumentation.ts`), והתור הוא טבלה בבסיס — ולכן שרת אחר של
+הפרויקט שנשאר מחובר לאותו בסיס תופס ג׳ובים ומריץ אותם עם הסביבה והקוד **שלו**.
+ב-7.9.2026 `next start -p 3105` מלפני שלושה ימים הפיל כך את `media.spec.ts` על מסלול
+"אין מנוע AI", ומילא את `Job.lastError` בנוסח שגיאה שכבר לא היה קיים ב-`src/`.
+`assertSoleDbClient` ב-`e2e/global-setup.ts` עוצר את הריצה מיד ומצביע על התהליך. הקריטריון
+הוא **גיל** החיבור ולא עצם קיומו, כי Playwright מעלה את `webServer` **לפני** ה-globalSetup
+(נמדד) ולכן שרת הבדיקות עצמו תמיד מחובר — מה שמבדיל אותו הוא שהוא צעיר מתהליך הריצה.
+מי שמחזיק שרת בכוונה (`reuseExistingServer`) מריץ עם `E2E_ALLOW_FOREIGN_DB_CLIENTS=1`.
+
 **‏PostToolUse hook** ב-`.claude/settings.json` מריץ `tsc --noEmit` על כל הפרויקט אחרי כל
 עריכת `.ts`/`.tsx`. שגיאת טיפוסים חוזרת מיד — אין צורך להריץ typecheck ידנית אחרי עריכה.
 
@@ -95,7 +105,7 @@ free-tier, אין ליצור שני. הוספת invariant: `MONITORING.md`. כל
 מנוטרל (`SENTRY_DEV=1` מחזיר אותו).
 
 **בחירת ספק לפי סביבה — תבנית אחת.** `storage/index.ts` (R2 / דיסק מקומי),
-`notifier/email.ts` (‏Gmail SMTP / לוג), `ai/gemini.ts` (‏Gemini — תמלול וחילוץ טקסט / SKIPPED):
+`notifier/email.ts` (Gmail API מעל HTTPS, ובהיעדרו SMTP / לוג), `ai/gemini.ts` (Gemini — תמלול וחילוץ טקסט / SKIPPED):
 בפיתוח חוסר הגדרה נופל ל-fallback שקט; בפרודקשן הוא **כשל רועש**, אלא אם נאמר במפורש
 (`MEDIA_STORAGE=local`). משתני סביבה נקראים רק דרך `src/lib/env.ts` (עצל), לא
 `process.env` בלוגיקה.

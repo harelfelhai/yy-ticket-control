@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { CAST, PROS } from "../fixtures/cast";
 import { loginAs } from "../fixtures/roles";
 import {
+  ASSIGNMENT_STATUS,
   CREATE_SCREEN,
   DRAFT_SCREEN,
   MEDIA,
@@ -83,8 +84,8 @@ test.describe("מסך 2 — הפנייה והשרשור", () => {
 
     await expect(recipientRow(page, first)).toBeVisible();
     await expect(recipientRow(page, second)).toBeVisible();
-    await expect(recipientRow(page, first)).toContainText("נשלח");
-    await expect(recipientRow(page, second)).toContainText("נשלח");
+    await expect(recipientRow(page, first)).toContainText(ASSIGNMENT_STATUS.sent);
+    await expect(recipientRow(page, second)).toContainText(ASSIGNMENT_STATUS.sent);
   });
 
   test("S2-06 — השרשור מציג אירועי מערכת בעברית", async ({ page }) => {
@@ -318,7 +319,7 @@ test.describe("מסך 7 — השלמת טיוטה", () => {
     // אחרי השיגור הפנייה אינה טיוטה עוד, ולכן הפאנל נסגר: `open` נגזר
     // מ-`isDraft` בשרת. פותחים אותו שוב כדי להגיע לרצועת הנמענים.
     await openDetails(page);
-    await expect(recipientRow(page, PROS.full.name)).toContainText("נשלח");
+    await expect(recipientRow(page, PROS.full.name)).toContainText(ASSIGNMENT_STATUS.sent);
   });
 
   test("S7-01/S7-02 — הטיוטה מוצגת בראש הלוח ומסומנת באדום", async ({ page }) => {

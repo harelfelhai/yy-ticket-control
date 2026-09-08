@@ -22,8 +22,9 @@ export const metadata = { title: `${he.admin.sites} — ${he.app.name}` };
  * בהקמת המשתמש בלבד, ולא הייתה שום דרך להזיז מנהל בין אתרים או לתת אתר
  * חדש למנהל קיים.
  */
-export default async function AdminSitesPage() {
+export default async function AdminSitesPage(props: PageProps<"/admin/sites">) {
   const actor = await requireUser();
+  const { new: openCreate } = await props.searchParams;
   const [sites, managers] = await Promise.all([
     listSites(actor),
     listAssignableSiteManagers(actor),
@@ -39,7 +40,14 @@ export default async function AdminSitesPage() {
         ← {he.admin.title}
       </Link>
 
+      {/*
+       * `?new=1` נקרא **בשרת** ולא ב-`useSearchParams`, ובכוונה: הפרמטר
+       * דרוש רק כערך התחלתי של הדיאלוג, וקריאתו בלקוח הייתה מחייבת גבול
+       * Suspense סביב רכיב שכל תפקידו הוא הרשימה. הקישור שמגיע לכאן הוא
+       * הכפתור שבמצב הריק של "פנייה חדשה" (`tickets/no-sites.tsx`).
+       */}
       <SitesManager
+        openCreate={openCreate === "1"}
         managers={managers}
         sites={sites.map((site) => ({
           id: site.id,

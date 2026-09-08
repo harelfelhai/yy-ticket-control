@@ -84,9 +84,9 @@ test.describe("יצירת פנייה", () => {
     // הרצועה ירדה לפאנל "פרטים" ב-0.3 (אפיון מסך 2 אזור ב׳).
     await openDetails(page);
     await expect(page.getByRole("list", { name: "נמענים" })).toContainText(contractorName);
-    // אף אחד לא צפה עדיין — הסטטוס הנגזר חייב להיות "חדש", והשיוך "נשלח".
+    // אף אחד לא צפה עדיין — הסטטוס הנגזר חייב להיות "חדש", והשיוך "שויך".
     await expect(page.getByText("חדש", { exact: true })).toBeVisible();
-    await expect(page.getByText("נשלח", { exact: true })).toBeVisible();
+    await expect(page.getByText("שויך", { exact: true })).toBeVisible();
   });
 
   test("פנייה חסרת שדות נשמרת כטיוטה ולא הולכת לאיבוד", async ({ page }) => {

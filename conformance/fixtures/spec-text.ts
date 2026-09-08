@@ -33,7 +33,8 @@ export const REASON_EXAMPLES = {
 
 /** סטטוס ברמת השיוך — §3.4, שורות 141–146 */
 export const ASSIGNMENT_STATUS = {
-  sent: "נשלח",
+  /** "שויך" ולא "נשלח" מ-1.1 — האפיון תוקן, ראו §3.4 ו-§7 שורה 44 */
+  sent: "שויך",
   viewed: "נצפה",
   done: "טופל",
   removed: "הוסר",

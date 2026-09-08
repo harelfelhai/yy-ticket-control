@@ -41,6 +41,23 @@ export function TicketActions({ ticketId, canComment }: TicketActionsProps) {
   // תמונה בלי כיתוב היא הודעה שלמה — ולעיתים המדויקת ביותר.
   const canSend = text.trim().length > 0 || files.length > 0;
 
+  /**
+   * חולץ מתוך ה-JSX כדי ש-Enter וכפתור השליחה יריצו את **אותו** קוד.
+   *
+   * שתי סגירות נפרדות היו נפרדות בשקט: השרת אינו דוחה טקסט ריק (הכלל
+   * "לא הודעה ריקה" יושב בשירות, שם הוא רואה גם קבצים), ולכן מסלול שני
+   * ששכח את `canSend` היה שולח הודעה ריקה בלי שאיש יראה זאת בבדיקה.
+   */
+  function send() {
+    run(
+      () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
+      () => {
+        setText("");
+        setFiles([]);
+      },
+    );
+  }
+
   return (
     /*
      * צמוד לתחתית (אפיון מסך 2 אזור ד׳, DESIGN.md § אלמנט דביק).
@@ -96,7 +113,16 @@ export function TicketActions({ ticketId, canComment }: TicketActionsProps) {
                 וההתמתחות היא תפקיד של התא בשורה. */}
             {recording ? null : (
               <div className="flex-1">
-                <ReplyField value={text} onChange={setText} />
+                {/*
+                 * `onSubmit` מועבר רק כשהכפתור עצמו היה פעיל — אותו תנאי
+                 * בדיוק. `busy` הוא `pending || !hydrated`, ולכן Enter
+                 * לפני ה-hydration אינו נבלע בשקט אלא פשוט יורד שורה.
+                 */}
+                <ReplyField
+                  value={text}
+                  onChange={setText}
+                  onSubmit={canSend && !busy ? send : undefined}
+                />
               </div>
             )}
 
@@ -113,15 +139,7 @@ export function TicketActions({ ticketId, canComment }: TicketActionsProps) {
                 size="compact"
                 disabled={busy}
                 aria-label={he.ticket.send}
-                onClick={() =>
-                  run(
-                    () => replyAction(ticketId, text, files.map((f) => f.mediaId)),
-                    () => {
-                      setText("");
-                      setFiles([]);
-                    },
-                  )
-                }
+                onClick={send}
               >
                 <Send className="size-3" aria-hidden="true" />
               </Button>

@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { he } from "@/lib/he";
 import { canViewOverview } from "@/lib/permissions";
 import { toViewer } from "@/lib/session";
-import { FULL_WIDTH, HEADER_HEIGHT } from "@/lib/ui";
+import { FULL_WIDTH, HEADER_HEIGHT, SCROLL_FOCUS_ROOM } from "@/lib/ui";
 import { logoutAction } from "../login/actions";
 
 /**
@@ -50,7 +50,15 @@ export default async function InternalLayout({
           ל-shell מרופט ש"יציאה" נותרה בו יתומה — פריסה שנקראת כתקלה. גלילה
           שומרת על שורה אחת נקייה ועל גובה יציב.
         */}
-        <nav className="flex min-w-0 flex-1 items-center justify-end gap-3 overflow-x-auto text-sm">
+        {/*
+          `SCROLL_FOCUS_ROOM` נלווה לגלילה ואינו קישוט: `overflow-x-auto`
+          הופך את הרצועה למיכל חותך גם אנכית, וטבעת המיקוד של כל קישור כאן
+          נחתכה מלמעלה ומלמטה — כלומר ניווט מקלדת בסרגל הראשי איבד את
+          הסימן שלו. ראו הנימוק בקבוע.
+        */}
+        <nav
+          className={`flex min-w-0 flex-1 items-center justify-end gap-3 overflow-x-auto text-sm ${SCROLL_FOCUS_ROOM}`}
+        >
           {/*
            * **הזנה מרוכזת אינה כאן, והיא ירדה בכוונה.**
            *

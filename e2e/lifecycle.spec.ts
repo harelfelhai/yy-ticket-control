@@ -160,10 +160,10 @@ test("מחזור חיים מלא: יצירה, שני קבלנים, הודעה מ
   // את הביטוי; ה-exact מכוון לתג עצמו.
   await expect(page.getByText("נפתחה מחדש", { exact: true })).toBeVisible();
   await expect(page.getByText("חדש", { exact: true })).toBeVisible();
-  // שני השיוכים חזרו ל"נשלח" — העבודה לא הושלמה, וזה חייב להיות גלוי.
+  // שני השיוכים חזרו ל"שויך" — העבודה לא הושלמה, וזה חייב להיות גלוי.
   await openDetails(page);
   await expect(
-    page.getByRole("list", { name: "נמענים", exact: true }).getByText("נשלח", { exact: true }),
+    page.getByRole("list", { name: "נמענים", exact: true }).getByText("שויך", { exact: true }),
   ).toHaveCount(2);
 });
 

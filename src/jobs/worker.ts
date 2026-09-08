@@ -2,7 +2,7 @@ import type { Job } from "@/generated/prisma/client";
 import { selectTextExtractor, selectTranscriber } from "@/lib/ai/gemini";
 import type { TextExtractor, Transcriber } from "@/lib/ai/types";
 import { selectEmailTransport } from "@/lib/notifier/email";
-import { type DeliveryOutcome, sendNotification } from "@/lib/notifier";
+import { type DeliveryOutcome, markNotifyFailed, sendNotification } from "@/lib/notifier";
 import type { EmailTransport } from "@/lib/notifier/types";
 import {
   type AiEngines,
@@ -220,10 +220,8 @@ export async function drainJobs(
 
 async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome> {
   switch (job.type) {
-    case JOB_TYPES.notify: {
-      const payload = job.payload as unknown as NotifyJobPayload;
-      return sendNotification(payload, deps.transport ?? selectEmailTransport());
-    }
+    case JOB_TYPES.notify:
+      return runNotify(job, deps);
 
     case JOB_TYPES.transcribe:
       return runAi(job, deps, runTranscription);
@@ -255,6 +253,28 @@ async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome
       // סוג לא מוכר אינו קורס בשקט: הוא נכשל, נשאר בטבלה, ומופיע כ-FAILED
       // עם הסיבה. זה קורה רק אם קוד ישן קרא לשורה שנוצרה בגרסה חדשה.
       throw new Error(`סוג עבודה לא מוכר: ${job.type}`);
+  }
+}
+
+/**
+ * מריץ שליחת התראה, ומסמן כשל על השיוך **רק כשנגמרו הניסיונות**.
+ *
+ * מבנה זהה ל-`runAi` שמתחתיו, ומאותו נימוק בדיוק: ניסיון שנכשל יחזור בעוד
+ * דקה, ואין סיבה שהמנהל יראה "השליחה נכשלה" על משהו שייפתר לבדו.
+ *
+ * **מה שהיה חסר עד 1.1** הוא הצד השני של אותה מטבע: כשכן נגמרו הניסיונות,
+ * הג׳וב ננעל ל-`FAILED` ואיש לא ידע. השיוך המשיך להיראות "בתור לשליחה"
+ * לנצח, מפני שאף שדה על `Assignment` לא תיעד את הכשל — בעוד שלמסלול ה-AI
+ * כבר היה `markAiFailed` בדיוק לשם כך.
+ */
+async function runNotify(job: Job, deps: WorkerDeps): Promise<DeliveryOutcome> {
+  const payload = job.payload as unknown as NotifyJobPayload;
+
+  try {
+    return await sendNotification(payload, deps.transport ?? selectEmailTransport());
+  } catch (error) {
+    if (job.attempts >= MAX_ATTEMPTS) await markNotifyFailed(payload);
+    throw error;
   }
 }
 

@@ -85,12 +85,12 @@ describe("תגי סטטוס", () => {
 
   it("שיוך פעיל אינו מקבל קו חוצה", () => {
     render(<AssignmentStatusChip status="SENT" />);
-    expect(screen.getByText("נשלח").className).not.toContain("line-through");
+    expect(screen.getByText("שויך").className).not.toContain("line-through");
   });
 
   it("״נצפה״ נבדל מ״נשלח״ גם אחרי האיחוד", () => {
     const { rerender } = render(<AssignmentStatusChip status="SENT" />);
-    const sent = screen.getByText("נשלח").className;
+    const sent = screen.getByText("שויך").className;
 
     rerender(<AssignmentStatusChip status="VIEWED" />);
     expect(screen.getByText("נצפה").className).not.toBe(sent);

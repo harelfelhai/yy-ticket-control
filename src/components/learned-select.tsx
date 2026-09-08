@@ -7,6 +7,7 @@ import { FormError } from "@/components/ui/message";
 import { he } from "@/lib/he";
 import { normalizeName } from "@/lib/normalize";
 import type { SelectOption } from "@/lib/options";
+import { SCROLL_FOCUS_ROOM } from "@/lib/ui";
 import { useHydrated } from "@/lib/use-hydrated";
 
 export type LearnedOption = SelectOption;
@@ -138,7 +139,14 @@ export function LearnedSelect({
             className="mb-2"
           />
 
-          <ul id={listId} role="listbox" aria-label={label} className="max-h-64 overflow-y-auto">
+          {/* `SCROLL_FOCUS_ROOM` — בלעדיו טבעת המיקוד של כל שורת אפשרות
+              נחתכת בצדדים בידי הגלילה האנכית (ראו הנימוק המלא בקבוע). */}
+          <ul
+            id={listId}
+            role="listbox"
+            aria-label={label}
+            className={`max-h-64 overflow-y-auto ${SCROLL_FOCUS_ROOM}`}
+          >
             {filtered.map((option) => (
               <li key={option.id}>
                 <button

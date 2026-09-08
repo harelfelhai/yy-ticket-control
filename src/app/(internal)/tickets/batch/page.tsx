@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import { listSiteDirectory } from "@/lib/services/directory";
 import { ButtonLink } from "@/components/ui/button";
+import { NoSites } from "../no-sites";
 import { BatchForm } from "./batch-form";
 import { CARD_LIST, CONTENT_WIDTH, PAGE_X, TITLE_DESCRIPTIVE } from "@/lib/ui";
 
@@ -22,12 +23,9 @@ export default async function BatchPage(props: PageProps<"/tickets/batch">) {
     ? await db.site.findMany({ where: { id: user.siteId } })
     : await db.site.findMany({ orderBy: { name: "asc" } });
 
-  if (sites.length === 0) {
-    // המסך עצמו רחב, אבל ענף הכשל הוא משפט אחד שקוראים — ולכן `CONTENT_WIDTH`
-    // ולא `FULL_WIDTH`. בלי קבוע כלשהו הוא נמתח על מסך שלם מאז שה-`<main>`
-    // חדל להגביל.
-    return <p className={`py-3 ${PAGE_X} ${CONTENT_WIDTH} text-muted`}>{he.ticket.noSite}</p>;
-  }
+  // המסך עצמו רחב, אבל ענף הכשל הוא משפט אחד שקוראים — `NoSites` מחזיק את
+  // `CONTENT_WIDTH` ואת הנימוק המלא, כולל למה זה אינו "המשתמש אינו משויך".
+  if (sites.length === 0) return <NoSites user={user} />;
 
   const site = sites.length === 1 ? sites[0] : sites.find((s) => s.id === requestedSiteId);
 

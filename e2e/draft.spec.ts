@@ -61,14 +61,14 @@ test("השלמת טיוטה ושיגורה: ממלאים את החסר, משגר
 
   await page.getByRole("button", { name: "שגר", exact: true }).click();
 
-  // אחרי השיגור: הבאנר נעלם, הנמען ברצועה עם "נשלח", ואירוע שיוך בשרשור.
+  // אחרי השיגור: הבאנר נעלם, הנמען ברצועה עם "שויך", ואירוע שיוך בשרשור.
   await expect(page.getByText("טיוטה — חסרים פרטים. לא נשלחה לאיש.")).toHaveCount(0);
   // הפאנל נפתח מהשרת בטיוטה ונסגר עם השיגור (`open={ticket.isDraft}`) —
   // פותחים אותו שוב כדי להגיע לרצועה.
   await openDetails(page);
   const recipients = page.getByRole("list", { name: "נמענים", exact: true });
   await expect(recipients).toContainText(electrician);
-  await expect(recipients).toContainText("נשלח");
+  await expect(recipients).toContainText("שויך");
   await expect(page.getByText(`${electrician} שויך לפנייה`)).toBeVisible();
 });
 

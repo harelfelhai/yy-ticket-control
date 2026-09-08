@@ -56,6 +56,37 @@ export const env = {
   notifyFromEmail: () => optional("NOTIFY_FROM_EMAIL"),
 
   /**
+   * ערוץ Gmail **מעל HTTPS** — הצירוף שמחליף את SMTP בפרודקשן.
+   *
+   * **למה זה קיים בכלל.** נמדד מתוך הקונטיינר של Railway ב-7.9.2026: חיבור
+   * TCP אל 25, 465 ו-587 נבלע בשקט ל-8 שניות אל **כל** מארח שנוסה — Gmail,
+   * Gmail relay, ה-MX של גוגל ו-SendGrid — בעוד ש-`www.google.com:443` נענה
+   * ב-16ms. כלומר יציאה ב-IPv4 תקינה לגמרי, וכלל firewall מפיל חבילות SMTP.
+   * `gmail.googleapis.com` מדבר 443 ולכן עובר.
+   *
+   * **כול-או-כלום כמו `r2()`.** שלושה ערכים: מזהה הלקוח, הסוד, ו-refresh
+   * token של חשבון השליחה. חסר אחד מהם → הערוץ אינו קיים, ו-
+   * `selectEmailTransport` נופל ל-SMTP או נכשל ברעש (בפרודקשן).
+   *
+   * **`GOOGLE_CLIENT_ID`/`SECRET` משותפים עם ההתחברות ואינם משוכפלים.** זו
+   * אותה אפליקציה מול גוגל, ושני מפתחות נוספים היו שני מקורות אמת לאותו
+   * דבר. מה שנפרד הוא ה-refresh token, שהוא **הרשאה של חשבון מסוים** לשלוח
+   * בשמו — ואין לו שום קשר להתחברות של משתמשי המערכת. הוספת ה-scope
+   * `gmail.send` כאן אינה משנה דבר במסך ההתחברות: ה-scopes שנשלחים שם
+   * נקבעים בכתובת ההרשאה, לא ברישום הלקוח.
+   */
+  gmailApi: () => {
+    // שלושת ה-`optional` נקראים כאן ולא דרך `googleOauth()`: הפניה ל-`env`
+    // מתוך האתחול של `env` עצמו הופכת את הטיפוס שלו ל-`any` בשקט.
+    const clientId = optional("GOOGLE_CLIENT_ID");
+    const clientSecret = optional("GOOGLE_CLIENT_SECRET");
+    const refreshToken = optional("GMAIL_REFRESH_TOKEN");
+
+    if (!clientId || !clientSecret || !refreshToken) return undefined;
+    return { clientId, clientSecret, refreshToken };
+  },
+
+  /**
    * הגדרות Cloudflare R2, או undefined אם אינן מלאות.
    *
    * הכול-או-כלום מכוון: שלושה מפתחות מתוך ארבעה אינם "כמעט מוגדר" אלא
