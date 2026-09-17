@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { REASON_EXAMPLES } from "../../conformance/fixtures/spec-text";
 import { he } from "@/lib/he";
 import {
   type AssignmentView,
@@ -324,6 +325,38 @@ describe("reasonText — למה הפנייה נמצאת כאן", () => {
 
   it("טיוטה מוסברת כטיוטה", () => {
     expect(reasonText(ticket({ isDraft: true }), [], NOW)).toBe(he.reason.draft);
+  });
+
+  describe("EM-S1-02 — טיוטה ממייל: שלוש שורות, הראשונה שמתקיימת", () => {
+    // מול הנוסח שהועתק מהאפיון, לא מול he.ts
+    const draft = (conflictCount: number, missingCount: number) =>
+      reasonText(ticket({ isDraft: true, emailDraft: { conflictCount, missingCount } }), [], NOW);
+
+    it("סתירה קודמת לחסרים — היא חוסמת שיגור", () => {
+      expect(draft(2, 3)).toBe(REASON_EXAMPLES.emailDraftConflicts(2));
+      expect(draft(2, 3)).toBe("טיוטה ממייל · סתירה ב-2 שדות");
+      expect(draft(1, 0)).toBe("טיוטה ממייל · סתירה ב-1 שדה");
+    });
+
+    it("בלי סתירה — החסרים, ביחיד וברבים", () => {
+      expect(draft(0, 2)).toBe(REASON_EXAMPLES.emailDraftMissing(2));
+      expect(draft(0, 2)).toBe("טיוטה ממייל · חסרים 2 פרטים");
+      expect(draft(0, 1)).toBe("טיוטה ממייל · חסר 1 פרט");
+    });
+
+    it("בלי סתירה ובלי חסר — מוכנה לשליחה", () => {
+      expect(draft(0, 0)).toBe(REASON_EXAMPLES.emailDraftReady);
+    });
+
+    it("טיוטה ידנית שלמה נשארת עם שורת הסיבה הקיימת (§7 שורה 82)", () => {
+      expect(reasonText(ticket({ isDraft: true, emailDraft: null }), [], NOW)).toBe(he.reason.draft);
+    });
+
+    it("הספירות אינן משנות את הסטטוס — עדיין טיוטה", () => {
+      expect(deriveTicketStatus(ticket({ isDraft: true, emailDraft: { conflictCount: 1, missingCount: 0 } }), [])).toBe(
+        "DRAFT",
+      );
+    });
   });
 
   it("פנייה סגורה מוסברת כסגורה", () => {

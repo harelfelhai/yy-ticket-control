@@ -1,5 +1,6 @@
 import type { DraftFieldName } from "@/generated/prisma/enums";
 import { DRAFT_FIELDS } from "@/lib/draft/fields";
+import { DRAFT_FIELD_LABEL } from "@/lib/draft/labels";
 import {
   emptyReport,
   type AmbiguousItem,
@@ -84,20 +85,6 @@ export interface ComposedIntakeReply {
 }
 
 const t = he.emailIntake;
-
-/**
- * שם השדה במייל הוא השם שהמסך קורא לו — מאותם מקורות, כדי ש"דירה" במייל
- * ו"דירה" בטופס של מסך 7 יהיו אותה מילה גם אחרי שינוי נוסח.
- */
-const FIELD_LABEL: Record<DraftFieldName, string> = {
-  SITE: he.ticket.site,
-  BUILDING: he.directory.building,
-  APARTMENT: he.directory.apartment,
-  ROOM: he.ticket.room,
-  DOMAIN: he.directory.domain,
-  DESCRIPTION: he.ticket.description,
-  RECIPIENTS: he.ticket.recipients,
-};
 
 export function selectTemplate(input: ComposeIntakeReplyInput): ReplyTemplate {
   switch (input.kind) {
@@ -190,7 +177,7 @@ function draftBody(template: "L01" | "L04", input: ComposeIntakeReplyInput): Rep
  */
 function summaryLine(summary: DraftSummary): string {
   return DRAFT_FIELDS.filter((field) => field !== "DESCRIPTION")
-    .map((field) => t.summaryItem(FIELD_LABEL[field], summaryValue(summary, field)))
+    .map((field) => t.summaryItem(DRAFT_FIELD_LABEL[field], summaryValue(summary, field)))
     .join(t.summarySeparator);
 }
 
@@ -219,12 +206,12 @@ function summaryValue(summary: DraftSummary, field: Exclude<DraftFieldName, "DES
  */
 function descriptionLine(summary: DraftSummary): string {
   const description = (summary.description ?? "").replace(/\r\n?/g, "\n").trim();
-  return t.summaryItem(FIELD_LABEL.DESCRIPTION, description || t.empty);
+  return t.summaryItem(DRAFT_FIELD_LABEL.DESCRIPTION, description || t.empty);
 }
 
 function updatedSection(items: readonly UpdatedItem[]): ReplyParagraph | null {
   const lines = byField(items).map((item) =>
-    t.updatedItem(FIELD_LABEL[item.field], display(item.before), display(item.after)),
+    t.updatedItem(DRAFT_FIELD_LABEL[item.field], display(item.before), display(item.after)),
   );
   return section(t.updatedHeading, lines.join(t.listSeparator));
 }
@@ -245,7 +232,7 @@ function missingSection(
   if (fields.length === 0) return null;
 
   const labels = fields
-    .map((field) => (field === "RECIPIENTS" ? t.missingRecipients : FIELD_LABEL[field]))
+    .map((field) => (field === "RECIPIENTS" ? t.missingRecipients : DRAFT_FIELD_LABEL[field]))
     .join(t.listSeparator);
   const listedUnderNotFound = notFound.some(
     (item) => item.field === "SITE" && optionsSentence("SITE", item.options ?? []) !== null,
@@ -256,7 +243,7 @@ function missingSection(
 
 function notFoundSection(items: readonly NotFoundItem[]): ReplyParagraph | null {
   const sentences = byField(items).map((item) => {
-    const sentence = t.notFoundItem(FIELD_LABEL[item.field], oneLine(item.written));
+    const sentence = t.notFoundItem(DRAFT_FIELD_LABEL[item.field], oneLine(item.written));
     const options = optionsSentence(item.field, item.options ?? []);
     return options ? `${sentence} ${options}` : sentence;
   });
@@ -271,7 +258,7 @@ function ambiguousSection(items: readonly AmbiguousItem[]): ReplyParagraph | nul
     throw new Error("composeIntakeReply: \"נמצאו כמה התאמות\" דורש לפחות שתי התאמות לכל שדה");
   }
   const sentences = byField(items).map((item) =>
-    t.ambiguousItem(FIELD_LABEL[item.field], oneLine(item.written), item.matches.map(oneLine).join(t.listSeparator)),
+    t.ambiguousItem(DRAFT_FIELD_LABEL[item.field], oneLine(item.written), item.matches.map(oneLine).join(t.listSeparator)),
   );
   // ההנחיה פעם אחת, אחרי כל השדות — היא אותה הנחיה לכולם
   return section(t.ambiguousHeading, [...sentences, t.ambiguousHint].join(" "));
@@ -280,7 +267,7 @@ function ambiguousSection(items: readonly AmbiguousItem[]): ReplyParagraph | nul
 function conflictSection(conflicts: readonly ConflictLine[]): ReplyParagraph | null {
   if (conflicts.length === 0) return null;
   const sentences = byField(conflicts).map((line) =>
-    t.conflictItem(FIELD_LABEL[line.field], display(line.emailValue), display(line.systemValue)),
+    t.conflictItem(DRAFT_FIELD_LABEL[line.field], display(line.emailValue), display(line.systemValue)),
   );
   return section(t.conflictHeading, [...sentences, t.conflictHint].join(" "));
 }

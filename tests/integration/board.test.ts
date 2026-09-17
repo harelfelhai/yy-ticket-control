@@ -331,6 +331,77 @@ describe("getBoard — תוכן הכרטיס", () => {
 });
 
 /**
+ * שורת הסיבה של טיוטה ממייל (EM-S1-02) — מקצה לקצה דרך שירות הלוח: הספירות
+ * נגזרות משורות `DraftField` ומערכי הפנייה, ולא נשמרות בשום מקום.
+ */
+describe("getBoard — טיוטה ממייל", () => {
+  async function emailDraft(fields: Record<string, unknown> = {}) {
+    return db.ticket.create({
+      data: {
+        channel: "EMAIL",
+        isDraft: true,
+        siteId: siteA,
+        createdById: manager.id,
+        description: "נזילה",
+        ...fields,
+      },
+    });
+  }
+
+  function reasonOf(board: Awaited<ReturnType<typeof getBoard>>, id: string) {
+    return board.sections.ACTION_REQUIRED.find((card) => card.id === id)?.reason;
+  }
+
+  it("סתירה קודמת לחסרים", async () => {
+    const ticket = await emailDraft(base);
+    await db.draftField.createMany({
+      data: [
+        { ticketId: ticket.id, field: "DOMAIN", conflict: true },
+        { ticketId: ticket.id, field: "APARTMENT", conflict: true },
+      ],
+    });
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+    expect(reasonOf(board, ticket.id)).toBe("טיוטה ממייל · סתירה ב-2 שדות");
+  });
+
+  it("בלי סתירה — מספר השדות החסרים, וחדר אינו נספר", async () => {
+    // חסרים: בניין, דירה ונמענים. החדר ריק ואינו שדה חובה.
+    const ticket = await emailDraft({ domainId: base.domainId });
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+    expect(reasonOf(board, ticket.id)).toBe("טיוטה ממייל · חסרים 3 פרטים");
+  });
+
+  it("טיוטה שלמה — מוכנה לשליחה", async () => {
+    const ticket = await emailDraft({
+      ...base,
+      draftRecipients: [{ kind: "professional", id: electrician, origin: "EMAIL" }] as never,
+    });
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+    expect(reasonOf(board, ticket.id)).toBe("טיוטה ממייל · מוכנה לשליחה");
+  });
+
+  it("טיוטה ידנית שלמה נשארת עם שורת הסיבה הקיימת (§7 שורה 82)", async () => {
+    const ticket = await db.ticket.create({
+      data: {
+        channel: "SELF",
+        isDraft: true,
+        siteId: siteA,
+        createdById: manager.id,
+        description: "נזילה",
+        ...base,
+        draftRecipients: [{ kind: "professional", id: electrician }] as never,
+      },
+    });
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+    expect(reasonOf(board, ticket.id)).toBe("טיוטה — חסרים פרטים");
+  });
+});
+
+/**
  * הארכיון גדל ללא גבול — פנייה אמיתית אינה נמחקת לעולם — בעוד מספר הפניות
  * הפתוחות נשאר קבוע. לפני התיקון הלוח שלף את **כל** הפניות שנוצרו אי-פעם
  * בכל טעינה, כדי להציג קבוצה שמקופלת ממילא כברירת מחדל.

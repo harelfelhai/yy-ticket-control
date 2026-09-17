@@ -48,10 +48,14 @@ export async function runTranscription(
   const audio = await selectStorage().read(media.storageKey);
   const text = normalizeText(await engines.transcriber.transcribe(audio, media.mimeType));
 
-  await db.mediaFile.update({
+  // ‏`updateMany` ולא `update`: הקובץ יכול היה להיות מוסר מהטיוטה בזמן
+  // התמלול (`removeDraftMedia`), ו-`update` היה זורק P2025 — שגיאה פנימית
+  // של Prisma שהייתה שורפת ניסיון ונרשמת ב-`Job.lastError` במקום הסיבה
+  const saved = await db.mediaFile.updateMany({
     where: { id: media.id },
     data: { transcription: text || null, aiStatus: "DONE", aiError: null },
   });
+  if (saved.count === 0) return { status: "skipped", reason: "missing" };
 
   if (text) await fillEmptyDescription(media.id, text);
 
@@ -79,10 +83,12 @@ export async function runTextExtraction(
   const file = await selectStorage().read(media.storageKey);
   const text = normalizeText(await engines.extractor.extract(file, media.mimeType));
 
-  await db.mediaFile.update({
+  // ראה ההערה ב-`runTranscription`: הקובץ עשוי להימחק תוך כדי החילוץ
+  const saved = await db.mediaFile.updateMany({
     where: { id: media.id },
     data: { extractedText: text || null, aiStatus: "DONE", aiError: null },
   });
+  if (saved.count === 0) return { status: "skipped", reason: "missing" };
 
   return { status: "done", chars: text.length, engine: engines.extractor.name };
 }
@@ -108,7 +114,7 @@ async function loadReady(mediaId: string) {
 }
 
 async function mark(mediaId: string, aiStatus: AiStatus): Promise<void> {
-  await db.mediaFile.update({ where: { id: mediaId }, data: { aiStatus } });
+  await db.mediaFile.updateMany({ where: { id: mediaId }, data: { aiStatus } });
 }
 
 /**

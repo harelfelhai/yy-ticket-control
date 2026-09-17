@@ -12,6 +12,8 @@ import { toViewer } from "@/lib/session";
 import type { SelectOption } from "@/lib/options";
 import { claimWhatsAppAutoOpen } from "@/lib/services/delivery";
 import { ensurePortalLink, rotatePortalLink } from "@/lib/services/portal";
+import { DRAFT_FIELDS } from "@/lib/draft/fields";
+import { removeDraftMedia, resolveDraftConflicts } from "@/lib/services/draft-fields";
 import { addTagToTicket, removeTagFromTicket } from "@/lib/services/tags";
 import { TicketError, getTicketDetail } from "@/lib/services/tickets";
 import {
@@ -153,12 +155,18 @@ export async function removeRecipientAction(
 // ── עריכת שדות, השלמת טיוטה, ומחיקתה ──────────────────────────────────
 
 const ticketFieldsSchema = z.object({
+  // ‏`siteId` ו-`recipients` נדחים בשירות בפנייה משוגרת (מסך 7 בלבד)
+  siteId: z.string().min(1).optional(),
   buildingId: z.string().min(1).nullable().optional(),
   apartmentId: z.string().min(1).nullable().optional(),
   domainId: z.string().min(1).nullable().optional(),
   room: z.enum(ROOMS).nullable().optional(),
   description: z.string().optional(),
+  recipients: recipientsSchema.optional(),
 });
+
+/** הבחירות בחלון הסתירות (מסך 7א): צד אחד לכל שדה שבסתירה */
+const choicesSchema = z.record(z.enum(DRAFT_FIELDS), z.enum(["system", "email"]));
 
 export async function updateTicketFieldsAction(
   ticketId: string,
@@ -172,10 +180,46 @@ export async function updateTicketFieldsAction(
 
 export async function submitDraftAction(
   ticketId: string,
-  recipients: z.infer<typeof recipientsSchema>,
+  recipients?: z.infer<typeof recipientsSchema>,
 ): Promise<ActionResult> {
   return guard(async () => {
-    await submitDraft(await viewer(), ticketId, recipientsSchema.parse(recipients));
+    // בלי רשימה — השירות משגר את הנמענים השמורים בטיוטה (מסך 7 של טיוטה ממייל)
+    await submitDraft(
+      await viewer(),
+      ticketId,
+      recipients === undefined ? undefined : recipientsSchema.parse(recipients),
+    );
+    refresh(ticketId);
+  });
+}
+
+/**
+ * מכריע את הסתירות שנבחרו בחלון (מסך 7א). `version` היא הטביעה של מה
+ * שהחלון הציג, והשרת דוחה הכרעה על ערכים שהשתנו בינתיים (§7 שורה 84).
+ */
+export async function resolveDraftConflictsAction(
+  ticketId: string,
+  choices: z.infer<typeof choicesSchema>,
+  version: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await resolveDraftConflicts(
+      await viewer(),
+      z.string().min(1).parse(ticketId),
+      choicesSchema.parse(choices),
+      z.string().parse(version),
+    );
+    refresh(ticketId);
+  });
+}
+
+/** מסיר קובץ מדיה מטיוטה ממייל — הקובץ נשאר בהתכתבות (מסך 7, EM-S7-05) */
+export async function removeDraftMediaAction(
+  ticketId: string,
+  mediaFileId: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await removeDraftMedia(await viewer(), z.string().min(1).parse(mediaFileId));
     refresh(ticketId);
   });
 }

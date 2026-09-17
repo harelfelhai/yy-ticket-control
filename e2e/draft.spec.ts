@@ -43,6 +43,34 @@ test("שמירה כטיוטה: באנר אדום, בלי כפתור סגירה, 
   await expect(actionRequired.getByText("טיוטה — חסרים פרטים").first()).toBeVisible();
 });
 
+test("EM-S7-06 — טיוטה שלא חסר בה דבר: 'טיוטה — לא נשלחה לאיש.'", async ({ page }) => {
+  // "חסרים פרטים" על טיוטה שלמה שולח את המנהל לחפש שדה שאינו קיים. מאז 1.3
+  // הנוסח נגזר ממה שבאמת חסר, וטיוטה שלמה נשמרת כטיוטה בכוונת הפותח.
+  const stamp = Date.now();
+  await loginAsManager(page);
+
+  await page.goto("/tickets/new");
+  await pick(page, "בניין", "בניין א");
+  await pick(page, "דירה", "1");
+  await pick(page, "תחום", "חשמל");
+  await page.getByLabel("תיאור").fill(`טיוטה שלמה ${stamp}`);
+  await addProfessional(page, `חשמלאי ${stamp}`, `053-${String(stamp).slice(-7)}`);
+  await page.getByRole("button", { name: "שמור כטיוטה" }).click();
+  await expect(page).toHaveURL(/\/tickets\/[a-z0-9]+$/);
+
+  await expect(page.getByText("טיוטה — לא נשלחה לאיש.")).toBeVisible();
+  await expect(page.getByText("טיוטה — חסרים פרטים. לא נשלחה לאיש.")).toHaveCount(0);
+  // ועדיין טיוטה: "שגר" קיים, והיא לא נשלחה לאיש.
+  await expect(page.getByRole("button", { name: "שגר", exact: true })).toBeVisible();
+
+  // בלוח, לעומת זאת, שורת הסיבה של טיוטה ידנית אינה משתנה (§7 שורה 82).
+  // הכרטיס מאותר לפי התיאור הייחודי: הבסיס משותף לכל הבדיקות, וטיוטה של
+  // בדיקה אחרת הייתה מספקת את הטענה במקומו.
+  await page.goto("/board");
+  const card = page.getByRole("link").filter({ hasText: `טיוטה שלמה ${stamp}` }).first();
+  await expect(card).toContainText("טיוטה — חסרים פרטים");
+});
+
 test("השלמת טיוטה ושיגורה: ממלאים את החסר, משגרים, והנמען מקבל אותה", async ({ page }) => {
   const stamp = Date.now();
   const electrician = `חשמלאי ${stamp}`;

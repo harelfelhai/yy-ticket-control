@@ -19,7 +19,10 @@ import { toViewer } from "@/lib/session";
 import { describeDelivery } from "@/lib/services/delivery";
 import { listSiteDirectory } from "@/lib/services/directory";
 import { listTags, listTicketTags } from "@/lib/services/tags";
-import { getTicketDetail, recipientName } from "@/lib/services/tickets";
+import { missingRequiredFields, getTicketDetail, recipientName } from "@/lib/services/tickets";
+import { activeRecipients } from "@/lib/draft/fields";
+import { draftValuesOf, emailDraftCounts } from "@/lib/draft/state";
+import { isEmailDraft } from "@/lib/services/draft-fields";
 import { canTagTicket } from "@/lib/permissions";
 import {
   deriveAwaitingReply,
@@ -87,8 +90,18 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
       .filter((assignedId): assignedId is string => assignedId !== null),
   );
 
+  /*
+   * טיוטה ממייל: שורת הסיבה מונה סתירות וחסרים (EM-S1-02), ואותן ספירות
+   * קובעות גם איזה באנר מוצג במסך. טיוטה ידנית — null, ושורת הסיבה שלה
+   * אינה משתנה (§7 שורה 82).
+   */
+  const draftValues = draftValuesOf(ticket);
+  const emailDraft = isEmailDraft(ticket)
+    ? emailDraftCounts(draftValues, ticket.draftFields.filter((field) => field.conflict).length)
+    : null;
+
   const reason = reasonText(
-    { ...ticket, handlerName: ticket.handler?.name ?? null, awaitingReply },
+    { ...ticket, handlerName: ticket.handler?.name ?? null, awaitingReply, emailDraft },
     assignmentViews,
     now,
   );
@@ -139,10 +152,10 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   // שלה — עם בורר אתר — נבנה בשלב נפרד; עד אז היא מוצגת כטיוטה בלי טופס.
   const draftDirectory =
     ticket.isDraft && canEdit && ticket.siteId ? await listSiteDirectory(ticket.siteId) : null;
+  // ‏`activeRecipients`: נמען שהוסר במערכת נשאר ברשימה כמצבה, כדי שתשובה
+  // מאוחרת שמוסיפה אותו תזוהה כסתירה (§5.ה4). הוא אינו נמען של הטיוטה.
   const draftRecipientOptions = ticket.isDraft
-    ? (
-        (ticket.draftRecipients as { kind: "professional" | "user"; id: string }[] | null) ?? []
-      )
+    ? activeRecipients(draftValues.recipients)
         .map((ref) => available.find((o) => o.id === ref.id && o.kind === ref.kind))
         .filter((o): o is (typeof available)[number] => o !== undefined)
     : [];
@@ -169,6 +182,21 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   ]);
 
   const location = he.ticket.location(ticket.building?.name, ticket.apartment?.number);
+
+  /*
+   * "טיוטה — חסרים פרטים. לא נשלחה לאיש." **רק כשבאמת חסרים פרטים** (מסך 7,
+   * EM-S7-06). בטיוטה שלמה — ממייל או מ"שמור כטיוטה" — הנוסח הוא "טיוטה — לא
+   * נשלחה לאיש.": "חסרים פרטים" על טיוטה שלא חסר בה דבר שולח את המנהל לחפש
+   * שדה שאינו קיים, ואת הסיבה שהיא לא שוגרה הוא לא מקבל.
+   */
+  const draftMissing = missingRequiredFields({
+    ...draftValues,
+    // הנמענים **כפי שהם שמורים בטיוטה**, ולא הרשימה שהטופס מצליח להציג:
+    // נמען שהושבת בינתיים יורד מהבורר (ואז הטופס מבקש נמען), אבל הוא עדיין
+    // בטיוטה — והבאנר מתאר את מה ששמור, לא את מה שניתן לבחור עכשיו.
+    recipients: activeRecipients(draftValues.recipients),
+  });
+  const draftBanner = draftMissing.length > 0 ? he.notices.draftBanner : he.notices.draftReadyBanner;
 
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
   const ageDays = Math.floor((now.getTime() - ticket.createdAt.getTime()) / MS_PER_DAY);
@@ -401,6 +429,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
               }))}
               domains={draftDirectory.domains.map((d) => ({ id: d.id, label: d.name }))}
               recipientOptions={available}
+              banner={draftBanner}
               initial={{
                 buildingId: ticket.buildingId,
                 apartmentId: ticket.apartmentId,
@@ -418,7 +447,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
           ) : (
             // בעלים שאינו הפותח רואה טיוטה אך אינו רשאי להשלים אותה.
             <p className={cardClasses("text-sm font-semibold text-danger", { tone: "danger" })}>
-              {he.notices.draftBanner}
+              {draftBanner}
             </p>
           )}
 
