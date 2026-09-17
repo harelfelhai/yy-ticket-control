@@ -1,30 +1,45 @@
 /**
- * מנפיק `GMAIL_REFRESH_TOKEN` — הרשאה חד-פעמית לשלוח בשם חשבון ה-Gmail.
+ * מנפיק `GMAIL_REFRESH_TOKEN` — הרשאה חד-פעמית לשלוח **ולקרוא** בשם חשבון
+ * ה-Gmail של המערכת.
  *
- * **למה זה נדרש בכלל.** נמדד מתוך הקונטיינר של הפרודקשן ב-7.9.2026:
- * Railway חוסם כל SMTP יוצא (25/465/587 נבלעים בשקט ל-8 שניות, בעוד ש-443
- * נענה ב-16ms). ערוץ המייל עבר לדבר עם Gmail מעל HTTPS, וזו ההרשאה שהוא
- * צריך — ראה `src/lib/notifier/gmail-api.ts`.
+ * **למה נדרשת שליחה.** נמדד מתוך הקונטיינר של הפרודקשן ב-7.9.2026: Railway
+ * חוסם כל SMTP יוצא (25/465/587 נבלעים בשקט ל-8 שניות, בעוד ש-443 נענה
+ * ב-16ms). ערוץ המייל עבר לדבר עם Gmail מעל HTTPS — ראה
+ * `src/lib/notifier/gmail-api.ts`.
  *
- * **מה הסקריפט הזה אינו עושה:** הוא אינו נוגע בסיסמאות ואינו מבקש מהמשתמש
- * להדביק סוד. ההרשאה עוברת דרך זרימת ההסכמה של גוגל בדפדפן בלבד, והטוקן
- * שמודפס בסוף הוא מה שנכנס ל-`.env.local` ול-Railway Variables.
+ * **למה נדרשת קריאה (אפיון 1.3).** פתיחת פנייה במייל קוראת את התיבה.
+ * ההיקף הוא `gmail.readonly` ולא `gmail.modify`, וזו הכרעה ולא חיסכון: §5.ה3
+ * כלל 3 קובע שהמערכת אינה משנה דבר בתיבה, כי EasyInv — שחולק איתה את התיבה
+ * — משתמש בסטטוס "לא נקרא" כרשימת העבודה שלו. הרשאה שאינה מאפשרת שינוי
+ * אוכפת את הכלל ביכולת ולא במשמעת. `tests/conformance/source/email-intake.test.ts`
+ * מוודא שהרשימה כאן היא בדיוק שני ההיקפים האלה.
+ *
+ * **מה הסקריפט אינו עושה:** הוא אינו נוגע בסיסמאות ואינו מבקש להדביק סוד.
+ * ההרשאה עוברת דרך זרימת ההסכמה של גוגל בדפדפן, והטוקן **נכתב ישירות
+ * ל-`.env.local`** — לא לטרמינל, כדי שלא יישאר בהיסטוריה של המסוף או של
+ * שיחה. `--print` מחזיר את ההתנהגות הקודמת (הדפסה) למי שצריך אותה.
  *
  * הרצה:
- *   npx tsx scripts/gmail-oauth.mts
+ *   npx tsx scripts/gmail-oauth.mts                 # כותב GMAIL_REFRESH_TOKEN
+ *   npx tsx scripts/gmail-oauth.mts --var NAME      # כותב למשתנה אחר (למשל חשבון בדיקות)
+ *   npx tsx scripts/gmail-oauth.mts --print         # מדפיס במקום לכתוב
+ *
+ * **להתחבר בדפדפן כחשבון התיבה עצמה.** הטוקן הוא הרשאה של החשבון שאישר;
+ * אישור מחשבון אחר ייתן למערכת גישה לתיבה הלא נכונה. הסקריפט מדפיס את
+ * כתובת החשבון שאישר ומשווה אותה ל-`GMAIL_USER` כשהוא מוגדר.
  *
  * דרישה חד-פעמית ב-Google Cloud Console, על אותו OAuth client שמשמש
  * להתחברות עם Google:
  *   1. להוסיף ל-Authorized redirect URIs את `http://localhost:5311/callback`
- *   2. להוסיף ל-OAuth consent screen את ה-scope
- *      `https://www.googleapis.com/auth/gmail.send`
+ *   2. להוסיף ל-OAuth consent screen (Data access) את שני ה-scopes שלמטה
  *
- * הוספת ה-scope אינה משנה דבר במסך ההתחברות של המערכת: ה-scopes שנשלחים
- * שם נקבעים בכתובת ההרשאה (`src/lib/google-oauth.ts`), לא ברישום הלקוח.
+ * הוספת ה-scopes אינה משנה את מסך ההתחברות של המערכת: ה-scopes שנשלחים שם
+ * נקבעים בכתובת ההרשאה (`src/lib/google-oauth.ts`), לא ברישום הלקוח.
  */
 
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { config } from "dotenv";
 
 // סדר הטעינה של Next: `.env.local` גובר על `.env`. הסקריפט חייב לקרוא את
@@ -35,7 +50,23 @@ config();
 
 const PORT = 5311;
 const REDIRECT_URI = `http://localhost:${PORT}/callback`;
-const SCOPE = "https://www.googleapis.com/auth/gmail.send";
+const ENV_FILE = ".env.local";
+
+/** שני ההיקפים — ולא אחד יותר. ראה את ההערה בראש הקובץ. */
+const GMAIL_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.readonly",
+] as const;
+
+const args = process.argv.slice(2);
+const print = args.includes("--print");
+const varIndex = args.indexOf("--var");
+const varName = varIndex >= 0 ? args[varIndex + 1] : "GMAIL_REFRESH_TOKEN";
+
+if (!varName || !/^[A-Z][A-Z0-9_]*$/.test(varName)) {
+  console.error("✖ --var דורש שם משתנה באותיות גדולות, למשל GMAIL_TEST_REFRESH_TOKEN");
+  process.exit(1);
+}
 
 const clientId = process.env["GOOGLE_CLIENT_ID"];
 const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
@@ -54,7 +85,7 @@ const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
 authUrl.searchParams.set("client_id", clientId);
 authUrl.searchParams.set("redirect_uri", REDIRECT_URI);
 authUrl.searchParams.set("response_type", "code");
-authUrl.searchParams.set("scope", SCOPE);
+authUrl.searchParams.set("scope", GMAIL_SCOPES.join(" "));
 authUrl.searchParams.set("access_type", "offline");
 authUrl.searchParams.set("prompt", "consent");
 
@@ -78,6 +109,20 @@ function openInBrowser(url: string): void {
     detached: true,
     windowsVerbatimArguments: true,
   }).unref();
+}
+
+/**
+ * מחליף או מוסיף שורת `NAME=value` ב-`.env.local`, בלי לגעת בשאר הקובץ.
+ * הערך אינו עובר דרך המסוף בשום שלב.
+ */
+function writeEnvVar(name: string, value: string): void {
+  const current = existsSync(ENV_FILE) ? readFileSync(ENV_FILE, "utf8") : "";
+  const line = `${name}=${value}`;
+  const pattern = new RegExp(`^${name}=.*$`, "m");
+  const next = pattern.test(current)
+    ? current.replace(pattern, () => line)
+    : `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`;
+  writeFileSync(ENV_FILE, next, "utf8");
 }
 
 const code = await new Promise<string>((resolve, reject) => {
@@ -122,7 +167,12 @@ const response = await fetch("https://oauth2.googleapis.com/token", {
   }),
 });
 
-const body = (await response.json()) as { refresh_token?: string; error_description?: string };
+const body = (await response.json()) as {
+  refresh_token?: string;
+  access_token?: string;
+  scope?: string;
+  error_description?: string;
+};
 
 if (!response.ok || !body.refresh_token) {
   console.error(`✖ החלפת הקוד נכשלה: ${body.error_description ?? response.status}`);
@@ -131,6 +181,39 @@ if (!response.ok || !body.refresh_token) {
   process.exit(1);
 }
 
-console.log("\n✔ ההרשאה הונפקה. להוסיף כ-GMAIL_REFRESH_TOKEN ל-.env.local ול-Railway:\n");
-console.log(body.refresh_token);
-console.log("\nואז לאמת בפועל: npx tsx scripts/smoke-mail.mts <כתובת>");
+/**
+ * **מסך ההסכמה של גוגל מאפשר לבטל סימון של היקף בודד**, וההסכמה עדיין
+ * "מצליחה". טוקן בלי `gmail.readonly` היה נכתב, השליחה הייתה ממשיכה לעבוד,
+ * והקליטה הייתה נכשלת רק בסבב הראשון — ובפרודקשן. לכן ההיקפים שהוענקו
+ * בפועל נבדקים כאן, והטוקן אינו נכתב אם חסר אחד מהם.
+ */
+const granted = new Set((body.scope ?? "").split(/\s+/).filter(Boolean));
+const missing = GMAIL_SCOPES.filter((scope) => !granted.has(scope));
+if (missing.length > 0) {
+  console.error(`✖ ההרשאה הוענקה בלי: ${missing.join(", ")}`);
+  console.error("  במסך ההסכמה יש לסמן את כל ההרשאות. הטוקן לא נכתב. הרץ שוב.");
+  process.exit(1);
+}
+
+// איזה חשבון אישר בפועל — הטעות הצפויה היא דפדפן שמחובר לחשבון אחר.
+const profileResponse = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+  headers: { authorization: `Bearer ${body.access_token}` },
+});
+const profile = (await profileResponse.json()) as { emailAddress?: string };
+const mailbox = profile.emailAddress ?? "(לא ידוע)";
+const expected = process.env["GMAIL_USER"];
+
+console.log(`\n✔ ההרשאה הונפקה לחשבון ${mailbox}, עם ${GMAIL_SCOPES.length} ההיקפים.`);
+if (expected && expected.trim().toLowerCase() !== mailbox.toLowerCase()) {
+  console.warn(`⚠ GMAIL_USER מוגדר ל-${expected}, אבל ההרשאה ניתנה ל-${mailbox}.`);
+  console.warn("  אם זו לא הכוונה — התחבר בדפדפן לחשבון הנכון והרץ שוב.");
+}
+
+if (print) {
+  console.log(`\n${varName}:\n${body.refresh_token}`);
+} else {
+  writeEnvVar(varName, body.refresh_token);
+  console.log(`\nנכתב ל-${ENV_FILE} כ-${varName} (הערך אינו מודפס).`);
+  console.log("לפרודקשן: להעתיק את הערך מהקובץ ל-Railway Variables.");
+}
+console.log("\nלאימות: npx tsx scripts/smoke-mail.mts <כתובת>");
