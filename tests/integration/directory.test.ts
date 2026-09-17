@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { he } from "@/lib/he";
 import {
   DirectoryError,
+  assertLocationInSite,
   createProfessional,
   findOrCreateApartment,
   findOrCreateBuilding,
@@ -161,6 +162,24 @@ describe("איש מקצוע — זיהוי כפילות", () => {
     await createProfessional({ name: "יוסי", phone: "0501234567" });
     await findOrCreateProfessional({ name: "יוסי", phone: "0509999999" });
     expect(await db.professional.count()).toBe(2);
+  });
+});
+
+describe("assertLocationInSite — טיוטה בלי אתר (EM-10)", () => {
+  it("EM-10 — בלי אתר ובלי מיקום: תקין", async () => {
+    await expect(assertLocationInSite({ siteId: null })).resolves.toBeUndefined();
+  });
+
+  it("EM-10 — בלי אתר אין בניין או דירה שיכולים להשתייך אליו", async () => {
+    const building = await findOrCreateBuilding(siteId, "בניין א");
+    const apartment = await findOrCreateApartment(building.id, "3");
+
+    await expect(assertLocationInSite({ siteId: null, buildingId: building.id })).rejects.toThrow(
+      he.directory.locationMismatch,
+    );
+    await expect(assertLocationInSite({ siteId: null, apartmentId: apartment.id })).rejects.toThrow(
+      he.directory.locationMismatch,
+    );
   });
 });
 

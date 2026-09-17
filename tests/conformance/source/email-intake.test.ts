@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SRC, sourceFiles, stripComments } from "../../unit/source-scan";
@@ -63,5 +63,42 @@ describe("§5.ה3 כלל 3 — המערכת אינה משנה דבר בתיבה"
         .map((pattern) => `${path} — ${pattern}`),
     );
     expect(violations).toEqual([]);
+  });
+});
+
+/**
+ * **שרת שבדיקות מרימות לעולם אינו מגיע לתיבה האמיתית.**
+ *
+ * ‏Next טוען את `.env.local` של המכונה בעצמו, ולכן קונפיג שלא מאפס את
+ * משתני Gmail היה מריץ את החבילה מול התיבה המשותפת — שולח מיילים אמיתיים,
+ * ומ-1.3 גם קורא אותה ועונה לשולחים. האיפוס יושב במקום אחד
+ * (`e2e/server-env.ts`), והבדיקה מוודאת שאף קונפיג אינו מדלג עליו — כולל
+ * קונפיג שיתווסף בעתיד.
+ */
+describe("שרתי הבדיקות מנותקים מהתיבה", () => {
+  const ROOT = process.cwd();
+  const configs = [
+    ...readdirSync(ROOT).filter((name) => /^playwright.*\.config\.ts$/.test(name)),
+    ...readdirSync(join(ROOT, "conformance"))
+      .filter((name) => /^playwright.*\.config\.ts$/.test(name))
+      .map((name) => `conformance/${name}`),
+  ];
+
+  it("כל קונפיג של Playwright פורש את MAIL_ISOLATION_ENV לתוך סביבת השרת", () => {
+    expect(configs.length).toBeGreaterThanOrEqual(3);
+    for (const config of configs) {
+      const code = stripComments(readFileSync(join(ROOT, config), "utf8"));
+      expect(code, config).toMatch(/\.\.\.MAIL_ISOLATION_ENV/);
+    }
+  });
+
+  it("האיפוס מכסה את כל משתני הערוץ ש-env.ts קורא", () => {
+    const isolation = readFileSync(join(ROOT, "e2e", "server-env.ts"), "utf8");
+    const envSource = stripComments(readFileSync(join(SRC, "lib", "env.ts"), "utf8"));
+    const channelVars = [...envSource.matchAll(/optional\("((?:GMAIL|NOTIFY|EMAIL_INTAKE)_[A-Z_]+)"\)/g)].map(
+      (match) => match[1],
+    );
+    expect(channelVars.length).toBeGreaterThan(0);
+    for (const name of channelVars) expect(isolation, name).toContain(`${name}: ""`);
   });
 });

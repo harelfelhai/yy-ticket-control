@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { defineConfig, devices } from "@playwright/test";
+import { MAIL_ISOLATION_ENV } from "./e2e/server-env";
 
 /**
  * לכידה ויזואלית — צילום המסכים המרכזיים לבדיקת עיצוב.
@@ -62,6 +63,8 @@ export default defineConfig({
         process.env.GOOGLE_CLIENT_ID ?? "visual-client.apps.googleusercontent.com",
       GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? "visual-client-secret",
       MEDIA_STORAGE: "local",
+      // לעולם לא התיבה האמיתית — ראה `e2e/server-env.ts`.
+      ...MAIL_ISOLATION_ENV,
     },
   },
 });

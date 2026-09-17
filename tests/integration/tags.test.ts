@@ -220,6 +220,28 @@ describe("getTagDetail — רשימת הפניות ממודרת", () => {
     expect(adminDetail?.tickets).toHaveLength(2);
   });
 
+  it("EM-10 — טיוטה בלי אתר אינה ברשימת התגית של מנהל עבודה שאינו משויך לאתר", async () => {
+    const tag = await findOrCreateTag("ממייל", adminId);
+    const siteless = await db.ticket.create({
+      data: { siteId: null, createdById: adminId, channel: "EMAIL", isDraft: true, description: "תקלה" },
+    });
+    await db.ticketTag.create({ data: { ticketId: siteless.id, tagId: tag.id } });
+
+    const managerNoSite = await db.user.create({
+      data: { role: "SITE_MANAGER", name: "מנהל בלי אתר", phone: "0500000009", passwordHash: "x" },
+    });
+    const noSiteUser: SessionUser = {
+      id: managerNoSite.id,
+      name: managerNoSite.name,
+      role: "SITE_MANAGER",
+      siteId: null,
+    };
+
+    // ‏`null === null` — בלי התיקון הוא היה "באתר" של הטיוטה.
+    expect((await getTagDetail(noSiteUser, tag.id))?.tickets ?? []).toEqual([]);
+    expect((await getTagDetail(adminUser, tag.id))?.tickets.map((t) => t.id)).toEqual([siteless.id]);
+  });
+
   it("מסמן אם הצופה רשאי לפתוח את התגית לקבלנים", async () => {
     const tag = await findOrCreateTag("בדק בית", adminId);
     expect((await getTagDetail(adminUser, tag.id))?.canManageAccess).toBe(true);

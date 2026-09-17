@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { defineConfig, devices } from "@playwright/test";
+import { MAIL_ISOLATION_ENV } from "../e2e/server-env";
 
 /**
  * שורש הפרויקט. נדרש במפורש כי `webServer.cwd` מוגדר כברירת מחדל לתיקיית
@@ -111,6 +112,8 @@ export default defineConfig({
        */
       GEMINI_API_KEY: "",
       MEDIA_STORAGE: "local",
+      // לעולם לא התיבה האמיתית — ראה `e2e/server-env.ts`.
+      ...MAIL_ISOLATION_ENV,
     },
   },
 });

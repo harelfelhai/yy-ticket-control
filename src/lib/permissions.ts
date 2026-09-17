@@ -17,7 +17,12 @@ export type Viewer =
   | { kind: "professional"; id: string };
 
 export interface TicketAccessView {
-  siteId: string;
+  /**
+   * ‏null רק בטיוטה ממייל שלא זוהה בה אתר (אפיון §2.6 שלב 3). כל פרדיקט
+   * כאן שמשווה אתר חייב לדחות null במפורש: `null === null` הוא true, ומנהל
+   * עבודה שאינו משויך לאתר היה "תואם" לכל טיוטה בלי אתר.
+   */
+  siteId: string | null;
   createdById: string;
   closedAt: Date | null;
 }
@@ -147,7 +152,9 @@ export function canViewOverview(viewer: Viewer): boolean {
 export function canEditAssignments(viewer: Viewer, ticket: TicketAccessView): boolean {
   if (!isUser(viewer)) return false;
   if (viewer.role === "ADMIN") return true;
-  if (viewer.role === "SITE_MANAGER") return viewer.siteId === ticket.siteId;
+  // ‏`!== null` אינו כפילות של ההשוואה: בלעדיו מנהל עבודה בלי אתר תאם
+  // לטיוטה בלי אתר (`null === null`) וקיבל עליה עריכה מלאה.
+  if (viewer.role === "SITE_MANAGER") return viewer.siteId !== null && viewer.siteId === ticket.siteId;
   return ticket.createdById === viewer.id;
 }
 

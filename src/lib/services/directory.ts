@@ -141,10 +141,18 @@ export async function assertUsersAssignable(userIds: string[]): Promise<void> {
  * טיוטה יכולה להישמר בלי מיקום מלא.
  */
 export async function assertLocationInSite(input: {
-  siteId: string;
+  /** ‏null — טיוטה ממייל בלי אתר: אין בה אתר שבניין או דירה יכולים להשתייך אליו */
+  siteId: string | null;
   buildingId?: string | null;
   apartmentId?: string | null;
 }): Promise<void> {
+  if (input.siteId === null) {
+    if (input.buildingId || input.apartmentId) {
+      throw new DirectoryError(he.directory.locationMismatch);
+    }
+    return;
+  }
+
   if (input.buildingId) {
     const building = await db.building.findUnique({
       where: { id: input.buildingId },

@@ -134,7 +134,11 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
 
   // טיוטה: הרשימות הנלמדות ונמעני הטיוטה השמורים, כדי שמסך ההשלמה יציג את
   // השדות החסרים ויאפשר לשגר. נטענים רק כשמדובר בטיוטה שהצופה רשאי לערוך.
-  const draftDirectory = ticket.isDraft && canEdit ? await listSiteDirectory(ticket.siteId) : null;
+  //
+  // ‏`siteId` חסר רק בטיוטה ממייל שלא זוהה בה אתר (CHECK במסד). מסך ההשלמה
+  // שלה — עם בורר אתר — נבנה בשלב נפרד; עד אז היא מוצגת כטיוטה בלי טופס.
+  const draftDirectory =
+    ticket.isDraft && canEdit && ticket.siteId ? await listSiteDirectory(ticket.siteId) : null;
   const draftRecipientOptions = ticket.isDraft
     ? (
         (ticket.draftRecipients as { kind: "professional" | "user"; id: string }[] | null) ?? []
@@ -328,13 +332,16 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
                   ) : null}
                 </p>
 
-                <RecipientEditor
-                  ticketId={ticket.id}
-                  siteId={ticket.siteId}
-                  assignments={assignmentRows}
-                  available={available}
-                  canEdit={canEdit}
-                />
+                {/* פנייה משוגרת תמיד באתר — נאכף ב-CHECK במסד */}
+                {ticket.siteId ? (
+                  <RecipientEditor
+                    ticketId={ticket.id}
+                    siteId={ticket.siteId}
+                    assignments={assignmentRows}
+                    available={available}
+                    canEdit={canEdit}
+                  />
+                ) : null}
 
                 <TicketTags
                   ticketId={ticket.id}
@@ -380,7 +387,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
        */}
       {ticket.isDraft ? (
         <div className={cardClasses("flex flex-col gap-3")}>
-          {canEdit && draftDirectory ? (
+          {canEdit && draftDirectory && ticket.siteId ? (
             <DraftCompletion
               // key יציב: מונע re-mount של הרכיב (ואיפוס המצב המקומי — למשל
               // נמען שנוצר תוך כדי השלמה) כשהעמוד מתרנדר מחדש אחרי Server Action.
