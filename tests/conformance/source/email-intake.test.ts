@@ -40,7 +40,7 @@ describe("§5.ה3 כלל 3 — המערכת אינה משנה דבר בתיבה"
       "https://www.googleapis.com/auth/gmail.send",
       "https://www.googleapis.com/auth/gmail.readonly",
     ]);
-    // ‏`gmail.modify`, `mail.google.com` (גישה מלאה) ו-`gmail.labels` הם
+    // `gmail.modify`, `mail.google.com` (גישה מלאה) ו-`gmail.labels` הם
     // ההיקפים שמתירים שינוי — אף אחד מהם אינו מופיע בסקריפט כקוד.
     expect(stripComments(SCRIPT)).not.toMatch(/gmail\.modify|gmail\.labels|mail\.google\.com\/"|gmail\.insert/);
   });
@@ -69,7 +69,7 @@ describe("§5.ה3 כלל 3 — המערכת אינה משנה דבר בתיבה"
 /**
  * **שרת שבדיקות מרימות לעולם אינו מגיע לתיבה האמיתית.**
  *
- * ‏Next טוען את `.env.local` של המכונה בעצמו, ולכן קונפיג שלא מאפס את
+ * Next טוען את `.env.local` של המכונה בעצמו, ולכן קונפיג שלא מאפס את
  * משתני Gmail היה מריץ את החבילה מול התיבה המשותפת — שולח מיילים אמיתיים,
  * ומ-1.3 גם קורא אותה ועונה לשולחים. האיפוס יושב במקום אחד
  * (`e2e/server-env.ts`), והבדיקה מוודאת שאף קונפיג אינו מדלג עליו — כולל

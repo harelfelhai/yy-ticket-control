@@ -31,11 +31,12 @@ export function normalizeText(input: string): string {
     .replace(/\r\n?/g, "\n")
     // רווחים וטאבים בתוך שורה מתכווצים, ירידות שורה נשמרות
     .replace(/[^\S\n]+/g, " ")
-    // שורה ריקה אחת לכל היותר בין פסקאות
-    .replace(/\n{3,}/g, "\n\n")
     .split("\n")
     .map((line) => line.trim())
     .join("\n")
+    // שורה ריקה אחת לכל היותר בין פסקאות. **אחרי** הקיצוץ של כל שורה: שורה
+    // שכולה רווחים (במייל — כל `<p>&nbsp;</p>` של Outlook) נעשית ריקה רק שם
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 

@@ -237,7 +237,7 @@ describe("getTagDetail — רשימת הפניות ממודרת", () => {
       siteId: null,
     };
 
-    // ‏`null === null` — בלי התיקון הוא היה "באתר" של הטיוטה.
+    // `null === null` — בלי התיקון הוא היה "באתר" של הטיוטה.
     expect((await getTagDetail(noSiteUser, tag.id))?.tickets ?? []).toEqual([]);
     expect((await getTagDetail(adminUser, tag.id))?.tickets.map((t) => t.id)).toEqual([siteless.id]);
   });

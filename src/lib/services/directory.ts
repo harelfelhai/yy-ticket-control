@@ -141,7 +141,7 @@ export async function assertUsersAssignable(userIds: string[]): Promise<void> {
  * טיוטה יכולה להישמר בלי מיקום מלא.
  */
 export async function assertLocationInSite(input: {
-  /** ‏null — טיוטה ממייל בלי אתר: אין בה אתר שבניין או דירה יכולים להשתייך אליו */
+  /** null — טיוטה ממייל בלי אתר: אין בה אתר שבניין או דירה יכולים להשתייך אליו */
   siteId: string | null;
   buildingId?: string | null;
   apartmentId?: string | null;
