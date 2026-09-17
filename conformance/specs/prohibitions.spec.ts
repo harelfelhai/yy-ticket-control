@@ -150,7 +150,10 @@ test.describe("PROH — פנייה אינה נסגרת ואינה נמחקת מ�
       saveAsDraft: true,
     });
 
-    await expect(page.getByText(DRAFT_SCREEN.banner)).toBeVisible();
+    // ‏`readyBanner` ולא `banner`: לטיוטה הזו לא חסר דבר — יש בה בניין, דירה,
+    // תחום, תיאור ונמען — ומעדכון 1.3 הנוסח שלה הוא "טיוטה — לא נשלחה לאיש."
+    // (EM-S7-06). מה שהבדיקה אוכפת כאן הוא שהיא לא נשלחה, וזה נאמר בשניהם.
+    await expect(page.getByText(DRAFT_SCREEN.readyBanner)).toBeVisible();
 
     const id = ticketIdFromPath(path);
     const assignments = await query<{ count: string }>(

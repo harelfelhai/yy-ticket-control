@@ -51,6 +51,15 @@ export interface TicketView {
    * לשקר על מצב העבודה. השם הוא של הכותב, לשורת הסיבה.
    */
   awaitingReply?: { recipientName: string } | null;
+  /**
+   * טיוטה ממייל בלבד (עדכון 1.3): כמה שדות בסתירה וכמה שדות חובה חסרים.
+   * null או חסר בכל פנייה אחרת, כולל טיוטה ידנית — שורת הסיבה שלה אינה
+   * משתנה (§7 שורה 82).
+   *
+   * **דגל, לא סטטוס** (§3.5 "סתירה פתוחה"): הפנייה נשארת `DRAFT`, ומה
+   * שמשתנה הוא ההסבר למה היא ב"דורש ממך".
+   */
+  emailDraft?: { conflictCount: number; missingCount: number } | null;
 }
 
 /** ההודעה האחרונה בשרשור, בשדות שנדרשים כדי לדעת מי כתב אותה */
@@ -202,7 +211,15 @@ export function reasonText(
   const active = activeAssignments(assignments);
 
   if (status === "CLOSED") return he.reason.closed;
-  if (status === "DRAFT") return he.reason.draft;
+  if (status === "DRAFT") {
+    // טיוטה ממייל: הראשונה שמתקיימת (מסך 1). סתירה קודמת — היא חוסמת שיגור
+    // גם כשלא חסר דבר, ו"מוכנה" הייתה אומרת אחרת.
+    const email = ticket.emailDraft;
+    if (!email) return he.reason.draft;
+    if (email.conflictCount > 0) return he.reason.emailDraftConflicts(email.conflictCount);
+    if (email.missingCount > 0) return he.reason.emailDraftMissing(email.missingCount);
+    return he.reason.emailDraftReady;
+  }
 
   if (status === "AWAITING_OPENER_APPROVAL") return he.reason.allDone;
 

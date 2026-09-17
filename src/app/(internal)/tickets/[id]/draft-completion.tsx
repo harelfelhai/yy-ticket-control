@@ -57,6 +57,12 @@ interface DraftCompletionProps {
   buildings: BuildingWithApartments[];
   domains: LearnedOption[];
   recipientOptions: RecipientOption[];
+  /**
+   * נוסח הבאנר, כפי שהשרת חישב אותו: "חסרים פרטים" רק כשבאמת חסרים (מסך 7,
+   * EM-S7-06). הרכיב אינו מחשב אותו בעצמו — מה שהוקלד ולא נשמר אינו משנה מה
+   * שמור בטיוטה.
+   */
+  banner: string;
   /** ערכים קיימים בטיוטה, לטעינה מראש */
   initial: {
     buildingId: string | null;
@@ -87,6 +93,7 @@ export function DraftCompletion({
   buildings: initialBuildings,
   domains: initialDomains,
   recipientOptions,
+  banner,
   initial,
   missing,
 }: DraftCompletionProps) {
@@ -248,7 +255,7 @@ export function DraftCompletion({
 
   return (
     <section className={cardClasses("flex flex-col gap-3", { tone: "danger" })}>
-      <p className="text-sm font-semibold text-danger">{he.notices.draftBanner}</p>
+      <p className="text-sm font-semibold text-danger">{banner}</p>
 
       {showBuilding ? (
         <LearnedSelect

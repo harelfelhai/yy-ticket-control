@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { firstLine } from "@/lib/format";
 import type { SessionUser } from "@/lib/session";
 import { compareApartmentNumbers } from "@/lib/normalize";
+import { draftValuesOf, emailDraftCounts } from "@/lib/draft/state";
+import { isEmailDraft } from "@/lib/services/draft-fields";
 import { tagChatTextMatch } from "@/lib/services/tags";
 import type { DerivedTicketStatus } from "@/lib/ticket-status";
 import {
@@ -130,10 +132,26 @@ const TICKET_INCLUDE = {
       authorProfessional: { select: { name: true } },
     },
   },
+  /*
+   * השדות שבסתירה בלבד — לשורת הסיבה של טיוטה ממייל (EM-S1-02).
+   *
+   * ‏`where` ולא ספירה נפרדת: הרשימה ריקה בכל פנייה שאינה טיוטה ממייל, וזו
+   * הרוב המכריע. השדות החסרים נגזרים מערכי הפנייה, שכבר נשלפים ממילא.
+   */
+  draftFields: { where: { conflict: true }, select: { field: true } },
 } satisfies Prisma.TicketInclude;
 
 /** פנייה כפי שהיא נשלפת ללוח, על כל מה ש-`TICKET_INCLUDE` מביא איתה */
 type BoardTicket = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
+
+/**
+ * הספירות של שורת הסיבה — **רק לטיוטה ממייל** (§7 שורה 82): טיוטה ידנית
+ * ממשיכה להציג "טיוטה — חסרים פרטים" גם כשהיא שלמה.
+ */
+function emailDraftCountsOf(ticket: BoardTicket) {
+  if (!isEmailDraft(ticket)) return null;
+  return emailDraftCounts(draftValuesOf(ticket), ticket.draftFields.length);
+}
 
 /** לוח ריק לחלוטין — לתרחיש ה-fail-closed של מנהל עבודה ללא אתר */
 function emptyBoard(): BoardData {
@@ -282,7 +300,12 @@ export async function getBoard(
       activeRecipientIds,
     );
 
-    const view = { ...ticket, handlerName: ticket.handler?.name ?? null, awaitingReply };
+    const view = {
+      ...ticket,
+      handlerName: ticket.handler?.name ?? null,
+      awaitingReply,
+      emailDraft: emailDraftCountsOf(ticket),
+    };
     const status = deriveTicketStatus(view, assignmentViews);
     // סינון הסטטוס כאן ולא ב-SQL — ראו `BoardFilters.status`.
     if (filters.status && status !== filters.status) continue;

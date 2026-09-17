@@ -8,7 +8,14 @@ import { he } from "@/lib/he";
 import type { WaPendingRecipient } from "@/lib/notifier/wa-share";
 import { pendingWhatsAppRecipients } from "./delivery";
 import { normalizeText } from "@/lib/normalize";
-import { type RecipientRef, dedupeRecipients } from "@/lib/draft/fields";
+import {
+  type RecipientRef,
+  activeRecipients,
+  dedupeRecipients,
+  missingFields,
+  parseDraftRecipients,
+} from "@/lib/draft/fields";
+import { DRAFT_FIELD_LABEL } from "@/lib/draft/labels";
 import { logInfo } from "@/lib/observability/log";
 import {
   type Viewer,
@@ -29,6 +36,8 @@ import {
   assertUsersAssignable,
 } from "./directory";
 import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
+import { type Tx, actorName, recordEvent, touchData } from "./ticket-activity";
+import { countDraftConflicts, isEmailDraft, lockTicket, updateDraftFields } from "./draft-fields";
 
 /**
  * יצירה ושיגור של פניות.
@@ -85,14 +94,17 @@ export interface RequiredFieldsView {
  * הייתה ריקה מתוכן. טיוטה ממייל של מנהל מערכת או בעלים יכולה לחסור אותו.
  */
 export function missingRequiredFields(input: RequiredFieldsView): string[] {
-  const missing: string[] = [];
-  if (!input.siteId) missing.push(he.ticket.site);
-  if (!input.buildingId) missing.push(he.directory.building);
-  if (!input.apartmentId) missing.push(he.directory.apartment);
-  if (!input.domainId) missing.push(he.directory.domain);
-  if (!normalizeText(input.description ?? "")) missing.push(he.ticket.description);
-  if (!input.recipients?.length) missing.push(he.ticket.recipients);
-  return missing;
+  // הכלל עצמו — אילו שדות חובה ומתי שדה "ריק" — מוגדר פעם אחת, במודל
+  // הטיוטה, ומשמש גם את שורת הסיבה בלוח ואת המייל החוזר לשולח.
+  return missingFields({
+    siteId: input.siteId,
+    buildingId: input.buildingId ?? null,
+    apartmentId: input.apartmentId ?? null,
+    room: null,
+    domainId: input.domainId ?? null,
+    description: normalizeText(input.description ?? ""),
+    recipients: (input.recipients ?? []).map((r) => ({ ...r, origin: "SYSTEM" as const })),
+  }).map((field) => DRAFT_FIELD_LABEL[field]);
 }
 
 /** מפריד רשימת נמענים לצורה שבה Prisma יוצר שיוכים */
@@ -219,30 +231,56 @@ async function attachInitialMedia(
 export async function submitDraft(
   viewer: Viewer,
   ticketId: string,
-  recipients: RecipientRef[],
+  recipients?: RecipientRef[],
 ): Promise<void> {
   const ticket = await loadForAction(ticketId);
   denyUnless(canEditTicketFields(viewer, ticket));
   // כבר שוגרה: יציאה שקטה מונעת יצירת שיוכים כפולים אם השיגור נלחץ פעמיים.
   if (!ticket.isDraft) return;
 
-  const unique = dedupeRecipients(recipients);
-  await assertProfessionalsActive(professionalIds(unique));
-  await assertUsersAssignable(userIds(unique));
-  const missing = missingRequiredFields({
-    siteId: ticket.siteId,
-    buildingId: ticket.buildingId,
-    apartmentId: ticket.apartmentId,
-    domainId: ticket.domainId,
-    description: ticket.description,
-    recipients: unique,
-  });
-
-  if (missing.length > 0) {
-    throw new TicketError(he.ticket.cannotSubmitMissing(missing));
-  }
-
   await db.$transaction(async (tx) => {
+    // **הכול תחת נעילה, ונקרא מחדש**: תשובה במייל שמוזגה בין הבדיקה לשיגור
+    // יכולה לפתוח סתירה או לרוקן שדה חובה, והשיגור הוא הרגע שאי אפשר לקחת
+    // בחזרה — הנמענים כבר קיבלו את הפנייה.
+    await lockTicket(tx, ticketId);
+    const fresh = await tx.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        isDraft: true,
+        channel: true,
+        siteId: true,
+        createdById: true,
+        closedAt: true,
+        buildingId: true,
+        apartmentId: true,
+        domainId: true,
+        description: true,
+        draftRecipients: true,
+      },
+    });
+    if (!fresh?.isDraft) return;
+    // ההרשאה נבדקת שוב על מה שנקרא תחת הנעילה: אתר של טיוטה ממייל יכול
+    // להשתנות במיזוג של תשובה, והוא זה שקובע מי רשאי לשגר אותה
+    denyUnless(canEditTicketFields(viewer, fresh));
+
+    // **הנמענים גם הם נקראים כאן ולא לפני הנעילה**: נמען שנוסף בטיוטה בין
+    // הקריאה לנעילה היה נעלם לחלוטין — הוא לא היה מקבל שיוך, ו-draftRecipients
+    // מתאפס בשיגור, כלומר גם הרשומה שלו נמחקת (§5.ב, "פנייה לא הולכת לאיבוד").
+    const unique = dedupeRecipients(
+      recipients ?? activeRecipients(parseDraftRecipients(fresh.draftRecipients)),
+    );
+    await assertProfessionalsActive(professionalIds(unique), tx);
+    await assertUsersAssignable(userIds(unique), tx);
+
+    if (isEmailDraft(fresh)) {
+      // §2.6 שלב 6: שיגור חסום עד שכל הסתירות הוכרעו, אחרת לא ברור איזה ערך
+      // יגיע לנמען. אותו נוסח כמו ההודעה במסך 7 — זו אותה סיבה.
+      const conflicts = await countDraftConflicts(tx, ticketId);
+      if (conflicts > 0) throw new TicketError(he.emailDraft.conflictBanner(conflicts));
+    }
+
+    const missing = missingRequiredFields({ ...fresh, recipients: unique });
+    if (missing.length > 0) throw new TicketError(he.ticket.cannotSubmitMissing(missing));
     // לולאת create ולא createMany: createMany אינו מחזיר מזהים, והם דרושים
     // מיד ל-applyNewAssignments (אירועים, קישורי גישה, וג'ובי התראה).
     const assignmentIds: string[] = [];
@@ -287,6 +325,8 @@ export async function getTicketDetail(ticketId: string) {
       domain: true,
       createdBy: { select: { id: true, name: true } },
       handler: { select: { id: true, name: true } },
+      // מטא השדות של טיוטה ממייל: התג "מהמייל", הסתירות, והערך שממתין בהן
+      draftFields: true,
       assignments: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -316,7 +356,6 @@ export function recipientName(assignment: TicketDetail["assignments"][number]): 
   return assignment.professional?.name ?? assignment.user?.name ?? "";
 }
 
-type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
 /**
  * מכניס לתור בקשה להודיע על אירוע בפנייה.
@@ -382,41 +421,20 @@ function denyUnless(allowed: boolean): void {
 }
 
 /**
- * מסמן תנועה בפנייה.
+ * שדות הפנייה הניתנים לעריכה (אפיון §3.2).
  *
- * זהו הלב של מנגנון ההסלמה: הסלמה נמדדת לפי היעדר תנועה בשרשור, ולא לפי
- * "לא נצפה". באפיון המקורי די היה בקבלן אחד שפותח את הקישור כדי שההסלמה
- * לא תופעל לעולם — גם אם השאר התעלמו חודש.
- *
- * הסימון `escalated` מתאפס יחד, כי פנייה שקרה בה משהו כבר אינה תקועה.
+ * ‏`siteId` ו-`recipients` **בטיוטה בלבד** (עדכון 1.3, מסך 7): בפנייה משוגרת
+ * האתר קובע מי רואה אותה ומי קיבל אותה, והנמענים הם שיוכים אמיתיים שנערכים
+ * דרך `addAssignments`/`removeAssignment` — עם התראות ואירועים.
  */
-function touchData() {
-  return { lastActivityAt: new Date(), escalated: false };
-}
-
-/**
- * רושם אירוע מערכת בשרשור.
- * ה-meta מוגבל למחרוזות בכוונה: הוא נועד להצגה בלבד, ושמירת אובייקטים
- * מקוננים שם הייתה מזמינה תלות בצורת נתונים שתשתנה.
- */
-async function recordEvent(
-  tx: Tx,
-  ticketId: string,
-  eventType: string,
-  eventMeta: Record<string, string>,
-) {
-  await tx.message.create({
-    data: { ticketId, kind: "EVENT", eventType, eventMeta },
-  });
-}
-
-/** שדות הפנייה הניתנים לעריכה (אפיון §3.2) */
 export interface TicketFieldsInput {
+  siteId?: string;
   buildingId?: string | null;
   apartmentId?: string | null;
   domainId?: string | null;
   room?: Room | null;
   description?: string;
+  recipients?: RecipientRef[];
 }
 
 /**
@@ -434,6 +452,19 @@ export async function updateTicketFields(
 ) {
   const ticket = await loadForAction(ticketId);
   denyUnless(canEditTicketFields(viewer, ticket));
+
+  // **טיוטה נערכת דרך מנוע המיזוג** (`draft-fields.ts`): שם יושבים כלל
+  // האיפוס (אתר ⇒ בניין ודירה), רישום "נערך במערכת" שהמייל נמדד מולו,
+  // והנעילה שמונעת מתשובה במייל להיכנס בין הקריאה לכתיבה.
+  if (ticket.isDraft) {
+    await updateDraftFields(viewer, ticketId, fields);
+    return loadForAction(ticketId);
+  }
+
+  // פנייה משוגרת: אין לה אתר להחליף ואין לה נמעני טיוטה.
+  if (fields.siteId !== undefined || fields.recipients !== undefined) {
+    throw new TicketError(he.common.notAllowed);
+  }
 
   await assertLocationInSite({
     siteId: ticket.siteId,
@@ -889,7 +920,15 @@ export async function deleteDraft(viewer: Viewer, ticketId: string) {
   const ticket = await loadForAction(ticketId);
   denyUnless(canDeleteDraft(viewer, ticket));
 
-  await db.ticket.delete({ where: { id: ticketId } });
+  await db.$transaction(async (tx) => {
+    // נעילה וקריאה חוזרת: בלעדיהן המחיקה ממתינה לשיגור שרץ במקביל, ואז
+    // מוחקת את הפנייה **ששוגרה** — הכלל היחיד שאסור לעבור עליו (§5.ז)
+    await lockTicket(tx, ticketId);
+    const fresh = await tx.ticket.findUnique({ where: { id: ticketId }, select: { isDraft: true } });
+    if (!fresh) return;
+    if (!fresh.isDraft) throw new TicketError(he.common.notAllowed);
+    await tx.ticket.delete({ where: { id: ticketId } });
+  });
 }
 
 /**
@@ -943,18 +982,6 @@ export async function setAssignmentStatus(
 
     await recordEvent(tx, assignment.ticket.id, status, { recipientName: name });
   });
-}
-
-async function actorName(tx: Tx, viewer: Viewer): Promise<string> {
-  if (viewer.kind === "user") {
-    const user = await tx.user.findUnique({ where: { id: viewer.id }, select: { name: true } });
-    return user?.name ?? "";
-  }
-  const professional = await tx.professional.findUnique({
-    where: { id: viewer.id },
-    select: { name: true },
-  });
-  return professional?.name ?? "";
 }
 
 /**

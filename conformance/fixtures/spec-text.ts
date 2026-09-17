@@ -29,6 +29,12 @@ export const REASON_EXAMPLES = {
   partial: (done: number, total: number) => `${done} מתוך ${total} סיימו`,
   stale: (days: number) => `ללא תנועה ${days} ימים`,
   handler: (name: string) => `${name} מטפל`,
+  /** מסך 1, טיוטה ממייל (עדכון 1.3, EM-S1-02) — הראשונה שמתקיימת */
+  emailDraftConflicts: (fields: number) =>
+    fields === 1 ? "טיוטה ממייל · סתירה ב-1 שדה" : `טיוטה ממייל · סתירה ב-${fields} שדות`,
+  emailDraftMissing: (details: number) =>
+    details === 1 ? "טיוטה ממייל · חסר 1 פרט" : `טיוטה ממייל · חסרים ${details} פרטים`,
+  emailDraftReady: "טיוטה ממייל · מוכנה לשליחה",
 } as const;
 
 /** סטטוס ברמת השיוך — §3.4, שורות 141–146 */
@@ -142,7 +148,15 @@ export const TAG_SCREEN = {
 
 /** מסך 7 — טיוטה, שורות 305–306 */
 export const DRAFT_SCREEN = {
+  /** מסך 7 — **רק כשבאמת חסרים פרטים** (עדכון 1.3) */
   banner: "טיוטה — חסרים פרטים. לא נשלחה לאיש.",
+  /** מסך 7 — בכל טיוטה שלא חסר בה דבר, ממייל או מ"שמור כטיוטה" (EM-S7-06) */
+  readyBanner: "טיוטה — לא נשלחה לאיש.",
+  /** מסך 7, טיוטה ממייל בסתירה (EM-S7-04) */
+  conflictBanner: (fields: number) =>
+    fields === 1
+      ? "יש סתירה בין המייל למערכת ב-1 שדה. לא ניתן לשגר עד שתוכרע."
+      : `יש סתירה בין המייל למערכת ב-${fields} שדות. לא ניתן לשגר עד שתוכרע.`,
   submit: "שגר",
   delete: "מחק טיוטה",
 } as const;

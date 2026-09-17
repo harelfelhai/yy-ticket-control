@@ -1,5 +1,12 @@
 import { UserFacingError } from "@/lib/action-result";
 import { db } from "@/lib/db";
+
+/**
+ * הלקוח שהאימותים רצים עליו. **ברירת המחדל היא הבריכה הגלובלית, אבל קורא
+ * שנמצא בתוך טרנזאקציה מעביר את `tx` שלו**: אחרת הבדיקה תופסת חיבור שני
+ * בזמן שהראשון מחזיק נעילת שורה, וזו דרך מצוינת למצות את הבריכה.
+ */
+type DbClient = typeof db | Parameters<Parameters<typeof db.$transaction>[0]>[0];
 import { he } from "@/lib/he";
 import {
   compareApartmentNumbers,
@@ -80,11 +87,14 @@ export async function findOrCreateDomain(rawName: string) {
  * מהעתיד ולא מוחקת את העבר, ולכן פנייה פתוחה שהוא כבר עליה ממשיכה לעבוד
  * — כולל הקישור האישי שלו, שהוא עדיין נדרש לסגור דרכו מה שנפתח לפניו.
  */
-export async function assertProfessionalsActive(professionalIds: string[]): Promise<void> {
+export async function assertProfessionalsActive(
+  professionalIds: string[],
+  client: DbClient = db,
+): Promise<void> {
   const unique = [...new Set(professionalIds)];
   if (unique.length === 0) return;
 
-  const inactive = await db.professional.findMany({
+  const inactive = await client.professional.findMany({
     where: { id: { in: unique }, active: false },
     select: { name: true },
   });
@@ -115,11 +125,14 @@ export async function assertProfessionalsActive(professionalIds: string[]): Prom
  * הבדיקה היא על הספירה ולא על השמות: מזהה שאינו קיים כלל נופל באותו תנאי,
  * ואין טעם בשתי הודעות שגיאה למצב אחד.
  */
-export async function assertUsersAssignable(userIds: string[]): Promise<void> {
+export async function assertUsersAssignable(
+  userIds: string[],
+  client: DbClient = db,
+): Promise<void> {
   const unique = [...new Set(userIds)];
   if (unique.length === 0) return;
 
-  const assignable = await db.user.count({
+  const assignable = await client.user.count({
     where: {
       id: { in: unique },
       active: true,
@@ -140,12 +153,15 @@ export async function assertUsersAssignable(userIds: string[]): Promise<void> {
  * תחתיו דירות — זיהום חוצה-אתרים שקט של הרשומות. שדות null אינם נבדקים:
  * טיוטה יכולה להישמר בלי מיקום מלא.
  */
-export async function assertLocationInSite(input: {
-  /** null — טיוטה ממייל בלי אתר: אין בה אתר שבניין או דירה יכולים להשתייך אליו */
-  siteId: string | null;
-  buildingId?: string | null;
-  apartmentId?: string | null;
-}): Promise<void> {
+export async function assertLocationInSite(
+  input: {
+    /** null — טיוטה ממייל בלי אתר: אין בה אתר שבניין או דירה יכולים להשתייך אליו */
+    siteId: string | null;
+    buildingId?: string | null;
+    apartmentId?: string | null;
+  },
+  client: DbClient = db,
+): Promise<void> {
   if (input.siteId === null) {
     if (input.buildingId || input.apartmentId) {
       throw new DirectoryError(he.directory.locationMismatch);
@@ -154,7 +170,7 @@ export async function assertLocationInSite(input: {
   }
 
   if (input.buildingId) {
-    const building = await db.building.findUnique({
+    const building = await client.building.findUnique({
       where: { id: input.buildingId },
       select: { siteId: true },
     });
@@ -164,7 +180,7 @@ export async function assertLocationInSite(input: {
   }
 
   if (input.apartmentId) {
-    const apartment = await db.apartment.findUnique({
+    const apartment = await client.apartment.findUnique({
       where: { id: input.apartmentId },
       select: { buildingId: true, building: { select: { siteId: true } } },
     });
