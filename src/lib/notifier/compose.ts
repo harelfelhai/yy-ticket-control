@@ -78,19 +78,27 @@ function body(input: ComposeInput): string | undefined {
 }
 
 /**
- * עוטף את גוף הטקסט ב-HTML לקריאה בתיבת מייל.
+ * פתיחת המעטפת של כל מייל יוצא — כאן ובמיילים החוזרים לשולח
+ * (`email-intake/reply/render-html.ts`).
  *
  * סגנון מוטבע (inline) ולא גיליון סגנונות: לקוחות מייל רבים מסירים תגית
- * `<style>` שלמה, ואז ההודעה מוצגת משמאל לימין ומתפרקת בעברית.
+ * `<style>` שלמה, ואז ההודעה מוצגת משמאל לימין ומתפרקת בעברית. מקום אחד,
+ * כדי ששני סוגי המיילים לא ייראו אחרת בתיבה של אותו אדם.
  */
+export const EMAIL_CONTAINER_OPEN =
+  '<div dir="rtl" lang="he" style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#111;text-align:right">';
+
+export const EMAIL_PARAGRAPH_STYLE = "margin:0 0 12px";
+
+/** עוטף את גוף הטקסט ב-HTML לקריאה בתיבת מייל. */
 export function renderEmailHtml(message: ComposedMessage): string {
   const paragraphs = message.body
     .split("\n\n")
-    .map((paragraph) => `<p style="margin:0 0 12px">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+    .map((paragraph) => `<p style="${EMAIL_PARAGRAPH_STYLE}">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
     .join("");
 
   return [
-    `<div dir="rtl" lang="he" style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#111;text-align:right">`,
+    EMAIL_CONTAINER_OPEN,
     `<h1 style="font-size:18px;margin:0 0 16px">${escapeHtml(message.subject)}</h1>`,
     paragraphs,
     `<p style="margin:24px 0 0;font-size:13px;color:#666">${escapeHtml(he.notify.emailFooter)}</p>`,
@@ -102,8 +110,11 @@ export function renderEmailHtml(message: ComposedMessage): string {
  * תיאור פנייה הוא טקסט חופשי שאדם הקליד, והוא נכנס להודעה שנשלחת החוצה.
  * בלי בריחה, תיאור שמכיל `<` שובר את המבנה — ובמקרה הגרוע מחדיר תוכן זר
  * לתיבת המייל של הנמען.
+ *
+ * מיוצא כי גם המייל החוזר לשולח מכניס ל-HTML טקסט חופשי (מה שנכתב במייל,
+ * שמות). בורח גם מ-`"`, ולכן בטוח גם בתוך ערך של `href="…"`.
  */
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

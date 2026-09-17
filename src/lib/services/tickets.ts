@@ -8,6 +8,7 @@ import { he } from "@/lib/he";
 import type { WaPendingRecipient } from "@/lib/notifier/wa-share";
 import { pendingWhatsAppRecipients } from "./delivery";
 import { normalizeText } from "@/lib/normalize";
+import { type RecipientRef, dedupeRecipients } from "@/lib/draft/fields";
 import { logInfo } from "@/lib/observability/log";
 import {
   type Viewer,
@@ -40,10 +41,12 @@ import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
 /** שגיאות מחזור חיי הפנייה נועדו להיראות על ידי המשתמש, בעברית */
 export class TicketError extends UserFacingError {}
 
-/** נמען: קבלן חיצוני, או משתמש פנימי (כולל תזכורן — הפותח משייך לעצמו) */
-export type RecipientRef =
-  | { kind: "professional"; id: string }
-  | { kind: "user"; id: string };
+/**
+ * נמען: קבלן חיצוני, או משתמש פנימי (כולל תזכורן — הפותח משייך לעצמו).
+ * מוגדר עם מודל הטיוטה (`draft/fields.ts`), כי שם הוא נשמר ונבחן.
+ */
+export type { RecipientRef } from "@/lib/draft/fields";
+export { dedupeRecipients } from "@/lib/draft/fields";
 
 export interface CreateTicketInput {
   siteId: string;
@@ -255,21 +258,6 @@ export async function submitDraft(
       data: { isDraft: false, draftRecipients: Prisma.DbNull, ...touchData() },
     });
     await applyNewAssignments(tx, ticketId, unique, assignmentIds);
-  });
-}
-
-/**
- * מסיר כפילויות ברשימת הנמענים.
- * מנהל שבוחר את אותו קבלן פעמיים (למשל אחרי חיפוש חוזר) היה מייצר שני
- * שיוכים לאותו אדם — ואז "2 מתוך 3 סיימו" סופר אותו פעמיים.
- */
-export function dedupeRecipients(recipients: RecipientRef[]): RecipientRef[] {
-  const seen = new Set<string>();
-  return recipients.filter((r) => {
-    const key = `${r.kind}:${r.id}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
   });
 }
 

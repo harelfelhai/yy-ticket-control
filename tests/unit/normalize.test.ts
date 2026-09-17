@@ -116,6 +116,12 @@ describe("normalizeText — טקסט חופשי", () => {
     expect(normalizeText("א\n\n\n\nב")).toBe("א\n\nב");
   });
 
+  it("שורות שכולן רווחים נספרות כשורות ריקות — גם הן מצטמצמות לאחת", () => {
+    // כך נראית כל שורה ריקה במייל של Outlook (`<p>&nbsp;</p>`); הצמצום רץ
+    // בעבר לפני קיצוץ השורות, ושלוש שורות כאלה נשארו שלוש שורות ריקות.
+    expect(normalizeText("א\n \n\t\n \nב")).toBe("א\n\nב");
+  });
+
   it("מנרמל סופי שורה של Windows", () => {
     expect(normalizeText("א\r\nב")).toBe("א\nב");
   });
