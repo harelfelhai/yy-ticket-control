@@ -177,13 +177,18 @@ export async function updateDraftFields(
   viewer: Viewer,
   ticketId: string,
   fields: DraftFieldsInput,
-  now = new Date(),
+  clock?: Date,
 ): Promise<void> {
   const edits = toSystemEdits(fields);
   if (edits.length === 0) return;
 
   await db.$transaction(async (tx) => {
     const { ticket, state } = await loadLocked(tx, ticketId);
+    // **השעון נלקח אחרי הנעילה, לא לפני ההמתנה לה.** החותמת הזו היא מה
+    // שמייל מאוחר יימדד מולו (§5.ה4), וחותמת שנלקחה לפני המתנה של שניות
+    // הייתה מציגה את העריכה כמוקדמת ממייל שהגיע בינתיים — ואז הוא היה
+    // נכנס בשקט במקום לפתוח סתירה.
+    const now = clock ?? new Date();
     denyUnless(canEditTicketFields(viewer, ticket));
     // שוגרה בין הטעינה לכתיבה: ההמשך היה כותב שדות לפנייה חיה בלי אירוע ובלי
     // התראה לנמענים
@@ -216,10 +221,12 @@ export async function resolveDraftConflicts(
   ticketId: string,
   choices: Partial<Record<DraftFieldName, Choice>>,
   version: string,
-  now = new Date(),
+  clock?: Date,
 ): Promise<void> {
   await db.$transaction(async (tx) => {
     const { ticket, state } = await loadLocked(tx, ticketId);
+    // ראה ההערה ב-`updateDraftFields`: השעון אחרי הנעילה
+    const now = clock ?? new Date();
     denyUnless(canEditTicketFields(viewer, ticket));
     denyUnless(isEmailDraft(ticket));
     if (conflictsVersion(state) !== version) throw new DraftError(he.emailDraft.conflictsChanged);
