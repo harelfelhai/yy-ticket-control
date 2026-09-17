@@ -185,8 +185,8 @@ export const ROOMS_HE = [
   "שטח משותף",
 ] as const;
 
-/** §3.2 שדה 13 — ערוץ המקור, שורה 118 */
-export const CHANNELS_HE = ["אני", "מההנהלה", "מוואטסאפ"] as const;
+/** §3.2 שדה 13 — ערוץ המקור (`ממייל` נוסף בעדכון 1.3) */
+export const CHANNELS_HE = ["אני", "מההנהלה", "מוואטסאפ", "ממייל"] as const;
 
 /** §3.6 — תשעת המסננים, שורה 170 */
 export const SEARCH_FILTERS = [

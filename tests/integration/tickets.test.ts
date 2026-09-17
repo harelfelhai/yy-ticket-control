@@ -72,6 +72,10 @@ describe("missingRequiredFields", () => {
     ]);
   });
 
+  it("DM-F20/EM-10 — אתר חסר נספר ראשון, בטיוטה ממייל שלא זוהה בה אתר", () => {
+    expect(missingRequiredFields(fullInput({ siteId: null }))).toEqual([he.ticket.site]);
+  });
+
   it("תיאור של רווחים בלבד נחשב חסר", () => {
     expect(missingRequiredFields(fullInput({ description: "   " }))).toEqual([
       he.ticket.description,

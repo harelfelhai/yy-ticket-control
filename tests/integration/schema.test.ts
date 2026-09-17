@@ -100,6 +100,37 @@ describe("אילוצי מודל הנתונים", () => {
     expect(await db.user.count()).toBe(1);
   });
 
+  /**
+   * ‏EM-M02 (אפיון §3.2 שדה 3): אתר חובה **למעט** טיוטה ממייל שלא זוהה בה
+   * אתר. האילוץ הוא CHECK שנכתב במיגרציה `email_intake` — Prisma אינו מבטא
+   * CHECK, ולכן רק הבדיקה הזו מבטיחה שהוא קיים ושלא נמחק במיגרציה עתידית.
+   */
+  it("EM-M02 — פנייה בלי אתר נדחית במסד, למעט טיוטה ממייל", async () => {
+    const admin = await db.user.create({
+      data: { role: "ADMIN", name: "מנהל", phone: "0500000004", passwordHash: "x" },
+    });
+    const base = { createdById: admin.id, description: "תקלה" };
+
+    // פנייה משוגרת בלי אתר — הייתה נעלמת מכל מנהל עבודה.
+    await expect(
+      db.ticket.create({ data: { ...base, siteId: null, channel: "EMAIL", isDraft: false } }),
+    ).rejects.toThrow();
+    // טיוטה שנפתחה במערכת חייבת אתר — הטופס תמיד בוחר אחד.
+    await expect(
+      db.ticket.create({ data: { ...base, siteId: null, channel: "SELF", isDraft: true } }),
+    ).rejects.toThrow();
+
+    const draft = await db.ticket.create({
+      data: { ...base, siteId: null, channel: "EMAIL", isDraft: true },
+    });
+    expect(draft.siteId).toBeNull();
+
+    // ושיגור שלה בלי לקבוע אתר נחסם באותו אילוץ.
+    await expect(
+      db.ticket.update({ where: { id: draft.id }, data: { isDraft: false } }),
+    ).rejects.toThrow();
+  });
+
   it("מספרר פניות ברצף עולה לצורך זיהוי בשיחה", async () => {
     const site = await db.site.create({ data: { name: "אתר" } });
     const manager = await db.user.create({

@@ -209,6 +209,54 @@ describe("canEditAssignments", () => {
   });
 });
 
+/**
+ * ‏EM-10 (אפיון §2.6 שלב 3, §5.ז): טיוטה ממייל של מנהל מערכת או בעלים שלא
+ * זוהה בה אתר נשמרת **בלי אתר**. היא גלויה לשולח, למנהל המערכת ולבעלים;
+ * עורכים אותה השולח ומנהל המערכת (בעלים — רק אם הוא השולח).
+ *
+ * הבדיקה החשובה כאן היא מנהל העבודה **שאינו משויך לאתר**: עד 1.3 שני
+ * הפרדיקטים השוו `viewer.siteId === ticket.siteId`, ו-`null === null` היה
+ * נותן לו עריכה מלאה בכל טיוטה בלי אתר.
+ */
+describe("EM-10 — טיוטה בלי אתר", () => {
+  const managerNoSite: Viewer = { kind: "user", id: "u-mgr-none", role: "SITE_MANAGER", siteId: null };
+  const siteless = (o: Partial<TicketAccessView> = {}) => ticket({ siteId: null, createdById: owner.id, ...o });
+  const sitelessDraft = (o: Partial<TicketAccessView> = {}) => ({ ...siteless(o), isDraft: true });
+
+  it("EM-10 — גלויה לשולח, למנהל המערכת ולבעלים", () => {
+    expect(canViewTicket(owner, siteless())).toBe(true);
+    expect(canViewTicket(admin, siteless())).toBe(true);
+    const otherOwner: Viewer = { kind: "user", id: "u-owner-2", role: "OWNER", siteId: null };
+    expect(canViewTicket(otherOwner, siteless())).toBe(true);
+  });
+
+  it("EM-10 — מנהלי עבודה אינם רואים אותה — גם מנהל שאינו משויך לאתר", () => {
+    expect(canViewTicket(managerA, siteless())).toBe(false);
+    expect(canViewTicket(managerNoSite, siteless())).toBe(false);
+  });
+
+  it("EM-10 — עורכים אותה השולח ומנהל המערכת; בעלים אחר ומנהל עבודה לא", () => {
+    const otherOwner: Viewer = { kind: "user", id: "u-owner-2", role: "OWNER", siteId: null };
+    for (const check of [canEditAssignments, canEditTicketFields, canTagTicket]) {
+      expect(check(owner, siteless())).toBe(true);
+      expect(check(admin, siteless())).toBe(true);
+      expect(check(otherOwner, siteless())).toBe(false);
+      expect(check(managerA, siteless())).toBe(false);
+      expect(check(managerNoSite, siteless())).toBe(false);
+    }
+  });
+
+  it("EM-10 — מחיקה ככל טיוטה: השולח ומנהל המערכת, לא מנהל עבודה בלי אתר", () => {
+    expect(canDeleteDraft(owner, sitelessDraft())).toBe(true);
+    expect(canDeleteDraft(admin, sitelessDraft())).toBe(true);
+    expect(canDeleteDraft(managerNoSite, sitelessDraft())).toBe(false);
+  });
+
+  it("מנהל עבודה בלי אתר אינו עורך גם פנייה רגילה באתר כלשהו", () => {
+    expect(canEditAssignments(managerNoSite, ticket({ siteId: SITE_A }))).toBe(false);
+  });
+});
+
 describe("canEditTicketFields — אותה קבוצה כמו עריכת נמענים", () => {
   it("מנהל מערכת, מנהל האתר והפותח רשאים; בעלים-לא-פותח ונמען לא", () => {
     const t = ticket({ createdById: managerA.id });

@@ -34,6 +34,7 @@ enum Channel {
   SELF // המשתמש פתח בעצמו במערכת
   MANAGEMENT // הועבר מההנהלה
   WHATSAPP // הגיע מבוט וואטסאפ — רדום בגרסה זו, ראה Gate G8
+  EMAIL // נפתח במייל ממשתמש מורשה — תמיד כטיוטה (אפיון §2.6, עדכון 1.3)
 }
 
 enum Room {
@@ -100,6 +101,14 @@ model User {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  /// "רשאי לפתוח פניות במייל" (אפיון §3.7 שדה 2). ברירת המחדל דלוקה, כך
+  /// שההרשאה נשענת על מה שכבר מגדיר משתמש — פעיל, עם כתובת — ולא על רשימה
+  /// נפרדת שמישהו צריך לזכור לתחזק.
+  emailIntakeEnabled Boolean @default(true)
+
+  /// "כתובות נוספות לפתיחת פניות במייל" (§3.7 שדה 3). לא לכניסה עם Google.
+  emailAliases UserEmailAlias[]
+
   createdTickets  Ticket[]     @relation("TicketCreatedBy")
   handlingTickets Ticket[]     @relation("TicketHandler")
   closedTickets   Ticket[]     @relation("TicketClosedBy")
@@ -107,8 +116,25 @@ model User {
   messages        Message[]
   createdTags     Tag[]
   uploadedMedia   MediaFile[] // קבצים שהמשתמש רשם
+  mailMessages    MailboxMessage[] // מיילים שנקלטו ממנו
 
   @@index([siteId, active])
+}
+
+/// כתובת נוספת שממנה משתמש רשאי לפתוח פנייה במייל (אפיון §3.7).
+///
+/// **טבלה ולא מערך על `User`**, כי הכלל "כתובת אחת — משתמש אחד" צריך
+/// אינדקס ייחודי על הכתובת. ייחודיות מול `User.email` — טבלה אחרת — נאכפת
+/// בשירות (`assertAddressFree`), שגם מחזיר את שם המשתמש המתנגש להודעה
+/// "הכתובת כבר משויכת ל[שם]". הכתובת נשמרת מנורמלת (`normalizeEmail`).
+model UserEmailAlias {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address   String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Site {
@@ -218,8 +244,12 @@ model Ticket {
   /// מספר פנייה קריא לאדם, לשימוש בשיחות ובהודעות יוצאות.
   seq Int @unique @default(autoincrement())
 
-  siteId String
-  site   Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  /// ‏null **רק** בטיוטה ממייל של מנהל מערכת או בעלים שלא זוהה בה אתר
+  /// (אפיון §2.6 שלב 3, §3.2 שדה 3). נאכף ב-CHECK שנוסף במיגרציה
+  /// `email_intake` — Prisma אינו מבטא CHECK, ולכן הוא נבדק גם
+  /// ב-`tests/integration/schema.test.ts`.
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
 
   // ארבעת אלה null רק בטיוטה — פנייה משוגרת חייבת את כולם (אפיון §3.2).
   buildingId  String?
@@ -267,6 +297,11 @@ model Ticket {
   assignments Assignment[]
   messages    Message[]
   tags        TicketTag[]
+
+  /// מצב כל שדה בטיוטה ממייל — תג "מהמייל", עריכה במערכת, סתירה (§5.ה4)
+  draftFields DraftField[]
+  /// ההתכתבות, בפנייה שנפתחה במייל בלבד (§3.2 שדה 20)
+  mailThread  MailThread?
 
   @@index([siteId, closedAt])
   @@index([lastActivityAt])
@@ -403,6 +438,9 @@ model MediaFile {
   aiError   String?
   createdAt DateTime @default(now())
 
+  /// הקובץ המצורף למייל שממנו נוצר הקובץ הזה, בטיוטה ממייל
+  mailboxAttachment MailboxAttachment?
+
   @@index([aiStatus])
 
   // ────────────────────────────────────────────────────────────────────
@@ -499,4 +537,217 @@ model RateLimit {
   expiresAt DateTime
 
   @@index([expiresAt])
+}
+
+// ─────────────────────── פתיחת פנייה במייל (אפיון 1.3) ───────────────────────
+
+enum MailDirection {
+  INBOUND // נקלט מהתיבה
+  OUTBOUND // נשלח מהמערכת לשולח
+}
+
+/// מצב הטיפול בשורת יומן. **PENDING אינו "נכשל"**: כשל זמני דוחה את
+/// ההודעה (`nextAttemptAt`) ולעולם אינו הופך בשקט להכרעה.
+enum MailState {
+  PENDING
+  DONE // נכנס: הוכרע (ראה `outcome`)
+  SENT // יוצא: נשלח בפועל
+  SIMULATED // יוצא: נכתב ללוג בלבד — אין ערוץ מייל בסביבה
+  SKIPPED // יוצא: לא נשלח במכוון (הטיוטה שוגרה/נמחקה לפני השליחה, §7 שורה 77)
+  FAILED // יוצא: מיצה את הניסיונות
+}
+
+/// ההכרעה על הודעה נכנסת — אוצר מילים סגור, כדי שכל הודעה בתיבה תסתיים
+/// באחת מהן ואף אחת לא "תיעלם".
+enum MailOutcome {
+  IGNORED_BEFORE_ACTIVATION // הגיעה לפני הפעלת היכולת (§5.ה3 כלל 5)
+  IGNORED_OWN_MESSAGE // נשלחה מהתיבה עצמה או על ידי המערכת
+  IGNORED_AUTO_REPLY // תשובה אוטומטית (§5.ה3 כלל 7)
+  IGNORED_UNAUTHORIZED // שולח שאינו משתמש מורשה (§2.6 שלב 2)
+  IGNORED_SUBJECT // מייל חדש בלי "תקלה"/"תקלות" בכותרת (§2.6 שלב 1)
+  GONE // ההודעה נמחקה מהתיבה לפני שנקראה
+  NO_SITE // מנהל עבודה שאינו משויך לאתר — לא נוצרה טיוטה (§2.6 שלב 3)
+  DRAFT_CREATED
+  DRAFT_CREATED_UNPROCESSED // החילוץ אינו זמין (§2.6 שלב 3)
+  REPLY_APPLIED
+  REPLY_STORED_UNPROCESSED // תשובה כשהחילוץ אינו זמין
+  REPLY_NOT_PERMITTED // משתמש מורשה שאינו רשאי לערוך (§5.ה3 כלל 9)
+  REPLY_AFTER_DISPATCH // הטיוטה כבר שוגרה (§2.6 שלב 6)
+  REPLY_AFTER_DELETION // הטיוטה נמחקה (§2.6 שלב 6)
+}
+
+/// שדות הטיוטה שמייל יכול לקבוע (§2.6 שלב 3). שם הדייר ותגיות אינם כאן.
+enum DraftFieldName {
+  SITE
+  BUILDING
+  APARTMENT
+  ROOM
+  DOMAIN
+  DESCRIPTION
+  RECIPIENTS
+}
+
+/// מצב שדה אחד בטיוטה ממייל, לצורך §5.ה4.
+///
+/// **הערך עצמו אינו כאן** — הוא יושב על `Ticket` (`buildingId`, `room`...)
+/// ובנמעני הטיוטה, כמו בכל טיוטה. השורה מתעדת רק את מה שהמייל מוסיף לשאלה:
+/// מי קבע את הערך, מתי נערך במערכת, והאם הוא בסתירה עם המייל האחרון.
+model DraftField {
+  ticketId String
+  ticket   Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  field    DraftFieldName
+
+  /// תג "מהמייל": הערך הנוכחי נקבע מתוך מייל ואיש לא ערך אותו במערכת מאז
+  fromEmail Boolean @default(false)
+
+  /// מתי נערך השדה במערכת לאחרונה (כולל הכרעה במסך 7א). השוואה מול זמן
+  /// הגעת התשובה קובעת מי מאוחר יותר — "עריכה מאוחרת במערכת מכריעה".
+  systemEditedAt DateTime?
+
+  /// סתירה פתוחה: המייל האחרון נתן ערך שונה מזה שנקבע במערכת לפניו
+  conflict Boolean @default(false)
+
+  /// הערך מהמייל האחרון, כשהשדה בסתירה. מחליף ממתין קודם (§5.ה4 — "שתי
+  /// אפשרויות, לא שלוש").
+  emailValue Json?
+
+  /// ההודעה שממנה הגיע `emailValue`
+  emailMessageId String?
+  emailMessage   MailboxMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
+
+  updatedAt DateTime @updatedAt
+
+  @@id([ticketId, field])
+}
+
+/// שרשרת המיילים של טיוטה אחת.
+///
+/// **`ticketId` מתאפס כשהטיוטה נמחקת** (SetNull) והשרשרת נשארת: תשובה
+/// שמגיעה אחר כך צריכה לדעת שהייתה כאן טיוטה ושהיא נמחקה, כדי לענות במייל
+/// "הטיוטה נמחקה" (§2.6 שלב 6) ולא להתעלם כאילו מעולם לא הייתה.
+model MailThread {
+  id        String   @id @default(cuid())
+  ticketId  String?  @unique
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  messages MailboxMessage[]
+}
+
+/// יומן התיבה **והתכתבות** — כל הודעה שנבדקה, בשני הכיוונים.
+///
+/// שני תפקידים בטבלה אחת, בכוונה: היומן הוא מה שמבטיח ש"אותו מייל נבדק
+/// פעמיים — נקלט פעם אחת" (`gmailMessageId @unique`), וההתכתבות (§3.1) היא
+/// אותן שורות עצמן כשהן שייכות לשרשרת של טיוטה. שתי טבלאות היו שני מקורות
+/// אמת לשאלה "מה הגיע ומה נשלח".
+///
+/// **מייל שהמערכת התעלמה ממנו נשמר בלי כותרת ובלי גוף** — רק מזהים, שולח
+/// והכרעה. התיבה משותפת עם מערכות אחרות, ותוכן שאינו שלנו אינו נשמר כאן.
+model MailboxMessage {
+  id        String        @id @default(cuid())
+  direction MailDirection
+  state     MailState     @default(PENDING)
+  outcome   MailOutcome?
+
+  /// מזהה Gmail. null ביוצא שטרם נשלח.
+  gmailMessageId String? @unique
+  gmailThreadId  String?
+
+  /// כותרות השרשור (RFC 5322) — כך מזוהה תשובה (§5.ה3 כלל 2)
+  rfcMessageId String?
+  inReplyTo    String?
+  referenceIds String[]
+
+  threadId String?
+  thread   MailThread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  /// ביוצא: ההודעה הנכנסת שעליה הוא עונה. ייחודי — **תשובה אחת להודעה**,
+  /// וזו האידמפוטנטיות של המייל החוזר.
+  repliesToId String?         @unique
+  repliesTo   MailboxMessage? @relation("MailReply", fields: [repliesToId], references: [id], onDelete: SetNull)
+  reply       MailboxMessage? @relation("MailReply")
+
+  fromAddress  String?
+  fromName     String?
+  toAddress    String?
+  authorUserId String?
+  authorUser   User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  subject  String?
+  /// בנכנס: הטקסט שנקרא (בתשובה — החדש בלבד). ביוצא: מה שנשלח.
+  bodyText String?
+  /// בנכנס: כל הטקסט, כולל הציטוט — לאבחון ולזיהוי ציטוט בתשובה הבאה
+  fullText String?
+
+  receivedAt DateTime?
+  sentAt     DateTime?
+
+  /// מה עלה מעיבוד ההודעה: מה עודכן, מה לא נמצא, מה נמצא בכמה התאמות
+  report Json?
+
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
+  detail        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments MailboxAttachment[]
+  draftFields DraftField[]
+
+  @@index([threadId, createdAt])
+  @@index([state, nextAttemptAt])
+  @@index([rfcMessageId])
+  @@index([gmailThreadId])
+}
+
+/// קובץ מצורף (או תמונה משובצת) של הודעה נכנסת.
+///
+/// נשמר לכל חלק, גם כשאינו מדיה (§2.6 שלב 3: "נשמר בהתכתבות בלבד"). קובץ
+/// מדיה מקבל גם `MediaFile` בטיוטה; הסרתו מהטיוטה (מסך 7) מוחקת את
+/// ה-`MediaFile` ומשאירה את השורה כאן, עם `removedFromDraftAt` — כך הקובץ
+/// נשאר בהתכתבות ואינו חוזר לטיוטה בתשובה הבאה (§7 שורה 69).
+model MailboxAttachment {
+  id        String         @id @default(cuid())
+  messageId String
+  message   MailboxMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  partIndex Int
+
+  filename  String?
+  mimeType  String
+  sizeBytes Int
+  sha256    String?
+
+  storageKey    String?  @unique
+  isMedia       Boolean
+  inline        Boolean  @default(false)
+  /// למה הקובץ לא נשמר או לא נכנס לטיוטה (גדול מדי, זהה לקיים, הוסר...)
+  skippedReason String?
+
+  mediaFileId        String?    @unique
+  mediaFile          MediaFile? @relation(fields: [mediaFileId], references: [id], onDelete: SetNull)
+  removedFromDraftAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, partIndex])
+  @@index([sha256])
+}
+
+/// מצב ערוץ הקליטה. שורה אחת לערוץ.
+model MailChannelState {
+  channel String @id
+  /// הכתובת שהתיבה אישרה בסבב האחרון — מול `GMAIL_USER`
+  mailbox String
+
+  /// **נקבע פעם אחת**, בסבב המוצלח הראשון, ואינו זז: מיילים שהגיעו לפניו
+  /// אינם נקלטים (§5.ה3 כלל 5). כיבוי והדלקה מחדש אינם מזיזים אותו, ולכן
+  /// הפער שבינתיים מעובד.
+  activatedAt DateTime
+
+  lastPollAt    DateTime?
+  lastPollOkAt  DateTime?
+  lastPollError String?
+
+  updatedAt DateTime @updatedAt
 }

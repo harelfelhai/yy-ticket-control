@@ -62,13 +62,28 @@ export interface CreateTicketInput {
   saveAsDraft?: boolean;
 }
 
+/** מה שנדרש כדי לדעת אילו שדות חובה חסרים — מפנייה חדשה או מטיוטה שמורה */
+export interface RequiredFieldsView {
+  /** ‏null בטיוטה ממייל שלא זוהה בה אתר (אפיון §2.6 שלב 3) */
+  siteId: string | null;
+  buildingId?: string | null;
+  apartmentId?: string | null;
+  domainId?: string | null;
+  description?: string;
+  recipients?: RecipientRef[];
+}
+
 /**
  * שדות החובה לשיגור, לפי §3.2 באפיון.
  * מוחזרים כרשימה ולא כבוליאני, כדי שהממשק יוכל לומר למשתמש מה בדיוק חסר
  * במקום "לא ניתן לשגר".
+ *
+ * **האתר נספר מ-1.3** (DM-F20): עד אז לא הייתה פנייה בלי אתר, והבדיקה
+ * הייתה ריקה מתוכן. טיוטה ממייל של מנהל מערכת או בעלים יכולה לחסור אותו.
  */
-export function missingRequiredFields(input: CreateTicketInput): string[] {
+export function missingRequiredFields(input: RequiredFieldsView): string[] {
   const missing: string[] = [];
+  if (!input.siteId) missing.push(he.ticket.site);
   if (!input.buildingId) missing.push(he.directory.building);
   if (!input.apartmentId) missing.push(he.directory.apartment);
   if (!input.domainId) missing.push(he.directory.domain);

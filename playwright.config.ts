@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { defineConfig, devices } from "@playwright/test";
+import { MAIL_ISOLATION_ENV } from "./e2e/server-env";
 
 /**
  * בדיקות מקצה לקצה מול שרת Next אמיתי.
@@ -124,6 +125,8 @@ export default defineConfig({
       // בבנייה של פרודקשן אין חשבון Cloudflare, והמערכת מסרבת לנחש. זהו
       // ויתור מפורש: זו בנייה ולא פריסה, והקבצים יושבים על הדיסק המקומי.
       MEDIA_STORAGE: "local",
+      // לעולם לא התיבה האמיתית — ראה `e2e/server-env.ts`.
+      ...MAIL_ISOLATION_ENV,
     },
   },
 });

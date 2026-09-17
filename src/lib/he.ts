@@ -107,6 +107,7 @@ export const he = {
     SELF: "אני",
     MANAGEMENT: "מההנהלה",
     WHATSAPP: "מוואטסאפ",
+    EMAIL: "ממייל",
   } satisfies Record<Channel, string>,
 
   /** רשימה קבועה, אינה נלמדת (אפיון §3.3) */
