@@ -29,6 +29,14 @@ const actions = vi.hoisted(() => ({
   updateUserAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   setUserActiveAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   deleteUserAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
+  setUserEmailIntakeAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
+  addUserEmailAliasAction: vi.fn(
+    async (): Promise<{ ok: true; data: undefined } | { ok: false; error: string }> => ({
+      ok: true as const,
+      data: undefined,
+    }),
+  ),
+  removeUserEmailAliasAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   createProfessionalAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   updateProfessionalAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   setProfessionalActiveAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
@@ -69,6 +77,8 @@ const USERS = [
     role: "SITE_MANAGER" as const,
     siteName: "מגדלי הצפון",
     active: true,
+    emailIntakeEnabled: true,
+    emailAliases: [{ id: "a1", address: "shira.private@gmail.com" }],
   },
 ];
 
@@ -342,5 +352,71 @@ describe("מסך אנשי מקצוע — היכולת שנוספה", () => {
 
     expect(screen.getByText(he.common.noResults)).toBeVisible();
     expect(screen.getByRole("button", { name: he.admin.newProfessionalButton })).toBeVisible();
+  });
+});
+
+/**
+ * ‏EM-S12-01 (אפיון מסך 12, §3.7): בכרטיס המשתמש מתג "רשאי לפתוח פניות במייל"
+ * ו"כתובות נוספות לפתיחת פניות במייל". כל פעולה נשמרת מיד (DESIGN.md § פתיחה
+ * במייל בכרטיס המשתמש), ולכן הבדיקות טוענות על הקריאה לפעולה ולא על "שמור".
+ */
+describe("EM-S12-01 — פתיחה במייל בדיאלוג המשתמש", () => {
+  async function openDialog(users = USERS) {
+    render(<UsersManager sites={[]} users={users} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "שירה לוי" }));
+    return { user, dialog: screen.getByRole("dialog") };
+  }
+
+  it("EM-U01 — המתג משקף את ההרשאה, וכיבויו נשמר מיד", async () => {
+    const { user, dialog } = await openDialog();
+    const toggle = within(dialog).getByRole("checkbox", { name: he.admin.emailIntakeEnabled });
+    expect(toggle).toBeChecked();
+
+    await user.click(toggle);
+    expect(actions.setUserEmailIntakeAction).toHaveBeenCalledWith("u1", false);
+  });
+
+  it("EM-U02 — הכתובות הנוספות מוצגות, ולכל אחת הסרה שנוקבת בכתובת", async () => {
+    const { user, dialog } = await openDialog();
+    expect(within(dialog).getByText("shira.private@gmail.com")).toBeVisible();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: he.admin.removeAlias("shira.private@gmail.com") }),
+    );
+    expect(actions.removeUserEmailAliasAction).toHaveBeenCalledWith("a1");
+  });
+
+  it("EM-U02 — הוספת כתובת קוראת לפעולה עם מה שהוקלד, והשדה מתרוקן בהצלחה", async () => {
+    const { user, dialog } = await openDialog();
+    const field = within(dialog).getByLabelText(he.admin.aliasAddress);
+
+    await user.type(field, "shira@work.co.il");
+    await user.click(within(dialog).getByRole("button", { name: he.admin.addAlias }));
+
+    expect(actions.addUserEmailAliasAction).toHaveBeenCalledWith("u1", "shira@work.co.il");
+    expect(field).toHaveValue("");
+  });
+
+  it("EM-U03 — כתובת תפוסה: ההודעה מוצגת והשדה אינו מתרוקן", async () => {
+    actions.addUserEmailAliasAction.mockResolvedValueOnce({
+      ok: false,
+      error: he.admin.addressTaken("דנה כהן"),
+    });
+    const { user, dialog } = await openDialog();
+    const field = within(dialog).getByLabelText(he.admin.aliasAddress);
+
+    await user.type(field, "dana@gmail.com");
+    await user.click(within(dialog).getByRole("button", { name: he.admin.addAlias }));
+
+    expect(await within(dialog).findByText(he.admin.addressTaken("דנה כהן"))).toBeVisible();
+    expect(field).toHaveValue("dana@gmail.com");
+  });
+
+  it("בלי כתובות נוספות — שורה שאומרת זאת, וכפתור ההוספה מושבת עד שמקלידים", async () => {
+    const { dialog } = await openDialog([{ ...USERS[0]!, emailIntakeEnabled: false, emailAliases: [] }]);
+    expect(within(dialog).getByText(he.admin.noEmailAliases)).toBeVisible();
+    expect(within(dialog).getByRole("checkbox", { name: he.admin.emailIntakeEnabled })).not.toBeChecked();
+    expect(within(dialog).getByRole("button", { name: he.admin.addAlias })).toBeDisabled();
   });
 });

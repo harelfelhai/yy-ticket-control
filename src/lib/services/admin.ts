@@ -383,9 +383,7 @@ export async function createInternalUser(actor: SessionUser, input: CreateUserIn
 
   // כפילות טלפון/מייל נבדקת מראש כדי להחזיר הודעה מובנת ולא כשל אילוץ גולמי.
   if (await db.user.findUnique({ where: { phone } })) throw new AdminError(he.admin.phoneTaken);
-  if (email && (await db.user.findUnique({ where: { email } }))) {
-    throw new AdminError(he.admin.emailTaken);
-  }
+  if (email) await assertAddressFree(email);
 
   return db.user.create({
     data: {
@@ -403,7 +401,10 @@ export async function listUsers(actor: SessionUser) {
   assertAdmin(actor);
   return db.user.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
-    include: { site: { select: { name: true } } },
+    include: {
+      site: { select: { name: true } },
+      emailAliases: { select: { id: true, address: true }, orderBy: { address: "asc" } },
+    },
   });
 }
 
@@ -446,12 +447,103 @@ export async function updateUser(
   const phoneClash = await db.user.findUnique({ where: { phone }, select: { id: true } });
   if (phoneClash && phoneClash.id !== id) throw new AdminError(he.admin.phoneTaken);
 
-  if (email) {
-    const emailClash = await db.user.findUnique({ where: { email }, select: { id: true } });
-    if (emailClash && emailClash.id !== id) throw new AdminError(he.admin.emailTaken);
-  }
+  if (email) await assertAddressFree(email, { primaryOf: id });
 
   return db.user.update({ where: { id }, data: { name, phone, email: email || null } });
+}
+
+// ─────────────────── פתיחת פניות במייל (אפיון §3.7, 1.3) ───────────────────
+
+/**
+ * "כתובת אחת — משתמש אחד" (§3.7): כתובת אינה יכולה להיות משויכת לשני
+ * משתמשים, לא כמייל ראשי ולא ככתובת נוספת — אחרת לא ברור מי הבעלים של
+ * טיוטה שנפתחה ממנה.
+ *
+ * **נאכף כאן ולא במסד.** שני הצדדים יושבים בשתי טבלאות (`User.email`,
+ * `UserEmailAlias.address`), ואינדקס ייחודי אינו חוצה טבלאות; trigger היה
+ * המחיר של מרוץ בין שני מנהלים שמקלידים את אותה כתובת לשני משתמשים באותה
+ * שנייה — ורק מנהל המערכת עורך משתמשים. בתוך כל טבלה האינדקס הייחודי כן
+ * קיים, ו-`addUserEmailAlias` מתרגם את הפרתו לאותה הודעה.
+ *
+ * **ההודעה נוקבת בשם**, כי בלעדיו המנהל יודע שהכתובת תפוסה ואינו יודע
+ * איזה כרטיס לפתוח כדי לשחרר אותה.
+ *
+ * ‏`primaryOf` — עריכת המייל הראשי של משתמש: המייל הנוכחי שלו אינו "תפוס".
+ * כתובת נוספת של **אותו** משתמש כן נחשבת תפוסה, כדי שאותה כתובת לא תופיע
+ * פעמיים בכרטיס אחד.
+ */
+export async function assertAddressFree(
+  address: string,
+  options: { primaryOf?: string } = {},
+): Promise<void> {
+  const primary = await db.user.findUnique({
+    where: { email: address },
+    select: { id: true, name: true },
+  });
+  if (primary && primary.id !== options.primaryOf) {
+    throw new AdminError(he.admin.addressTaken(primary.name));
+  }
+
+  const alias = await db.userEmailAlias.findUnique({
+    where: { address },
+    select: { user: { select: { name: true } } },
+  });
+  if (alias) throw new AdminError(he.admin.addressTaken(alias.user.name));
+}
+
+/** "רשאי לפתוח פניות במייל" (§3.7 שדה 2) — נקבע בידי מנהל המערכת בלבד */
+export async function setUserEmailIntake(actor: SessionUser, userId: string, enabled: boolean) {
+  assertAdmin(actor);
+  const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AdminError(he.admin.userNotFound);
+
+  return db.user.update({ where: { id: userId }, data: { emailIntakeEnabled: enabled } });
+}
+
+/**
+ * מוסיף כתובת נוספת למשתמש (§3.7 שדה 3).
+ *
+ * הכתובת נשמרת מנורמלת — אותה `normalizeEmail` שהקליטה משווה דרכה את כתובת
+ * השולח. בלי זה `Dana@Gmail.com` שהוקלד כאן לא היה תואם למייל שמגיע
+ * מ-`dana@gmail.com`, והשולח לא היה מקבל שום סימן (מייל מכתובת לא מוכרת
+ * אינו נענה, §2.6 שלב 2).
+ *
+ * **אינה פותחת כניסה עם Google** (§3.7, AUTH-10): `resolveGoogleUser` מתאים
+ * ל-`User.email` בלבד, ואינו נוגע בטבלה הזו.
+ */
+export async function addUserEmailAlias(actor: SessionUser, userId: string, rawAddress: string) {
+  assertAdmin(actor);
+
+  const address = normalizeEmail(rawAddress);
+  if (!address || !looksLikeEmail(address)) throw new AdminError(he.directory.invalidEmail);
+
+  const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AdminError(he.admin.userNotFound);
+
+  await assertAddressFree(address);
+
+  try {
+    return await db.userEmailAlias.create({ data: { userId, address } });
+  } catch (error) {
+    // שני מנהלים באותה שנייה: הבדיקה שלמעלה עברה אצל שניהם, והאינדקס
+    // הייחודי תפס את השני. ההודעה זהה למסלול הרגיל ולא כשל אילוץ גולמי.
+    if (isUniqueViolation(error)) await assertAddressFree(address);
+    throw error;
+  }
+}
+
+export async function removeUserEmailAlias(actor: SessionUser, aliasId: string): Promise<void> {
+  assertAdmin(actor);
+  const { count } = await db.userEmailAlias.deleteMany({ where: { id: aliasId } });
+  if (count === 0) throw new AdminError(he.admin.aliasNotFound);
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "P2002"
+  );
 }
 
 /**

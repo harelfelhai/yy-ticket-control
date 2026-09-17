@@ -22,10 +22,13 @@ import {
   renameBuilding,
   renameDomain,
   renameSite,
+  addUserEmailAlias,
+  removeUserEmailAlias,
   resetUserPassword,
   setProfessionalActive,
   setSiteManagers,
   setUserActive,
+  setUserEmailIntake,
   updateProfessional,
   updateUser,
 } from "@/lib/services/admin";
@@ -212,6 +215,35 @@ export async function resetUserPasswordAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     await resetUserPassword(await requireUser(), id(userId), z.string().min(1).parse(newPassword));
+    revalidatePath("/admin/users");
+  });
+}
+
+/** "רשאי לפתוח פניות במייל" (אפיון §3.7) — נשמר מיד, כמו השבתה */
+export async function setUserEmailIntakeAction(
+  userId: string,
+  enabled: boolean,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await setUserEmailIntake(await requireUser(), id(userId), z.boolean().parse(enabled));
+    revalidatePath("/admin/users");
+  });
+}
+
+/** כתובת נוספת לפתיחת פניות במייל. הנרמול, הפורמט והייחודיות — בשירות. */
+export async function addUserEmailAliasAction(
+  userId: string,
+  address: string,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await addUserEmailAlias(await requireUser(), id(userId), z.string().parse(address));
+    revalidatePath("/admin/users");
+  });
+}
+
+export async function removeUserEmailAliasAction(aliasId: string): Promise<ActionResult> {
+  return guard(async () => {
+    await removeUserEmailAlias(await requireUser(), id(aliasId));
     revalidatePath("/admin/users");
   });
 }

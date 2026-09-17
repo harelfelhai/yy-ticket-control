@@ -25,6 +25,7 @@ import {
   setUserActiveAction,
   updateUserAction,
 } from "../../actions";
+import { type EmailAliasRow, EmailIntakeFields } from "./email-intake-fields";
 
 interface SiteOption {
   id: string;
@@ -39,6 +40,9 @@ interface UserRow {
   role: Role;
   siteName: string | null;
   active: boolean;
+  /** "רשאי לפתוח פניות במייל" (אפיון §3.7) */
+  emailIntakeEnabled: boolean;
+  emailAliases: EmailAliasRow[];
 }
 
 const ROLES: Role[] = ["SITE_MANAGER", "OWNER", "ADMIN"];
@@ -358,6 +362,12 @@ function UserDetailsDialog({ user, onClose }: { user: UserRow; onClose: () => vo
             </dl>
 
             {error ? <FormError>{error}</FormError> : null}
+
+            <EmailIntakeFields
+              userId={user.id}
+              enabled={user.emailIntakeEnabled}
+              aliases={user.emailAliases}
+            />
 
             <ResetPasswordRow userId={user.id} userName={user.name} />
 
