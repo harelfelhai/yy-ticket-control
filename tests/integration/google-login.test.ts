@@ -86,6 +86,20 @@ describe("resolveGoogleUser", () => {
     if (result.ok) expect(result.user.id).toBe(user.id);
   });
 
+  /**
+   * ‏AUTH-10 / EM-U05 (אפיון §3.7): הכתובות הנוספות משמשות לפתיחת פניות
+   * במייל בלבד. הכרעה 1.2 — "מנהל שמשנה מייל למשתמש חותך בכך גם את גישת
+   * הגוגל שלו" — הייתה נשברת אם כתובת נוספת הייתה פותחת כניסה.
+   */
+  it("AUTH-10 — כתובת נוספת של משתמש פעיל אינה פותחת כניסה עם Google", async () => {
+    const user = await createUser();
+    await db.userEmailAlias.create({ data: { userId: user.id, address: "private@gmail.com" } });
+
+    expect(await resolveGoogleUser("private@gmail.com")).toEqual({ ok: false, code: "no_account" });
+    // והמייל הראשי ממשיך לעבוד כרגיל.
+    expect((await resolveGoogleUser("manager@example.com")).ok).toBe(true);
+  });
+
   it("מייל שאינו קיים נדחה", async () => {
     await createUser();
 

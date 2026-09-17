@@ -5,6 +5,7 @@ import { he } from "@/lib/he";
 import type { SessionUser } from "@/lib/session";
 import {
   AdminError,
+  addUserEmailAlias,
   createApartment,
   createBuilding,
   createInternalUser,
@@ -23,6 +24,7 @@ import {
   listSites,
   listUsers,
   mergeProfessionals,
+  removeUserEmailAlias,
   renameApartment,
   renameBuilding,
   renameDomain,
@@ -30,6 +32,7 @@ import {
   setProfessionalActive,
   setSiteManagers,
   setUserActive,
+  setUserEmailIntake,
   updateProfessional,
   updateUser,
 } from "@/lib/services/admin";
@@ -158,6 +161,125 @@ describe("createInternalUser", () => {
         password: "password1",
       }),
     ).rejects.toThrow(he.admin.phoneTaken);
+  });
+});
+
+/**
+ * פתיחת פניות במייל — השדות בכרטיס המשתמש (אפיון §3.7, מסך 12, EM-U01–U06).
+ */
+describe("פתיחה במייל — הרשאה וכתובות נוספות", () => {
+  async function makeUser(name: string, phone: string, email?: string) {
+    return createInternalUser(admin, { name, phone, email, role: "OWNER", password: "sod-chazak-9" });
+  }
+
+  it("EM-U01 — משתמש חדש רשאי לפתוח פניות במייל כברירת מחדל, ומנהל המערכת מכבה ומדליק", async () => {
+    const user = await makeUser("דנה", "0521111111", "dana@example.com");
+    expect(user.emailIntakeEnabled).toBe(true);
+
+    await setUserEmailIntake(admin, user.id, false);
+    expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).emailIntakeEnabled).toBe(false);
+
+    await setUserEmailIntake(admin, user.id, true);
+    expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).emailIntakeEnabled).toBe(true);
+  });
+
+  it("EM-U01 — רק מנהל המערכת נותן ולוקח את ההרשאה ומנהל כתובות", async () => {
+    const user = await makeUser("דנה", "0521111111", "dana@example.com");
+    await expect(setUserEmailIntake(manager, user.id, false)).rejects.toThrow(he.admin.forbidden);
+    await expect(addUserEmailAlias(manager, user.id, "dana@gmail.com")).rejects.toThrow(he.admin.forbidden);
+
+    const alias = await addUserEmailAlias(admin, user.id, "dana@gmail.com");
+    await expect(removeUserEmailAlias(manager, alias.id)).rejects.toThrow(he.admin.forbidden);
+  });
+
+  it("EM-U02 — כמה כתובות נוספות למשתמש, נשמרות מנורמלות ומוסרות", async () => {
+    const user = await makeUser("דנה", "0521111111", "dana@example.com");
+    await addUserEmailAlias(admin, user.id, "  Dana.Private@Gmail.COM ");
+    const second = await addUserEmailAlias(admin, user.id, "dana@work.co.il");
+
+    const listed = (await listUsers(admin)).find((u) => u.id === user.id);
+    expect(listed?.emailAliases.map((a) => a.address)).toEqual(["dana.private@gmail.com", "dana@work.co.il"]);
+
+    await removeUserEmailAlias(admin, second.id);
+    expect(await db.userEmailAlias.count({ where: { userId: user.id } })).toBe(1);
+    await expect(removeUserEmailAlias(admin, second.id)).rejects.toThrow(he.admin.aliasNotFound);
+  });
+
+  it("EM-U02 — כתובת שאינה כתובת מייל נדחית", async () => {
+    const user = await makeUser("דנה", "0521111111");
+    await expect(addUserEmailAlias(admin, user.id, "dana at gmail")).rejects.toThrow(he.directory.invalidEmail);
+    await expect(addUserEmailAlias(admin, user.id, "   ")).rejects.toThrow(he.directory.invalidEmail);
+  });
+
+  it("EM-U03 — כתובת נוספת שהיא המייל הראשי של משתמש אחר נדחית, ונוקבת בשמו", async () => {
+    await makeUser("דנה כהן", "0521111111", "dana@example.com");
+    const other = await makeUser("רון", "0522222222", "ron@example.com");
+
+    await expect(addUserEmailAlias(admin, other.id, "DANA@example.com")).rejects.toThrow(
+      he.admin.addressTaken("דנה כהן"),
+    );
+  });
+
+  it("EM-U03 — כתובת נוספת שכבר נוספה למשתמש אחר נדחית, ונוקבת בשמו", async () => {
+    const dana = await makeUser("דנה כהן", "0521111111", "dana@example.com");
+    const ron = await makeUser("רון", "0522222222", "ron@example.com");
+    await addUserEmailAlias(admin, dana.id, "shared@gmail.com");
+
+    await expect(addUserEmailAlias(admin, ron.id, "shared@gmail.com")).rejects.toThrow(
+      he.admin.addressTaken("דנה כהן"),
+    );
+  });
+
+  it("EM-U03 — מייל ראשי בהקמה ובעריכה נדחה כשהוא תפוס בידי מישהו אחר", async () => {
+    const dana = await makeUser("דנה כהן", "0521111111", "dana@example.com");
+    await addUserEmailAlias(admin, dana.id, "dana.private@gmail.com");
+
+    await expect(makeUser("רון", "0522222222", "dana.private@gmail.com")).rejects.toThrow(
+      he.admin.addressTaken("דנה כהן"),
+    );
+
+    const ron = await makeUser("רון", "0522222222", "ron@example.com");
+    await expect(
+      updateUser(admin, ron.id, { name: "רון", phone: "0522222222", email: "dana.private@gmail.com" }),
+    ).rejects.toThrow(he.admin.addressTaken("דנה כהן"));
+    await expect(
+      updateUser(admin, ron.id, { name: "רון", phone: "0522222222", email: "dana@example.com" }),
+    ).rejects.toThrow(he.admin.addressTaken("דנה כהן"));
+  });
+
+  it("EM-U03 — עריכת משתמש שמשאירה את המייל שלו אינה מתנגשת בעצמה", async () => {
+    const dana = await makeUser("דנה כהן", "0521111111", "dana@example.com");
+    const updated = await updateUser(admin, dana.id, {
+      name: "דנה לוי",
+      phone: "0521111111",
+      email: "dana@example.com",
+    });
+    expect(updated.name).toBe("דנה לוי");
+  });
+
+  it("EM-U03 — כתובת נוספת אינה משכפלת את המייל הראשי של אותו משתמש", async () => {
+    const dana = await makeUser("דנה כהן", "0521111111", "dana@example.com");
+    await expect(addUserEmailAlias(admin, dana.id, "dana@example.com")).rejects.toThrow(
+      he.admin.addressTaken("דנה כהן"),
+    );
+  });
+
+  it("EM-U03 — האינדקס הייחודי במסד מחזיר את הקוד שהשירות מזהה", async () => {
+    // ‏`addUserEmailAlias` מתרגם הפרת ייחודיות (מרוץ בין שני מנהלים) להודעה
+    // לפי הקוד P2002. הבדיקה מוודאת שזה הקוד שהלקוח מחזיר בפועל מעל
+    // adapter-pg — בלעדיה המסלול היה נשען על הנחה.
+    const dana = await makeUser("דנה כהן", "0521111111");
+    await db.userEmailAlias.create({ data: { userId: dana.id, address: "race@gmail.com" } });
+    await expect(
+      db.userEmailAlias.create({ data: { userId: dana.id, address: "race@gmail.com" } }),
+    ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("EM-U04 — הכתובות יורדות עם המשתמש, ואינן רשימה נפרדת שנשארת מאחור", async () => {
+    const dana = await makeUser("דנה כהן", "0521111111");
+    await addUserEmailAlias(admin, dana.id, "dana.private@gmail.com");
+    await deleteUser(admin, dana.id);
+    expect(await db.userEmailAlias.count()).toBe(0);
   });
 });
 

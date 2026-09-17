@@ -32,6 +32,8 @@ export default async function AdminUsersPage() {
           role: u.role,
           siteName: u.site?.name ?? null,
           active: u.active,
+          emailIntakeEnabled: u.emailIntakeEnabled,
+          emailAliases: u.emailAliases,
         }))}
       />
     </div>
