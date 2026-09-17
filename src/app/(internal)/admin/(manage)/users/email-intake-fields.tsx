@@ -65,8 +65,13 @@ export function EmailIntakeFields({
       {/*
        * ‏`<fieldset>`/`<legend>` ולא `Field`: תווית אחת לכמה פקדים — הרשימה
        * ושורת ההוספה — וזה בדיוק תפקידם (אותו נימוק כמו ב-`SiteManagersField`).
+       *
+       * ‏**`min-w-0` אינו קישוט.** ל-`<fieldset>` יש בדפדפן ברירת מחדל
+       * `min-inline-size: min-content`, ולכן כתובת ארוכה מתחה אותו מעבר לרוחב
+       * הדיאלוג: `truncate` שבתוכו לא קיצץ דבר, בטלפון כל הדיאלוג גלש לרוחב,
+       * ובדסקטופ "הוסף" נחתך. נתפס בצילום, לא בבדיקה.
        */}
-      <fieldset className="flex flex-col gap-1">
+      <fieldset className="flex min-w-0 flex-col gap-1">
         <legend className="text-sm font-medium">{he.admin.emailAliases}</legend>
 
         {aliases.length === 0 ? (

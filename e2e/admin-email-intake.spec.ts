@@ -30,8 +30,10 @@ async function openAdminCard(page: Page) {
 test("EM-S12-01 — מתג ההרשאה וכתובות נוספות נשמרים בשרת, וכתובת תפוסה נדחית בשם", async ({
   page,
 }, testInfo) => {
-  // הכתובת ייחודית לכל מכשיר ולכל ריצה — ראו ההערה בראש הקובץ.
-  const address = `e2e-${testInfo.project.name}-${Date.now()}@example.com`;
+  // הכתובת ייחודית לכל מכשיר ולכל ריצה — ראו ההערה בראש הקובץ. ארוכה
+  // בכוונה: `<fieldset>` נמתח כברירת מחדל לרוחב התוכן שלו, וכתובת ארוכה
+  // גלשה מהדיאלוג בטלפון (נתפס בצילום; ראו `email-intake-fields.tsx`).
+  const address = `e2e-${testInfo.project.name}-${Date.now()}-a-rather-long-private-address@example-company-domain.co.il`;
   await loginAsAdmin(page);
 
   let dialog = await openAdminCard(page);
@@ -45,6 +47,12 @@ test("EM-S12-01 — מתג ההרשאה וכתובות נוספות נשמרים
   // נשמרת מנורמלת, והשדה מתרוקן רק אחרי שהשרת קיבל.
   await expect(dialog.getByText(address, { exact: true })).toBeVisible();
   await expect(field).toHaveValue("");
+
+  // הכתובת הארוכה מקוצצת ואינה מותחת את הדיאלוג: כפתור ההוספה כולו בתוכו.
+  const dialogBox = await dialog.boundingBox();
+  const addBox = await dialog.getByRole("button", { name: "הוסף", exact: true }).boundingBox();
+  expect(addBox!.x).toBeGreaterThanOrEqual(dialogBox!.x);
+  expect(addBox!.x + addBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width);
 
   // ── אותה כתובת שוב: נדחית, נוקבת בשם, והשדה אינו מתרוקן ────────────
   await field.fill(address);
