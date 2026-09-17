@@ -292,7 +292,7 @@ const records: RunRecord[] = [];
 const variants = [
   { name: "zod-schema", schema: jsonSchema },
   { name: "bare-schema", schema: jsonSchemaBare },
-  // ‏"minimal" נדחה בריצה הראשונה (400: מותרים low/medium/high למודל הזה).
+  // "minimal" נדחה בריצה הראשונה (400: מותרים low/medium/high למודל הזה).
   { name: "thinking-low", schema: jsonSchemaBare, thinking: "low" },
 ];
 

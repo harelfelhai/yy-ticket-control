@@ -67,7 +67,7 @@ export interface CreateTicketInput {
 
 /** מה שנדרש כדי לדעת אילו שדות חובה חסרים — מפנייה חדשה או מטיוטה שמורה */
 export interface RequiredFieldsView {
-  /** ‏null בטיוטה ממייל שלא זוהה בה אתר (אפיון §2.6 שלב 3) */
+  /** null בטיוטה ממייל שלא זוהה בה אתר (אפיון §2.6 שלב 3) */
   siteId: string | null;
   buildingId?: string | null;
   apartmentId?: string | null;

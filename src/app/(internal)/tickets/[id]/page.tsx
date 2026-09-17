@@ -135,7 +135,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   // טיוטה: הרשימות הנלמדות ונמעני הטיוטה השמורים, כדי שמסך ההשלמה יציג את
   // השדות החסרים ויאפשר לשגר. נטענים רק כשמדובר בטיוטה שהצופה רשאי לערוך.
   //
-  // ‏`siteId` חסר רק בטיוטה ממייל שלא זוהה בה אתר (CHECK במסד). מסך ההשלמה
+  // `siteId` חסר רק בטיוטה ממייל שלא זוהה בה אתר (CHECK במסד). מסך ההשלמה
   // שלה — עם בורר אתר — נבנה בשלב נפרד; עד אז היא מוצגת כטיוטה בלי טופס.
   const draftDirectory =
     ticket.isDraft && canEdit && ticket.siteId ? await listSiteDirectory(ticket.siteId) : null;

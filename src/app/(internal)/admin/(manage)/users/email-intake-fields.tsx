@@ -63,10 +63,10 @@ export function EmailIntakeFields({
       </div>
 
       {/*
-       * ‏`<fieldset>`/`<legend>` ולא `Field`: תווית אחת לכמה פקדים — הרשימה
+       * `<fieldset>`/`<legend>` ולא `Field`: תווית אחת לכמה פקדים — הרשימה
        * ושורת ההוספה — וזה בדיוק תפקידם (אותו נימוק כמו ב-`SiteManagersField`).
        *
-       * ‏**`min-w-0` אינו קישוט.** ל-`<fieldset>` יש בדפדפן ברירת מחדל
+       * **`min-w-0` אינו קישוט.** ל-`<fieldset>` יש בדפדפן ברירת מחדל
        * `min-inline-size: min-content`, ולכן כתובת ארוכה מתחה אותו מעבר לרוחב
        * הדיאלוג: `truncate` שבתוכו לא קיצץ דבר, בטלפון כל הדיאלוג גלש לרוחב,
        * ובדסקטופ "הוסף" נחתך. נתפס בצילום, לא בבדיקה.
@@ -81,7 +81,7 @@ export function EmailIntakeFields({
             {aliases.map((alias) => (
               <li key={alias.id} className="flex min-h-7 items-center gap-2">
                 {/*
-                 * ‏`dir="ltr"`: כתובת לטינית ב-RTL מפזרת את ה-@ והנקודות לקצה השגוי.
+                 * `dir="ltr"`: כתובת לטינית ב-RTL מפזרת את ה-@ והנקודות לקצה השגוי.
                  * בלי `flex-1`: ה-X נצמד לכתובת שהוא מסיר, ולא לקצה השורה (§ Layout).
                  */}
                 <span className="min-w-0 truncate text-sm" dir="ltr">
@@ -95,7 +95,7 @@ export function EmailIntakeFields({
                   aria-label={he.admin.removeAlias(alias.address)}
                   className="shrink-0"
                 >
-                  {/* ‏`X` ולא `Trash2`: אין כאן היסטוריה שנמחקת (§ אייקונים). */}
+                  {/* `X` ולא `Trash2`: אין כאן היסטוריה שנמחקת (§ אייקונים). */}
                   <X className="size-3" aria-hidden="true" />
                 </Button>
               </li>

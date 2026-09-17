@@ -220,7 +220,7 @@ export async function listTagOverviews(user: SessionUser): Promise<TagOverview[]
 
 /** מנהל עבודה רואה רק את אתרו; מנהל מערכת ובעלים רואים הכול (אפיון §5.ז) */
 function ticketInScope(user: SessionUser, siteId: string | null): boolean {
-  // ‏`!== null` — אותו נימוק כמו ב-`canEditAssignments`: טיוטה בלי אתר אינה
+  // `!== null` — אותו נימוק כמו ב-`canEditAssignments`: טיוטה בלי אתר אינה
   // "באתר" של מנהל עבודה שאינו משויך לאתר.
   if (user.role === "SITE_MANAGER") return user.siteId !== null && user.siteId === siteId;
   return true;
