@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { assertWritableObject } from "./limits";
 import type { MediaStorage, UploadTarget } from "./types";
 
 /**
@@ -31,6 +32,14 @@ export function localStorage(baseUrl: string): MediaStorage {
     // והבתים מוגשים משם.
     async createDownloadUrl() {
       return null;
+    },
+
+    // הכתיבה עצמה נשארת ב-`writeLocalObject`, שה-route של ההעלאה כבר
+    // קורא לו: שני המסלולים חייבים ליצור אותו קובץ באותו מקום, ושכפול
+    // של שלוש שורות fs הוא בדיוק איך שהם מתפצלים בלי שאיש ישים לב.
+    async write(key, bytes, contentType) {
+      assertWritableObject(key, bytes, contentType);
+      await writeLocalObject(key, bytes);
     },
 
     async read(key) {

@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
-import type { EmailMessage, EmailTransport } from "./types";
+import { createAccessTokenProvider, type GoogleOAuthConfig } from "@/lib/google/gmail-token";
+import { toNodemailerMail } from "./mail-options";
+import type { EmailMessage, EmailSendResult, EmailTransport } from "./types";
 
 /**
  * ערוץ Gmail מעל HTTPS, ולא מעל SMTP.
@@ -23,7 +25,6 @@ import type { EmailMessage, EmailTransport } from "./types";
  * שהתחליף כאן הוא **התעבורה בלבד**, לא הזהות.
  */
 
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
 /**
@@ -35,28 +36,18 @@ const SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /**
- * שוליים לפני פקיעת ה-access token.
- *
- * Google מנפיק טוקן לשעה. בלי השוליים, טוקן שנותרו לו שתי שניות היה נשלח
- * ופוקע באמצע הבקשה — כשל שמופיע פעם בשעה ואינו ניתן לשחזור.
- */
-const TOKEN_SAFETY_MARGIN_MS = 60_000;
-
-interface OAuthConfig {
-  clientId: string;
-  clientSecret: string;
-  refreshToken: string;
-}
-
-/**
  * בונה את הודעת ה-RFC822 דרך nodemailer, ולא ביד.
  *
  * `streamTransport` הוא ה-API הציבורי של nodemailer להרכבת הודעה **בלי
  * לשלוח אותה**, והוא מטפל בכל מה שכתיבה ידנית שוברת בעברית: קידוד הכותרות
  * (`=?UTF-8?B?…?=`), גבולות ה-multipart בין הטקסט ל-HTML, ו-`Content-Transfer-Encoding`.
  * הספרייה כבר תלות בפרויקט מהמסלול הקודם, ולכן זה גם אינו מוסיף דבר.
+ *
+ * מיוצא בשביל הבדיקות: מה שנבדק כאן הוא **הכותרות שיוצאות בפועל**, ואת
+ * אלה אפשר לראות רק מתוך ההודעה הבנויה. בדיקה שתסתפק בכך שהשדה נמסר
+ * ל-nodemailer הייתה מאמתת את הקריאה ולא את התוצאה.
  */
-async function buildRawMessage(from: string, message: EmailMessage): Promise<string> {
+export async function buildRawMessage(from: string, message: EmailMessage): Promise<string> {
   const composer = nodemailer.createTransport({
     streamTransport: true,
     buffer: true,
@@ -65,62 +56,33 @@ async function buildRawMessage(from: string, message: EmailMessage): Promise<str
     newline: "unix",
   });
 
-  const info = await composer.sendMail({
-    from,
-    to: message.to,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  // המיפוי עצמו משותף לשני הערוצים (`mail-options.ts`) — כותרת שרשור
+  // שתיווסף שם חייבת לצאת גם ב-SMTP וגם כאן.
+  const info = await composer.sendMail(toNodemailerMail(from, message));
 
   // base64url ולא base64: זה מה ש-Gmail API דורש בשדה `raw`.
   return (info.message as Buffer).toString("base64url");
 }
 
 /**
- * מנפיק access token מה-refresh token, ומחזיק אותו עד סמוך לפקיעה.
+ * מה שגוגל ענתה על השליחה.
  *
- * המטמון הוא ברמת הטרנספורט ולא גלובלי: כך בדיקה שבונה טרנספורט משלה אינה
- * יורשת טוקן של ריצה קודמת.
+ * `users.messages.send` מחזירה משאב `Message` — `id`, `threadId`
+ * ו-`labelIds`. את ה-`Message-ID` של RFC היא **אינה** מחזירה, ולכן השדה
+ * נשאר ריק ואינו מוחזר כהד למה שביקשנו: Gmail רשאי לכתוב מזהה משלו, ומזהה
+ * שגוי שנשמר גרוע ממזהה חסר — הוא נראה כמו עובדה, ותשובה שתגיע לעולם לא
+ * תותאם לו. השרשור נשען על `threadId`, שהוא הסמכות ממילא.
+ *
+ * תשובה שאינה JSON אינה זורקת: ההודעה כבר יצאה, וזריקה כאן הייתה מחזירה
+ * את הג׳וב לתור ושולחת אותה שוב.
  */
-function accessTokenProvider(config: OAuthConfig): () => Promise<string> {
-  let cached: { token: string; expiresAt: number } | null = null;
-
-  return async () => {
-    if (cached && Date.now() < cached.expiresAt) return cached.token;
-
-    const response = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        refresh_token: config.refreshToken,
-        grant_type: "refresh_token",
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-
-    const body = await response.text();
-    if (!response.ok) {
-      // גוף התשובה נכנס להודעה: גוגל מחזירה כאן `invalid_grant` כשה-refresh
-      // token נשלל, וזו התקלה היחידה במסלול הזה שדורשת פעולה אנושית. בלי
-      // הגוף, `Job.lastError` היה אומר "401" ותו לא.
-      throw new Error(`הנפקת access token ל-Gmail נכשלה (${response.status}): ${body.slice(0, 300)}`);
-    }
-
-    const parsed = JSON.parse(body) as { access_token?: string; expires_in?: number };
-    if (!parsed.access_token) {
-      throw new Error("תשובת ה-OAuth של Gmail חסרה access_token");
-    }
-
-    const lifetimeMs = (parsed.expires_in ?? 3600) * 1000;
-    cached = {
-      token: parsed.access_token,
-      expiresAt: Date.now() + Math.max(lifetimeMs - TOKEN_SAFETY_MARGIN_MS, 0),
-    };
-    return cached.token;
-  };
+function parseSendResponse(body: string): EmailSendResult {
+  try {
+    const parsed = JSON.parse(body) as { id?: string; threadId?: string };
+    return { id: parsed.id, threadId: parsed.threadId };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -128,8 +90,12 @@ function accessTokenProvider(config: OAuthConfig): () => Promise<string> {
  * דרך `users/me` בשם כתובת אחרת נדחית. שם תצוגה מותר, ולכן
  * `"בקרת פניות <x@gmail.com>"` תקין.
  */
-export function gmailApiTransport(config: OAuthConfig, from: string): EmailTransport {
-  const getAccessToken = accessTokenProvider(config);
+export function gmailApiTransport(config: GoogleOAuthConfig, from: string): EmailTransport {
+  // provider אחד לכל טרנספורט, ולא מטמון גלובלי: כך בדיקה שבונה טרנספורט
+  // משלה אינה יורשת טוקן של ריצה קודמת. המימוש עצמו יצא מכאן ל-
+  // `lib/google/gmail-token.ts` מפני שמ-1.3 יש לו צרכן שני — הסבב שקורא את
+  // התיבה פונה לאותה כתובת עם אותו refresh token.
+  const getAccessToken = createAccessTokenProvider(config);
 
   return {
     name: "gmail-api",
@@ -143,7 +109,10 @@ export function gmailApiTransport(config: OAuthConfig, from: string): EmailTrans
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ raw }),
+        // `threadId` נמסר רק כשיש שרשור לצרף אליו. Gmail דוחה בקשה שבה
+        // ה-`threadId` אינו מתיישב עם כותרות ההודעה, ולכן אין לשלוח אותו
+        // "ליתר ביטחון" — הוא מגיע יחד עם `inReplyTo` מאותו מייל נכנס.
+        body: JSON.stringify(message.threadId ? { raw, threadId: message.threadId } : { raw }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
@@ -154,6 +123,8 @@ export function gmailApiTransport(config: OAuthConfig, from: string): EmailTrans
         const body = await response.text();
         throw new Error(`שליחת מייל דרך Gmail API נכשלה (${response.status}): ${body.slice(0, 300)}`);
       }
+
+      return parseSendResponse(await response.text());
     },
   };
 }
