@@ -19,13 +19,25 @@ import { SRC, sourceFiles, stripComments } from "../../unit/source-scan";
  * אסור ולמה.
  */
 
-const SCRIPT = readFileSync(join(process.cwd(), "scripts", "gmail-oauth.mts"), "utf8");
+const SCRIPTS = join(process.cwd(), "scripts");
+const SCRIPT = readFileSync(join(SCRIPTS, "gmail-oauth.mts"), "utf8");
 
-/** כל קובץ ב-`src` שמדבר עם Gmail API, עם תוכנו בלי הערות */
+/**
+ * כל קובץ שמדבר עם Gmail API, עם תוכנו בלי הערות — ב-`src` **וגם**
+ * ב-`scripts`.
+ *
+ * הסקריפטים נכללים מפני שהם רצים מול התיבה האמיתית בידי אדם: ריצת
+ * ה-shadow של S5 קוראת את כל התיבה, וקריאה משנה אחת שם שקולה בדיוק
+ * לקריאה משנה מתוך האפליקציה.
+ */
 function gmailFiles(): { path: string; code: string }[] {
-  return sourceFiles(SRC)
+  const scripts = readdirSync(SCRIPTS)
+    .filter((name) => name.endsWith(".mts") || name.endsWith(".ts"))
+    .map((name) => join(SCRIPTS, name));
+
+  return [...sourceFiles(SRC), ...scripts]
     .map((file) => ({
-      path: relative(SRC, file).replaceAll("\\", "/"),
+      path: relative(process.cwd(), file).replaceAll("\\", "/"),
       code: stripComments(readFileSync(file, "utf8")),
     }))
     .filter(({ code }) => /gmail\.googleapis\.com/.test(code));

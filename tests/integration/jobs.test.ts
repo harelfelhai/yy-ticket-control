@@ -34,6 +34,9 @@ function fakeTransport(options: { failTimes?: number } = {}) {
         throw new Error("שרת המייל אינו זמין");
       }
       sent.push(message);
+      // `EmailSendResult` ריק: הכפיל אינו מדמה מזהים של ספק, ומה שנבדק
+      // כאן הוא התור ולא השרשור.
+      return {};
     },
   };
 

@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
+import { normalizeMessageId } from "@/lib/email-intake/headers";
 import { env } from "@/lib/env";
 import { gmailApiTransport } from "./gmail-api";
+import { toNodemailerMail } from "./mail-options";
 import type { EmailTransport } from "./types";
 
 /**
@@ -70,15 +72,21 @@ export function gmailTransport(user: string, appPassword: string, from: string):
   return {
     name: "gmail",
     async send(message) {
-      await transporter.sendMail({
-        from,
-        to: message.to,
-        subject: message.subject,
-        html: message.html,
-        // גרסת טקסט לצד ה-HTML: חלק מהלקוחות מציגים אותה, והיא מפחיתה
-        // את הסיכוי שההודעה תסווג כספאם.
-        text: message.text,
-      });
+      // המיפוי משותף עם ערוץ ה-API (`mail-options.ts`), כדי שכותרות
+      // השרשור לא יהיו תלויות בערוץ שנבחר בסביבה.
+      const info = (await transporter.sendMail(toNodemailerMail(from, message))) as {
+        messageId?: string;
+      };
+
+      // nodemailer מדווח את ה-`Message-ID` שהוא **כתב בפועל** — שלנו אם
+      // נמסר, ואחרת זה שהוא ייצר. `threadId` אינו קיים כאן: שרשור הוא
+      // מושג של Gmail ולא של SMTP, ובמסלול הזה הוא נשען על הכותרות בלבד.
+      //
+      // הנרמול אינו קוסמטיקה: nodemailer מחזיר את **ערך הכותרת**, עם
+      // הסוגריים המשולשים, והצד הנכנס שומר מזהים אחרי `normalizeMessageId`
+      // — בלי סוגריים. שתי צורות לאותו מזהה פירושן שתשובה שתגיע מחר לא
+      // תיקשר לטיוטה שהיא עונה לה (EM-14), בלי שגיאה ובלי סימן.
+      return { messageId: normalizeMessageId(info.messageId) ?? undefined };
     },
   };
 }
@@ -99,6 +107,9 @@ export function consoleTransport(): EmailTransport {
       console.info(
         `[notifier] מייל (לא נשלח — אין GMAIL_APP_PASSWORD)\nאל: ${message.to}\nנושא: ${message.subject}\n${message.text}\n`,
       );
+      // לא יצאה הודעה, ולכן אין לה מזהה ואין לה שרשור. `{}` ולא מזהה
+      // מומצא: מי שישמור מזהה מכאן יחפש מחר תשובה להודעה שלא נשלחה.
+      return {};
     },
   };
 }

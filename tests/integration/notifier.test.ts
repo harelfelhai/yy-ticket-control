@@ -38,6 +38,9 @@ function fakeTransport(options: { failTimes?: number } = {}) {
         throw new Error("שרת המייל אינו זמין");
       }
       sent.push(message);
+      // `EmailSendResult` ריק: מה שנבדק כאן הוא מי מקבל מה ומתי, ולא
+      // המזהים שהערוץ האמיתי מחזיר.
+      return {};
     },
   };
 
