@@ -7,7 +7,7 @@ import {
   failJob,
   reclaimOrphanedJobs,
 } from "@/jobs/queue";
-import { JOB_TYPES } from "@/jobs/types";
+import { JOB_TYPES, MAIL_JOB_TYPES, jobLaneOf } from "@/jobs/types";
 import { drainJobs, ensureDailyRescheduled, processNextJob } from "@/jobs/worker";
 import { db } from "@/lib/db";
 import type { EmailMessage, EmailTransport } from "@/lib/notifier/types";
@@ -235,5 +235,122 @@ describe("ensureDailyRescheduled — שרשרת יומית שורדת כשל ס�
   it("no-op לסוג עבודה שאינו יומי", async () => {
     await ensureDailyRescheduled(JOB_TYPES.notify, new Date());
     expect(await db.job.count()).toBe(0);
+  });
+});
+
+/**
+ * נתיבי התור (EM-12).
+ *
+ * ההבטחה במייל הנכנס היא תשובה תוך חמש דקות. העובד מריץ עבודה אחת בכל רגע,
+ * ולכן ההבטחה תלויה לא בקוד של השליחה אלא ב**מי עומד בתור לפניה**. הבדיקות
+ * כאן נועלות בדיוק את זה: מי כל נתיב תופס, ומי הוא בוודאות לא.
+ */
+describe("נתיבי התור — EM-12", () => {
+  it("EM-12 — ג'וב דואר אינו נתפס בנתיב הכללי", async () => {
+    await enqueue(db, JOB_TYPES.emailIntake, { mailboxMessageId: "m1" });
+
+    expect(await claimNextJob(new Date(), "general")).toBeNull();
+    expect((await claimNextJob(new Date(), "mail"))?.type).toBe(JOB_TYPES.emailIntake);
+  });
+
+  it("EM-12 — ג'וב כללי אינו נתפס בנתיב הדואר", async () => {
+    await enqueue(db, JOB_TYPES.transcribe, { mediaId: "x" });
+
+    expect(await claimNextJob(new Date(), "mail")).toBeNull();
+    expect((await claimNextJob(new Date(), "general"))?.type).toBe(JOB_TYPES.transcribe);
+  });
+
+  it("EM-12 — תשובה אינה ממתינה מאחורי ג'וב כללי ותיק ממנה", async () => {
+    // זה הכשל שהנתיבים נועדו למנוע: הזנה מרוכזת יוצרת עשרות ג'ובי חילוץ,
+    // וכולם ותיקים מהתשובה שנוצרה אחריהם. בתור יחיד התשובה הייתה אחרונה.
+    const now = new Date("2026-09-18T08:00:00Z");
+    await db.job.create({
+      data: {
+        type: JOB_TYPES.extract,
+        payload: { mediaId: "ותיק" },
+        runAt: new Date(now.getTime() - 60_000),
+      },
+    });
+    await enqueue(db, JOB_TYPES.emailReply, { mailboxMessageId: "m2" }, now);
+
+    expect((await claimNextJob(now, "mail"))?.type).toBe(JOB_TYPES.emailReply);
+  });
+
+  it("EM-12 — בלי נתיב נתפס הכול, וכל קורא קיים ממשיך לעבוד", async () => {
+    // `conformance/run-job.ts drain` והבדיקות אינן מכירות נתיבים כלל.
+    await enqueue(db, JOB_TYPES.emailIntake, { mailboxMessageId: "m3" });
+    await enqueue(db, JOB_TYPES.notify, { event: "ASSIGNED", assignmentId: "לא-קיים" });
+
+    const first = await claimNextJob();
+    const second = await claimNextJob();
+
+    expect([first?.type, second?.type].sort()).toEqual(
+      [JOB_TYPES.emailIntake, JOB_TYPES.notify].sort(),
+    );
+  });
+
+  it("EM-12 — כל סוג עבודה שייך לנתיב אחד בדיוק", () => {
+    const all = Object.values(JOB_TYPES);
+    const mail = all.filter((type) => jobLaneOf(type) === "mail");
+    const general = all.filter((type) => jobLaneOf(type) === "general");
+
+    expect(mail).toEqual([...MAIL_JOB_TYPES]);
+    expect(mail.length + general.length).toBe(all.length);
+  });
+
+  it("EM-12 — סוג עבודה שאינו מוכר נופל לנתיב הכללי ולא נשאר PENDING לנצח", async () => {
+    // הכשל השקט שנמנע כאן: אילו הנתיב הכללי היה רשימת סוגים מפורשת, שורה
+    // שנוצרה בגרסה חדשה יותר לא הייתה נתפסת על ידי אף לולאה — בלי שגיאה.
+    await db.job.create({ data: { type: "סוג-עתידי", payload: {} } });
+
+    expect(await claimNextJob(new Date(), "mail")).toBeNull();
+    expect((await claimNextJob(new Date(), "general"))?.type).toBe("סוג-עתידי");
+  });
+
+  it("EM-12 — drainJobs בנתיב הדואר מרוקן רק ג'ובי דואר", async () => {
+    await enqueue(db, JOB_TYPES.notify, { event: "ASSIGNED", assignmentId: "לא-קיים" });
+    await enqueue(db, JOB_TYPES.emailIntake, { mailboxMessageId: "m4" });
+
+    const results = await drainJobs(
+      { transport: fakeTransport().transport },
+      new Date(),
+      20,
+      "mail",
+    );
+
+    // הסטטוס אינו נבדק כאן בכוונה — הנבדק הוא **מי נלקח**, לא מה עשה
+    // המטפל. הג'וב הכללי חייב להישאר ממתין ללולאה שלו.
+    expect(results.map((r) => r.job.type)).toEqual([JOB_TYPES.emailIntake]);
+    expect(await db.job.count({ where: { type: JOB_TYPES.notify, status: "PENDING" } })).toBe(1);
+  });
+
+  it("EM-12 — שתי הלולאות במקביל אינן תופסות עבודה פעמיים", async () => {
+    for (let i = 0; i < 4; i += 1) {
+      await enqueue(db, JOB_TYPES.notify, { event: "ASSIGNED", assignmentId: `לא-קיים-${i}` });
+      await enqueue(db, JOB_TYPES.emailReply, { mailboxMessageId: `m-${i}` });
+    }
+
+    // `now` נלקח **אחרי** ההכנסה: `runAt` נקבע בברירת מחדל לשעון ה-DB ברגע
+    // ה-INSERT, וחותמת שנלקחה לפניו הייתה משאירה את השורות "טרם הגיע זמנן".
+    const now = new Date();
+    const deps = { transport: fakeTransport().transport };
+    const [general, mail] = await Promise.all([
+      drainJobs(deps, now, 20, "general"),
+      drainJobs(deps, now, 20, "mail"),
+    ]);
+
+    const ids = [...general, ...mail].map((r) => r.job.id);
+    expect(new Set(ids).size).toBe(8);
+    expect(new Set(general.map((r) => r.job.type))).toEqual(new Set([JOB_TYPES.notify]));
+    expect(new Set(mail.map((r) => r.job.type))).toEqual(new Set([JOB_TYPES.emailReply]));
+  });
+
+  it("EM-12 — תפיסה מקבילה של אותה שורה מצליחה פעם אחת בלבד", async () => {
+    // ההגנה שמאפשרת שתי לולאות באותו תהליך, ותישאר נכונה גם עם instance שני.
+    await enqueue(db, JOB_TYPES.notify, { event: "ASSIGNED", assignmentId: "לא-קיים" });
+
+    const claimed = await Promise.all([claimNextJob(), claimNextJob()]);
+
+    expect(claimed.filter(Boolean)).toHaveLength(1);
   });
 });

@@ -25,6 +25,18 @@ const QUEUE_OVERDUE_MS = 20 * 60_000;
 /** חלון ההסתכלות על ג'ובים שנכשלו סופית. ראה `jobsFailing` ב-`predicates.ts`. */
 const FAILED_WINDOW_MS = 24 * HOUR_MS;
 
+/**
+ * כמה זמן מותר לסבב קליטת המייל לא לרשום פעימה.
+ *
+ * הטיימר רץ כל 60 שניות, ולכן 15 דקות הן חמישה-עשר סבבים שלא קרו — רחוק
+ * מספיק מסבב בודד שנתקע על בקשה איטית, וקרוב מספיק לחמש הדקות שהמערכת
+ * מבטיחה למייל החוזר (§2.6 שלב 4) כדי שההפרה תתגלה ולא תימשך לילה שלם.
+ */
+const EMAIL_POLL_STALE_MS = 15 * 60_000;
+
+/** גיל ההודעה הנכנסת שממנו PENDING אינו "בדרך" אלא "נשכח". */
+const MAIL_STUCK_MS = 30 * 60_000;
+
 export interface WatchdogCheck {
   name: string;
   /** זורק כשה-invariant מופר */
@@ -116,6 +128,107 @@ export const checks: WatchdogCheck[] = [
       if (env.isProduction() && !env.googleOauth()) {
         throw new Error(
           "התחברות עם Google אינה מוגדרת: חסרים GOOGLE_CLIENT_ID או GOOGLE_CLIENT_SECRET",
+        );
+      }
+    },
+  },
+  {
+    /**
+     * **EM-12 — הצינור של המייל חי.**
+     *
+     * הטיימר של הקליטה (`jobs/email-poller.ts`) אינו ג׳וב בטבלה: הוא
+     * `setTimeout` בתוך התהליך, ולכן טיימר שמת אינו מייצר לא שורה FAILED,
+     * לא תור תקוע ואף לא שגיאה אחת. מבחוץ המערכת נראית בדיוק כמו מערכת
+     * שאיש לא כתב אליה — וזה בדיוק הכשל השקט שה-watchdog קיים בשבילו.
+     *
+     * **רק כשהיכולת דלוקה.** עד S9 היא כבויה בכל הסביבות, ופעימה שאינה
+     * נרשמת היא המצב התקין. `emailIntakeEnabled()` הוא אותו דגל שמחליט אם
+     * הטיימר בכלל עולה, ולכן שתי התשובות אינן יכולות להיפרד.
+     */
+    name: "email-poll-heartbeat",
+    async run(now) {
+      if (!env.emailIntakeEnabled()) return;
+
+      const at = await getHeartbeat(HEARTBEAT.emailPoll);
+      if (heartbeatStale(at, now, EMAIL_POLL_STALE_MS)) {
+        throw new Error(
+          `סבב קליטת המייל אינו רץ: ${at ? at.toISOString() : "מעולם לא רץ"}`,
+        );
+      }
+    },
+  },
+  {
+    /**
+     * **EM-12 — הודעה שנקלטה ולא הוכרעה.**
+     *
+     * `queue-not-stuck` מביט בטבלת `Job` בלבד, והוא מפספס את המקרה שבו
+     * הג׳וב **נעלם**: קריסה בין `claim` ל-`complete` משאירה שורת
+     * `MailboxMessage` ב-PENDING בלי ג׳וב שיטפל בה. בנכנס זו הודעה שלא
+     * קיבלה הכרעה, ביוצא זו תשובה שלא נשלחה — ובשני הכיוונים מישהו כתב
+     * למערכת ולא קיבל דבר, שקט מוחלט.
+     *
+     * **30 דקות, ו-`nextAttemptAt` עתידי אינו נספר.** כשל זמני מול Gmail
+     * דוחה הודעה ב-backoff שמגיע עד שעה (`services/email-intake.ts`), וזו
+     * המתנה מתוכננת ולא תקיעות — בדיוק ההבחנה שכבר קיימת ב-`queue-not-stuck`
+     * בין PENDING עתידי ל-PENDING באיחור.
+     *
+     * **בלי תנאי על הדגל, בשונה מהפעימה.** כשהיכולת כבויה הטבלה ריקה ממילא,
+     * אבל אם מישהו כיבה אותה באמצע אירוע — ההודעות שכבר נקלטו ולא נענו הן
+     * עובדה שאינה משתנה מכיבוי המתג, ועליה צריך להתריע.
+     */
+    name: "email-intake-not-stuck",
+    async run(now) {
+      const cutoff = new Date(now.getTime() - MAIL_STUCK_MS);
+      const stuck = await db.mailboxMessage.count({
+        where: {
+          state: "PENDING",
+          createdAt: { lt: cutoff },
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+        },
+      });
+
+      // אותו פרדיקט של התור: כל פריט אחד באיחור הוא כבר תקלה.
+      if (queueStuck(stuck)) {
+        throw new Error(`${stuck} הודעות מייל ממתינות מעל 30 דקות ללא הכרעה`);
+      }
+    },
+  },
+  {
+    /**
+     * **invariant של תצורה, כמו `google-login-configured` — ומאותו נימוק.**
+     *
+     * היכולת דלוקה בפרודקשן אבל חסר לה מה שהיא צריכה. שני המצבים שקטים
+     * לחלוטין, וכל אחד מהם נראה מבחוץ כמו "אף אחד לא כותב אלינו":
+     *
+     * - **בלי טוקן Gmail** אין מה לקרוא ואין דרך לענות. הסבב נעצר בכל דקה
+     *   ומדווח, אבל שגיאה שחוזרת כל דקה היא בדיוק מה שממוצע rate-limit
+     *   בולע; invariant שנשאל כל שש שעות אינו נבלע.
+     * - **בלי `GEMINI_API_KEY`** כל מייל נוחת במסלול "החילוץ אינו זמין"
+     *   (EM-11) — נוצרת טיוטה שכל תוכנה הוא גוף המייל, ונשלחת תשובה
+     *   שמפנה להשלים ידנית. המערכת "עובדת", ובאופן שאינו שווה דבר. זה אינו
+     *   סותר את ההחלטה ש-AI הוא רשות (`.env.example`, "שירותי AI"): שם
+     *   ההיעדר עולה קובץ אחד בלי תמלול, כאן הוא הופך את החריג לכלל.
+     *
+     * `isProduction()` **וגם** `emailIntakeEnabled()`: מכונת פיתוח שהדליקה
+     * את היכולת מול `EMAIL_INTAKE_NONPROD` עושה זאת ביודעין ובלי מפתחות,
+     * ויכולת כבויה אינה "תצורה חסרה" אלא החלטה.
+     */
+    name: "email-intake-configured",
+    async run() {
+      if (!env.isProduction() || !env.emailIntakeEnabled()) return;
+
+      const missing: string[] = [];
+      if (!env.gmailUser()) missing.push("GMAIL_USER");
+      // כול-או-כלום: `gmailApi()` אינו מגלה מי מהשלושה חסר, ולכן שלושתם
+      // נמנים — מי שמתקן בודק ממילא את כולם.
+      if (!env.gmailApi()) {
+        missing.push("GOOGLE_CLIENT_ID+GOOGLE_CLIENT_SECRET+GMAIL_REFRESH_TOKEN");
+      }
+      if (!env.geminiApiKey()) missing.push("GEMINI_API_KEY");
+
+      if (missing.length > 0) {
+        throw new Error(
+          `קליטת פניות במייל דלוקה בפרודקשן בלי תצורה מלאה. חסר: ${missing.join(", ")}`,
         );
       }
     },
