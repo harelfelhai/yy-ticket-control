@@ -11,6 +11,15 @@ import { db } from "@/lib/db";
 export const HEARTBEAT = {
   escalation: "escalation",
   backup: "backup",
+  /**
+   * סבב קליטת המייל — **פעימה של טיימר ולא של ג׳וב יומי**, ולכן הסף שלה
+   * נמדד בדקות (15) ולא בשעות: הטיימר רץ כל 60 שניות, והמייל החוזר מובטח
+   * תוך חמש דקות (§2.6 שלב 4). פעימה בת רבע שעה פירושה שההבטחה כבר הופרה.
+   *
+   * נכתבת בסוף סבב poll מוצלח (`services/email-poll.ts`), ונזרעת בעליית
+   * ה-worker כמו שתיים האחרות — אחרת ההפעלה הראשונה הייתה מתריעה על שווא.
+   */
+  emailPoll: "email-poll",
 } as const;
 
 export type HeartbeatName = (typeof HEARTBEAT)[keyof typeof HEARTBEAT];

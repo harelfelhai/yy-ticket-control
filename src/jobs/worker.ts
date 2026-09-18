@@ -22,12 +22,24 @@ import {
   ensureDailyEscalationScheduled,
   runDailyEscalation,
 } from "./handlers/escalation";
+import { runEmailIntake } from "./handlers/email";
+import { startEmailPoller } from "./email-poller";
+import type { FieldExtractor } from "@/lib/email-intake/extraction";
+import type { MailSource } from "@/lib/email-intake/source";
+import type { EmailIntakeOutcome } from "@/lib/services/email-intake";
+import { type EmailReplyOutcome, markReplyFailed, sendEmailReply } from "@/lib/services/email-reply";
 import { cleanupRateLimits } from "@/lib/rate-limit";
 import { captureError } from "@/lib/observability/log";
 import { HEARTBEAT, seedHeartbeat } from "@/watchdog/heartbeat";
 import { runWatchdog } from "@/watchdog/runner";
 import { MAX_ATTEMPTS, claimNextJob, completeJob, failJob, reclaimOrphanedJobs } from "./queue";
-import { JOB_TYPES, type NotifyJobPayload } from "./types";
+import {
+  JOB_TYPES,
+  type EmailIntakeJobPayload,
+  type EmailReplyJobPayload,
+  type JobLane,
+  type NotifyJobPayload,
+} from "./types";
 
 /**
  * העובד שמריץ את התור.
@@ -98,7 +110,6 @@ function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T>
  * עדיין נספר, ולכן לוכדים לכל היותר פעם ב-10 דקות.
  */
 const LOOP_ERROR_CAPTURE_INTERVAL_MS = 10 * 60_000;
-let lastLoopErrorCaptureAt = 0;
 
 /** כל כמה זמן ה-watchdog בודק את ה-invariants ומדווח check-in ל-Sentry */
 const WATCHDOG_INTERVAL_MS = 6 * 60 * 60_000;
@@ -109,7 +120,13 @@ const WATCHDOG_INTERVAL_MS = 6 * 60 * 60_000;
  */
 const WATCHDOG_STARTUP_DELAY_MS = 30_000;
 
-export type JobOutcome = DeliveryOutcome | AiOutcome | EscalationOutcome | BackupOutcome;
+export type JobOutcome =
+  | DeliveryOutcome
+  | AiOutcome
+  | EscalationOutcome
+  | BackupOutcome
+  | EmailIntakeOutcome
+  | EmailReplyOutcome;
 
 export type JobResult =
   | { job: Job; status: "done"; outcome?: JobOutcome }
@@ -126,14 +143,35 @@ export interface WorkerDeps {
   transport?: EmailTransport;
   transcriber?: Transcriber | null;
   extractor?: TextExtractor | null;
+  /**
+   * התיבה הנכנסת — לשני ג׳ובי הדואר.
+   *
+   * שדה נפרד ולא שימוש חוזר ב-`transport`: הקריאה והשליחה הן שני ממשקים
+   * שונים (`MailSource` מול `EmailTransport`), גם כשבפרודקשן אותו טוקן
+   * Gmail עומד מאחורי שניהם.
+   */
+  mailSource?: MailSource;
+  /**
+   * מחלץ שדות הטיוטה מהמייל. **אינו** `extractor` שמעליו: זה חילוץ טקסט
+   * מקובץ מדיה (`TextExtractor`), וזה קריאת שדות מגוף מייל
+   * (`FieldExtractor`). שני מנועים, שני מסלולים, ושם דומה שכבר גרם לבלבול.
+   *
+   * `null` מפורש פירושו "אין מנוע בסביבה" — המסלול של EM-11.
+   */
+  fieldExtractor?: FieldExtractor | null;
 }
 
-/** מריץ עבודה אחת מהתור, אם יש כזו. מחזיר null כשהתור ריק. */
+/**
+ * מריץ עבודה אחת מהתור, אם יש כזו. מחזיר null כשהתור (או הנתיב) ריק.
+ *
+ * `lane` אופציונלי ובלעדיו נתפסת כל עבודה — ראו `laneFilter` ב-`queue.ts`.
+ */
 export async function processNextJob(
   deps: WorkerDeps = {},
   now: Date = new Date(),
+  lane?: JobLane,
 ): Promise<JobResult | null> {
-  const job = await claimNextJob(now);
+  const job = await claimNextJob(now, lane);
   if (!job) return null;
 
   try {
@@ -206,11 +244,12 @@ export async function drainJobs(
   deps: WorkerDeps = {},
   now: Date = new Date(),
   limit: number = MAX_JOBS_PER_TICK,
+  lane?: JobLane,
 ): Promise<JobResult[]> {
   const results: JobResult[] = [];
 
   while (results.length < limit) {
-    const next = await processNextJob(deps, now);
+    const next = await processNextJob(deps, now, lane);
     if (!next) break;
     results.push(next);
   }
@@ -240,6 +279,21 @@ async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome
       await ensureDailyEscalationScheduled(now);
       return { kind: "escalation", escalated };
     }
+
+    // שני ג׳ובי הדואר רצים בנתיב `mail` (`jobs/types.ts`), ולכן ג׳וב AI ארוך
+    // אינו דוחק אותם מעבר לחמש הדקות שהובטחו (§2.6 שלב 4).
+    case JOB_TYPES.emailIntake:
+      // `now` של הסבב ולא `new Date()` בפנים: הוא מה שקובע את תקציב
+      // החילוץ ואת מועד הדחייה הבאה, ובדיקה שאינה שולטת בו אינה יכולה
+      // לבדוק את EM-11.
+      return runEmailIntake(job.payload as unknown as EmailIntakeJobPayload, {
+        source: deps.mailSource,
+        extractor: deps.fieldExtractor,
+        now,
+      });
+
+    case JOB_TYPES.emailReply:
+      return runEmailReply(job, deps, now);
 
     case JOB_TYPES.backup: {
       const outcome = await runDailyBackup(now);
@@ -303,6 +357,77 @@ async function runAi(
   }
 }
 
+/**
+ * שולח את המייל החוזר, ומסמן את השורה היוצאת ככשל **רק כשנגמרו הניסיונות**.
+ *
+ * מבנה זהה ל-`runNotify` ול-`runAi`, ומאותו נימוק — אבל כאן יש סיבה נוספת
+ * שאין להן: לשורה **יוצאת** אין מסלול חזרה לתור. סריקת התקועות של הסבב
+ * (`services/email-poll.ts`) מסוננת לנכנס בלבד, ולכן שורה שנשארה PENDING
+ * אחרי שהג׳וב מת נספרת ב-invariant `email-intake-not-stuck` בכל ריצת
+ * watchdog, לנצח. `markReplyFailed` הוא מה שסוגר אותה — ראו התיעוד שם.
+ */
+async function runEmailReply(job: Job, deps: WorkerDeps, now: Date): Promise<EmailReplyOutcome> {
+  const payload = job.payload as unknown as EmailReplyJobPayload;
+
+  try {
+    return await sendEmailReply(payload, {
+      transport: deps.transport,
+      // התיבה משמשת כאן לחיפוש האידמפוטנטיות בלבד ("האם כבר שלחתי?").
+      // `undefined` = תיבה לפי הסביבה; בדיקה מזריקה את שלה.
+      mailSource: deps.mailSource,
+      now,
+    });
+  } catch (error) {
+    if (job.attempts >= MAX_ATTEMPTS) await markReplyFailed(payload, error);
+    throw error;
+  }
+}
+
+/**
+ * מפעיל לולאת סבב אחת, לנתיב אחד.
+ *
+ * הוצא לפונקציה כשנוספו הנתיבים: מאז יש **שתי** לולאות באותו תהליך, והן
+ * חייבות להיות בלתי-תלויות. אחרת ג'וב AI ארוך בנתיב הכללי דוחה תשובת מייל
+ * מעבר לחמש הדקות שהובטחו, ותשובה שנתקעה מול Gmail מעכבת התראות — שני
+ * כשלים שבהם כל ג'וב לעצמו תקין, ורק הסדר גרם לנזק.
+ *
+ * חלון ה-throttle של Sentry הוא משתנה **סגור בכל לולאה** ולא משותף. אילו
+ * היה משותף, כשל בנתיב אחד היה משתיק את הדיווח על כשל בנתיב השני באותן
+ * עשר דקות — כלומר תקלה אמיתית שנבלעת מפני שתקלה אחרת הקדימה אותה.
+ */
+function startLaneLoop(lane: JobLane): void {
+  let lastErrorCaptureAt = 0;
+
+  const tick = async () => {
+    try {
+      await drainJobs({}, new Date(), MAX_JOBS_PER_TICK, lane);
+    } catch (error) {
+      // כשל כאן פירושו שהתור עצמו לא נגיש (בסיס נתונים למטה). ממשיכים
+      // לנסות: העבודות ממתינות בטבלה ואינן הולכות לאיבוד.
+      //
+      // `console` ולא `log.ts` **רק כאן**: זו הלולאה עצמה שנפלה, ובפיתוח
+      // Sentry מנוטרל — בלי השורה בטרמינל בסיס נתונים שירד היה נראה
+      // כמערכת שקטה ותקינה.
+      console.error(`[jobs:${lane}] הלולאה נכשלה`, error);
+      // לכידה ל-Sentry עם throttle: DB שלמטה שעה היה מייצר 360 אירועים
+      // ושורף את המכסה. לוכדים פעם ב-10 דקות — מספיק כדי לדעת, לא כדי להציף.
+      const nowMs = Date.now();
+      if (nowMs - lastErrorCaptureAt >= LOOP_ERROR_CAPTURE_INTERVAL_MS) {
+        lastErrorCaptureAt = nowMs;
+        captureError(error, {
+          tags: { phase: "poll-loop", lane },
+          fingerprint: ["poll-loop-db-down", lane],
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, ERROR_BACKOFF_MS));
+    } finally {
+      setTimeout(tick, POLL_INTERVAL_MS).unref?.();
+    }
+  };
+
+  setTimeout(tick, POLL_INTERVAL_MS).unref?.();
+}
+
 let running = false;
 
 /**
@@ -342,30 +467,20 @@ export function startWorker(): void {
     });
   });
 
-  const tick = async () => {
-    try {
-      await drainJobs();
-    } catch (error) {
-      // כשל כאן פירושו שהתור עצמו לא נגיש (בסיס נתונים למטה). ממשיכים
-      // לנסות: העבודות ממתינות בטבלה ואינן הולכות לאיבוד.
-      console.error("[jobs] הלולאה נכשלה", error);
-      // לכידה ל-Sentry עם throttle: DB שלמטה שעה היה מייצר 360 אירועים
-      // ושורף את המכסה. לוכדים פעם ב-10 דקות — מספיק כדי לדעת, לא כדי להציף.
-      const nowMs = Date.now();
-      if (nowMs - lastLoopErrorCaptureAt >= LOOP_ERROR_CAPTURE_INTERVAL_MS) {
-        lastLoopErrorCaptureAt = nowMs;
-        captureError(error, {
-          tags: { phase: "poll-loop" },
-          fingerprint: ["poll-loop-db-down"],
-        });
-      }
-      await new Promise((resolve) => setTimeout(resolve, ERROR_BACKOFF_MS));
-    } finally {
-      setTimeout(tick, POLL_INTERVAL_MS).unref?.();
-    }
-  };
+  // **שתי לולאות, באותו קצב.** ראו `startLaneLoop`. הן חולקות תהליך אחד
+  // ולכן אינן רצות ממש במקביל, אבל כל אחת ממתינה לעבודה של **עצמה** בלבד:
+  // `await` בנתיב אחד משחרר את הלולאה השנייה להתקדם.
+  startLaneLoop("general");
+  startLaneLoop("mail");
 
-  setTimeout(tick, POLL_INTERVAL_MS).unref?.();
+  // **הגילוי** — הצלע השלישית, ובלעדיה שתי הלולאות ריקות: אף אחת מהן אינה
+  // יוצרת ג׳וב דואר, הן רק מריצות מה שכבר בתור. הסבב הוא הטיימר שקורא את
+  // התיבה וכותב שורה וג׳וב לכל מייל חדש (`jobs/email-poller.ts`).
+  //
+  // אין כאן בדיקת דגל: `startEmailPoller` בודק בעצמו `emailIntakeEnabled()`
+  // ומחזיר no-op כשהיכולת כבויה. שכפול התנאי כאן היה יוצר מקום שני שאפשר
+  // לשכוח לעדכן, בדיוק בהחלטה שחייבת להישאר בעלת תשובה אחת.
+  startEmailPoller();
 
   // ה-watchdog רץ בטיימר **נפרד** כל 6 שעות, מחוץ ללולאת העבודות (2ש') כדי
   // לא לעכב אותה. `.unref` כמו בלולאה, אחרת התהליך לא נסגר ב-Ctrl-C.
