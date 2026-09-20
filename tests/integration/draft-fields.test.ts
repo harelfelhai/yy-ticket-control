@@ -6,6 +6,7 @@ import { conflictsVersion, toDraftState } from "@/lib/draft/state";
 import { he } from "@/lib/he";
 import {
   loadDraftState,
+  lockTicket,
   removeDraftMedia,
   resolveDraftConflicts,
   updateDraftFields,
@@ -142,6 +143,24 @@ async function mergeReply(
   }
   return merged;
 }
+
+describe("פנייה שאינה קיימת — lockAndLoadDraft מחזירה null, והקורא זורק", () => {
+  // רגרסיה ל-S7: `loadLocked` הפכה ל-`lockAndLoadDraft` המיוצאת (גם
+  // `email-intake.ts` נועלת דרכה), ואינה זורקת יותר בעצמה — כל קורא כאן
+  // זורק `DraftError` בעצמו מיד אחרי הקריאה. הבדיקות האלה נועדו לתפוס
+  // בדיוק את זה: שהזריקה עדיין קורית, רק ממקום אחר.
+  it("updateDraftFields על פנייה שאינה קיימת זורקת 'הפנייה לא נמצאה'", async () => {
+    await expect(updateDraftFields(toViewer(admin), "no-such-id", { domainId })).rejects.toThrow(
+      he.ticket.notFound,
+    );
+  });
+
+  it("resolveDraftConflicts על פנייה שאינה קיימת זורקת 'הפנייה לא נמצאה'", async () => {
+    await expect(
+      resolveDraftConflicts(toViewer(admin), "no-such-id", { DOMAIN: "system" }, "[]"),
+    ).rejects.toThrow(he.ticket.notFound);
+  });
+});
 
 describe("EM-C05 — עריכה במערכת: מה נכתב, ומה יורד", () => {
   it("שדה שמולא מהמייל ונערך במערכת מאבד את התג ונרשם כעריכה", async () => {
@@ -672,6 +691,41 @@ describe("EM-S7-05 — הסרת מדיה מטיוטת מייל", () => {
     await expect(removeDraftMedia(toViewer(otherManager), media.id)).rejects.toThrow(
       he.common.notAllowed,
     );
+  });
+
+  // רגרסיה: שלוש הקריאות ל-`lockAndLoadDraft` ב-`draft-fields.ts` (עדכון
+  // שדות, הכרעת סתירות והסרת מדיה) נבנו מאותו refactor ובודקות `!locked`
+  // באותו תבנית בדיוק — אבל רק שתי הראשונות קיבלו בדיקת רגרסיה (למעלה,
+  // "פנייה שאינה קיימת"). זו של הסרת מדיה, וכאן דרך מירוץ אמיתי ולא דרך
+  // מזהה שקרי: removeDraftMedia קוראת את ה-MediaFile **בלי נעילה** (כדי
+  // לדעת איזו פנייה לנעול), ורק אז נועלת את שורת הפנייה — בדיוק החלון שבו
+  // מחיקת טיוטה מקבילה (`deleteDraft`, שנועלת את אותה שורה) יכולה להשלים.
+  it("הטיוטה נמחקת בדיוק בזמן שהוא ממתין לנעילה: נכתבת 'הפנייה לא נמצאה', לא קריסה על destructuring", async () => {
+    const { ticket, media } = await withMedia();
+
+    // חימום: פותח חיבור שני בבריכה מראש, כדי שפתיחת הטרנזאקציה השנייה
+    // בהמשך לא תמתין להקמת חיבור TCP חדש (שיכולה לקחת מאות מילישניות
+    // ולערער את התזמון של המירוץ)
+    await Promise.all([db.$transaction(async (tx) => tx.site.count()), db.site.count()]);
+
+    // טרנזאקציה אמיתית שנייה: נועלת את שורת הפנייה (כמו `deleteDraft`
+    // האמיתית), ומחזיקה את הנעילה בכוונה לפני שהיא מוחקת ומאשרת — כדי
+    // שהחלון יהיה רחב מספיק ל-`removeDraftMedia` להגיע אליו בוודאות
+    const deleteTx = db.$transaction(async (tx) => {
+      await lockTicket(tx, ticket.id);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await tx.ticket.delete({ where: { id: ticket.id } });
+    });
+
+    // ה-`mediaFile.findUnique` הראשון של removeDraftMedia אינו זקוק לנעילת
+    // הפנייה (הוא קורא רק את שורת המדיה) ולכן מצליח מיד, גם בזמן שהמחיקה
+    // מחזיקה את הנעילה — והקריאה השנייה שלה חוסמת עד שהמחיקה משתחררת
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const removal = removeDraftMedia(toViewer(admin), media.id);
+
+    await deleteTx;
+    await expect(removal).rejects.toThrow(he.ticket.notFound);
+    expect(await db.ticket.findUnique({ where: { id: ticket.id } })).toBeNull();
   });
 });
 

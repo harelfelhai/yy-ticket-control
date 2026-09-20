@@ -3,10 +3,12 @@ import { runEmailIntake } from "@/jobs/handlers/email";
 import { JOB_TYPES } from "@/jobs/types";
 import { db } from "@/lib/db";
 import type { MailEnvelope } from "@/lib/email-intake/types";
-import { canViewTicket } from "@/lib/permissions";
+import { type Viewer, canViewTicket } from "@/lib/permissions";
 import { handleEmailIntake } from "@/lib/services/email-intake";
-import { selectStorage } from "@/lib/storage";
-import { aiError, fakeFieldExtractor } from "../helpers/fake-field-extractor";
+import { removeDraftMedia } from "@/lib/services/draft-fields";
+import { he } from "@/lib/he";
+import { selectStorage, type MediaStorage } from "@/lib/storage";
+import { aiError, emptyExtraction, fakeFieldExtractor } from "../helpers/fake-field-extractor";
 import { fakeMailSource } from "../helpers/fake-mail-source";
 import {
   ARRIVED_AT,
@@ -14,11 +16,15 @@ import {
   FIRST_MAIL_SUBJECT,
   MAILBOX,
   OTHER_SENDER,
+  OTHER_SENDER_NAME,
   OUTGOING_REPLY_MESSAGE_ID,
+  REPLY_ARRIVED_AT,
+  REPLY_NEW_TEXT,
   SAMPLE_APARTMENT,
   SAMPLE_BUILDING,
   SAMPLE_SITE,
   SENDER,
+  STRANGER,
   autoReplyMail,
   documentAttachmentPart,
   firstMail,
@@ -272,21 +278,23 @@ describe("סולם ההכרעה", () => {
     expect(ticket.createdById).toBe(adminId);
   });
 
-  it("EM-14 — תשובה בשרשרת מוכרת אינה פותחת פנייה חדשה ואינה נוגעת בטיוטה", async () => {
+  it("EM-14 — תשובה בשרשרת מוכרת אינה פותחת פנייה חדשה, ומעודכנת דרך מסלול התשובה", async () => {
     const { threadId, ticketId } = await existingThread();
 
     const { id, outcome } = await run(replyInThread(), { now: new Date(ARRIVED_AT.getTime() + 86_400_000 * 3) });
 
-    expect(outcome).toEqual({ kind: "email-intake", status: "skipped", reason: "reply-path-not-built" });
+    // הכותב (dana@example.com, ADMIN) הוא היוצר של הטיוטה ולכן רשאי לערוך —
+    // ההודעה מוכרעת דרך מסלול המיזוג של S7, לא נפתחת פנייה שנייה
+    expect(outcome).toMatchObject({ kind: "email-intake", status: "decided", outcome: "REPLY_APPLIED" });
     const row = await rowOf(id);
-    expect(row.state).toBe("SKIPPED");
-    expect(row.outcome).toBeNull();
+    expect(row.state).toBe("DONE");
+    expect(row.outcome).toBe("REPLY_APPLIED");
     expect(row.threadId).toBe(threadId);
-    expect(row.detail).toContain("S7");
-    // הטיוטה לא נגעה: אין שדות חדשים, אין מייל חוזר, ואין פנייה שנייה
+    // החילוץ המזויף לא הוגדר (ברירת מחדל ריקה) — אין שדה שהוצע, ולכן הטיוטה
+    // עצמה לא השתנתה, אבל התשובה כן נענתה
     expect(await db.ticket.count()).toBe(1);
     expect(await db.draftField.count({ where: { ticketId } })).toBe(0);
-    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(0);
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(1);
   });
 
   it("EM-14 — שרשרת מזוהה גם כשכותרות השרשור אבדו, לפי מזהה השרשור של Gmail", async () => {
@@ -297,7 +305,7 @@ describe("סולם ההכרעה", () => {
       { now: new Date(ARRIVED_AT.getTime() + 86_400_000 * 3) },
     );
 
-    expect(outcome).toMatchObject({ status: "skipped" });
+    expect(outcome).toMatchObject({ status: "decided" });
     expect(await db.ticket.count()).toBe(1);
   });
 
@@ -1246,6 +1254,652 @@ describe("מצבי קצה", () => {
   });
 });
 
+// ─────────────────────────────── מסלול התשובה (S7, מודול R) ───────────────────────────────
+
+const REPLY_NOW = new Date(REPLY_ARRIVED_AT.getTime() + 60_000);
+const ADMIN_VIEWER = (): Viewer => ({ kind: "user", id: adminId, role: "ADMIN", siteId: null });
+
+async function replyRun(fixture: MailFixture, options: RunOptions = {}) {
+  return run(fixture, { now: REPLY_NOW, ...options });
+}
+
+describe("מסלול התשובה — §5.ה3 כלל 9 (שלושת המקרים)", () => {
+  it("EM-15 — מנהל עבודה אחר באתר, לא רק היוצר, רשאי לערוך ומקבל מייל חוזר", async () => {
+    // הכותב הוא managerId (מנהל עבודה של אותו אתר), לא adminId שפתח את
+    // הטיוטה — §5.ה4 מציין זאת במפורש: "גם מנהל עבודה אחר באתר רשאי לערוך"
+    await existingThread();
+    const { id, outcome } = await replyRun(replyInThread({ from: OTHER_SENDER, fromName: OTHER_SENDER_NAME }));
+
+    expect(outcome).toMatchObject({ status: "decided", outcome: "REPLY_APPLIED" });
+    const row = await rowOf(id);
+    expect(row.authorUserId).toBe(managerId);
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(1);
+  });
+
+  it("EM-15 — משתמש מורשה שאינו רשאי לערוך: לא נקלטת, אבל הוא מקבל מייל", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר אחר לגמרי" } });
+    const outsider = await db.user.create({
+      data: {
+        role: "SITE_MANAGER",
+        name: "מנהל זר",
+        phone: "0500000077",
+        passwordHash: "x",
+        email: "outsider@example.com",
+        siteId: otherSite.id,
+      },
+    });
+
+    await existingThread();
+    const { id, outcome } = await replyRun(replyInThread({ from: outsider.email as string, fromName: "מנהל זר" }));
+
+    expect(outcome).toEqual({ kind: "email-intake", status: "decided", outcome: "REPLY_NOT_PERMITTED" });
+    const row = await rowOf(id);
+    expect(row.state).toBe("DONE");
+    expect(row.authorUserId).toBe(outsider.id);
+    // התשובה **כן** נענית — זה המקרה היחיד מבין השלושה שבו "לא נקלטה" בכל
+    // זאת מקבל מייל (בניגוד לזר לגמרי, EM-L10)
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(1);
+    // הטיוטה לא נגעה כלל
+    expect(await db.draftField.count()).toBe(0);
+  });
+
+  it("EM-15 — תשובה מכתובת שאינה של משתמש (זר): לא נקלטת ולא נענית, גם מהשולח המקורי", async () => {
+    await existingThread();
+    const { id, outcome } = await replyRun(replyInThread({ from: STRANGER, fromName: "זר" }));
+
+    // מקרה 3 של כלל 9 כבר מוכרע בשלב 6 של הסולם (findSender), **לפני**
+    // שמגיעים למסלול התשובה — ולכן אין כאן outcome ייעודי למייל, אלא אותה
+    // הכרעה כמו מייל ראשון מזר
+    expect(outcome).toMatchObject({ status: "decided", outcome: "IGNORED_UNAUTHORIZED" });
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(0);
+  });
+
+  it("EM-15 · §7 שורה 76 — תשובה אחרי שיגור ממי שאינו רשאי: מקבל 'אין הרשאה', לא 'כבר נשלחה'", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר שלישי" } });
+    const outsider = await db.user.create({
+      data: {
+        role: "SITE_MANAGER",
+        name: "מנהל זר",
+        phone: "0500000078",
+        passwordHash: "x",
+        email: "outsider2@example.com",
+        siteId: otherSite.id,
+      },
+    });
+
+    // הפנייה **כבר שוגרה** (isDraft: false) — סדר הבדיקות הוא הכלל: הרשאת
+    // העריכה נבדקת לפני מצב השיגור
+    await existingThread({ ticket: { isDraft: false } });
+    const { outcome } = await replyRun(replyInThread({ from: outsider.email as string, fromName: "מנהל זר" }));
+
+    expect(outcome).toMatchObject({ status: "decided", outcome: "REPLY_NOT_PERMITTED" });
+  });
+
+  it("REPLY_AFTER_DISPATCH — תשובה ממי שרשאי, אחרי שהפנייה שוגרה: אינה משנה דבר", async () => {
+    const { ticketId } = await existingThread({ ticket: { isDraft: false } });
+    const before = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+
+    const { id, outcome } = await replyRun(replyInThread());
+
+    expect(outcome).toMatchObject({ status: "decided", outcome: "REPLY_AFTER_DISPATCH" });
+    const after = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(after).toEqual(before);
+    expect(await db.draftField.count()).toBe(0);
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(1);
+  });
+
+  it("REPLY_AFTER_DELETION — תשובה אחרי שהטיוטה נמחקה: לא נקלטת, אבל השולח מקבל מייל", async () => {
+    const { ticketId } = await existingThread();
+    await db.ticket.delete({ where: { id: ticketId } });
+
+    const { id, outcome } = await replyRun(replyInThread());
+
+    expect(outcome).toMatchObject({ status: "decided", outcome: "REPLY_AFTER_DELETION" });
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(1);
+  });
+});
+
+describe("מסלול התשובה — EM-13: רק הטקסט החדש מגיע לחילוץ", () => {
+  it("EM-13 — הציטוט (כולל 'מה יש בטיוטה' של המייל החוזר הקודם) אינו נשלח למחלץ", async () => {
+    await existingThread();
+    const extractor = fakeFieldExtractor();
+    const source = fakeMailSource({ messages: [replyInThread()], match: () => true });
+    const id = await inbound(replyInThread().envelope);
+
+    await handleEmailIntake({ mailboxMessageId: id }, { source, extractor, now: REPLY_NOW });
+
+    expect(extractor.calls).toHaveLength(1);
+    expect(extractor.lastCall?.text).toBe(REPLY_NEW_TEXT);
+    expect(extractor.lastCall?.text).not.toContain(SAMPLE_SITE);
+    expect(extractor.lastCall?.isReply).toBe(true);
+  });
+});
+
+describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במערכת), דרך החיווט האמיתי", () => {
+  it("EM-C03 — שדה שלא נערך במערכת: הערך מהמייל נכנס בשקט, עם תג 'מהמייל'", async () => {
+    const { ticketId } = await existingThread();
+
+    const { id, outcome } = await replyRun(
+      replyInThread({ text: "התחום הוא אינסטלציה.", html: null }),
+      { extraction: { result: { domain: DOMAIN_NAME } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.domainId).toBe(domainId);
+    const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
+    expect(field).toMatchObject({ fromEmail: true, conflict: false });
+
+    const row = await rowOf(id);
+    const report = row.report as { updated: { field: string; before: string | null; after: string | null }[] };
+    expect(report.updated).toContainEqual({ field: "DOMAIN", before: null, after: DOMAIN_NAME });
+  });
+
+  it("EM-C04 — שדה שנערך במערכת לפני התשובה: סתירה, שני הערכים נשמרים, הטיוטה לא נדרסת", async () => {
+    const otherDomain = await db.domain.create({ data: { name: "חשמל" } });
+    const { ticketId } = await existingThread({
+      ticket: { domainId: otherDomain.id },
+      fields: { DOMAIN: { systemEditedAt: ARRIVED_AT, fromEmail: false } },
+    });
+
+    const { id, outcome } = await replyRun(
+      replyInThread({ text: "התחום הוא אינסטלציה.", html: null }),
+      { extraction: { result: { domain: DOMAIN_NAME } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    // אף צד לא דרס את השני — הערך במערכת נשאר
+    expect(ticket.domainId).toBe(otherDomain.id);
+    const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
+    expect(field.conflict).toBe(true);
+    expect(field.emailValue).toMatchObject({ field: "DOMAIN", domainId });
+
+    const row = await rowOf(id);
+    const report = row.report as { updated: unknown[] };
+    // סתירה אינה "עודכן מהתשובה שלך" — היא מוצגת בנפרד, בזמן השליחה
+    expect(report.updated).toEqual([]);
+  });
+
+  it("EM-C02 — סתירה קיימת שהמייל האחרון נותן בה את הערך שבמערכת: נסגרת בלי שינוי", async () => {
+    const otherDomain = await db.domain.create({ data: { name: "חשמל" } });
+    const { ticketId } = await existingThread({
+      ticket: { domainId },
+      fields: {
+        DOMAIN: {
+          conflict: true,
+          systemEditedAt: ARRIVED_AT,
+          emailValue: { field: "DOMAIN", domainId: otherDomain.id },
+          fromEmail: false,
+        },
+      },
+    });
+
+    const { outcome } = await replyRun(
+      replyInThread({ text: "התחום הוא אינסטלציה.", html: null }),
+      { extraction: { result: { domain: DOMAIN_NAME } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.domainId).toBe(domainId);
+    const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
+    expect(field.conflict).toBe(false);
+    expect(field.emailValue).toBeNull();
+  });
+
+  it("EM-C05 — עריכה במערכת מאוחרת לערך מהמייל: המערכת מכריעה, בלי סתירה", async () => {
+    const otherDomain = await db.domain.create({ data: { name: "חשמל" } });
+    const future = new Date(REPLY_ARRIVED_AT.getTime() + 86_400_000);
+    const { ticketId } = await existingThread({
+      ticket: { domainId: otherDomain.id },
+      // "נערך" **אחרי** שהתשובה תגיע — למרות שהג׳וב עצמו רץ אחר כך (REPLY_NOW)
+      fields: { DOMAIN: { systemEditedAt: future, fromEmail: false } },
+    });
+
+    const { outcome } = await replyRun(
+      replyInThread({ text: "התחום הוא אינסטלציה.", html: null }),
+      { extraction: { result: { domain: DOMAIN_NAME } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.domainId).toBe(otherDomain.id);
+    const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
+    expect(field.conflict).toBe(false);
+    expect(field.systemEditedAt).toEqual(future);
+  });
+
+  it("EM-C07 — תשובה מוסיפה לתיאור: מצורף, אינו סתירה", async () => {
+    const { ticketId } = await existingThread();
+
+    const { outcome } = await replyRun(replyInThread(), {
+      extraction: { result: { description: { op: "append", text: "וגם יש רטיבות בתקרה." } } },
+    });
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.description).toBe("נזילה במטבח\n\nוגם יש רטיבות בתקרה.");
+    const field = await db.draftField.findUniqueOrThrow({
+      where: { ticketId_field: { ticketId, field: "DESCRIPTION" } },
+    });
+    expect(field.conflict).toBe(false);
+  });
+
+  it("EM-C08 — נמענים: הוספה נכנסת בשקט, הסרת נמען שנקבע במערכת היא סתירה", async () => {
+    const { ticketId } = await existingThread({
+      ticket: {
+        draftRecipients: [{ kind: "professional", id: professionalId, origin: "SYSTEM", removedBySystemAt: null }],
+      },
+      fields: { RECIPIENTS: { systemEditedAt: ARRIVED_AT, fromEmail: false } },
+    });
+
+    const { outcome } = await replyRun(
+      replyInThread({ text: `בבקשה להוריד את ${PRO_NAME} מהפנייה.`, html: null }),
+      { extraction: { result: { recipientsRemove: [PRO_NAME] } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    const recipients = ticket.draftRecipients as { kind: string; id: string; removedBySystemAt: string | null }[];
+    // הנמען עדיין ברשימה (פעיל) — ההסרה לא נכנסה בשקט, היא רק פתחה סתירה
+    expect(recipients.find((r) => r.id === professionalId)?.removedBySystemAt ?? null).toBeNull();
+    const field = await db.draftField.findUniqueOrThrow({
+      where: { ticketId_field: { ticketId, field: "RECIPIENTS" } },
+    });
+    expect(field.conflict).toBe(true);
+  });
+
+  it("EM-C08 — נמען שהוסר במערכת ומתווסף שוב במייל: סתירה", async () => {
+    const removedAt = ARRIVED_AT.toISOString();
+    const { ticketId } = await existingThread({
+      ticket: {
+        draftRecipients: [{ kind: "professional", id: professionalId, origin: "SYSTEM", removedBySystemAt: removedAt }],
+      },
+      fields: { RECIPIENTS: { systemEditedAt: ARRIVED_AT, fromEmail: false } },
+    });
+
+    const { outcome } = await replyRun(
+      replyInThread({ text: `נא לצרף שוב את ${PRO_NAME} לפנייה.`, html: null }),
+      { extraction: { result: { recipientsAdd: [PRO_NAME] } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const field = await db.draftField.findUniqueOrThrow({
+      where: { ticketId_field: { ticketId, field: "RECIPIENTS" } },
+    });
+    expect(field.conflict).toBe(true);
+    expect(field.emailValue).toMatchObject({ field: "RECIPIENTS", add: [{ kind: "professional", id: professionalId }] });
+  });
+
+  it("EM-C10 — שינוי אתר מאפס בניין ודירה, אך לא נמענים; האיפוס נזכר גם לצד המערכת", async () => {
+    const secondSite = await db.site.create({ data: { name: "אתר שני" } });
+    const { ticketId } = await existingThread({
+      ticket: {
+        buildingId,
+        apartmentId,
+        draftRecipients: [{ kind: "professional", id: professionalId, origin: "SYSTEM", removedBySystemAt: null }],
+      },
+    });
+
+    const { outcome } = await replyRun(
+      replyInThread({ text: `האתר הנכון הוא ${secondSite.name}.`, html: null }),
+      { extraction: { result: { site: secondSite.name } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.siteId).toBe(secondSite.id);
+    expect(ticket.buildingId).toBeNull();
+    expect(ticket.apartmentId).toBeNull();
+    // הנמענים אינם מתאפסים (אפיון 1.3.1, §7 שורה 70)
+    const recipients = ticket.draftRecipients as { id: string }[];
+    expect(recipients).toHaveLength(1);
+    expect(recipients[0].id).toBe(professionalId);
+  });
+
+  it("תיקון דירה בתשובה, בתוך הבניין שכבר בטיוטה — בלי שהמייל הזכיר בניין או אתר", async () => {
+    const apartment14 = await db.apartment.create({ data: { buildingId, number: "14" } });
+    const { ticketId } = await existingThread({ ticket: { buildingId, apartmentId } });
+
+    const { outcome } = await replyRun(replyInThread(), {
+      extraction: { result: { apartment: "14" } },
+    });
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.apartmentId).toBe(apartment14.id);
+    expect(ticket.buildingId).toBe(buildingId);
+  });
+
+  it("EM-A05x — תשובה משנה בניין, דירה, חדר ונמענים בבת אחת: הדוח מציג תוויות תצוגה, לא מזהים גולמיים", async () => {
+    const otherBuilding = await db.building.create({ data: { siteId, name: "בניין ג" } });
+    const otherApartment = await db.apartment.create({ data: { buildingId: otherBuilding.id, number: "9" } });
+    const { ticketId } = await existingThread({ ticket: { buildingId, apartmentId } });
+
+    const { id, outcome } = await replyRun(
+      replyInThread({
+        text: `בניין ${otherBuilding.name}, דירה ${otherApartment.number}. חדר האמבטיה. נא לצרף את ${PRO_NAME}.`,
+        html: null,
+      }),
+      {
+        extraction: {
+          result: { building: otherBuilding.name, apartment: otherApartment.number, room: "BATHROOM", recipientsAdd: [PRO_NAME] },
+        },
+      },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.buildingId).toBe(otherBuilding.id);
+    expect(ticket.apartmentId).toBe(otherApartment.id);
+    expect(ticket.room).toBe("BATHROOM");
+
+    const row = await rowOf(id);
+    const report = row.report as { updated: { field: string; before: string | null; after: string | null }[] };
+    // תוויות תצוגה — שם הבניין/מספר הדירה/תרגום החדר, לא ה-id הגולמי
+    expect(report.updated).toContainEqual({ field: "BUILDING", before: BUILDING_NAME, after: otherBuilding.name });
+    expect(report.updated).toContainEqual({
+      field: "APARTMENT",
+      before: SAMPLE_APARTMENT,
+      after: otherApartment.number,
+    });
+    expect(report.updated).toContainEqual({ field: "ROOM", before: null, after: he.room.BATHROOM });
+    expect(report.updated).toContainEqual({ field: "RECIPIENTS", before: null, after: PRO_NAME });
+  });
+
+  it("תשובה עם 'op: replace' בתיאור: מחליפה את הטקסט הקיים, לא מצרפת אליו כמו 'append'", async () => {
+    const { ticketId } = await existingThread();
+
+    const { outcome } = await replyRun(replyInThread(), {
+      extraction: { result: { description: { op: "replace", text: "התקלה השתנתה: יש נזילה גם באמבטיה." } } },
+    });
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    // בשונה מ-EM-C07 (append): הטקסט הישן אינו נשמר, "replace" מחליף אותו
+    expect(ticket.description).toBe("התקלה השתנתה: יש נזילה גם באמבטיה.");
+  });
+
+  it("§7 #74 לצד שינוי אתר — תשובה משנה אתר ומזכירה דירה בלי בניין: הדירה אינה מותאמת מול הבניין הישן", async () => {
+    const secondSite = await db.site.create({ data: { name: "אתר שני לגמרי" } });
+    // דירה "14" קיימת באתר **הישן** — בדיוק המקרה שהמערכת חייבת לא להתאים
+    // אליו: כתובת שגויה לקבלן, אם השומר נגד שינוי-אתר-בלי-בניין נשבר
+    const apartment14InOldSite = await db.apartment.create({ data: { buildingId, number: "14" } });
+    const { ticketId } = await existingThread({ ticket: { buildingId, apartmentId } });
+
+    const { outcome } = await replyRun(
+      replyInThread({ text: `האתר הנכון הוא ${secondSite.name}, דירה 14.`, html: null }),
+      { extraction: { result: { site: secondSite.name, apartment: "14" } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.siteId).toBe(secondSite.id);
+    // האיפוס של §5.ה4 חל (האתר השתנה), ואף לא הותאמה דירה מהבניין הישן
+    expect(ticket.buildingId).toBeNull();
+    expect(ticket.apartmentId).toBeNull();
+    expect(ticket.apartmentId).not.toBe(apartment14InOldSite.id);
+  });
+});
+
+describe("מסלול התשובה — שינוי אתר על ידי מנהל מערכת/בעלים", () => {
+  it("מנהל עבודה: טקסט אתר בתשובה אינו נבדק כלל (האתר נגזר מהשולח, כמו במייל ראשון)", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר אחר" } });
+    const { ticketId } = await existingThread();
+
+    const { outcome } = await replyRun(
+      replyInThread({
+        from: OTHER_SENDER,
+        fromName: OTHER_SENDER_NAME,
+        text: `האתר הנכון הוא ${otherSite.name}.`,
+        html: null,
+      }),
+      { extraction: { result: { site: otherSite.name } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    // מנהל העבודה לא יכול לשנות אתר, גם לא בתשובה — נשאר האתר שלו
+    expect(ticket.siteId).toBe(siteId);
+    expect(await db.draftField.count({ where: { ticketId, field: "SITE" } })).toBe(0);
+  });
+
+  it("מנהל מערכת: יכול להציע אתר חדש בתשובה", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר חדש" } });
+    const { ticketId } = await existingThread();
+
+    const { outcome } = await replyRun(
+      replyInThread({ text: `האתר הנכון הוא ${otherSite.name}.`, html: null }),
+      { extraction: { result: { site: otherSite.name } } },
+    );
+
+    expect(outcome).toMatchObject({ outcome: "REPLY_APPLIED" });
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.siteId).toBe(otherSite.id);
+  });
+});
+
+describe("מסלול התשובה — EM-25: קובץ שהוסר מהטיוטה אינו נכנס אליה שוב", () => {
+  it("EM-25 — קובץ זהה (לפי sha256) שהוסר במסך 7 אינו הופך שוב למדיה, אך נשמר בהתכתבות", async () => {
+    const firstWithImage = firstMail({ text: HAPPY_TEXT, parts: [inlineImagePart()] });
+    const { outcome: firstOutcome } = await run(firstWithImage, { extraction: { result: HAPPY_EXTRACTION } });
+    expect(firstOutcome).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED" });
+
+    const media = await db.mediaFile.findFirstOrThrow();
+    await removeDraftMedia(ADMIN_VIEWER(), media.id);
+    expect(await db.mediaFile.count()).toBe(0);
+
+    const replyWithSameImage = replyInThread({ parts: [inlineImagePart()] });
+    const { id, outcome } = await replyRun(replyWithSameImage);
+
+    expect(outcome).toMatchObject({ status: "decided" });
+    // לא הפך שוב למדיה
+    expect(await db.mediaFile.count()).toBe(0);
+    // אבל כן קיבל שורת MailboxAttachment משלו, על ההודעה הזו
+    const attachment = await db.mailboxAttachment.findFirstOrThrow({ where: { messageId: id } });
+    expect(attachment).toMatchObject({ skippedReason: "removed_before", mediaFileId: null });
+    // ההתכתבות שומרת את שתי ההופעות
+    expect(await db.mailboxAttachment.count()).toBe(2);
+  });
+
+  it("EM-A05 — קובץ זהה (לפי sha256) שעדיין פעיל בטיוטה, ולא הוסר מעולם, אינו נכנס שוב בתשובה נוספת", async () => {
+    const firstWithImage = firstMail({ text: HAPPY_TEXT, parts: [inlineImagePart()] });
+    const { outcome: firstOutcome } = await run(firstWithImage, { extraction: { result: HAPPY_EXTRACTION } });
+    expect(firstOutcome).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED" });
+    // הראשונה כן הפכה למדיה, ואיש לא הסיר אותה
+    expect(await db.mediaFile.count()).toBe(1);
+
+    // תשובה נוספת מצרפת בדיוק את אותה תמונה (למשל לוגו בחתימה) — בלי הסרה בין לבין
+    const secondWithSameImage = replyInThread({
+      id: "gmail-reply-2",
+      messageId: "reply-2@mail.example.com",
+      parts: [inlineImagePart()],
+    });
+    const { id, outcome } = await replyRun(secondWithSameImage);
+
+    expect(outcome).toMatchObject({ status: "decided" });
+    // לא נוצרה רשומת MediaFile שנייה, ולא נשלח ג׳וב AI כפול עליה
+    expect(await db.mediaFile.count()).toBe(1);
+    const attachment = await db.mailboxAttachment.findFirstOrThrow({ where: { messageId: id } });
+    expect(attachment).toMatchObject({ skippedReason: "already_in_draft", mediaFileId: null });
+    // ההתכתבות שומרת את שתי ההופעות בכל זאת
+    expect(await db.mailboxAttachment.count()).toBe(2);
+  });
+
+  it("מירוץ: קובץ מוסר במסך 7 בדיוק בזמן שתשובה עם אותו קובץ נכתבת לאחסון — אינו קם לתחייה", async () => {
+    const firstWithImage = firstMail({ text: HAPPY_TEXT, parts: [inlineImagePart()] });
+    const { outcome: firstOutcome } = await run(firstWithImage, { extraction: { result: HAPPY_EXTRACTION } });
+    expect(firstOutcome).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED" });
+    const media = await db.mediaFile.findFirstOrThrow();
+
+    // אחסון שמדמה תזמון אמיתי: בדיוק כשהבתים של התשובה נכתבים (אחרי שהצילום
+    // הראשוני של הכפילות כבר נלקח, בקוד הלא-מתוקן), מישהו מסיר את הקובץ
+    // הקיים במסך 7 — ההסרה שלו מסתיימת (commit) **לפני** שהתשובה מגיעה לנעילה
+    const realStorage = selectStorage();
+    let removed = false;
+    const raceStorage: MediaStorage = {
+      ...realStorage,
+      async write(key, bytes, contentType) {
+        if (!removed) {
+          removed = true;
+          await removeDraftMedia(ADMIN_VIEWER(), media.id);
+        }
+        return realStorage.write(key, bytes, contentType);
+      },
+    };
+
+    const replyWithSameImage = replyInThread({ parts: [inlineImagePart()] });
+    const source = fakeMailSource({ messages: [replyWithSameImage], match: () => true });
+    const id = await inbound(replyWithSameImage.envelope);
+
+    const outcome = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor: fakeFieldExtractor({}), now: REPLY_NOW, storage: raceStorage },
+    );
+
+    expect(outcome).toMatchObject({ status: "decided" });
+    expect(removed).toBe(true);
+    // הקובץ שהוסר לא קם לתחייה, למרות שההסרה קרתה תוך כדי כתיבת הבתים של
+    // התשובה ולא לפניה
+    expect(await db.mediaFile.count()).toBe(0);
+    const attachment = await db.mailboxAttachment.findFirstOrThrow({ where: { messageId: id } });
+    expect(attachment).toMatchObject({ skippedReason: "removed_before", mediaFileId: null });
+  });
+});
+
+describe("מסלול התשובה — השולח משתנה בדיוק בזמן שהחילוץ/ההורדה רצים (ממצאי ביקורת S7)", () => {
+  it("מנהל עבודה ששויך לאתר אחר בדיוק בזמן שהחילוץ רץ: נכתבת REPLY_NOT_PERMITTED, לא מיזוג", async () => {
+    const otherSite = await db.site.create({ data: { name: "אתר אחר לגמרי" } });
+    await existingThread();
+    const mail = replyInThread({ from: OTHER_SENDER, fromName: OTHER_SENDER_NAME });
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const id = await inbound(mail.envelope);
+
+    // ההרשאה נבדקה כתקינה **לפני** ההמתנה לרשת (managerId משויך אז לאתר של
+    // הטיוטה) — אבל בדיוק בזמן שהחילוץ "רץ", מנהל מערכת משייך אותו לאתר אחר
+    const raceExtractor = {
+      name: "race-site-reassign",
+      async extract() {
+        await db.user.update({ where: { id: managerId }, data: { siteId: otherSite.id } });
+        return emptyExtraction();
+      },
+    };
+
+    const outcome = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor: raceExtractor, now: REPLY_NOW },
+    );
+
+    // בלי קריאה חוזרת של השולח תחת הנעילה, זה היה נכתב כמיזוג לפי ההרשאה
+    // הישנה (SITE_MANAGER של האתר המקורי)
+    expect(outcome).toMatchObject({ status: "decided", outcome: "REPLY_NOT_PERMITTED" });
+    expect(await db.draftField.count()).toBe(0);
+    // עדיין נענה — זה המקרה השני של כלל 9 (מורשה שאינו רשאי לערוך), לא השלישי
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(1);
+  });
+
+  it("שולח מושבת בדיוק בזמן שהחילוץ רץ: הופך ל'זר' — לא נקלט ולא נענה, אבל נשמר בהתכתבות", async () => {
+    const { threadId } = await existingThread();
+    const mail = replyInThread();
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const id = await inbound(mail.envelope);
+
+    const raceExtractor = {
+      name: "race-deactivate",
+      async extract() {
+        await db.user.update({ where: { id: adminId }, data: { active: false } });
+        return emptyExtraction();
+      },
+    };
+
+    const outcome = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor: raceExtractor, now: REPLY_NOW },
+    );
+
+    expect(outcome).toMatchObject({ status: "decided", outcome: "IGNORED_UNAUTHORIZED" });
+    // הכרעה כמו "זר" מלכתחילה — אין מייל חוזר ואין נגיעה בטיוטה
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(0);
+    expect(await db.draftField.count()).toBe(0);
+    const row = await rowOf(id);
+    // אבל כן נשאר חלק מהשרשרת: ההתכתבות עדיין מציגה שההודעה קרתה (EM-M01)
+    expect(row.threadId).toBe(threadId);
+  });
+});
+
+describe("מסלול התשובה — EM-11: החילוץ אינו זמין", () => {
+  it("REPLY_STORED_UNPROCESSED — התשובה נשמרת בהתכתבות בלבד, ואינה ממוזגת", async () => {
+    const { ticketId } = await existingThread();
+    const before = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+
+    const { id, outcome } = await replyRun(replyInThread(), { noExtractor: true });
+
+    expect(outcome).toMatchObject({ status: "decided", outcome: "REPLY_STORED_UNPROCESSED" });
+    const after = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(after).toEqual(before);
+    expect(await db.draftField.count()).toBe(0);
+    const row = await rowOf(id);
+    expect(row.bodyText).toBe(REPLY_NEW_TEXT);
+    expect(row.fullText).toContain(REPLY_NEW_TEXT);
+    // עדיין קיבל מייל חוזר — L07_REPLY
+    expect(await db.mailboxMessage.count({ where: { direction: "OUTBOUND", repliesToId: id } })).toBe(1);
+  });
+
+  it("כשל זמני בחילוץ של תשובה נדחה כל עוד יש תקציב, ואז מצליח", async () => {
+    await existingThread();
+    const mail = replyInThread();
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const extractor = fakeFieldExtractor({ error: aiError("transient"), failTimes: 1 });
+    const id = await inbound(mail.envelope);
+
+    const first = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor, now: new Date(REPLY_ARRIVED_AT.getTime() + 10_000) },
+    );
+    expect(first).toMatchObject({ status: "deferred", reason: "extraction" });
+
+    const second = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor, now: new Date(REPLY_ARRIVED_AT.getTime() + 45_000) },
+    );
+    expect(second).toMatchObject({ status: "decided", outcome: "REPLY_APPLIED" });
+    expect(extractor.calls).toHaveLength(2);
+    // גם בניסיון השני נקרא רק הטקסט החדש — EM-13 לא נשבר בין ניסיונות
+    expect(extractor.calls[1].text).toBe(REPLY_NEW_TEXT);
+  });
+});
+
+describe("מסלול התשובה — המצב משתנה בין הבדיקה הראשונה להורדת הקבצים/לחילוץ", () => {
+  it("הטיוטה נמחקת בדיוק בזמן שהחילוץ רץ: נכתבת REPLY_AFTER_DELETION, לא מיזוג", async () => {
+    const { ticketId } = await existingThread();
+    const mail = replyInThread();
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const id = await inbound(mail.envelope);
+
+    // מחלץ שמדמה תזמון אמיתי: בדיוק בזמן שהוא "עובד" (לפני שההכרעה חוזרת),
+    // מישהו מוחק את הטיוטה במערכת — בדיוק החלון שבין הבדיקה הלא-נעולה
+    // (`loadReplyTicket`) לבין הנעילה מחדש בתוך הטרנזאקציה
+    const raceExtractor = {
+      name: "race",
+      async extract() {
+        await db.ticket.delete({ where: { id: ticketId } });
+        return emptyExtraction();
+      },
+    };
+
+    const outcome = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor: raceExtractor, now: REPLY_NOW },
+    );
+
+    // בלי הקריאה החוזרת תחת הנעילה זה היה נכתב כ-REPLY_APPLIED על טיוטה
+    // שכבר אינה קיימת
+    expect(outcome).toMatchObject({ status: "decided", outcome: "REPLY_AFTER_DELETION" });
+    expect(await db.ticket.findUnique({ where: { id: ticketId } })).toBeNull();
+  });
+});
+
 // ─────────────────────────────── עזר ───────────────────────────────
 
 /**
@@ -1253,7 +1907,14 @@ describe("מצבי קצה", () => {
  * השורה היוצאת נושאת את `OUTGOING_REPLY_MESSAGE_ID`, שאליו `replyInThread`
  * מצביע ב-`In-Reply-To`.
  */
-async function existingThread(): Promise<{ threadId: string; ticketId: string }> {
+interface ExistingThreadOptions {
+  /** דריסות לפנייה — לדוגמה `isDraft: false` לתשובה אחרי שיגור, בניין/דירה קיימים */
+  ticket?: Record<string, unknown>;
+  /** שורות `DraftField` שיש ליצור מראש — לדוגמה שדה שנערך במערכת (EM-C04/EM-C05) */
+  fields?: Record<string, Record<string, unknown>>;
+}
+
+async function existingThread(options: ExistingThreadOptions = {}): Promise<{ threadId: string; ticketId: string }> {
   const ticket = await db.ticket.create({
     data: {
       channel: "EMAIL",
@@ -1261,10 +1922,15 @@ async function existingThread(): Promise<{ threadId: string; ticketId: string }>
       createdById: adminId,
       siteId,
       description: "נזילה במטבח",
+      ...options.ticket,
     },
     select: { id: true },
   });
   const thread = await db.mailThread.create({ data: { ticketId: ticket.id }, select: { id: true } });
+
+  for (const [field, data] of Object.entries(options.fields ?? {})) {
+    await db.draftField.create({ data: { ticketId: ticket.id, field: field as never, ...data } });
+  }
 
   await db.mailboxMessage.create({
     data: {

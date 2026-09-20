@@ -51,7 +51,14 @@ export interface DraftFieldsInput {
   recipients?: RecipientRef[];
 }
 
-const DRAFT_TICKET_SELECT = {
+/**
+ * מיוצא: זהו הבחירה היחידה של שדות הפנייה לצורכי טיוטה — גם לנעילה וטעינה
+ * כאן, וגם לבדיקת "מה קורה לתשובה שמגיעה עכשיו" ב-`email-intake.ts` (S7),
+ * שצריכה בדיוק את אותם שדות (`TicketAccessView` ועוד `isDraft`) כדי להכריע
+ * בין מיזוג, "נשלחה" ו"אין הרשאה" מול אותה טיוטה בדיוק. בחירה כפולה הייתה
+ * שני מקורות אמת לצורת הפנייה.
+ */
+export const DRAFT_TICKET_SELECT = {
   id: true,
   isDraft: true,
   channel: true,
@@ -67,7 +74,7 @@ const DRAFT_TICKET_SELECT = {
   draftRecipients: true,
 } as const;
 
-type DraftTicket = Prisma.TicketGetPayload<{ select: typeof DRAFT_TICKET_SELECT }>;
+export type DraftTicket = Prisma.TicketGetPayload<{ select: typeof DRAFT_TICKET_SELECT }>;
 
 /** טיוטה שנפתחה במייל — היחידה שמחזיקה מטא של שדות ושיכולה להיות בסתירה */
 export function isEmailDraft(ticket: { isDraft: boolean; channel: string }): boolean {
@@ -84,21 +91,41 @@ export async function lockTicket(tx: Tx, ticketId: string): Promise<void> {
   await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${ticketId} FOR UPDATE`;
 }
 
-async function loadLocked(tx: Tx, ticketId: string): Promise<{ ticket: DraftTicket; state: DraftState }> {
+/**
+ * נועלת את הפנייה וטוענת אותה מחדש — `null` כשהיא נמחקה בין הקריאה
+ * שקבעה איזו פנייה לנעול לבין הנעילה עצמה.
+ *
+ * **מיוצאת, ואינה זורקת על "לא נמצאה".** קוראים אחרים בקובץ הזה (עריכת
+ * שדות, הכרעת סתירות, הסרת מדיה) רואים "לא נמצאה" כבאג של בקשה — מישהו
+ * מנסה לערוך פנייה שאינה קיימת — וזורקים `DraftError` בעצמם, מיד אחרי
+ * הקריאה. אבל תשובה במייל (`email-intake.ts`, S7) רואה באותו מצב בדיוק
+ * הכרעה לגיטימית ("הטיוטה נמחקה", §2.6 שלב 6) ולא שגיאה — ולכן ההחלטה
+ * מה "לא נמצאה" אומרת שייכת לקורא, לא לפונקציה הזו.
+ */
+export async function lockAndLoadDraft(
+  tx: Tx,
+  ticketId: string,
+): Promise<{ ticket: DraftTicket; state: DraftState } | null> {
   await lockTicket(tx, ticketId);
   const ticket = await tx.ticket.findUnique({ where: { id: ticketId }, select: DRAFT_TICKET_SELECT });
-  if (!ticket) throw new DraftError(he.ticket.notFound);
+  if (!ticket) return null;
   const rows = await tx.draftField.findMany({ where: { ticketId } });
   return { ticket, state: toDraftState(ticket, rows) };
 }
 
 /**
- * כותב את ההפרש בין שני מצבים, ומחזיר את השדות שערכם השתנה.
+ * מיוצאת: כותבת את ההפרש בין שני מצבים ומחזירה את השדות שערכם השתנה.
  *
- * ‏`withMeta` מוגבל לטיוטת מייל: בטיוטה ידנית אין מקור אחר, ושורות `DraftField`
+ * זו הפונקציה היחידה בפרויקט שכותבת `DraftField`/עמודות הטיוטה מ-`DraftState`
+ * — גם לעריכה במערכת (כאן) וגם למיזוג תשובה במייל (`email-intake.ts`, S7).
+ * שני מימושים עצמאיים של אותה כתיבה כבר יצרו באג אחד בפרויקט הזה (ראה
+ * `services/media.ts` מול `email-intake.ts` ב-`aiJobFor` — לא כאן, אבל אותו
+ * לקח בדיוק): שני מקומות שאמורים לעשות את אותו דבר מתפצלים בשקט.
+ *
+ * `withMeta` מוגבל לטיוטת מייל: בטיוטה ידנית אין מקור אחר, ושורות `DraftField`
  * היו רק מקום נוסף להחזיק בו "נערך במערכת" בלי שמישהו ישאל.
  */
-async function writeState(
+export async function writeDraftState(
   tx: Tx,
   ticketId: string,
   before: DraftState,
@@ -183,7 +210,9 @@ export async function updateDraftFields(
   if (edits.length === 0) return;
 
   await db.$transaction(async (tx) => {
-    const { ticket, state } = await loadLocked(tx, ticketId);
+    const locked = await lockAndLoadDraft(tx, ticketId);
+    if (!locked) throw new DraftError(he.ticket.notFound);
+    const { ticket, state } = locked;
     // **השעון נלקח אחרי הנעילה, לא לפני ההמתנה לה.** החותמת הזו היא מה
     // שמייל מאוחר יימדד מולו (§5.ה4), וחותמת שנלקחה לפני המתנה של שניות
     // הייתה מציגה את העריכה כמוקדמת ממייל שהגיע בינתיים — ואז הוא היה
@@ -203,7 +232,7 @@ export async function updateDraftFields(
     for (const edit of edits) next = applySystemEdit(next, edit, now);
 
     await assertDraftValues(tx, next, state);
-    const changed = await writeState(tx, ticketId, state, next, isEmailDraft(ticket));
+    const changed = await writeDraftState(tx, ticketId, state, next, isEmailDraft(ticket));
     await recordFieldsEdited(tx, ticketId, viewer, changed);
   });
 }
@@ -224,7 +253,9 @@ export async function resolveDraftConflicts(
   clock?: Date,
 ): Promise<void> {
   await db.$transaction(async (tx) => {
-    const { ticket, state } = await loadLocked(tx, ticketId);
+    const locked = await lockAndLoadDraft(tx, ticketId);
+    if (!locked) throw new DraftError(he.ticket.notFound);
+    const { ticket, state } = locked;
     // ראה ההערה ב-`updateDraftFields`: השעון אחרי הנעילה
     const now = clock ?? new Date();
     denyUnless(canEditTicketFields(viewer, ticket));
@@ -243,7 +274,7 @@ export async function resolveDraftConflicts(
     }
 
     await assertDraftValues(tx, next, state);
-    const changed = await writeState(tx, ticketId, state, next, true);
+    const changed = await writeDraftState(tx, ticketId, state, next, true);
     await recordFieldsEdited(tx, ticketId, viewer, changed);
   });
 }
@@ -270,7 +301,9 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
     )?.message?.ticketId;
     if (!ticketId) throw new DraftError(he.media.notFound);
 
-    const { ticket } = await loadLocked(tx, ticketId);
+    const locked = await lockAndLoadDraft(tx, ticketId);
+    if (!locked) throw new DraftError(he.ticket.notFound);
+    const { ticket } = locked;
     const media = await tx.mediaFile.findUnique({
       where: { id: mediaFileId },
       select: {
