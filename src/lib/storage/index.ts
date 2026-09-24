@@ -6,6 +6,16 @@ import type { MediaStorage } from "./types";
 
 export type { MediaStorage, UploadTarget } from "./types";
 
+// רשימת ההיתר והתקרה ישבו כאן, ועברו ל-`limits.ts` כשגם הדרייברים נזקקו
+// להן (`MediaStorage.write` נכתב מהשרת ואינו עובר ברישום המדיה). הייצוא
+// מכאן נשמר כדי שמסלול הייבוא `@/lib/storage` יישאר אחד.
+export {
+  ALLOWED_MIME_TYPES,
+  MAX_FILE_BYTES,
+  assertWritableObject,
+  isAllowedMimeType,
+} from "./limits";
+
 /**
  * בוחר את האחסון לפי הסביבה — אותו היגיון בדיוק כמו בבחירת ערוץ המייל.
  *
@@ -28,37 +38,6 @@ export function selectStorage(): MediaStorage {
   }
 
   return localStorage(env.appBaseUrl());
-}
-
-/**
- * סוגי הקבצים שמותר להעלות.
- *
- * רשימת היתר ולא רשימת איסור: קובץ שאינו ברשימה נדחה, ולא להפך. הסינון
- * נעשה בשרת ולא רק ב-`accept` של השדה — התכונה הזו היא נוחות בממשק
- * ואינה מונעת דבר ממי שקורא ל-API ישירות.
- */
-export const ALLOWED_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "application/pdf",
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "audio/webm",
-  "audio/mp4",
-  "audio/mpeg",
-  "audio/ogg",
-] as const;
-
-/** תקרה לקובץ יחיד. וידאו קצר מהטלפון נכנס בנוחות. */
-export const MAX_FILE_BYTES = 50 * 1024 * 1024;
-
-export function isAllowedMimeType(value: string): boolean {
-  // ‏codecs מגיע מ-MediaRecorder בצורה `audio/webm;codecs=opus`
-  const base = value.split(";")[0]?.trim().toLowerCase() ?? "";
-  return (ALLOWED_MIME_TYPES as readonly string[]).includes(base);
 }
 
 const EXTENSIONS: Record<string, string> = {

@@ -87,7 +87,9 @@ authUrl.searchParams.set("redirect_uri", REDIRECT_URI);
 authUrl.searchParams.set("response_type", "code");
 authUrl.searchParams.set("scope", GMAIL_SCOPES.join(" "));
 authUrl.searchParams.set("access_type", "offline");
-authUrl.searchParams.set("prompt", "consent");
+// select_account: להציג בחירת חשבון גם כשהדפדפן מחובר לחשבון אחד בלבד. בלי זה
+// ההרשאה ניתנת בשקט לחשבון המחובר, וזו בדיוק הטעות שקרתה ב-24.9.2026.
+authUrl.searchParams.set("prompt", "select_account consent");
 
 /**
  * פותח כתובת בדפדפן ברירת המחדל של Windows.
