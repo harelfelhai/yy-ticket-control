@@ -5,7 +5,15 @@ import { enqueue } from "@/jobs/queue";
 import { JOB_TYPES, type JobType } from "@/jobs/types";
 import { AiRequestError, canExtractText } from "@/lib/ai/gemini";
 import { db } from "@/lib/db";
-import type { DraftFieldName, DraftRecipient, RecipientRef } from "@/lib/draft/fields";
+import type {
+  DraftFieldName,
+  DraftRecipient,
+  DraftState,
+  DraftValues,
+  RecipientRef,
+  RecipientsProposal,
+} from "@/lib/draft/fields";
+import { type EmailProposal, type FieldChange, mergeEmailIntoDraft } from "@/lib/draft/merge";
 import { isAutoReply } from "@/lib/email-intake/auto-reply";
 import type {
   ExtractionAttachment,
@@ -21,7 +29,7 @@ import {
   mentionedIn,
 } from "@/lib/email-intake/matching";
 import { classifyAttachment } from "@/lib/email-intake/mime";
-import { htmlToText } from "@/lib/email-intake/quote";
+import { extractNewText, htmlToText } from "@/lib/email-intake/quote";
 import { MailSourceError, type MailSource } from "@/lib/email-intake/source";
 import { isIntakeSubject } from "@/lib/email-intake/subject";
 import {
@@ -32,13 +40,17 @@ import {
   type MailPart,
   type Mention,
   type NotFoundItem,
+  type UpdatedItem,
   emptyReport,
 } from "@/lib/email-intake/types";
 import { env } from "@/lib/env";
+import { he } from "@/lib/he";
 import { normalizeEmail, normalizeText } from "@/lib/normalize";
 import { captureError, logError, logInfo, logWarn } from "@/lib/observability/log";
+import { type Viewer, canCreateTicketInSite, canEditTicketFields } from "@/lib/permissions";
 import type { MediaStorage } from "@/lib/storage";
 import { MAX_FILE_BYTES, isAllowedMimeType, selectStorage } from "@/lib/storage";
+import { DRAFT_TICKET_SELECT, type DraftTicket, lockAndLoadDraft, writeDraftState } from "./draft-fields";
 import type { Tx } from "./ticket-activity";
 
 /**
@@ -123,10 +135,6 @@ const EXTRACTION_BUDGET_MS = 4 * MINUTE_MS;
  */
 const MIN_EXTRACTION_ATTEMPTS = 2;
 
-/** מה שנרשם על שורה שממתינה למסלול התשובה (S7) */
-const REPLY_PATH_NOT_BUILT =
-  "תשובה בשרשרת של טיוטה — מסלול התשובה (S7) טרם מומש, ההודעה נשמרה ולא עובדה";
-
 // ─────────────────────────────── החוזה ───────────────────────────────
 
 export interface EmailIntakeDeps {
@@ -155,8 +163,6 @@ export type EmailIntakeOutcome = { kind: "email-intake" } & (
   | { status: "deferred"; reason: DeferReason; nextAttemptAt: Date }
   /** הגג נגמר: ההודעה נעצרה בלי הכרעה, עם issue ב-Sentry */
   | { status: "exhausted"; reason: DeferReason; attempts: number }
-  /** מסלול התשובה — S7 */
-  | { status: "skipped"; reason: "reply-path-not-built" }
   | { status: "decided"; outcome: MailOutcome; ticketId?: string }
 );
 
@@ -343,9 +349,9 @@ async function decide(
   const sender = await findSender(envelope.from?.address ?? null);
   if (!sender) return decideIgnored(row, "IGNORED_UNAUTHORIZED", envelope, now);
 
-  // 7. שייך לשרשרת מוכרת → מסלול התשובה, שאינו קיים עדיין (S7).
+  // 7. שייך לשרשרת מוכרת → מסלול התשובה (§2.6 שלב 5–6, §5.ה3 כלל 9).
   const threadId = await findKnownThread(envelope);
-  if (threadId) return skipUntilReplyPath(row, envelope, threadId);
+  if (threadId) return applyEmailReply(row, envelope, threadId, sender, now, deps);
 
   // 8. כלל הכותרת מכריע את גורלו של מייל **חדש** (EM-01).
   if (!isIntakeSubject(envelope.subject)) {
@@ -424,46 +430,6 @@ async function findKnownThread(envelope: MailEnvelope): Promise<string | null> {
     select: { threadId: true },
   });
   return byThread?.threadId ?? null;
-}
-
-/**
- * **התפר של S7.** תשובה בשרשרת של טיוטה (§2.6 שלב 5, §5.ה3 כלל 9) דורשת
- * את כל מה שאין כאן: בדיקת "רשאי לערוך" בזמן התשובה, הסרת הציטוט
- * (`extractNewText`), מיזוג לטיוטה (`mergeEmailIntoDraft`), והכרעות
- * "כבר שוגרה"/"נמחקה". עד שהן ייכתבו, ההודעה **נעצרת כאן**:
- *
- * - `state: SKIPPED` ו-`outcome: null` — היא לא הוכרעה, רק לא עובדה. אף
- *   אחד מערכי `MailOutcome` אינו מתאר "טרם מומש", והמצאת ערך כזה הייתה
- *   נכנסת לדוחות כאילו זו הכרעה עסקית.
- * - הטיוטה אינה נוגעת: אין מיזוג, אין שינוי שדות, ואין מייל חוזר.
- * - כותרת וגוף אינם נשמרים, כמו בכל הודעה שלא עובדה. כשהמסלול ייכתב הוא
- *   יקרא את ההודעה מהתיבה מחדש — היא לא השתנתה.
- *
- * מה ש-S7 מחליף: את גוף הפונקציה הזו בלבד. הקוראים לה — שלב 7 בסולם —
- * נשארים כפי שהם, כולל השאלה `findKnownThread`.
- */
-async function skipUntilReplyPath(
-  row: InboundRow,
-  envelope: MailEnvelope,
-  threadId: string,
-): Promise<EmailIntakeOutcome> {
-  await db.mailboxMessage.update({
-    where: { id: row.id },
-    data: {
-      state: "SKIPPED",
-      outcome: null,
-      threadId,
-      detail: REPLY_PATH_NOT_BUILT,
-      ...identityOf(envelope),
-    },
-  });
-
-  logInfo("email.intake.reply_deferred_to_s7", {
-    mailboxMessageId: row.id,
-    threadId,
-    gmailMessageId: envelope.sourceId,
-  });
-  return { kind: KIND, status: "skipped", reason: "reply-path-not-built" };
 }
 
 // ─────────────────────────────── כתיבת ההכרעה ───────────────────────────────
@@ -757,11 +723,46 @@ export async function createEmailDraft(
 }
 
 /**
- * הכרעה שאין איתה טיוטה אך **יש** מייל חוזר (היום: NO_SITE בלבד).
+ * כותב הכרעה שאין איתה מיזוג לטיוטה — רק דוח ומייל חוזר. הליבה המשותפת
+ * של `decideWithReply` (NO_SITE, ומסלול התשובה כשאין מה למזג) ושל ההכרעה
+ * מחדש בתוך הנעילה כשהמצב השתנה בין הבדיקה הראשונה למיזוג (S7,
+ * `applyEmailReply`) — שתיהן צריכות בדיוק את אותה כתיבה, האחת בתוך
+ * טרנזאקציה שהיא פותחת (`decideWithReply`) והשנייה בתוך טרנזאקציה שכבר
+ * פתוחה ונועלת שורת פנייה (`applyEmailReply`). `db.$transaction` אינו
+ * מקנן, ולכן הכתיבה עצמה חייבת לקבל `tx` מבחוץ ולא לפתוח משלה.
  *
  * הכותרת נשמרת כאן ולא בשאר ההכרעות, כי המייל החוזר חייב לצאת באותה
  * שרשרת — ו-Gmail משייך לשרשרת לפי הכותרת (`Re: …`). הגוף עדיין אינו
  * נשמר: הוא לא עובד, ואין טיוטה שתציג אותו.
+ */
+async function writeReplyOutcome(
+  tx: Tx,
+  row: InboundRow,
+  envelope: MailEnvelope,
+  sender: SenderUser,
+  outcome: MailOutcome,
+  report: IntakeReport,
+  threadId: string | null,
+): Promise<void> {
+  await tx.mailboxMessage.update({
+    where: { id: row.id },
+    data: {
+      state: "DONE",
+      outcome,
+      nextAttemptAt: null,
+      detail: null,
+      authorUserId: sender.id,
+      subject: envelope.subject,
+      report: report as unknown as Prisma.InputJsonValue,
+      ...identityOf(envelope),
+    },
+  });
+  await scheduleReply(tx, row.id, envelope, threadId, envelope.from?.address ?? null);
+}
+
+/**
+ * הכרעה שאין איתה טיוטה אך **יש** מייל חוזר (NO_SITE, ומסלול התשובה
+ * כשאין מיזוג: נמחקה, שוגרה, או שהכותב אינו רשאי לערוך).
  */
 async function decideWithReply(
   row: InboundRow,
@@ -772,22 +773,7 @@ async function decideWithReply(
   threadId: string | null,
   now: Date,
 ): Promise<EmailIntakeOutcome> {
-  await db.$transaction(async (tx) => {
-    await tx.mailboxMessage.update({
-      where: { id: row.id },
-      data: {
-        state: "DONE",
-        outcome,
-        nextAttemptAt: null,
-        detail: null,
-        authorUserId: sender.id,
-        subject: envelope.subject,
-        report: report as unknown as Prisma.InputJsonValue,
-        ...identityOf(envelope),
-      },
-    });
-    await scheduleReply(tx, row.id, envelope, threadId, envelope.from?.address ?? null);
-  });
+  await db.$transaction((tx) => writeReplyOutcome(tx, row, envelope, sender, outcome, report, threadId));
 
   logInfo("email.intake.decided", {
     mailboxMessageId: row.id,
@@ -827,6 +813,532 @@ async function scheduleReply(
   await enqueue(tx, JOB_TYPES.emailReply, { mailboxMessageId: outbound.id });
 }
 
+// ─────────────────────────────── מסלול התשובה (S7) ───────────────────────────────
+
+/**
+ * מי משלושת המצבים חל על תשובה שמגיעה **עכשיו** לטיוטה, או שיש למזג
+ * (§2.6 שלבים 5–6, §5.ה3 כלל 9, §7 שורה 76).
+ *
+ * **סדר הבדיקות הוא הכלל, לא מקרה.** הרשאת העריכה נבדקת **לפני** מצב
+ * השיגור: תשובה ממשתמש מורשה שאינו רשאי לערוך מקבלת "אין לך הרשאה" **גם
+ * כשהפנייה כבר שוגרה** — לא "כבר נשלחה" (§7 שורה 76, EM-A07). מייל "כבר
+ * נשלחה" נושא מספר פנייה וקישור אליה, ואלה אינם שייכים למי שאין לו הרשאה
+ * עליה. מחיקה נבדקת ראשונה מטעם מבני ולא לפי סדר עדיפות: בלי טיוטה אין
+ * `siteId`/`createdById` לבדוק מולם הרשאה כלל.
+ *
+ * **מקרה 3 של כלל 9 (זר) אינו כאן.** "כתובת שאינה של משתמש מורשה" כבר
+ * הוכרע בשלב 6 של הסולם — `findSender` — **לפני** שהגענו לכאן: הפונקציה
+ * הזו נקראת אך ורק כשיש `sender` לא-null, וזה בדיוק ה"מורשה" של כלל 9.
+ * שולח שהושבת או שההרשאה שלו בוטלה נכשל באותו `findSender`, כי הוא נבדק
+ * מול הנתונים **החיים** ולא מול מה שהיה נכון כשהטיוטה נוצרה — ולכן הוא
+ * "זר" באותה מידה בדיוק, גם אם הוא השולח המקורי.
+ */
+type ReplyVerdict = "merge" | Extract<MailOutcome, "REPLY_AFTER_DELETION" | "REPLY_NOT_PERMITTED" | "REPLY_AFTER_DISPATCH">;
+
+function decideReplyVerdict(ticket: DraftTicket | null, sender: SenderUser): ReplyVerdict {
+  if (!ticket) return "REPLY_AFTER_DELETION";
+  if (!canEditTicketFields(viewerOf(sender), ticket)) return "REPLY_NOT_PERMITTED";
+  if (!ticket.isDraft) return "REPLY_AFTER_DISPATCH";
+  return "merge";
+}
+
+/** השחקן שמאחורי התשובה, כפי שהרשאות המערכת רואות אותו (§5.ז) */
+function viewerOf(sender: SenderUser): Viewer {
+  return { kind: "user", id: sender.id, role: sender.role, siteId: sender.siteId };
+}
+
+/** הוכחת type-safety בלבד: `decideReplyVerdict` מחזירה "merge" רק כשיש טיוטה */
+function assertTicketForMerge(ticket: DraftTicket | null): asserts ticket is DraftTicket {
+  if (!ticket) throw new Error("applyEmailReply: הכרעת המיזוג הגיעה בלי טיוטה");
+}
+
+function assertLockedForMerge(
+  locked: { ticket: DraftTicket; state: DraftState } | null,
+): asserts locked is { ticket: DraftTicket; state: DraftState } {
+  if (!locked) throw new Error("applyEmailReply: הכרעת המיזוג הגיעה בלי טיוטה נעולה");
+}
+
+/** הפנייה שהשרשרת מוצמדת אליה, ברגע זה — `null` כשהטיוטה נמחקה (§2.6 שלב 6) */
+async function loadReplyTicket(threadId: string): Promise<DraftTicket | null> {
+  const thread = await db.mailThread.findUniqueOrThrow({
+    where: { id: threadId },
+    select: { ticket: { select: DRAFT_TICKET_SELECT } },
+  });
+  return thread.ticket;
+}
+
+/**
+ * מיישם תשובה בשרשרת של טיוטה — הפונקציה המחליפה את `skipUntilReplyPath`.
+ *
+ * שני שלבים, בכוונה: כל מה שאיטי או עלול להידחות (הורדת קבצים, קריאה
+ * למחלץ) רץ **לפני** כל נעילה — בדיוק כמו `createEmailDraft` במסלול המייל
+ * הראשון — כי `defer()` פותח טרנזאקציה משלו, ו-`db.$transaction` אינו
+ * מקנן. רק הכתיבה עצמה, אחרי שהכול כבר בידינו, רצה תחת נעילת השורה ועם
+ * קריאה חוזרת של המצב (submitDraft הוא התבנית שנקבעה לכך בפרויקט): מה
+ * שנבדק לפני ההורדה יכול היה להשתנות בדיוק בזמן שחיכינו לרשת.
+ */
+async function applyEmailReply(
+  row: InboundRow,
+  envelope: MailEnvelope,
+  threadId: string,
+  sender: SenderUser,
+  now: Date,
+  deps: EmailIntakeDeps,
+): Promise<EmailIntakeOutcome> {
+  const probe = await loadReplyTicket(threadId);
+  const verdict = decideReplyVerdict(probe, sender);
+  if (verdict !== "merge") {
+    return decideWithReply(row, envelope, sender, verdict, emptyReport(), threadId, now);
+  }
+  assertTicketForMerge(probe);
+  const ticketId = probe.id;
+
+  // הטקסט החדש בלבד (EM-13) — הציטוט, שכולל את המייל החוזר הקודם שלנו על
+  // הטיוטה הזו, אסור שייקרא כהוראה. `priorBodies` הן גופי **שאר** ההודעות
+  // בשרשרת הזו, בשני הכיוונים — כך ש-Outlook שמצטט תשובה שלנו גם הוא נתפס.
+  const priorBodies = await loadPriorBodies(threadId, row.id);
+  const { newText } = extractNewText({ text: envelope.text, html: envelope.html, priorBodies });
+  const fullText = bodyTextOf(envelope);
+
+  const attachments = await collectAttachments(row, envelope, deps, now);
+  if (attachments.deferred) return attachments.outcome;
+
+  const extraction = await extract({
+    row,
+    envelope,
+    sender,
+    body: newText,
+    parts: attachments.parts,
+    deps,
+    now,
+    isReply: true,
+  });
+  if (extraction.deferred) return extraction.outcome;
+
+  // הבתים נכתבים לאחסון **בלי** הכרעת הכפילות (EM-25/EM-A05) — בדיוק כמו
+  // במסלול המייל הראשון, ומאותה סיבה: אסור לנעול טרנזאקציה על העלאה. מפתח
+  // שנכתב לקובץ שיתברר כתחת הנעילה ככפילות הוא בזבוז שקט (ראה ההערה מעל
+  // `writeAttachments`) — אבל **נכון**, בשונה מהכרעה לפי חתימה שנקראה לפני
+  // הנעילה: מירוץ מול הסרה במסך 7 (ממצא ביקורת S7 #3) יכול להשתנות בדיוק
+  // בחלון הזה, וההכרעה חייבת לשקף את המצב שקיים **כשננעלת השורה**, לא לפניה.
+  const stored = await writeAttachments(envelope, attachments.parts, deps);
+
+  // §7 שורה 75 (EM-A06): קבצים נכנסים גם כשהחילוץ אינו זמין — רק הטקסט לא
+  // ממוזג. EM-11 של התשובה: "התשובה נשמרה בהתכתבות, לא עובדה אוטומטית".
+  const outcome: MailOutcome = extraction.value ? "REPLY_APPLIED" : "REPLY_STORED_UNPROCESSED";
+
+  return db.$transaction(async (tx) => {
+    const locked = await lockAndLoadDraft(tx, ticketId);
+
+    // השולח נבדק מחדש **גם הוא**, לא רק הטיוטה (ממצא ביקורת S7 #2/#4):
+    // תפקיד, שיוך אתר, השבתה או ביטול היכולת יכולים היו להשתנות באותו חלון
+    // שבו חיכינו להורדה ולחילוץ — בדיוק כמו שהטיוטה יכולה הייתה להימחק.
+    // `null` = הפך ל"זר" (כלל 9 מקרה 3), גם אם הוא השולח המקורי.
+    const freshSender = await refetchSender(tx, sender);
+    if (!freshSender) {
+      await tx.mailboxMessage.update({
+        where: { id: row.id },
+        data: {
+          state: "DONE",
+          outcome: "IGNORED_UNAUTHORIZED",
+          nextAttemptAt: null,
+          // נשארת חלק מהשרשרת (ההתכתבות מציגה שההודעה קרתה, EM-M01) —
+          // בשונה מ"זר" מההתחלה, שאותו שלב 6 של הסולם מכריע עוד לפני
+          // שנודע לאיזו שרשרת הוא שייך
+          threadId,
+          ...identityOf(envelope),
+        },
+      });
+      logInfo("email.intake.decided", {
+        mailboxMessageId: row.id,
+        outcome: "IGNORED_UNAUTHORIZED",
+        userId: sender.id,
+        at: now.toISOString(),
+      });
+      return { kind: KIND, status: "decided", outcome: "IGNORED_UNAUTHORIZED" };
+    }
+
+    const freshVerdict = decideReplyVerdict(locked?.ticket ?? null, freshSender);
+    if (freshVerdict !== "merge") {
+      // המצב השתנה בין הבדיקה למעלה להורדה/לחילוץ (נמחקה, שוגרה, או
+      // ההרשאה השתנתה) — כותבים את ההכרעה הנכונה **עכשיו**, לא זו שבדקנו
+      await writeReplyOutcome(tx, row, envelope, freshSender, freshVerdict, emptyReport(), threadId);
+      logInfo("email.intake.decided", {
+        mailboxMessageId: row.id,
+        outcome: freshVerdict,
+        userId: freshSender.id,
+        at: now.toISOString(),
+      });
+      return { kind: KIND, status: "decided", outcome: freshVerdict };
+    }
+    assertLockedForMerge(locked);
+    const { state } = locked;
+
+    // EM-25 (קובץ שהוסר) ו-EM-A05/§7 #74 (קובץ שעדיין פעיל בטיוטה, ולא
+    // הוסר מעולם) — שתיהן נקראות **תחת הנעילה**, מהסיבה שבהערה למעלה.
+    const dedup = await loadThreadAttachmentShas(tx, threadId);
+    const finalParts = markDedupedAttachments(stored, dedup);
+
+    let report = emptyReport();
+    if (extraction.value) {
+      const built = await buildReplyProposal(tx, extraction.value, envelope, freshSender, newText, state.values);
+      const merged = mergeEmailIntoDraft({
+        state,
+        proposal: built.proposal,
+        receivedAt: envelope.receivedAt,
+        messageId: row.id,
+      });
+      report = built.report;
+      report.updated = await toUpdatedItems(tx, merged.changes);
+      await writeDraftState(tx, ticketId, state, merged.state, true);
+    }
+    // חילוץ שאינו זמין (REPLY_STORED_UNPROCESSED): אין הצעה ואין מיזוג —
+    // הטקסט החדש נשמר על השורה (למטה) ואינו נענה מחדש כשהשירות חוזר.
+
+    const mediaIds = await writeMedia(tx, ticketId, freshSender.id, finalParts);
+    await writeMailboxAttachments(tx, row.id, finalParts, mediaIds);
+
+    await tx.mailboxMessage.update({
+      where: { id: row.id },
+      data: {
+        state: "DONE",
+        outcome,
+        nextAttemptAt: null,
+        detail: null,
+        threadId,
+        authorUserId: freshSender.id,
+        subject: envelope.subject,
+        bodyText: newText,
+        fullText,
+        report: report as unknown as Prisma.InputJsonValue,
+        ...identityOf(envelope),
+      },
+    });
+
+    await scheduleReply(tx, row.id, envelope, threadId, envelope.from?.address ?? null);
+
+    logInfo("email.intake.reply_applied", {
+      mailboxMessageId: row.id,
+      ticketId,
+      outcome,
+      updated: report.updated.length,
+      notFound: report.notFound.length,
+      ambiguous: report.ambiguous.length,
+    });
+    return { kind: KIND, status: "decided", outcome, ticketId };
+  });
+}
+
+/**
+ * קוראת מחדש את פרטי השולח **תחת הנעילה**, ולא מסתפקת ב-`SenderUser` שכבר
+ * בידינו מ-`findSender` (שרץ בשלב 6 של הסולם, לפני ההורדה והחילוץ).
+ *
+ * כתובת ורשימת הפיילוט אינן נקראות שוב: הן תלויות בהודעה ובסביבה, לא
+ * במשתמש, ואינן יכולות להשתנות תוך כדי עיבוד הודעה בודדת. תפקיד, שיוך אתר,
+ * השבתה וביטול היכולת כן נבדקים מחדש — בדיוק השדות ש-`findSender` עצמו
+ * שוער עליהם, ובדיוק מה שיכול היה להשתנות באותו חלון (ממצא ביקורת S7 #2/#4).
+ *
+ * `null` פירושו שהשולח הפך ל"זר" (כלל 9 מקרה 3) בדיוק באותו חלון — מטופל
+ * בקורא כמו שולח שמעולם לא היה מורשה.
+ */
+async function refetchSender(tx: Tx, sender: SenderUser): Promise<SenderUser | null> {
+  const fresh = await tx.user.findUnique({
+    where: { id: sender.id },
+    select: { id: true, name: true, role: true, siteId: true, active: true, emailIntakeEnabled: true },
+  });
+  if (!fresh || !fresh.active || !fresh.emailIntakeEnabled) return null;
+  return { id: fresh.id, name: fresh.name, role: fresh.role, siteId: fresh.siteId };
+}
+
+/**
+ * גופי **שאר** ההודעות בשרשרת הזו, ישן לחדש — מה ש-`extractNewText` צריך
+ * כ-`priorBodies` כדי לזהות ציטוט בלי סימון (EM-13). בנכנס נשמר `fullText`
+ * (כל מה שהגיע, כולל ציטוט קודם); ביוצא — `bodyText` (מה שבאמת נשלח).
+ * הסדר אינו נדרש על ידי `extractNewText` עצמה, אבל ישן-לחדש קריא לאבחון.
+ */
+async function loadPriorBodies(threadId: string, excludeMessageId: string): Promise<string[]> {
+  const rows = await db.mailboxMessage.findMany({
+    where: { threadId, id: { not: excludeMessageId } },
+    select: { direction: true, bodyText: true, fullText: true, receivedAt: true, sentAt: true },
+  });
+
+  return rows
+    .map((row) => ({ text: row.direction === "INBOUND" ? row.fullText : row.bodyText, at: row.receivedAt ?? row.sentAt }))
+    .filter((row): row is { text: string; at: Date | null } => Boolean(row.text))
+    .sort((a, b) => (a.at?.getTime() ?? 0) - (b.at?.getTime() ?? 0))
+    .map((row) => row.text);
+}
+
+/** חתימות (sha256) של קבצי הטיוטה הזו, לפי מה שכבר קיים בשרשרת */
+interface ThreadAttachmentShas {
+  /** הוסרו במפורש (מסך 7, `removeDraftMedia`) — EM-25 */
+  removed: ReadonlySet<string>;
+  /** עדיין פעילים בטיוטה (יש להם `MediaFile`, ולא הוסרו) — EM-A05, §7 #74 */
+  active: ReadonlySet<string>;
+}
+
+/**
+ * חתימות הקבצים של השרשרת הזו — מכל הודעה בה, לא רק מהראשונה: לוגו יכול
+ * להגיע גם בתשובה שנייה או שלישית. **נקראת תחת הנעילה** (`tx`), לא לפניה:
+ * ראה ההערה ב-`applyEmailReply` על מירוץ מול הסרה במסך 7 (ממצא ביקורת S7
+ * #3) — הכרעת הכפילות חייבת לשקף את המצב שקיים כשננעלת השורה.
+ *
+ * שאילתה אחת, לא שתיים: לכל שורת `MailboxAttachment` עם חתימה יש בדיוק
+ * שתי אפשרויות — הוסרה (`removedFromDraftAt` קיים) או עדיין מצביעה על
+ * `MediaFile` פעיל (`mediaFileId` קיים). כפילות שכבר דוללה בעבר (העתק שני
+ * של אותו לוגו, `mediaFileId: null` ו-`removedFromDraftAt: null`) אינה אף
+ * אחת מהשתיים, ובכך לא נכנסת לאף קבוצה — נכון, כי היא לא "עדיין פעילה"
+ * ולא "הוסרה", היא פשוט לא הייתה מעולם.
+ */
+async function loadThreadAttachmentShas(tx: Tx, threadId: string): Promise<ThreadAttachmentShas> {
+  const rows = await tx.mailboxAttachment.findMany({
+    where: { message: { threadId }, sha256: { not: null } },
+    select: { sha256: true, removedFromDraftAt: true, mediaFileId: true },
+  });
+
+  const removed = new Set<string>();
+  const active = new Set<string>();
+  for (const row of rows) {
+    if (!row.sha256) continue;
+    if (row.removedFromDraftAt) removed.add(row.sha256);
+    else if (row.mediaFileId) active.add(row.sha256);
+  }
+  return { removed, active };
+}
+
+/**
+ * מסמנת חלק שכבר קיים בשרשרת הזו, לפי חתימה: לא ייכתב לאחסון ולא יהפוך
+ * למדיה (וממילא לא לג׳וב AI כפול על אותם בתים), אבל עדיין יקבל שורת
+ * `MailboxAttachment` משלו על ההודעה הנוכחית — ההתכתבות שומרת כל הופעה.
+ *
+ * שתי סיבות שונות, אותה תוצאה: **הוסר** (EM-25, "removed_before") —
+ * המצבה המקורית נשארת "הוסרה", וההופעה החדשה אינה מחזירה אותה. **עדיין
+ * פעיל** (EM-A05/§7 #74, "already_in_draft") — לוגו שאיש לא הסיר מעולם
+ * אינו נכפל בכל תשובה. הוסר גובר על פעיל (הם לעולם לא חופפים לאותה חתימה
+ * בו-זמנית — ראה `loadThreadAttachmentShas`), כך שסדר הבדיקה אינו קובע
+ * בפועל; הוא נשמר מפורש לקריאות. חלק שנפסל מסיבה אחרת (`skippedReason` כבר
+ * קיים) אינו כאן: ל-`skipped()` תמיד `sha256: null`.
+ */
+function markDedupedAttachments(parts: readonly PreparedPart[], shas: ThreadAttachmentShas): PreparedPart[] {
+  return parts.map((part) => {
+    if (!part.sha256) return part;
+    if (shas.removed.has(part.sha256)) {
+      return { ...part, bytes: null, storageKey: null, skippedReason: "removed_before" };
+    }
+    if (shas.active.has(part.sha256)) {
+      return { ...part, bytes: null, storageKey: null, skippedReason: "already_in_draft" };
+    }
+    return part;
+  });
+}
+
+/**
+ * בונה `EmailProposal` מחילוץ של **תשובה** — המקבילה של `planDraft` למסלול
+ * הזה. ההבדל המהותי: אין כאן טיוטה חדשה שנוצרת, יש טיוטה **קיימת** שכבר
+ * יש לה אתר/בניין אפשריים. התאמת בניין ודירה חייבת להתבצע מול **האתר
+ * שהמייל הזה מדבר עליו** — האתר שהמייל הציע, ורק אם הוא לא הציע דבר, האתר
+ * שכבר בטיוטה (ראה ההערה הארוכה מעל `mergeEmailIntoDraft` ב-`draft/merge.ts`
+ * על "תלויים מאותו מייל כשהאתר או הבניין לא נכנסו").
+ *
+ * רץ תחת הנעילה (`tx`) ולא לפניה: "האתר שכבר בטיוטה" חייב להיות **הערך
+ * הנעול**, לא זה שנקרא לפני שהמתנו לקבצים ולמחלץ.
+ */
+async function buildReplyProposal(
+  tx: Tx,
+  extraction: FieldExtraction,
+  envelope: MailEnvelope,
+  sender: SenderUser,
+  newText: string,
+  current: DraftValues,
+): Promise<{ proposal: EmailProposal; report: IntakeReport }> {
+  const report = emptyReport();
+  const haystack = `${envelope.subject}\n${newText}`;
+  const written = (mention: Mention, field: DraftFieldName): string | null => quotedText(mention, field, haystack);
+  const proposal: EmailProposal = {};
+
+  // ── אתר ── מנהל עבודה: בלי התאמה כלל, בדיוק כמו `planDraft` — האתר נגזר
+  // מהשולח ותשובה אינה יכולה לשנות אותו. מנהל מערכת/בעלים: כמו במייל ראשון.
+  if (sender.role !== "SITE_MANAGER") {
+    const siteText = written(extraction.site, "SITE");
+    if (siteText) {
+      const sites = await candidates(tx.site.findMany({ select: { id: true, name: true } }));
+      const resolved = resolve("SITE", siteText, matchName(siteText, sites), report, sites);
+      // "בתשובה, שינוי אתר חל רק אם הכותב רשאי לפתוח פנייה באתר החדש"
+      // (הכרעת מימוש, לא אפיון מפורש). כיום תמיד true למנהל מערכת/בעלים —
+      // הבדיקה נשארת כרשת ביטחון לתפקיד עתידי; אתר שאין הרשאה לפתוח בו
+      // נזרק בשקט (לא מדווח כ"לא נמצא" — הוא נמצא, רק אין הרשאה עליו).
+      if (resolved && canCreateTicketInSite(viewerOf(sender), resolved)) proposal.site = resolved;
+    }
+  }
+
+  const effectiveSiteId = proposal.site ?? current.siteId;
+  // האתר משתנה מהמייל הזה — גם כשהוא זהה למה שכבר בטיוטה `proposal.site`
+  // עדיין "undefined" כלומר לא הוצע, ולכן ההשוואה ל-`current.siteId` נכונה
+  const siteChanging = proposal.site !== undefined && proposal.site !== current.siteId;
+
+  if (effectiveSiteId) {
+    const buildingText = written(extraction.building, "BUILDING");
+    if (buildingText) {
+      const buildings = await candidates(
+        tx.building.findMany({ where: { siteId: effectiveSiteId }, select: { id: true, name: true } }),
+      );
+      const resolved = resolve("BUILDING", buildingText, matchBuilding(buildingText, buildings), report, buildings);
+      if (resolved) proposal.building = resolved;
+    }
+
+    // הבניין להתאמת דירה: מה שהמייל הזה נתן, ואם לא — הבניין שכבר בטיוטה,
+    // **רק אם האתר לא השתנה מהמייל הזה**. אם האתר השתנה והמייל לא נתן
+    // בניין, אין בניין בהקשר הנכון להתאים דירה מולו.
+    const effectiveBuildingId = proposal.building ?? (siteChanging ? null : current.buildingId);
+    if (effectiveBuildingId) {
+      const apartmentText = written(extraction.apartment, "APARTMENT");
+      if (apartmentText) {
+        const rows = await tx.apartment.findMany({
+          where: { buildingId: effectiveBuildingId },
+          select: { id: true, number: true },
+        });
+        const apartments = rows.map((row) => ({ id: row.id, label: row.number }));
+        const resolved = resolve("APARTMENT", apartmentText, matchApartment(apartmentText, apartments), report, null);
+        if (resolved) proposal.apartment = resolved;
+      }
+    }
+  }
+
+  // ── חדר ── כמו במייל ראשון: ערך של הספירה, לא טקסט — אין כאן התאמה
+  if (extraction.room.value && extraction.room.source !== "none") proposal.room = extraction.room.value;
+
+  // ── תחום ──
+  const domainText = written(extraction.domain, "DOMAIN");
+  if (domainText) {
+    const domains = await candidates(tx.domain.findMany({ select: { id: true, name: true } }));
+    const resolved = resolve("DOMAIN", domainText, matchName(domainText, domains), report, domains);
+    if (resolved) proposal.domain = resolved;
+  }
+
+  // ── תיאור ── `append`/`replace`/`set` כולם עוברים למנוע המיזוג כמו שהם;
+  // רק המנוע יודע אם זו תוספת (EM-C07) או שדה שיוכרע מול עריכה במערכת.
+  if (extraction.description.op !== "none") {
+    const text = normalizeText(extraction.description.text);
+    if (text) proposal.description = { op: extraction.description.op, text };
+  }
+
+  // ── נמענים ── הוספה **והסרה** (§5.ה4) — בשונה ממייל ראשון
+  const recipients = await resolveRecipientsProposal(extraction, report, haystack, tx);
+  if (recipients) proposal.recipients = recipients;
+
+  return { proposal, report };
+}
+
+interface ReplyLabels {
+  site: Map<string, string>;
+  building: Map<string, string>;
+  apartment: Map<string, string>;
+  domain: Map<string, string>;
+  professional: Map<string, string>;
+  user: Map<string, string>;
+}
+
+async function idLabelMap(
+  ids: ReadonlySet<string>,
+  load: (ids: string[]) => Promise<{ id: string; name: string }[]>,
+): Promise<Map<string, string>> {
+  if (ids.size === 0) return new Map();
+  return new Map((await load([...ids])).map((row) => [row.id, row.name]));
+}
+
+/**
+ * ממיר את `MergeResult.changes` (מזהים גולמיים) ל-`UpdatedItem[]` — תוויות
+ * להצגה, הבסיס ל"עודכן מהתשובה שלך" (EM-C03). ממחזר את **דפוס** תרגום
+ * המזהים לתוויות שכבר קיים ב-`services/email-reply.ts` (S6, `systemLabel`/
+ * `emailLabel`/`loadLabels`, סביב שורה 600) — אבל לא את הפונקציות עצמן,
+ * שאינן מיוצאות משם. שתי קריאות ל-DB לכל סוג רשומה, לא אחת לכל שינוי.
+ */
+async function toUpdatedItems(tx: Tx, changes: readonly FieldChange[]): Promise<UpdatedItem[]> {
+  if (changes.length === 0) return [];
+
+  const siteIds = new Set<string>();
+  const buildingIds = new Set<string>();
+  const apartmentIds = new Set<string>();
+  const domainIds = new Set<string>();
+  const professionalIds = new Set<string>();
+  const userIds = new Set<string>();
+  const addRef = (ref: RecipientRef) => (ref.kind === "professional" ? professionalIds : userIds).add(ref.id);
+
+  for (const change of changes) {
+    for (const value of [change.before, change.after]) {
+      switch (change.field) {
+        case "SITE":
+          if (typeof value === "string") siteIds.add(value);
+          break;
+        case "BUILDING":
+          if (typeof value === "string") buildingIds.add(value);
+          break;
+        case "APARTMENT":
+          if (typeof value === "string") apartmentIds.add(value);
+          break;
+        case "DOMAIN":
+          if (typeof value === "string") domainIds.add(value);
+          break;
+        case "RECIPIENTS":
+          (value as RecipientRef[] | undefined)?.forEach(addRef);
+          break;
+        case "ROOM":
+        case "DESCRIPTION":
+          break;
+      }
+    }
+  }
+
+  const [site, building, apartment, domain, professional, user] = await Promise.all([
+    idLabelMap(siteIds, (ids) => tx.site.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })),
+    idLabelMap(buildingIds, (ids) =>
+      tx.building.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    ),
+    idLabelMap(apartmentIds, async (ids) =>
+      (await tx.apartment.findMany({ where: { id: { in: ids } }, select: { id: true, number: true } })).map((row) => ({
+        id: row.id,
+        name: row.number,
+      })),
+    ),
+    idLabelMap(domainIds, (ids) => tx.domain.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })),
+    idLabelMap(professionalIds, (ids) =>
+      tx.professional.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    ),
+    idLabelMap(userIds, (ids) => tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })),
+  ]);
+  const labels: ReplyLabels = { site, building, apartment, domain, professional, user };
+
+  return changes.map((change) => ({
+    field: change.field,
+    before: replyDisplayValue(change.field, change.before, labels),
+    after: replyDisplayValue(change.field, change.after, labels),
+  }));
+}
+
+function replyDisplayValue(field: DraftFieldName, raw: unknown, labels: ReplyLabels): string | null {
+  switch (field) {
+    case "SITE":
+      return typeof raw === "string" ? (labels.site.get(raw) ?? null) : null;
+    case "BUILDING":
+      return typeof raw === "string" ? (labels.building.get(raw) ?? null) : null;
+    case "APARTMENT":
+      return typeof raw === "string" ? (labels.apartment.get(raw) ?? null) : null;
+    case "DOMAIN":
+      return typeof raw === "string" ? (labels.domain.get(raw) ?? null) : null;
+    case "ROOM":
+      return raw ? he.room[raw as Room] : null;
+    case "DESCRIPTION":
+      return typeof raw === "string" && raw !== "" ? raw : null;
+    case "RECIPIENTS": {
+      const refs = (raw as RecipientRef[] | undefined) ?? [];
+      const names = refs
+        .map((ref) => (ref.kind === "professional" ? labels.professional : labels.user).get(ref.id) ?? "")
+        .filter(Boolean);
+      return names.length > 0 ? names.join(he.emailIntake.listSeparator) : null;
+    }
+  }
+}
+
 // ─────────────────────────────── החילוץ ───────────────────────────────
 
 /**
@@ -847,19 +1359,22 @@ async function extract(input: {
   parts: readonly PreparedPart[];
   deps: EmailIntakeDeps;
   now: Date;
+  /** תשובה בשרשרת (S7): `body` הוא הטקסט החדש בלבד, ו-`op` יכול להיות append/replace/none */
+  isReply?: boolean;
 }): Promise<{ deferred: false; value: FieldExtraction | null } | { deferred: true; outcome: EmailIntakeOutcome }> {
-  const { row, envelope, sender, body, parts, deps, now } = input;
+  const { row, envelope, sender, body, parts, deps, now, isReply = false } = input;
   if (!deps.extractor) return { deferred: false, value: null };
 
   try {
     const value = await deps.extractor.extract({
       subject: envelope.subject,
       // מייל ראשון נקרא **במלואו**, כולל בלוק שהועבר: שם כתוב הדיווח
-      // (§7 שורה 73). הסרת הציטוט שייכת לתשובה בשרשרת בלבד (EM-13).
+      // (§7 שורה 73). בתשובה `body` כבר הוא הטקסט החדש בלבד (EM-13,
+      // `extractNewText` נקרא אצל הקורא).
       text: body,
       attachments: extractionAttachments(parts),
       gazetteer: await loadGazetteer(sender),
-      isReply: false,
+      isReply,
     });
     return { deferred: false, value };
   } catch (error) {
@@ -1150,31 +1665,21 @@ function resolve(
 }
 
 /**
- * הנמענים שהמייל ביקש להוסיף.
+ * מאגר המועמדים לנמענים — אנשי מקצוע ומשתמשים **ברשימה אחת**: השולח כתב
+ * שם, ולא "קבלן" או "משתמש". שם שמתאים לשניהם הוא עמימות אמיתית (EM-08)
+ * ולא ברירה שרירותית לפי סוג הרשומה.
  *
- * אנשי מקצוע ומשתמשים נבדקים **ברשימה אחת**: השולח כתב שם, ולא "קבלן"
- * או "משתמש". שם שמתאים לשניהם הוא עמימות אמיתית (EM-08) ולא ברירה
- * שרירותית לפי סוג הרשומה.
- *
- * `remove` אינו מטופל במייל ראשון — אין ממה להסיר. ההסרה שייכת לתשובה
- * בשרשרת (§5.ה4), כלומר ל-S7.
+ * מקור אחד למייל ראשון (`resolveRecipients`) ולתשובה (`resolveRecipientsProposal`,
+ * S7) — שתיהן צריכות בדיוק אותו מאגר, ובנייתו פעמיים הייתה מסתכנת בהבדל
+ * שקט (למשל שכחת `active: true`) בין שני המסלולים.
  */
-async function resolveRecipients(
-  extraction: FieldExtraction,
-  report: IntakeReport,
-  haystack: string,
-): Promise<DraftRecipient[]> {
-  const wanted = extraction.recipients.add
-    .map((mention) => quotedText(mention, "RECIPIENTS", haystack))
-    .filter((text): text is string => text !== null);
-  if (wanted.length === 0) return [];
-
+async function recipientPool(client: Tx | typeof db = db): Promise<(Candidate & { ref: RecipientRef })[]> {
   const [professionals, users] = await Promise.all([
-    db.professional.findMany({ where: { active: true }, select: { id: true, name: true } }),
-    db.user.findMany({ where: { active: true }, select: { id: true, name: true } }),
+    client.professional.findMany({ where: { active: true }, select: { id: true, name: true } }),
+    client.user.findMany({ where: { active: true }, select: { id: true, name: true } }),
   ]);
 
-  const pool: (Candidate & { ref: RecipientRef })[] = [
+  return [
     ...professionals.map((row) => ({
       id: `professional:${row.id}`,
       label: row.name,
@@ -1186,22 +1691,70 @@ async function resolveRecipients(
       ref: { kind: "user" as const, id: row.id },
     })),
   ];
+}
 
-  const chosen: DraftRecipient[] = [];
+/**
+ * מתאים רשימת אזכורים (מה שהמחלץ החזיר ב-`recipients.add` או ב-`recipients.remove`)
+ * לנמענים קיימים במאגר. הליבה המשותפת של הוספה והסרה — ראה `recipientPool`.
+ */
+function matchRecipientRefs(
+  mentions: readonly Mention[],
+  pool: readonly (Candidate & { ref: RecipientRef })[],
+  report: IntakeReport,
+  haystack: string,
+): RecipientRef[] {
+  const wanted = mentions
+    .map((mention) => quotedText(mention, "RECIPIENTS", haystack))
+    .filter((text): text is string => text !== null);
+
+  const chosen: RecipientRef[] = [];
   for (const writtenText of wanted) {
     const result = matchName(writtenText, pool);
     if (result.kind === "match") {
       const { ref } = result.candidate;
       // שם שנכתב פעמיים הוא הדגשה, לא שני נמענים
-      if (!chosen.some((item) => item.kind === ref.kind && item.id === ref.id)) {
-        chosen.push({ ...ref, origin: "EMAIL", removedBySystemAt: null });
-      }
+      if (!chosen.some((item) => item.kind === ref.kind && item.id === ref.id)) chosen.push(ref);
       continue;
     }
     resolve("RECIPIENTS", writtenText, result, report, null);
   }
-
   return chosen;
+}
+
+/**
+ * הנמענים שהמייל ביקש להוסיף (מייל ראשון).
+ *
+ * `remove` אינו מטופל כאן — אין ממה להסיר במייל שפותח טיוטה. ההסרה שייכת
+ * לתשובה בשרשרת (§5.ה4, `resolveRecipientsProposal`).
+ */
+async function resolveRecipients(
+  extraction: FieldExtraction,
+  report: IntakeReport,
+  haystack: string,
+): Promise<DraftRecipient[]> {
+  if (extraction.recipients.add.length === 0) return [];
+  const pool = await recipientPool();
+  const refs = matchRecipientRefs(extraction.recipients.add, pool, report, haystack);
+  return refs.map((ref) => ({ ...ref, origin: "EMAIL" as const, removedBySystemAt: null }));
+}
+
+/**
+ * הצעת הנמענים של תשובה — הוספה **והסרה** (§5.ה4), כ-`RecipientsProposal`
+ * שמנוע המיזוג (`merge.ts`) מכריע לפיו לכל נמען בנפרד. `undefined` כשהמייל
+ * לא הזכיר אף נמען — כדי ש-`mergeEmailIntoDraft` לא יראה בכך "הרשימה ריקה".
+ */
+async function resolveRecipientsProposal(
+  extraction: FieldExtraction,
+  report: IntakeReport,
+  haystack: string,
+  client: Tx | typeof db = db,
+): Promise<RecipientsProposal | undefined> {
+  if (extraction.recipients.add.length === 0 && extraction.recipients.remove.length === 0) return undefined;
+  const pool = await recipientPool(client);
+  const add = matchRecipientRefs(extraction.recipients.add, pool, report, haystack);
+  const remove = matchRecipientRefs(extraction.recipients.remove, pool, report, haystack);
+  if (add.length === 0 && remove.length === 0) return undefined;
+  return { add, remove };
 }
 
 // ─────────────────────────────── קבצים מצורפים ───────────────────────────────
