@@ -161,6 +161,23 @@ export const DRAFT_SCREEN = {
   delete: "מחק טיוטה",
 } as const;
 
+/** מסך 7 — טיוטה ממייל (עדכון 1.3), שורות 440–456; "התכתבות המייל" — §3.2 שדה 20 ומסך 2 שורה 329 */
+export const EMAIL_DRAFT_SCREEN = {
+  correspondence: "התכתבות המייל",
+  fromEmailTag: "מהמייל",
+  compare: "השווה ובחר",
+  removeFile: "הסר קובץ",
+} as const;
+
+/** מסך 7א — חלון הסתירות, שורות 457–480 */
+export const CONFLICT_DIALOG = {
+  title: "סתירות בין המייל למערכת",
+  columnSystem: "במערכת",
+  columnEmail: "מהמייל",
+  apply: "החל את הבחירה",
+  close: "סגור",
+} as const;
+
 /** מסך 8 — פורטל הקבלן, שורות 319–329 */
 export const PORTAL = {
   markDone: "סיימתי — טופל",

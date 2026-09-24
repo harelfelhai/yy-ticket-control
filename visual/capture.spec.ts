@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { type Locator, type Page, expect, test } from "@playwright/test";
+import { seedEmail } from "../e2e/email-fixtures";
 import { E2E_ADMIN } from "../e2e/global-setup";
 
 /**
@@ -266,7 +267,37 @@ test("לוכד את המסכים המרכזיים", async ({ page }, testInfo) =
   await shot(page, device, "17-admin-domains");
 
   await captureBatchAndTag(page, device);
+  await captureEmailDraft(page, device);
 });
+
+/**
+ * טיוטה ממייל (S8, אפיון 1.3): מסך 7 במצב מייל, חלון הסתירות (מסך 7א),
+ * וחלון "פרטים" של פנייה ששוגרה עם ההתכתבות.
+ *
+ * התרחיש נזרע ישירות בבסיס (`e2e/seed-email.ts`) — אותה זריעה של ה-E2E,
+ * עם סתירה פתוחה על הבניין, תגי "מהמייל" ו"חסר", וקבצים בהתכתבות.
+ */
+async function captureEmailDraft(page: Page, device: string): Promise<void> {
+  const seed = seedEmail();
+
+  await page.goto(`/tickets/${seed.draftId}`);
+  await expect(page.getByRole("region", { name: "התכתבות המייל" })).toBeVisible();
+  await shot(page, device, "20-email-draft");
+
+  await page.getByRole("button", { name: "השווה ובחר" }).click();
+  await expect(page.getByRole("dialog", { name: "סתירות בין המייל למערכת" })).toBeVisible();
+  await shot(page, device, "21-email-conflicts");
+  await page.keyboard.press("Escape");
+
+  await page.goto(`/tickets/${seed.dispatchedId}`);
+  await page.getByRole("button", { name: "פרטים", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "פרטים" })).toBeVisible();
+  await shot(page, device, "22-email-details");
+
+  await page.goto(`/tickets/${seed.noSiteId}`);
+  await expect(page.getByRole("region", { name: "התכתבות המייל" })).toBeVisible();
+  await shot(page, device, "23-email-draft-no-site");
+}
 
 /**
  * הזנה מרוכזת ומסך התגית.

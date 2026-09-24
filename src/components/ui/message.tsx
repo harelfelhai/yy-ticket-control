@@ -110,7 +110,7 @@ export function LoadingStatus() {
   );
 }
 
-export type BannerTone = "success" | "warning" | "info";
+export type BannerTone = "success" | "warning" | "info" | "danger";
 
 /**
  * ‏`info` (שנקרא `brand` עד המעבר לגרפיט) נוסף בסבב 0.4 (פער 34), ומאותה סיבה שבה `quiet` נוסף ל-`Button`
@@ -122,6 +122,13 @@ const BANNER_TONES: Record<BannerTone, string> = {
   success: "border-success/30 bg-success/10 text-success",
   warning: "border-warning/30 bg-warning/10 text-warning",
   info: "border-info/30 bg-info/10 text-info",
+  /**
+   * נוסף ב-S8 (1.3) להודעת הסתירה בטיוטה ממייל. סתירה פתוחה חוסמת שיגור —
+   * "טיוטה שדורשת השלמה" לפי § מצבים — ושאר סימוניה (הקו והתג בשדה, שורת
+   * הסיבה בלוח) כבר `danger`. באנר `warning` היה מסמן את אותה סתירה בצבע
+   * שני, בדיוק מה שתוקן בפער 20.
+   */
+  danger: "border-danger/30 bg-danger/10 text-danger",
 };
 
 /**

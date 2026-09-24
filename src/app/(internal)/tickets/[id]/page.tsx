@@ -10,6 +10,7 @@ import { he } from "@/lib/he";
 import {
   canCloseTicket,
   canCommentOnTicket,
+  canCreateTicketInSite,
   canDeleteTicket,
   canEditAssignments,
   canSetHandler,
@@ -21,8 +22,10 @@ import { listSiteDirectory } from "@/lib/services/directory";
 import { listTags, listTicketTags } from "@/lib/services/tags";
 import { missingRequiredFields, getTicketDetail, recipientName } from "@/lib/services/tickets";
 import { activeRecipients } from "@/lib/draft/fields";
-import { draftValuesOf, emailDraftCounts } from "@/lib/draft/state";
-import { isEmailDraft } from "@/lib/services/draft-fields";
+import { draftValuesOf, emailDraftCounts, toDraftState } from "@/lib/draft/state";
+import { describeDraftState } from "@/lib/services/draft-display";
+import { emailMediaIds, isEmailDraft } from "@/lib/services/draft-fields";
+import { getTicketCorrespondence } from "@/lib/services/email-correspondence";
 import { canTagTicket } from "@/lib/permissions";
 import {
   deriveAwaitingReply,
@@ -40,6 +43,9 @@ import {
 } from "@/lib/ui";
 import { DeleteTicket } from "./delete-ticket";
 import { DraftCompletion } from "./draft-completion";
+import { DraftMediaList } from "./draft-media-list";
+import { EmailCorrespondence } from "./email-correspondence";
+import { EmailDraftCompletion } from "./email-draft-completion";
 import { WaPendingPanel } from "@/components/wa-pending-panel";
 import { RecipientEditor } from "./recipient-editor";
 import { ResidentName } from "./resident-name";
@@ -107,6 +113,26 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   );
 
   const canEdit = canEditAssignments(viewer, ticket);
+
+  /*
+   * טיוטה ממייל (מסך 7 במצב מייל): המצב המלא של השדות — ערכים ומטא ("מהמייל",
+   * סתירות והערך שממתין בהן) — מתורגם לשמות, **רק למי שמשלים את הטיוטה**:
+   * מי שרואה ואינו רשאי לערוך מקבל את הבאנר בלבד, ושש שאילתות השמות היו
+   * עבודה בשבילו לחינם.
+   *
+   * ההתכתבות נטענת לכל פנייה שנפתחה במייל: בטיוטה היא בראש המסך, ואחרי
+   * השיגור בחלון "פרטים" — **רק מה שקדם לשיגור** (מסך 2, EM-S2-01). השיגור
+   * הוא שיוך הנמענים, ולכן מועדו הוא מועד השיוך הראשון.
+   */
+  const emailDraftState = isEmailDraft(ticket) ? toDraftState(ticket, ticket.draftFields) : null;
+  const dispatchedAt = ticket.isDraft ? undefined : ticket.assignments[0]?.createdAt;
+  const [emailDisplay, correspondence, removableMedia] = await Promise.all([
+    emailDraftState && canEdit ? describeDraftState(emailDraftState) : Promise.resolve(null),
+    ticket.channel === "EMAIL"
+      ? getTicketCorrespondence(viewer, ticket.id, { before: dispatchedAt })
+      : Promise.resolve(null),
+    emailDraftState && canEdit ? emailMediaIds(ticket.id) : Promise.resolve(new Set<string>()),
+  ]);
   const alreadyAssigned = new Set(
     ticket.assignments
       .filter((a) => a.status !== "REMOVED")
@@ -148,10 +174,30 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
   // טיוטה: הרשימות הנלמדות ונמעני הטיוטה השמורים, כדי שמסך ההשלמה יציג את
   // השדות החסרים ויאפשר לשגר. נטענים רק כשמדובר בטיוטה שהצופה רשאי לערוך.
   //
-  // `siteId` חסר רק בטיוטה ממייל שלא זוהה בה אתר (CHECK במסד). מסך ההשלמה
-  // שלה — עם בורר אתר — נבנה בשלב נפרד; עד אז היא מוצגת כטיוטה בלי טופס.
-  const draftDirectory =
-    ticket.isDraft && canEdit && ticket.siteId ? await listSiteDirectory(ticket.siteId) : null;
+  // `siteId` חסר רק בטיוטה ממייל שלא זוהה בה אתר (CHECK במסד): אין לה
+  // עדיין בניינים לבחור מהם, ומסך ההשלמה שלה מציג בורר אתר תחילה.
+  //
+  // בורר האתר של טיוטה ממייל (§5.ז): מנהל מערכת ובעלים בוחרים אתר; מנהל
+  // עבודה נעול לאתרו ורואה אותו כטקסט. התחומים אינם תלויים באתר, ולכן
+  // טיוטה בלי אתר מקבלת את כולם. שלוש השאילתות במקביל.
+  const [draftDirectory, sites, allDomains] = await Promise.all([
+    ticket.isDraft && canEdit && ticket.siteId ? listSiteDirectory(ticket.siteId) : Promise.resolve(null),
+    emailDraftState && canEdit && user.role !== "SITE_MANAGER"
+      ? db.site.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+      : Promise.resolve(null),
+    emailDraftState && canEdit && !ticket.siteId
+      ? db.domain.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+  ]);
+  const domainOptions = draftDirectory
+    ? draftDirectory.domains.map((d) => ({ id: d.id, label: d.name }))
+    : allDomains.map((d) => ({ id: d.id, label: d.name }));
+  // הקבצים שבטיוטה ממייל — מה שהגיע במייל; "הסר קובץ" מוריד אותם מהטיוטה
+  // בלבד (EM-S7-05). קובץ שצורף בשרשור אינו כאן: הוא אינו בהתכתבות, והסרה
+  // שלו הייתה מחיקה בלי תיעוד (§7 שורה 87)
+  const draftMedia = ticket.messages.flatMap((message) =>
+    message.media.filter((file) => removableMedia.has(file.id)).map((file) => toMediaView(file)),
+  );
   // ‏`activeRecipients`: נמען שהוסר במערכת נשאר ברשימה כמצבה, כדי שתשובה
   // מאוחרת שמוסיפה אותו תזוהה כסתירה (§5.ה4). הוא אינו נמען של הטיוטה.
   const draftRecipientOptions = ticket.isDraft
@@ -159,6 +205,39 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         .map((ref) => available.find((o) => o.id === ref.id && o.kind === ref.kind))
         .filter((o): o is (typeof available)[number] => o !== undefined)
     : [];
+  /*
+   * **נמען שנשמר בטיוטה ממייל והושבת מאז — נשאר גלוי**, עם הסימון "מושבת".
+   * הרשימה הזמינה כוללת משתמשים פעילים בלבד, ולכן בלי זה הוא נעלם מהבורר;
+   * אבל "שגר" בטיוטה ממייל משגר את הנמענים **השמורים** (תחת נעילה), והשיגור
+   * היה נכשל על נמען שאין דרך לראות או להסיר. כך מסירים אותו כמו כל נמען.
+   */
+  const hiddenRecipients =
+    emailDraftState && canEdit
+      ? activeRecipients(draftValues.recipients).filter(
+          (ref) => !available.some((o) => o.id === ref.id && o.kind === ref.kind),
+        )
+      : [];
+  const inactiveRecipientOptions =
+    hiddenRecipients.length > 0
+      ? (
+          await db.user.findMany({
+            where: { id: { in: hiddenRecipients.filter((r) => r.kind === "user").map((r) => r.id) } },
+            select: { id: true, name: true },
+          })
+        ).map((u) => ({ id: u.id, label: u.name, hint: he.emailDraft.inactiveRecipient, kind: "user" as const }))
+      : [];
+  // האתר שהמייל הציע בסתירה — מנהל עבודה אינו רשאי לבחור אתר אחר משלו
+  const emailSite = emailDraftState?.meta.SITE.emailValue;
+  const emailSiteAllowed =
+    emailSite?.field === "SITE" ? canCreateTicketInSite(viewer, emailSite.siteId) : true;
+  // נמעני טיוטת המייל בסדר שבו נשמרו — כולל מי שהושבת מאז
+  const emailRecipientValues = activeRecipients(draftValues.recipients)
+    .map(
+      (ref) =>
+        available.find((o) => o.id === ref.id && o.kind === ref.kind) ??
+        inactiveRecipientOptions.find((o) => o.id === ref.id && o.kind === ref.kind),
+    )
+    .filter((o) => o !== undefined);
 
   // מצב השליחה נטען במקביל לכל הנמענים: לכל אחד יש שאילתה משלו לקישור,
   // וסדרה טורית של חמש שאילתות מורגשת ברשת סלולרית באתר בנייה.
@@ -211,8 +290,13 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
    * המדיה ההתחלתית כבר יושבת בשרשור כהודעת MEDIA נפרדת (`attachInitialMedia`),
    * ולכן הבועה הזו נושאת טקסט בלבד.
    */
+  /*
+   * **בטיוטה ממייל אין בועת פתיחה.** התיאור שם הוא שדה עריך בטופס שמעל, והמקור
+   * של הטיוטה הוא ההתכתבות (מסך 7) — בועה נוספת הייתה מציגה את אותו טקסט
+   * פעמיים. אחרי השיגור הוא חוזר להיות ההודעה הפותחת, כמו בכל פנייה.
+   */
   const openingMessage: ThreadMessageView | null =
-    ticket.description.trim().length > 0
+    !emailDraftState && ticket.description.trim().length > 0
       ? {
           id: `opening-${ticket.id}`,
           authorName: ticket.createdBy.name,
@@ -378,6 +462,13 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
                   canEdit={canTag}
                 />
 
+                {/* פנייה שנפתחה במייל: ההתכתבות שקדמה לשיגור — לא בשרשור (EM-S2-01) */}
+                {correspondence ? (
+                  <div className="border-t border-border pt-3">
+                    <EmailCorrespondence messages={correspondence} />
+                  </div>
+                ) : null}
+
                 {/* מחיקה — למנהל מערכת בלבד, בתחתית הפאנל והרחק מפעולות
                     היום-יום. בטיוטה היא נעשית דרך "מחק טיוטה" במסך ההשלמה. */}
                 {canDeleteTicket(viewer) ? <DeleteTicket ticketId={ticket.id} /> : null}
@@ -415,7 +506,53 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
        */}
       {ticket.isDraft ? (
         <div className={cardClasses("flex flex-col gap-3")}>
-          {canEdit && draftDirectory && ticket.siteId ? (
+          {/*
+           * טיוטה ממייל (מסך 7 במצב מייל): ההתכתבות בראש, הקבצים שבטיוטה, ואז
+           * כל השדות עם התגים — או הבאנר בלבד למי שרואה ואינו רשאי להשלים.
+           */}
+          {emailDraftState ? (
+            <>
+              <EmailCorrespondence messages={correspondence ?? []} />
+              {canEdit && emailDisplay ? (
+                <>
+                  <DraftMediaList ticketId={ticket.id} media={draftMedia} />
+                  <EmailDraftCompletion
+                    // key יציב, גם בהחלפת אתר: הרכיב מאפס בעצמו את הרשימות
+                    // שנגזרות מהאתר (`useResetOn`). טעינה מחדש הייתה מאבדת את
+                    // המיקוד אחרי הכרעת סתירה באתר, ושגיאה של שמירה שבדרך
+                    key={ticket.id}
+                    ticketId={ticket.id}
+                    banner={draftBanner}
+                    display={emailDisplay}
+                    site={ticket.site ? { id: ticket.site.id, label: ticket.site.name } : null}
+                    sites={sites?.map((s) => ({ id: s.id, label: s.name })) ?? null}
+                    buildings={
+                      draftDirectory?.buildings.map((b) => ({
+                        id: b.id,
+                        label: b.name,
+                        apartments: b.apartments.map((a) => ({ id: a.id, label: a.number })),
+                      })) ?? []
+                    }
+                    domains={domainOptions}
+                    recipientOptions={available}
+                    values={{
+                      buildingId: ticket.buildingId,
+                      apartmentId: ticket.apartmentId,
+                      room: ticket.room,
+                      domainId: ticket.domainId,
+                      description: ticket.description,
+                      recipients: emailRecipientValues,
+                    }}
+                    emailSiteAllowed={emailSiteAllowed}
+                  />
+                </>
+              ) : (
+                <p className={cardClasses("text-sm font-semibold text-danger", { tone: "danger" })}>
+                  {draftBanner}
+                </p>
+              )}
+            </>
+          ) : canEdit && draftDirectory && ticket.siteId ? (
             <DraftCompletion
               // key יציב: מונע re-mount של הרכיב (ואיפוס המצב המקומי — למשל
               // נמען שנוצר תוך כדי השלמה) כשהעמוד מתרנדר מחדש אחרי Server Action.

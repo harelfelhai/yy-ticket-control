@@ -29,11 +29,20 @@ interface RecipientPickerProps {
   options: RecipientOption[];
   value: RecipientOption[];
   onChange: (recipients: RecipientOption[]) => void;
-  onCreateProfessional: (input: {
+  /**
+   * יצירת איש מקצוע חדש. חסר — אין כפתור: בטיוטה ממייל בלי אתר אין לאיש
+   * המקצוע בית, וטופס שנכשל רק בשמירה, אחרי שמולא כולו, היה מבזבז את המילוי.
+   */
+  onCreateProfessional?: (input: {
     name: string;
     phone: string;
     email: string;
   }) => Promise<RecipientOption>;
+  /**
+   * הבורר נעול. במסך 7 של טיוטה ממייל כל שינוי נשמר מיד עם טביעת השדה, ושינוי
+   * שני לפני שהראשון חזר היה נושא טביעה ישנה ונדחה — כמו כל בורר אחר שם.
+   */
+  disabled?: boolean;
 }
 
 /**
@@ -51,10 +60,11 @@ export function RecipientPicker({
   value,
   onChange,
   onCreateProfessional,
+  disabled = false,
 }: RecipientPickerProps) {
   const [showCreate, setShowCreate] = useState(false);
   const hydrated = useHydrated();
-  const busy = !hydrated;
+  const busy = !hydrated || disabled;
 
   const selectedIds = new Set(value.map((r) => `${r.kind}:${r.id}`));
   const available = options.filter((o) => !selectedIds.has(`${o.kind}:${o.id}`));
@@ -90,6 +100,7 @@ export function RecipientPicker({
                 */}
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={() => remove(recipient)}
                   aria-label={`${he.ticket.removeRecipient} ${recipient.label}`}
                   className="-my-1 -me-2 inline-flex min-h-7 min-w-7 items-center justify-center text-base leading-none"
@@ -107,10 +118,11 @@ export function RecipientPicker({
         options={available}
         value={null}
         onChange={add}
+        disabled={disabled}
         placeholder={he.ticket.addRecipient}
       />
 
-      {showCreate ? (
+      {!onCreateProfessional ? null : showCreate ? (
         <ProfessionalCreateForm
           onCreate={async (input) => {
             const created = await onCreateProfessional(input);

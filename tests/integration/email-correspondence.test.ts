@@ -7,6 +7,7 @@ import {
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
 import type { Viewer } from "@/lib/permissions";
+import { SKIPPED_AFTER_CLOSE } from "@/lib/services/email-reply";
 import { resetDb } from "../helpers/reset-db";
 
 /**
@@ -128,7 +129,7 @@ describe("getTicketCorrespondence", () => {
     await expect(getTicketCorrespondence(strangerViewer, ticket.id)).resolves.toBeNull();
   });
 
-  it("EM-M01 — מציגה לקבלן משויך את ההתכתבות, וכוללת קובץ מצורף בצורה הנכונה", async () => {
+  it("EM-M01 — מציגה את ההתכתבות וקובץ מצורף בצורה הנכונה; קבלן משויך אינו רואה אותה", async () => {
     const ticket = await emailDraftTicket();
     const thread = await db.mailThread.create({ data: { ticketId: ticket.id } });
     await db.assignment.create({
@@ -168,8 +169,11 @@ describe("getTicketCorrespondence", () => {
       },
     });
 
-    const strangerViewer: Viewer = { kind: "professional", id: contractorId };
-    const result = await getTicketCorrespondence(strangerViewer, ticket.id);
+    // ההתכתבות הייתה עם השולח ולא עם הנמענים, והפורטל אינו מציג אותה (S8)
+    const assignedContractor: Viewer = { kind: "professional", id: contractorId };
+    await expect(getTicketCorrespondence(assignedContractor, ticket.id)).resolves.toBeNull();
+
+    const result = await getTicketCorrespondence(managerViewer(), ticket.id);
 
     expect(result).toHaveLength(1);
     expect(result?.[0]).toMatchObject({
@@ -190,6 +194,7 @@ describe("getTicketCorrespondence", () => {
         isMedia: true,
         mediaFileId: media.id,
         skippedReason: null,
+        downloadable: true,
       },
     ]);
   });
@@ -362,16 +367,85 @@ describe("canViewCorrespondence", () => {
     await expect(canViewCorrespondence(otherManagerViewer(), ticket.id)).resolves.toBe(false);
   });
 
-  it("EM-M01 — canViewCorrespondence: true לקבלן עם שיוך פעיל, false לקבלן שהוסר", async () => {
+  it("EM-M01 — canViewCorrespondence: false לקבלן, גם עם שיוך פעיל (S8)", async () => {
     const ticket = await emailDraftTicket();
-    const assignment = await db.assignment.create({
+    await db.assignment.create({
       data: { ticketId: ticket.id, professionalId: contractorId, status: "SENT" },
     });
 
+    // קבלן משויך רואה את הפנייה בפורטל — אבל לא את ההתכתבות עם השולח, שכוללת
+    // גם את מה שהוסר בכוונה מהטיוטה לפני השיגור (EM-S7-05)
     const contractorViewer: Viewer = { kind: "professional", id: contractorId };
-    await expect(canViewCorrespondence(contractorViewer, ticket.id)).resolves.toBe(true);
-
-    await db.assignment.update({ where: { id: assignment.id }, data: { status: "REMOVED" } });
     await expect(canViewCorrespondence(contractorViewer, ticket.id)).resolves.toBe(false);
+    await expect(canViewCorrespondence(managerViewer(), ticket.id)).resolves.toBe(true);
+  });
+
+  it("EM-S2-01 — `before`: רק מה שנוצר עד השיגור; מייל חוזר על תשובה מאוחרת אינו חלק מההתכתבות", async () => {
+    const ticket = await emailDraftTicket();
+    const thread = await db.mailThread.create({ data: { ticketId: ticket.id } });
+    const dispatchedAt = new Date("2026-09-16T10:00:00.000Z");
+
+    const original = await db.mailboxMessage.create({
+      data: {
+        direction: "INBOUND",
+        state: "DONE",
+        outcome: "DRAFT_CREATED",
+        threadId: thread.id,
+        bodyText: "המקורי",
+        createdAt: new Date("2026-09-16T08:00:00.000Z"),
+      },
+    });
+    const late = await db.mailboxMessage.create({
+      data: {
+        direction: "OUTBOUND",
+        state: "SENT",
+        threadId: thread.id,
+        bodyText: "הפנייה כבר נשלחה",
+        createdAt: new Date("2026-09-16T11:00:00.000Z"),
+      },
+    });
+
+    const all = await getTicketCorrespondence(managerViewer(), ticket.id);
+    expect(all?.map((m) => m.id)).toEqual([original.id, late.id]);
+
+    const beforeDispatch = await getTicketCorrespondence(managerViewer(), ticket.id, { before: dispatchedAt });
+    expect(beforeDispatch?.map((m) => m.id)).toEqual([original.id]);
+  });
+
+  it("קובץ בלי בתים אינו ניתן להורדה; דילוג אחרי שיגור מסומן, ודילוג מסיבה אחרת — לא", async () => {
+    const ticket = await emailDraftTicket();
+    const thread = await db.mailThread.create({ data: { ticketId: ticket.id } });
+    const inbound = await db.mailboxMessage.create({
+      data: { direction: "INBOUND", state: "DONE", outcome: "DRAFT_CREATED", threadId: thread.id },
+    });
+    await db.mailboxAttachment.create({
+      data: {
+        messageId: inbound.id,
+        partIndex: 1,
+        filename: "quote.xlsx",
+        mimeType: "application/vnd.ms-excel",
+        sizeBytes: 3000,
+        isMedia: false,
+        skippedReason: "not-media",
+      },
+    });
+    const skippedDispatched = await db.mailboxMessage.create({
+      data: {
+        direction: "OUTBOUND",
+        state: "SKIPPED",
+        threadId: thread.id,
+        detail: `הטיוטה שוגרה בין ההכרעה לשליחה ${SKIPPED_AFTER_CLOSE}`,
+      },
+    });
+    const skippedOther = await db.mailboxMessage.create({
+      data: { direction: "OUTBOUND", state: "SKIPPED", threadId: thread.id, detail: "להודעה הנכנסת אין כתובת שולח" },
+    });
+
+    const result = await getTicketCorrespondence(managerViewer(), ticket.id);
+    const byId = new Map(result?.map((m) => [m.id, m]));
+    expect(byId.get(inbound.id)?.attachments[0]).toMatchObject({ downloadable: false, skippedReason: "not-media" });
+    expect(byId.get(skippedDispatched.id)?.skippedAfterClose).toBe(true);
+    expect(byId.get(skippedOther.id)?.skippedAfterClose).toBe(false);
+    expect(byId.get(inbound.id)?.skippedAfterClose).toBe(false);
   });
 });

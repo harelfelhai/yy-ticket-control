@@ -17,7 +17,7 @@ import {
   resolveChoices,
 } from "@/lib/draft/merge";
 import { DRAFT_FIELD_LABEL } from "@/lib/draft/labels";
-import { conflictsVersion, diffDraftState, toDraftState } from "@/lib/draft/state";
+import { conflictsVersion, diffDraftState, fieldVersion, toDraftState } from "@/lib/draft/state";
 import { he } from "@/lib/he";
 import { normalizeText } from "@/lib/normalize";
 import { type Viewer, canCreateTicketInSite, canEditTicketFields } from "@/lib/permissions";
@@ -199,12 +199,19 @@ function toSystemEdits(fields: DraftFieldsInput): SystemEdit[] {
  * **שדה שנשלח נחשב ערוך גם כשערכו לא השתנה** (§5.ה4, EM-C09): שמירה
  * מפורשת היא בדיקה של אדם, ולכן תג "מהמייל" יורד וסתירה פתוחה נסגרת — ותשובה
  * מאוחרת שונה תפתח סתירה חדשה במקום לדרוס ערך שאושר.
+ *
+ * `expected` — טביעת השדה (`fieldVersion`) כפי שהמסך הציג אותו, לכל שדה
+ * שנשלח. היא נבדקת **תחת הנעילה**, ושדה שהשתנה מאז (תשובה במייל שפתחה בו
+ * סתירה, הוסיפה נמען או מילאה אותו) דוחה את כל השמירה (§7 שורה 86): אחרת
+ * העריכה הייתה סוגרת בשקט סתירה שאיש לא ראה. בלי `expected` — אין בדיקה,
+ * כמו בטיוטה ידנית, שאין לה ערוץ שני שמשנה אותה.
  */
 export async function updateDraftFields(
   viewer: Viewer,
   ticketId: string,
   fields: DraftFieldsInput,
   clock?: Date,
+  expected?: Partial<Record<DraftFieldName, string>>,
 ): Promise<void> {
   const edits = toSystemEdits(fields);
   if (edits.length === 0) return;
@@ -226,6 +233,15 @@ export async function updateDraftFields(
     if (fields.siteId !== undefined && fields.siteId !== ticket.siteId) {
       // אתר חדש = פתיחת פנייה בו. מנהל עבודה אינו יכול להוציא טיוטה מהאתר שלו
       denyUnless(canCreateTicketInSite(viewer, fields.siteId));
+    }
+
+    if (expected) {
+      for (const edit of edits) {
+        const shown = expected[edit.field];
+        if (shown !== undefined && shown !== fieldVersion(state, edit.field)) {
+          throw new DraftError(he.emailDraft.fieldChanged);
+        }
+      }
     }
 
     let next = state;
@@ -288,6 +304,10 @@ export async function resolveDraftConflicts(
  *
  * הצורך המיידי הוא לוגו בחתימת המייל, שנכנס כתמונה משובצת ובלי הסרה היה
  * מוצג לנמענים אחרי השיגור.
+ *
+ * **רק קובץ שהגיע במייל** (§7 שורה 87). בשרשור של טיוטה אפשר לצרף קבצים גם
+ * מתוך המערכת; הם אינם בהתכתבות, והסרה שלהם הייתה מחיקה בלי תיעוד — ולכן
+ * הם נשארים בכלל "הוספה בלבד" (§3.2).
  */
 export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Promise<void> {
   await db.$transaction(async (tx) => {
@@ -310,6 +330,7 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
         id: true,
         messageId: true,
         message: { select: { id: true, ticketId: true, kind: true, text: true } },
+        mailboxAttachment: { select: { id: true } },
       },
     });
     if (!media) throw new DraftError(he.media.notFound);
@@ -317,6 +338,8 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
     // אחרי השיגור המדיה חוזרת לכלל "הוספה בלבד" (§3.2), וטיוטה ידנית לא
     // צריכה הסרה — מי שצירף קובץ בעצמו לא קיבל לוגו של חתימה
     denyUnless(isEmailDraft(ticket));
+    // וגם בטיוטה ממייל — רק מה שהגיע במייל ונשאר בהתכתבות (§7 שורה 87)
+    denyUnless(media.mailboxAttachment !== null);
 
     await tx.mailboxAttachment.updateMany({
       where: { mediaFileId: media.id },
@@ -333,6 +356,19 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
 
     await tx.ticket.update({ where: { id: ticketId }, data: touchData() });
   });
+}
+
+/**
+ * מזהי הקבצים בפנייה שהגיעו במייל — הקבצים היחידים ש"הסר קובץ" חל עליהם
+ * (§7 שורה 87, ראה `removeDraftMedia`). נקרא ברינדור מסך 7, ולכן בלי נעילה:
+ * ההסרה עצמה בודקת שוב.
+ */
+export async function emailMediaIds(ticketId: string, client: Tx | typeof db = db): Promise<Set<string>> {
+  const rows = await client.mailboxAttachment.findMany({
+    where: { mediaFile: { message: { ticketId } } },
+    select: { mediaFileId: true },
+  });
+  return new Set(rows.flatMap((row) => (row.mediaFileId ? [row.mediaFileId] : [])));
 }
 
 /** מספר השדות שבסתירה — לחסימת השיגור ולשורת הסיבה */

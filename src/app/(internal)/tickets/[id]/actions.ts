@@ -166,15 +166,37 @@ const ticketFieldsSchema = z.object({
 });
 
 /** הבחירות בחלון הסתירות (מסך 7א): צד אחד לכל שדה שבסתירה */
-const choicesSchema = z.record(z.enum(DRAFT_FIELDS), z.enum(["system", "email"]));
+// `partialRecord` ולא `record`: ב-Zod 4 רשומה עם מפתחות enum היא ממצה, כלומר
+// `record` היה דורש בחירה לכל שבעת השדות ודוחה כל הכרעה אמיתית, שנוגעת רק
+// בשדות שבסתירה (נתפס בחיבור המסך, S8).
+const choicesSchema = z.partialRecord(z.enum(DRAFT_FIELDS), z.enum(["system", "email"]));
 
+/** טביעות השדות כפי שמסך 7 הציג אותם (`fieldVersion`) — ראה `updateDraftFields` */
+const expectedSchema = z.partialRecord(z.enum(DRAFT_FIELDS), z.string());
+
+/**
+ * עורך שדות פנייה או טיוטה.
+ *
+ * **הרענון רץ גם בכישלון** (`finally`): שמירה שנדחתה כי השדה השתנה מאז
+ * שהמסך נטען (§7 שורה 86) חייבת להחזיר למסך את המצב העדכני — אחרת ההודעה
+ * "המסך עודכן" הייתה שקרית, והניסיון הבא היה נדחה שוב על אותם ערכים.
+ */
 export async function updateTicketFieldsAction(
   ticketId: string,
   fields: z.infer<typeof ticketFieldsSchema>,
+  expected?: z.infer<typeof expectedSchema>,
 ): Promise<ActionResult> {
   return guard(async () => {
-    await updateTicketFields(await viewer(), ticketId, ticketFieldsSchema.parse(fields));
-    refresh(ticketId);
+    try {
+      await updateTicketFields(
+        await viewer(),
+        ticketId,
+        ticketFieldsSchema.parse(fields),
+        expected === undefined ? undefined : expectedSchema.parse(expected),
+      );
+    } finally {
+      refresh(ticketId);
+    }
   });
 }
 
@@ -196,6 +218,10 @@ export async function submitDraftAction(
 /**
  * מכריע את הסתירות שנבחרו בחלון (מסך 7א). `version` היא הטביעה של מה
  * שהחלון הציג, והשרת דוחה הכרעה על ערכים שהשתנו בינתיים (§7 שורה 84).
+ *
+ * **הרענון רץ גם בדחייה** (`finally`): ההודעה אומרת "פתחו אותו שוב כדי
+ * לראות את הערכים העדכניים", ובלי רענון פתיחה חוזרת הציגה את אותם ערכים
+ * ישנים ונדחתה שוב.
  */
 export async function resolveDraftConflictsAction(
   ticketId: string,
@@ -203,13 +229,16 @@ export async function resolveDraftConflictsAction(
   version: string,
 ): Promise<ActionResult> {
   return guard(async () => {
-    await resolveDraftConflicts(
-      await viewer(),
-      z.string().min(1).parse(ticketId),
-      choicesSchema.parse(choices),
-      z.string().parse(version),
-    );
-    refresh(ticketId);
+    try {
+      await resolveDraftConflicts(
+        await viewer(),
+        z.string().min(1).parse(ticketId),
+        choicesSchema.parse(choices),
+        z.string().parse(version),
+      );
+    } finally {
+      refresh(ticketId);
+    }
   });
 }
 

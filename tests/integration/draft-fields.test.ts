@@ -2,9 +2,10 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { activeRecipients, parseDraftRecipients } from "@/lib/draft/fields";
 import { applySystemEdit, mergeEmailIntoDraft } from "@/lib/draft/merge";
-import { conflictsVersion, toDraftState } from "@/lib/draft/state";
+import { conflictsVersion, fieldVersion, toDraftState } from "@/lib/draft/state";
 import { he } from "@/lib/he";
 import {
+  emailMediaIds,
   loadDraftState,
   lockTicket,
   removeDraftMedia,
@@ -277,6 +278,25 @@ describe("EM-C10 — איפוס בשרת", () => {
     expect(events[0]?.eventMeta).toMatchObject({
       fields: [he.ticket.site, he.directory.building, he.directory.apartment].join(", "),
     });
+  });
+
+  it("גם החלפת בניין בלבד אינה עריכה של הדירה — מייל מאוחר עם דירה נכנס בלי סתירה", async () => {
+    const ticket = await emailDraft({ buildingId, apartmentId });
+    const second = await db.building.create({ data: { siteId, name: "בניין ג" } });
+    const secondApartment = await db.apartment.create({ data: { buildingId: second.id, number: "3" } });
+    // כמו מסך 7: רק הבניין נשלח, והשרת מאפס את הדירה בעצמו
+    await updateDraftFields(toViewer(admin), ticket.id, { buildingId: second.id });
+
+    const apartment = (await db.draftField.findMany({ where: { ticketId: ticket.id } })).find(
+      (r) => r.field === "APARTMENT",
+    );
+    expect(apartment?.systemEditedAt ?? null).toBeNull();
+
+    await mergeReply(ticket.id, { apartment: secondApartment.id });
+    const state = await loadDraftState(ticket.id);
+    expect(state.values.apartmentId).toBe(secondApartment.id);
+    expect(state.meta.APARTMENT.conflict).toBe(false);
+    expect(state.meta.APARTMENT.fromEmail).toBe(true);
   });
 });
 
@@ -649,6 +669,73 @@ describe("EM-S7-05 — הסרת מדיה מטיוטת מייל", () => {
     expect(await db.mediaFile.findUnique({ where: { id: second.id } })).not.toBeNull();
   });
 
+  it("EM-A16 — קובץ שצורף בשרשור של טיוטה ממייל אינו מוסר: הוא אינו בהתכתבות (§7 שורה 87)", async () => {
+    const ticket = await emailDraft();
+    const message = await db.message.create({
+      data: { ticketId: ticket.id, kind: "MEDIA", authorUserId: manager.id },
+    });
+    const posted = await db.mediaFile.create({
+      data: {
+        messageId: message.id,
+        storageKey: `thread/${ticket.id}/photo.png`,
+        mimeType: "image/png",
+        sizeBytes: 1,
+        uploaded: true,
+      },
+    });
+
+    await expect(removeDraftMedia(toViewer(admin), posted.id)).rejects.toThrow(he.common.notAllowed);
+    expect(await db.mediaFile.findUnique({ where: { id: posted.id } })).not.toBeNull();
+    expect(await db.message.findUnique({ where: { id: message.id } })).not.toBeNull();
+  });
+
+  it("EM-A16 — emailMediaIds: רק הקבצים שהגיעו במייל, ורק של הפנייה הזו", async () => {
+    const { ticket, media } = await withMedia();
+    const thread = await db.message.create({
+      data: { ticketId: ticket.id, kind: "MEDIA", authorUserId: manager.id },
+    });
+    await db.mediaFile.create({
+      data: {
+        messageId: thread.id,
+        storageKey: `thread/${ticket.id}/photo.png`,
+        mimeType: "image/png",
+        sizeBytes: 1,
+        uploaded: true,
+      },
+    });
+    // קובץ מייל של פנייה אחרת
+    const other = await emailDraft();
+    const otherMessage = await db.message.create({
+      data: { ticketId: other.id, kind: "MEDIA", authorUserId: admin.id },
+    });
+    const otherMedia = await db.mediaFile.create({
+      data: {
+        messageId: otherMessage.id,
+        storageKey: `mail/${other.id}/logo.png`,
+        mimeType: "image/png",
+        sizeBytes: 1,
+        uploaded: true,
+      },
+    });
+    const otherMail = await db.mailboxMessage.create({
+      data: { direction: "INBOUND", state: "DONE", gmailThreadId: "t2", rfcMessageId: "<b@x>" },
+    });
+    await db.mailboxAttachment.create({
+      data: {
+        messageId: otherMail.id,
+        partIndex: 1,
+        mimeType: "image/png",
+        sizeBytes: 1,
+        isMedia: true,
+        inline: true,
+        sha256: "def",
+        mediaFileId: otherMedia.id,
+      },
+    });
+
+    expect(await emailMediaIds(ticket.id)).toEqual(new Set([media.id]));
+  });
+
   it("בטיוטה ידנית אין הסרה — מי שצירף קובץ בעצמו לא קיבל לוגו של חתימה", async () => {
     const manual = await manualDraft();
     const message = await db.message.create({
@@ -740,5 +827,58 @@ describe("toDraftState מול המסד", () => {
 
     await updateDraftFields(toViewer(admin), ticket.id, { domainId });
     expect(await db.draftField.count({ where: { ticketId: ticket.id } })).toBe(1);
+  });
+});
+
+describe("EM-A15 — עריכה במסך 7 של שדה שהשתנה מאז שהמסך נטען נדחית (§7 שורה 86)", () => {
+  it("טביעה תואמת — השמירה עוברת", async () => {
+    const ticket = await emailDraft({ domainId });
+    const shown = fieldVersion(await loadDraftState(ticket.id), "DOMAIN");
+
+    await updateDraftFields(toViewer(admin), ticket.id, { domainId: otherDomainId }, undefined, { DOMAIN: shown });
+
+    expect((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).domainId).toBe(otherDomainId);
+  });
+
+  it("תשובה במייל פתחה סתירה אחרי שהמסך נטען — השמירה נדחית, והסתירה נשארת פתוחה", async () => {
+    const ticket = await emailDraft({ domainId });
+    // המנהל ערך את התחום, ואחר כך נטען המסך שעליו הוא עובד עכשיו
+    await updateDraftFields(toViewer(admin), ticket.id, { domainId }, new Date(Date.now() - 60_000));
+    const shown = fieldVersion(await loadDraftState(ticket.id), "DOMAIN");
+
+    // בינתיים: תשובה במייל מציעה תחום אחר, ונפתחת סתירה שהמסך הפתוח לא ראה
+    const merged = await mergeReply(ticket.id, { domain: otherDomainId });
+    expect(merged.state.meta.DOMAIN.conflict).toBe(true);
+
+    await expect(
+      updateDraftFields(toViewer(admin), ticket.id, { domainId }, undefined, { DOMAIN: shown }),
+    ).rejects.toThrow(he.emailDraft.fieldChanged);
+
+    const row = await db.draftField.findUniqueOrThrow({
+      where: { ticketId_field: { ticketId: ticket.id, field: "DOMAIN" } },
+    });
+    expect(row.conflict).toBe(true);
+  });
+
+  it("נמען שהמייל הוסיף אחרי שהמסך נטען — שמירת הרשימה המלאה נדחית ואינו הופך למצבה", async () => {
+    const ticket = await emailDraft({ draftRecipients: [] });
+    const shown = fieldVersion(await loadDraftState(ticket.id), "RECIPIENTS");
+
+    await mergeReply(ticket.id, { recipients: { add: [{ kind: "professional", id: professionalId }], remove: [] } });
+
+    await expect(
+      updateDraftFields(toViewer(admin), ticket.id, { recipients: [] }, undefined, { RECIPIENTS: shown }),
+    ).rejects.toThrow(he.emailDraft.fieldChanged);
+
+    const stored = parseDraftRecipients(
+      (await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).draftRecipients,
+    );
+    expect(activeRecipients(stored).map((r) => r.id)).toEqual([professionalId]);
+  });
+
+  it("בלי טביעה — אין בדיקה (טיוטה ידנית, ושירותים שאינם מסך 7)", async () => {
+    const ticket = await manualDraft({ domainId });
+    await updateDraftFields(toViewer(manager), ticket.id, { domainId: otherDomainId });
+    expect((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).domainId).toBe(otherDomainId);
   });
 });

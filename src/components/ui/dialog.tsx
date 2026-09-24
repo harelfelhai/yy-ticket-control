@@ -53,6 +53,47 @@ interface DialogProps {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+function isRadio(element: Element | null): element is HTMLInputElement {
+  return element instanceof HTMLInputElement && element.type === "radio" && element.name !== "";
+}
+
+/**
+ * עצירות ה-Tab של הפאנל, **כפי שהדפדפן סופר אותן**: קבוצת רדיו היא עצירה
+ * אחת ולא כמה. בלי הכיווץ הזה, האלמנט האחרון בסדר המסמך היה רדיו שהדפדפן
+ * כלל אינו עוצר בו (חלון הסתירות, כשכפתור האישור מושבת), המלכודת לא זיהתה
+ * את העצירה האחרונה, ו-Tab יצא מהדיאלוג אל הדף שמאחור.
+ */
+function tabStops(panel: HTMLElement | null): HTMLElement[] {
+  const stops: HTMLElement[] = [];
+  for (const element of panel?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []) {
+    if (isRadio(element) && stops.some((stop) => isRadio(stop) && stop.name === element.name)) continue;
+    stops.push(element);
+  }
+  return stops;
+}
+
+/** האם המיקוד נמצא על העצירה הזו — ברדיו: על אחד מכפתורי אותה קבוצה */
+function isAtStop(active: Element | null, stop: HTMLElement): boolean {
+  if (active === stop) return true;
+  return isRadio(active) && isRadio(stop) && active.name === stop.name;
+}
+
+/**
+ * מיקוד העצירה האחרונה, כשחוזרים אליה ב-Shift+Tab. בקבוצת רדיו — כמו הדפדפן:
+ * הכפתור המסומן, ואם אין — האחרון בקבוצה. העצירה עצמה היא הכפתור **הראשון**
+ * (`tabStops`), והמיקוד עליו כשמסומן אחר היה מקריא "לא מסומן" על הבחירה.
+ */
+function focusLast(panel: HTMLElement | null, stop: HTMLElement): void {
+  if (!isRadio(stop)) {
+    stop.focus();
+    return;
+  }
+  const group = [...(panel?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter(
+    (element): element is HTMLInputElement => isRadio(element) && element.name === stop.name,
+  );
+  (group.find((radio) => radio.checked) ?? group[group.length - 1] ?? stop).focus();
+}
+
 export function Dialog({
   title,
   onClose,
@@ -95,20 +136,20 @@ export function Dialog({
 
       if (event.key !== "Tab") return;
 
-      // מלכודת מיקוד: Tab מהאחרון חוזר לראשון, ו-Shift+Tab להפך.
-      const items = [...(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
-      if (items.length === 0) return;
+      // מלכודת מיקוד: Tab מהעצירה האחרונה חוזר לראשונה, ו-Shift+Tab להפך.
+      const stops = tabStops(panelRef.current);
+      if (stops.length === 0) return;
 
-      const first = items[0];
-      const last = items[items.length - 1];
+      const first = stops[0];
+      const last = stops[stops.length - 1];
       const active = document.activeElement;
 
-      if (!event.shiftKey && active === last) {
+      if (!event.shiftKey && isAtStop(active, last)) {
         event.preventDefault();
         first.focus();
-      } else if (event.shiftKey && active === first) {
+      } else if (event.shiftKey && isAtStop(active, first)) {
         event.preventDefault();
-        last.focus();
+        focusLast(panelRef.current, last);
       }
     }
 
