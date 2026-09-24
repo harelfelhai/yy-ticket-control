@@ -82,8 +82,10 @@ test("EM-S7A-04/05 + EM-C09 — 'החל את הבחירה' בשלב אחד: הס
   await expect(dialog).toBeHidden();
 
   const building = page.locator('[data-field="BUILDING"]');
-  // הסתירה נסגרה: ההודעה נעלמה, הסימון ירד, והשיגור אינו חסום עוד מסתירה
-  await expect(page.getByText(/יש סתירה בין המייל למערכת/)).toHaveCount(0);
+  // הסתירה נסגרה: ההודעה נעלמה, הסימון ירד, והשיגור אינו חסום עוד מסתירה.
+  // העוגן בתחילת ההודעה: המייל החוזר שפתוח בהתכתבות אומר גם הוא "יש סתירה
+  // בין המייל למערכת", והוא היסטוריה שנשארת
+  await expect(page.getByText(/^יש סתירה בין המייל למערכת ב-/)).toHaveCount(0);
   await expect(building.getByText("בסתירה", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "שגר", exact: true })).toBeEnabled();
   // הערך שנבחר נכתב לטיוטה — בפקד הבניין, ובכותרת המסך
