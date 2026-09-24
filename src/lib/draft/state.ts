@@ -211,6 +211,21 @@ export function conflictsVersion(state: DraftState): string {
   );
 }
 
+/**
+ * טביעה של שדה אחד כפי שמסך 7 מציג אותו: הערך, והאם הוא בסתירה ועם איזה
+ * ערך מהמייל. אותו רעיון של `conflictsVersion`, ברמת שדה.
+ *
+ * **למה זה קיים.** מסך 7 שומר כל שדה מיד, ושמירה היא עריכה במערכת: היא
+ * סוגרת סתירה פתוחה בשדה ומורידה ממנו את תג "מהמייל" (§5.ה4). בלי הטביעה,
+ * תשובה במייל שנקלטה בזמן שהמסך פתוח (ופתחה סתירה, או הוסיפה נמען) הייתה
+ * נדרסת בשמירה הבאה בלי שאיש ראה אותה — בדיוק מה שהסימון בטופס נועד למנוע
+ * (מסך 7, §7 שורה 86). השרת משווה את הטביעה שהמסך שלח לטביעה תחת הנעילה.
+ */
+export function fieldVersion(state: DraftState, field: DraftFieldName): string {
+  const meta = state.meta[field];
+  return JSON.stringify([fieldValue(state.values, field), meta.conflict, meta.emailValue, meta.emailMessageId]);
+}
+
 /** הספירות של שורת הסיבה בלוח (EM-S1-02) ושל הודעת הסתירה במסך 7 */
 export interface EmailDraftCounts {
   conflictCount: number;

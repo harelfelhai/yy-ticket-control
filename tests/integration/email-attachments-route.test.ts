@@ -15,12 +15,12 @@ import { resetDb } from "../helpers/reset-db";
  * הבדיקה קוראת ל-`GET` ישירות (כמו `tests/integration/auth-gate.test.ts`
  * עושה ל-Route Handler בלי פרמטרים), ולא דרך שרת HTTP חי: אין כאן רשת, ואין
  * הבדל תפקודי בין קריאה ישירה לפונקציה לבין קריאה מעל HTTP — שתיהן מריצות
- * בדיוק את אותו קוד. המסלול דרך קבלן/נמען חיצוני (טוקן פורטל אמיתי, בלי
- * מוק) הוא הנבדק העיקרי, כי הוא היחיד שאינו תלוי בעוגיית סשן — בדיוק כמו
- * ב-`e2e/media.spec.ts`. מסלול המשתמש הפנימי (ADMIN/SITE_MANAGER) נבדק כאן
- * פעם אחת עם `resolveViewer` מדומה — ענפי `canViewTicket` עצמם כבר מכוסים
- * במלואם ב-`tests/unit/permissions.test.ts`, וזה כאן רק מוודא שה-route
- * מזין את התוצאה שלו נכון.
+ * בדיוק את אותו קוד. המשתמש הפנימי נבדק עם `resolveViewer` מדומה (אין כאן
+ * עוגיית סשן); קבלן — בטוקן פורטל אמיתי, בלי מוק, כמו ב-`e2e/media.spec.ts`.
+ *
+ * **מ-S8 קבלן אינו מקבל קובץ מההתכתבות, גם כשהוא משויך**: ההתכתבות הייתה עם
+ * השולח ולא עם הנמענים, והיא כוללת גם את מה שהוסר בכוונה מהטיוטה לפני
+ * השיגור (`canViewCorrespondence`).
  */
 
 let manager: SessionUser;
@@ -126,12 +126,22 @@ function request(attachmentId: string, token?: string) {
   return GET(new Request(url), { params: Promise.resolve({ id: attachmentId }) });
 }
 
-describe("הגשת קובץ — קבלן משויך", () => {
+/** בקשה כמשתמש פנימי — מנהל האתר של הפנייה */
+async function requestAsManager(attachmentId: string) {
+  const spy = vi.spyOn(viewerService, "resolveViewer").mockResolvedValueOnce({ kind: "user", ...manager });
+  try {
+    return await request(attachmentId, "any-token-ignored-by-mock");
+  } finally {
+    spy.mockRestore();
+  }
+}
+
+describe("הגשת קובץ — מנהל האתר", () => {
   it("EM-M01 — מגיש את הבתים בפועל, עם כותרות תוכן נכונות", async () => {
     const ticket = await makeTicket();
     const { attachment, bytes } = await attachedFile(ticket.id, { filename: "קיר.png" });
 
-    const response = await requestAs(contractor, attachment.id);
+    const response = await requestAsManager(attachment.id);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("image/png");
@@ -148,7 +158,7 @@ describe("הגשת קובץ — קבלן משויך", () => {
     const { attachment } = await attachedFile(ticket.id);
     await db.mailboxAttachment.update({ where: { id: attachment.id }, data: { filename: null } });
 
-    const response = await requestAs(contractor, attachment.id);
+    const response = await requestAsManager(attachment.id);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''file");
@@ -156,6 +166,14 @@ describe("הגשת קובץ — קבלן משויך", () => {
 });
 
 describe("הגשת קובץ — הרשאה", () => {
+  it("S8 — קבלן משויך לפנייה מקבל 404: ההתכתבות אינה חלק ממה שהנמען רואה", async () => {
+    const ticket = await makeTicket();
+    const { attachment } = await attachedFile(ticket.id);
+
+    const response = await requestAs(contractor, attachment.id);
+    expect(response.status).toBe(404);
+  });
+
   it("EM-M01 — קבלן שאינו משויך לפנייה מקבל 404", async () => {
     const ticket = await makeTicket();
     const { attachment } = await attachedFile(ticket.id);

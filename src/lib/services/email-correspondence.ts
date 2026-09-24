@@ -1,6 +1,7 @@
 import type { MailDirection, MailOutcome, MailState } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { type Viewer, type AssignmentAccessView, type TicketAccessView, canViewTicket } from "@/lib/permissions";
+import { SKIPPED_AFTER_CLOSE } from "./email-reply";
 
 /**
  * התכתבות המייל של פנייה — קריאה בלבד (EM-M01, §3.1, §3.2 שדה 20).
@@ -60,6 +61,12 @@ export interface CorrespondenceAttachment {
   mediaFileId: string | null;
   /** למה הקובץ לא נשמר או לא נכנס לטיוטה — גדול מדי, זהה לקיים, הוסר... */
   skippedReason: string | null;
+  /**
+   * האם יש לקובץ בתים שמורים (`storageKey`). רק קובץ כזה מקבל קישור: הצינור
+   * שומר בתים של מדיה שנכנסה לטיוטה בלבד, ו-`api/email-attachments/[id]`
+   * מחזיר 404 לכל השאר — קישור אליהם היה קישור מת.
+   */
+  downloadable: boolean;
 }
 
 /** הודעת מייל אחת בהתכתבות — נכנסת או יוצאת, לפי הסדר */
@@ -77,6 +84,12 @@ export interface CorrespondenceMessage {
   receivedAt: Date | null;
   sentAt: Date | null;
   createdAt: Date;
+  /**
+   * מייל יוצא שדולג כי הטיוטה שוגרה או נמחקה לפני השליחה (§7 שורה 77) — ולא
+   * מסיבה אחרת. רק במקרה הזה ההתכתבות אומרת "שוגרה או נמחקה"; דילוג מסיבה
+   * אחרת על טיוטה שעדיין פתוחה היה מקבל סיבה שגויה.
+   */
+  skippedAfterClose: boolean;
   attachments: CorrespondenceAttachment[];
 }
 
@@ -110,9 +123,22 @@ async function loadTicketAccess(
  * ישתמש באותה בדיקה בדיוק בלי לשכפל את שאילתת הטעינה וההיגיון.
  */
 export async function canViewCorrespondence(viewer: Viewer, ticketId: string): Promise<boolean> {
+  if (!mayViewAnyCorrespondence(viewer)) return false;
   const ticket = await loadTicketAccess(ticketId);
   if (!ticket) return false;
   return canViewTicket(viewer, ticket, ticket.assignments);
+}
+
+/**
+ * **נמען חיצוני אינו רואה התכתבות לעולם**, גם כשהוא משויך לפנייה.
+ *
+ * ההתכתבות הייתה עם השולח ולא עם הנמענים (מסך 2: "אינה נכנסת לשרשור"),
+ * והפורטל (מסך 8) מציג את השרשור בלבד. היא גם כוללת את מה שמנהל הסיר
+ * בכוונה מהטיוטה לפני השיגור — לוגו, תמונה שלא נועדה לקבלן (EM-S7-05) —
+ * ולכן קבלן משויך שמחזיק מזהה של קובץ מצורף אינו רשאי להוריד אותו.
+ */
+function mayViewAnyCorrespondence(viewer: Viewer): boolean {
+  return viewer.kind !== "professional";
 }
 
 /**
@@ -129,7 +155,14 @@ export async function canViewCorrespondence(viewer: Viewer, ticketId: string): P
 export async function getTicketCorrespondence(
   viewer: Viewer,
   ticketId: string,
+  /**
+   * רק מה שנוצר עד הרגע הזה. חלון "פרטים" של פנייה משוגרת מציג "כל
+   * ההתכתבות שקדמה לשיגור" (מסך 2, EM-S2-01): המייל החוזר שיוצא על תשובה
+   * שהגיעה אחרי השיגור ("הפנייה כבר נשלחה") אינו חלק ממנה.
+   */
+  options: { before?: Date } = {},
 ): Promise<CorrespondenceMessage[] | null> {
+  if (!mayViewAnyCorrespondence(viewer)) return null;
   const ticket = await loadTicketAccess(ticketId);
   if (!ticket) return null;
   if (!canViewTicket(viewer, ticket, ticket.assignments)) return null;
@@ -139,7 +172,10 @@ export async function getTicketCorrespondence(
     include: {
       messages: {
         // "עדיין לא" אינו התכתבות — ראה ההערה בראש הקובץ.
-        where: { state: { not: "PENDING" } },
+        where: {
+          state: { not: "PENDING" },
+          ...(options.before ? { createdAt: { lte: options.before } } : {}),
+        },
         orderBy: { createdAt: "asc" },
         include: { attachments: { orderBy: { partIndex: "asc" } } },
       },
@@ -163,6 +199,7 @@ function toCorrespondenceMessage(message: {
   receivedAt: Date | null;
   sentAt: Date | null;
   createdAt: Date;
+  detail: string | null;
   attachments: {
     id: string;
     filename: string | null;
@@ -171,6 +208,7 @@ function toCorrespondenceMessage(message: {
     isMedia: boolean;
     mediaFileId: string | null;
     skippedReason: string | null;
+    storageKey: string | null;
   }[];
 }): CorrespondenceMessage {
   return {
@@ -186,6 +224,7 @@ function toCorrespondenceMessage(message: {
     receivedAt: message.receivedAt,
     sentAt: message.sentAt,
     createdAt: message.createdAt,
+    skippedAfterClose: message.state === "SKIPPED" && (message.detail ?? "").includes(SKIPPED_AFTER_CLOSE),
     attachments: message.attachments.map((attachment) => ({
       id: attachment.id,
       filename: attachment.filename,
@@ -194,6 +233,7 @@ function toCorrespondenceMessage(message: {
       isMedia: attachment.isMedia,
       mediaFileId: attachment.mediaFileId,
       skippedReason: attachment.skippedReason,
+      downloadable: attachment.storageKey !== null,
     })),
   };
 }

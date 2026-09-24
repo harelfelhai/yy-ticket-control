@@ -170,13 +170,13 @@ export async function sendEmailReply(
   // נשלחה" ו"נמחקה" הם בדיוק המענה על המצב הזה, ו"אין הרשאה"/"אינך משויך
   // לאתר" אינם נוגעים בה כלל.
   if (kind === "DRAFT") {
-    if (!ticket) return skip(outbound, "deleted", "הטיוטה נמחקה בין ההכרעה לשליחה (§7 שורה 77)");
-    if (!ticket.isDraft) return skip(outbound, "dispatched", "הטיוטה שוגרה בין ההכרעה לשליחה (§7 שורה 77)");
+    if (!ticket) return skip(outbound, "deleted", `הטיוטה נמחקה בין ההכרעה לשליחה ${SKIPPED_AFTER_CLOSE}`);
+    if (!ticket.isDraft) return skip(outbound, "dispatched", `הטיוטה שוגרה בין ההכרעה לשליחה ${SKIPPED_AFTER_CLOSE}`);
   }
   // "פנייה #[מספר] כבר נשלחה" (EM-L05) דורש מספר וקישור; בלי הפנייה אין מה
   // לומר, והמצב הוא אותו מצב של שורה 77 — היא נמחקה אחרי השיגור.
   if (kind === "AFTER_DISPATCH" && !ticket) {
-    return skip(outbound, "deleted", "הפנייה ששוגרה נמחקה לפני שהמייל יצא (§7 שורה 77)");
+    return skip(outbound, "deleted", `הפנייה ששוגרה נמחקה לפני שהמייל יצא ${SKIPPED_AFTER_CLOSE}`);
   }
   // "אפשר לפנות ל[שם השולח]" (EM-L08) — בלי השם המשפט נשבר, ו-`compose`
   // זורק. עדיף לדלג ברעש מאשר להפיל את הג׳וב שוב ושוב.
@@ -825,6 +825,14 @@ async function findInMailbox(source: MailSource, messageId: string, outboundId: 
  * `bug` מסמן מצב שלא היה אמור להיווצר (שורה יוצאת להכרעה שאין עליה מענה,
  * הודעה נכנסת בלי כתובת). הוא שקט מדי מכדי להישאר רק בשדה במסד.
  */
+/**
+ * הסימון בסוף `detail` של מייל חוזר שדולג כי הטיוטה שוגרה או נמחקה לפני
+ * שיצא (§7 שורה 77). ההתכתבות (`email-correspondence.ts`) מזהה לפיו את
+ * הדילוג הצפוי ומבדילה אותו מדילוג מסיבה אחרת — שלושת המקומות כאן הם היחידים
+ * שכותבים אותו.
+ */
+export const SKIPPED_AFTER_CLOSE = "(§7 שורה 77)";
+
 async function skip(
   outbound: MailboxMessage,
   reason: EmailReplySkipReason,

@@ -1,5 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
-import type { AssignmentStatus, Channel, Room } from "@/generated/prisma/enums";
+import type { AssignmentStatus, Channel, DraftFieldName, Room } from "@/generated/prisma/enums";
 import { enqueue } from "@/jobs/queue";
 import { JOB_TYPES, type NotifyJobPayload } from "@/jobs/types";
 import { UserFacingError } from "@/lib/action-result";
@@ -449,6 +449,8 @@ export async function updateTicketFields(
   viewer: Viewer,
   ticketId: string,
   fields: TicketFieldsInput,
+  /** טביעות השדות כפי שמסך 7 הציג אותם — טיוטה בלבד; ראה `updateDraftFields` */
+  expected?: Partial<Record<DraftFieldName, string>>,
 ) {
   const ticket = await loadForAction(ticketId);
   denyUnless(canEditTicketFields(viewer, ticket));
@@ -457,7 +459,7 @@ export async function updateTicketFields(
   // האיפוס (אתר ⇒ בניין ודירה), רישום "נערך במערכת" שהמייל נמדד מולו,
   // והנעילה שמונעת מתשובה במייל להיכנס בין הקריאה לכתיבה.
   if (ticket.isDraft) {
-    await updateDraftFields(viewer, ticketId, fields);
+    await updateDraftFields(viewer, ticketId, fields, undefined, expected);
     return loadForAction(ticketId);
   }
 
