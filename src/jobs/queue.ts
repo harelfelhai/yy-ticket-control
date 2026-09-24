@@ -1,6 +1,6 @@
 import type { Job, Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import type { JobType } from "./types";
+import { MAIL_JOB_TYPES, type JobLane, type JobType } from "./types";
 
 /**
  * תור עבודות על גבי טבלה ב-Postgres.
@@ -42,16 +42,35 @@ export async function enqueue(
 }
 
 /**
- * תופס את העבודה הבאה שהגיע זמנה, או null.
+ * מסנן הנתיב לשאילתת התפיסה.
+ *
+ * **בלי נתיב פירושו הכול**, וזו ברירת המחדל בכוונה: כל קורא קיים —
+ * `conformance/run-job.ts`, הסקריפטים והבדיקות — ממשיך לרוקן את התור כולו
+ * בלי לדעת שקיימים נתיבים. רק שתי לולאות העובד מבקשות נתיב מפורש.
+ *
+ * הנתיב הכללי נכתב כ-`notIn` ולא כרשימת הסוגים שלו, כדי שסוג עבודה חדש
+ * ייתפס על ידו מאליו (ראו `MAIL_JOB_TYPES`).
+ */
+function laneFilter(lane?: JobLane): Prisma.JobWhereInput {
+  if (!lane) return {};
+  const mailTypes = [...MAIL_JOB_TYPES];
+  return lane === "mail" ? { type: { in: mailTypes } } : { type: { notIn: mailTypes } };
+}
+
+/**
+ * תופס את העבודה הבאה שהגיע זמנה **בנתיב המבוקש**, או null.
  *
  * התפיסה מותנית: העדכון מצליח רק אם הסטטוס עדיין PENDING. אם תהליך אחר
- * הקדים, מספר השורות שעודכנו הוא 0 והקורא ממשיך הלאה. זו הגנה מספיקה
- * לריצה על instance יחיד, והיא נשארת נכונה גם אם יתווסף שני — במחיר
- * ניסיון מבוזבז ולא במחיר עבודה שרצה פעמיים.
+ * הקדים, מספר השורות שעודכנו הוא 0 והקורא ממשיך הלאה. זו ההגנה שמאפשרת
+ * לשתי לולאות לרוץ באותו תהליך — וגם לשני instance־ים, במחיר ניסיון מבוזבז
+ * ולא במחיר עבודה שרצה פעמיים.
  */
-export async function claimNextJob(now: Date = new Date()): Promise<Job | null> {
+export async function claimNextJob(
+  now: Date = new Date(),
+  lane?: JobLane,
+): Promise<Job | null> {
   const candidate = await db.job.findFirst({
-    where: { status: "PENDING", runAt: { lte: now } },
+    where: { status: "PENDING", runAt: { lte: now }, ...laneFilter(lane) },
     orderBy: { runAt: "asc" },
   });
   if (!candidate) return null;

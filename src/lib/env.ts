@@ -9,12 +9,25 @@
  * ב-R2 או ב-AI לא ייכשל רק משום שהמפתחות האלה לא מוגדרים אצלו.
  */
 
+import { normalizeEmail } from "@/lib/normalize";
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(`משתנה הסביבה ${name} אינו מוגדר. ראה .env.example`);
   }
   return value;
+}
+
+/**
+ * `NODE_ENV === "production"` במקום אחד.
+ *
+ * פונקציה ברמת המודול ולא `env.isProduction()` פנימי: הפניה ל-`env` מתוך
+ * האתחול של `env` עצמו הופכת את הטיפוס שלו ל-`any` בשקט — אותו שיקול
+ * שמתועד ב-`gmailApi` למטה.
+ */
+function isProductionEnv(): boolean {
+  return process.env.NODE_ENV === "production";
 }
 
 /** אורך מינימלי למפתח הצפנת העוגייה. iron-session דורש 32 תווים לפחות. */
@@ -84,6 +97,47 @@ export const env = {
 
     if (!clientId || !clientSecret || !refreshToken) return undefined;
     return { clientId, clientSecret, refreshToken };
+  },
+
+  /**
+   * **הדגל שמפעיל את קליטת הפניות במייל (1.3)** — כבוי כל עוד לא נאמר אחרת.
+   *
+   * שני תנאים, ולא אחד:
+   *
+   * 1. `EMAIL_INTAKE_ENABLED=1` — ההסכמה המפורשת להתחיל לקרוא את התיבה.
+   *    השוואה ל-`"1"` בדיוק, כמו `MEDIA_STORAGE=local`: `"true"`, `"yes"`
+   *    ו-`"0"` אינם מדליקים יכולת שעונה לאנשים אמיתיים בטעות הקלדה.
+   * 2. **פרודקשן, או ויתור מפורש** (`EMAIL_INTAKE_NONPROD=1`). זה השומר
+   *    שמונע את התאונה הצפויה: מפתח שמעתיק את משתני הפרודקשן ל-`.env.local`
+   *    כדי לשחזר באג מקבל יחד איתם את `GMAIL_REFRESH_TOKEN` של התיבה
+   *    המשותפת, ומרגע זה שרת הפיתוח שלו קורא דואר אמיתי, פותח טיוטות בבסיס
+   *    הפיתוח **ועונה לשולחים**. הדגל לבדו אינו מספיק כדי שזה יקרה — צריך
+   *    לומר את זה פעמיים.
+   *
+   * בדיקות ו-E2E מאפסים את שלושת המשתנים (`e2e/server-env.ts`), ולכן שרת
+   * שבדיקה מרימה לעולם אינו נוגע בתיבה.
+   */
+  emailIntakeEnabled: (): boolean =>
+    optional("EMAIL_INTAKE_ENABLED") === "1" &&
+    (isProductionEnv() || optional("EMAIL_INTAKE_NONPROD") === "1"),
+
+  /**
+   * רשימת כתובות לפיילוט — **חיתוך** מעל רשימת המשתמשים המורשים, לא תוספת.
+   *
+   * ריקה (ברירת המחדל) פירושה "בלי פיילוט": כל המשתמשים המורשים נקלטים.
+   * כשהיא מלאה, רק מי שנמצא בה **וגם** רשאי לפתוח פנייה במייל נקלט — כך
+   * העלייה לאוויר נעשית על שולח אחד או שניים בלי לגעת בהרשאות של אף אחד.
+   *
+   * הכתובות מנורמלות באותה פונקציה שמנרמלת כתובת של משתמש
+   * (`normalizeEmail`), אחרת `"Dani@Gmail.com"` בסביבה לא היה מתאים ל-
+   * `"dani@gmail.com"` בבסיס הנתונים, והפיילוט היה נראה כמי שאינו קולט דבר.
+   */
+  emailIntakePilotAddresses: (): string[] => {
+    const raw = optional("EMAIL_INTAKE_PILOT_ADDRESSES");
+    if (!raw) return [];
+
+    // Set: פסיק כפול או אותה כתובת פעמיים הם שגיאת הקלדה, לא שני שולחים.
+    return [...new Set(raw.split(",").map(normalizeEmail).filter(Boolean))];
   },
 
   /**
@@ -166,7 +220,7 @@ export const env = {
     return { accountId, accessKeyId, secretAccessKey, bucket };
   },
 
-  isProduction: () => process.env.NODE_ENV === "production",
+  isProduction: () => isProductionEnv(),
 };
 
 /** מחרוזת ריקה נחשבת כלא-מוגדר: כך שורה ריקה ב-.env אינה מתחזה לערך */
