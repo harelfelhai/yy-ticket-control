@@ -356,6 +356,23 @@ describe("הצינור מקצה לקצה", () => {
     expect(await db.ticket.count()).toBe(1);
     expect(sent).toHaveLength(1);
   });
+
+  it("EM-A11 — תיבת המערכת בהעתק בלבד: נקלט כמו מייל ישיר, והמייל החוזר הולך לשולח בלבד", async () => {
+    // המנהל כתב לקבלן והעתיק את המערכת (§7 שורה 80): השאילתה מסננת לפי
+    // השולח ולא לפי הנמען, ושום שלב בהכרעה אינו שואל למי המייל נשלח
+    const contractor = "contractor@example.com";
+    const mail = firstMail({ text: MAIL_TEXT, receivedAt: arrivedAt, to: [contractor], cc: [MAILBOX] });
+    const { source, sent, deps } = pipeline([mail]);
+
+    expect(await runEmailPoll({ source, now })).toMatchObject({ status: "ok", discovered: 1 });
+    expect(outcomeOf(await drainOneMailJob(deps))).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED" });
+    expect(await db.ticket.count({ where: { channel: "EMAIL", isDraft: true } })).toBe(1);
+
+    await drainOneMailJob(deps);
+    // מי שהיה ב-To אינו מקבל דבר: המייל החוזר הוא לשולח בלבד (EM-L10)
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe(SENDER);
+  });
 });
 
 // ─────────────────────────────── מה שאינו נקלט ואינו נענה ───────────────────────────────
