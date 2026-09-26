@@ -193,22 +193,32 @@ railway run npx tsx prisma/seed.ts
 | `DATABASE_URL` | ✅ קריטי | `${{Postgres.DATABASE_URL}}` — reference variable. נדרש בבנייה ובריצה. |
 | `SESSION_SECRET` | ✅ קריטי | 32+ תווים, ייחודי לפרודקשן. ליצירה: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
 | `APP_BASE_URL` | ✅ קריטי | הכתובת הציבורית של האפליקציה (למשל `https://<app>.up.railway.app` או דומיין מותאם). בסיס קישורי הקסם — חייב להיות נגיש לקבלנים. |
-| `GMAIL_USER` | ✅ בפרודקשן | חשבון ה-Gmail של העסק, שממנו נשלחות ההתראות. |
+| `GMAIL_USER` | ✅ בפרודקשן | חשבון ה-Gmail של העסק, שממנו נשלחות ההתראות, **והתיבה שקליטת המייל קוראת** (1.3). סבב שמגלה שהטוקן שייך לתיבה אחרת נעצר בקול. |
 | `GMAIL_APP_PASSWORD` | ⚠️ מוגדר, **ואינו עובד כאן** | **סיסמת אפליקציה** בת 16 תווים ל-SMTP. נמדד ב-7.9.2026 מתוך הקונטיינר: Railway חוסם כל SMTP יוצא — 25, 465 ו-587 נבלעים בשקט ל-8 שניות אל כל מארח, בעוד ש-443 נענה ב-16ms. המסלול נשאר בקוד למי שמריץ במקום שבו SMTP פתוח. |
-| `GMAIL_REFRESH_TOKEN` | ✅ נדרש בפרודקשן | **הערוץ שעובד:** Gmail API מעל HTTPS. `refresh token` של חשבון השליחה עם ה-scope `gmail.send`, מונפק ב-`npx tsx scripts/gmail-oauth.mts`. משתמש ב-`GOOGLE_CLIENT_ID`/`SECRET` הקיימים. גובר על `GMAIL_APP_PASSWORD` כששניהם מוגדרים. |
+| `GMAIL_REFRESH_TOKEN` | ✅ נדרש בפרודקשן | **הערוץ שעובד:** Gmail API מעל HTTPS. `refresh token` של חשבון התיבה עם שני scopes בדיוק: `gmail.send` ו-`gmail.readonly` (מ-24.9.2026; הקריאה נדרשת לקליטת המייל, ואין שום scope שמסוגל לשנות את התיבה). מונפק ב-`npx tsx scripts/gmail-oauth.mts` **כשמחוברים כחשבון התיבה** — הסקריפט מציג בחירת חשבון בכל ריצה. אימות בלי לחשוף תוכן: `npx tsx scripts/smoke-gmail-read.mts`. משתמש ב-`GOOGLE_CLIENT_ID`/`SECRET` הקיימים. גובר על `GMAIL_APP_PASSWORD` כששניהם מוגדרים. |
 | `NOTIFY_FROM_EMAIL` | ❌ אופציונלי | ברירת המחדל היא `GMAIL_USER` — הכתובת היחידה ש-Gmail מתיר לשלוח ממנה. קיים רק לשם תצוגה: `"בקרת פניות Y&Y <...>"`. |
 | `R2_ACCOUNT_ID` | ✅ בפרודקשן | Cloudflare R2 — ארבעת משתני R2 הולכים יחד. |
 | `R2_ACCESS_KEY_ID` | ✅ בפרודקשן | R2. |
 | `R2_SECRET_ACCESS_KEY` | ✅ בפרודקשן | R2. |
 | `R2_BUCKET` | ✅ בפרודקשן | ‏bucket המדיה של פרודקשן (למשל `yy-media-prod`). |
 | `R2_BACKUP_BUCKET` | ✅ בפרודקשן | ‏bucket שני לגיבוי הלילי. בלעדיו ג'וב הגיבוי נכשל בקול במקום לכתוב לדיסק שנמחק. |
-| `GEMINI_API_KEY` | אופציונלי | **תמלול עברית וחילוץ טקסט כאחד** (`gemini-3.7-flash`). החליף ב-1.9.2026 את `OPENAI_API_KEY` ואת `ANTHROPIC_API_KEY` — ספק אחד לשתי המשימות. בלעדיו שניהם מדולגים (‏SKIPPED), לא נכשלים. |
+| `GEMINI_API_KEY` | ✅ כשקליטת המייל דלוקה | **תמלול עברית וחילוץ טקסט כאחד** (`gemini-3.7-flash`), ומ-1.3 גם **חילוץ השדות ממייל**. החליף ב-1.9.2026 את `OPENAI_API_KEY` ואת `ANTHROPIC_API_KEY` — ספק אחד לכל המשימות. בלעדיו התמלול והחילוץ מדולגים (SKIPPED), וכל מייל נוחת ב"החילוץ אינו זמין" — טיוטה עם גוף המייל בלבד. קליטה דלוקה בלעדיו מדווחת ב-invariant `email-intake-configured`. |
 | `GOOGLE_CLIENT_ID` | ❌ אופציונלי | **התחברות עם Google (1.2).** הולך יחד עם `GOOGLE_CLIENT_SECRET`; בלי שניהם הכפתור אינו מוצג וההתחברות בסיסמה נשארת המסלול היחיד. ה-Authorized redirect URI ב-Google Console חייב להיות `<APP_BASE_URL>/api/auth/google/callback` **בדיוק**, עד הסכימה והפורט — אי-התאמה מוחזרת כשגיאה של גוגל **לפני** שהבקשה מגיעה אלינו, ולכן היא לא תופיע בשום לוג שלנו. |
 | `GOOGLE_CLIENT_SECRET` | ❌ אופציונלי | סוד הלקוח מאותו OAuth client. **משתנה ריצה בלבד** — אין לו `ARG` ב-`Dockerfile`, מפני שהוא נקרא בזמן בקשה ולא בזמן `next build`. היעדר שניהם בפרודקשן מדווח ל-Sentry דרך ה-invariant `google-login-configured` (ראה `MONITORING.md`) — ולא מפיל את העלייה. |
+| `EMAIL_INTAKE_ENABLED` | ✅ `1` — דלוק מ-25.9.2026 | **פתיחת פנייה במייל (1.3).** מדליק רק בערך `1` בדיוק, ורק בפרודקשן. כבוי: אף מייל אינו נקרא. ראה § הפעלת קליטת המייל למטה. |
+| `EMAIL_INTAKE_PILOT_ADDRESSES` | ⚠️ זמני — פיילוט | רשימה מופרדת בפסיקים. **חיתוך** מעל המשתמשים המורשים, לא תוספת: כשהיא מוגדרת, נקלט רק מי שגם ברשימה וגם רשאי. מ-25.9.2026 מכילה את הכתובת של בעל המוצר בלבד. **הסרתה** היא הפתיחה לכל המשתמשים המורשים (O7). |
+| `EMAIL_INTAKE_NONPROD` | ❌ לא בפרודקשן | ויתור מפורש שמדליק את הקליטה **מחוץ** לפרודקשן. בלעדיו, מפתח שהעתיק את משתני הפרודקשן ל-`.env.local` אינו קורא את התיבה המשותפת ואינו עונה לשולחים. |
 | `PG_DUMP_PATH` / `PG_RESTORE_PATH` | ❌ להשאיר ריק | ברירת המחדל `pg_dump`/`pg_restore` על ה-PATH בקונטיינר (מותקנים דרך ה-`Dockerfile`, מ-PGDG, בגרסה 18). |
 | `MEDIA_STORAGE` | ❌ להשאיר ריק | ריק → שימוש ב-R2. `local` היה שומר לדיסק זמני שנמחק בפריסה הבאה. |
 | `SHADOW_DATABASE_URL`, `TEST_*`, `E2E_*`, `SEED_ADMIN_PASSWORD` | ❌ לא בפרודקשן | רלוונטיים לפיתוח/בדיקות/seed בלבד. |
 | `PORT` | ❌ אוטומטי | ‏Railway מזריק; `next start` קורא אותו. |
+
+### הפעלת קליטת המייל (1.3)
+
+- **הפעלה:** שני המשתנים בפקודה אחת — `railway variables --set "EMAIL_INTAKE_PILOT_ADDRESSES=…" --set "EMAIL_INTAKE_ENABLED=1"`. פקודה אחת ולא שתיים: בין שתיים היה רגע שבו הדגל דלוק והרשימה ריקה, כלומר קליטה פתוחה לכולם. השינוי מפעיל פריסה.
+- **גבול ההפעלה:** הסבב המוצלח הראשון רושם `MailChannelState.activatedAt` (פעם אחת, ואינו משתנה). נקלט רק מייל שהגיע אחריו (EM-22) — הפעלה אינה מעבדת את ההיסטוריה של התיבה.
+- **חזרה לאחור:** להסיר את `EMAIL_INTAKE_ENABLED`. זמן ההפעלה נשמר, והסבב הראשון אחרי הדלקה מחדש סורק משעה לפני `lastPollOkAt` (או 48 שעות אחורה, המוקדם מביניהם — `pollWindowStart`), כך שמייל שהגיע בזמן הכיבוי נקלט. היומן מונע קליטה כפולה של מה שכבר הוכרע.
+- **איך יודעים שהקליטה חיה:** לוגי האפליקציה (`email.poll`, `email.reply.sent` וכו׳) נשלחים ל-**Sentry Logs** ולא ל-stdout — `railway logs` אינו מציג אותם. המקור הישיר הוא בסיס הנתונים (דרך `DATABASE_PUBLIC_URL`, ראה `MONITORING.md`): `MailChannelState` — `lastPollOkAt` טרי ו-`lastPollError` ריק; `Heartbeat` בשם `email-poll`; ו-`MailboxMessage` — הכרעה לכל הודעה, והפרש `sentAt − receivedAt` של המייל החוזר.
 
 ---
 

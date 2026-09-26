@@ -98,6 +98,19 @@ Postgres 18 מקומי (`embedded-postgres`, פורט 5433, נתונים ב-`.lo
 הג׳ובים היומיים (הסלמה 06:00, גיבוי 03:00 שעון ישראל) מתזמנים את עצמם מחדש;
 `src/jobs/schedule.ts` הוא החישוב הטהור של שעון-הקיץ.
 
+**קליטת פניות במייל (1.3).** טיימר בתוך התהליך — לא ג׳וב — קורא את תיבת
+`GMAIL_USER` כל 60 שניות (`src/jobs/email-poller.ts` ← `services/email-poll.ts`),
+דרך `MailSource` שאין בו שום פעולה משנה: הטוקן הוא `gmail.readonly` ו-`gmail.send`,
+והתיבה משותפת עם EasyInv, שמשתמש ב"לא נקרא" כרשימת העבודה שלו (EM-20 נאכף
+ביכולת, לא במשמעת). לכל הודעה חדשה נכתבות **באותה טרנזאקציה** שורת
+`MailboxMessage` — היומן, ומקור האמת לשאלה "האם כל מייל הוכרע" — וג׳וב
+`EMAIL_INTAKE`. כל סבב סורק מחדש 48 שעות, כך שהיומן הוא המצב והסבב הוא גם
+השוואה מול התיבה. ג׳ובי המייל רצים בנתיב (lane) נפרד ב-worker, כדי שתשובה לא
+תמתין מאחורי סבב הזנה מרוכזת. מנוע המיזוג (`src/lib/draft/merge.ts`) טהור,
+וסתירות נשמרות ב-`DraftField`. הדגל: `EMAIL_INTAKE_ENABLED=1`, בפרודקשן בלבד,
+ו-`EMAIL_INTAKE_PILOT_ADDRESSES` כחיתוך לפיילוט — ראו `docs/deployment-status.md`
+§ הפעלת קליטת המייל.
+
 **כשלים שקטים.** `src/watchdog/` רץ כל 6 שעות מתוך ה-worker, מאמת invariants
 (`checks.ts`, על בסיס פעימות `Heartbeat`) ומדווח ל-cron monitor **יחיד** ב-Sentry — מגבלת
 free-tier, אין ליצור שני. הוספת invariant: `MONITORING.md`. כל לוג ותפיסת שגיאה עוברים דרך
