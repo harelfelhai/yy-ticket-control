@@ -151,13 +151,15 @@ function InboundSender({ message }: { message: CorrespondenceMessage }) {
 /**
  * קובץ מצורף: קישור הורדה רק כשיש לו בתים שמורים (`downloadable`). לכל השאר
  * — שם, גודל ומה קרה לקובץ, במילים. קישור לקובץ בלי בתים היה מחזיר 404.
+ *
+ * **הסיבה מוצגת גם ליד קישור.** מסמך Word/Excel נשמר בהתכתבות (§7 שורה 64)
+ * ולכן הוא קישור, אבל הוא לא נכנס לטיוטה ולא יגיע לנמענים — ומי שמשלים את
+ * הטיוטה צריך לדעת את זה לפני שהוא משגר.
  */
 function AttachmentRow({ attachment }: { attachment: CorrespondenceAttachment }) {
   const name = attachment.filename ?? he.emailDraft.unnamedAttachment;
-  const reason = attachment.downloadable
-    ? null
-    : (attachment.skippedReason && he.emailDraft.attachmentSkipped[attachment.skippedReason]) ||
-      he.emailDraft.attachmentUnavailable;
+  const skipped = attachment.skippedReason ? he.emailDraft.attachmentSkipped[attachment.skippedReason] : undefined;
+  const reason = skipped ?? (attachment.downloadable ? null : he.emailDraft.attachmentUnavailable);
 
   return (
     <li className="flex flex-wrap items-center gap-2 text-sm">

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
 import { db } from "../src/lib/db";
+import { writeLocalObject } from "../src/lib/storage/local";
 import {
   DISPATCHED_BODY,
   DISPATCHED_DESCRIPTION,
@@ -135,6 +136,13 @@ async function main(): Promise<void> {
       aiStatus: "SKIPPED",
     },
   });
+  // Excel שנשמר בהתכתבות (§7 שורה 64), עם בתים אמיתיים באחסון המקומי: כך
+  // ה-E2E מוריד אותו דרך השרת ובודק שהוא יורד בשמו ולא נפתח. החתימה היא של
+  // ZIP, המיכל של xlsx — כמו שהצינור דורש לפני שהוא שומר
+  const quoteBytes = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(60, 1)]);
+  const quoteKey = `e2e/mail/${first.id}/2.xlsx`;
+  await writeLocalObject(quoteKey, quoteBytes);
+
   await db.mailboxAttachment.createMany({
     data: [
       {
@@ -154,10 +162,10 @@ async function main(): Promise<void> {
         partIndex: 2,
         filename: NON_MEDIA_NAME,
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        sizeBytes: 3072,
+        sizeBytes: quoteBytes.byteLength,
         sha256: sha(`${draft.id}-quote`),
-        // כמו הצינור: לקובץ שאינו מדיה אין בתים שמורים, ולכן גם אין קישור
-        storageKey: null,
+        // כמו הצינור: Excel נשמר בהתכתבות, ועדיין "לא נכנס לטיוטה"
+        storageKey: quoteKey,
         isMedia: false,
         skippedReason: "not-media",
       },

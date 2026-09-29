@@ -72,6 +72,7 @@ async function attachedFile(
     withThread?: boolean;
     skippedReason?: string;
     storageKey?: string | null;
+    isMedia?: boolean;
   } = {},
 ) {
   const thread = await db.mailThread.create({
@@ -104,7 +105,7 @@ async function attachedFile(
       filename,
       mimeType,
       sizeBytes: bytes.byteLength,
-      isMedia: true,
+      isMedia: overrides.isMedia ?? true,
       storageKey,
       skippedReason: overrides.skippedReason ?? null,
     },
@@ -162,6 +163,42 @@ describe("הגשת קובץ — מנהל האתר", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''file");
+  });
+
+  it("§7 שורה 64 — מסמך Word מההתכתבות יורד (attachment) בשמו המקורי, ולא נפתח", async () => {
+    const ticket = await makeTicket();
+    const docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const bytes = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
+    const { attachment } = await attachedFile(ticket.id, {
+      filename: "הצעת מחיר.docx",
+      mimeType: docx,
+      bytes,
+      isMedia: false,
+      skippedReason: "not-media",
+    });
+
+    const response = await requestAsManager(attachment.id);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe(docx);
+    expect(response.headers.get("Content-Disposition")).toBe(
+      `attachment; filename*=UTF-8''${encodeURIComponent("הצעת מחיר.docx")}`,
+    );
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("§7 שורה 64 — גם מסמך Word אינו נגיש לקבלן משויך: ההתכתבות אינה שלו", async () => {
+    const ticket = await makeTicket();
+    const { attachment } = await attachedFile(ticket.id, {
+      filename: "הצעת מחיר.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      isMedia: false,
+      skippedReason: "not-media",
+    });
+
+    const response = await requestAs(contractor, attachment.id);
+
+    expect(response.status).toBe(404);
   });
 });
 

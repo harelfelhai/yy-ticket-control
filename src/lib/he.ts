@@ -1118,9 +1118,10 @@ export const he = {
     unnamedAttachmentN: (index: number) => `קובץ ללא שם ${index}`,
     fileSize: (kilobytes: string) => `${kilobytes} KB`,
     /**
-     * קובץ מצורף שאין לו בתים שמורים ולכן אינו קישור, לפי `skippedReason`
-     * שהצינור כותב (`services/email-intake.ts`). הנוסח אומר מה קרה לקובץ, כי
-     * שם בלי קישור ובלי הסבר נקרא כתקלה.
+     * מה קרה לקובץ מצורף שלא נכנס לטיוטה, לפי `skippedReason` שהצינור כותב
+     * (`services/email-intake.ts`). קובץ בלי בתים שמורים אינו קישור, והנוסח
+     * אומר למה — שם בלי קישור ובלי הסבר נקרא כתקלה. מסמך Word/Excel כן נשמר
+     * ויש לו קישור, והנוסח שלצדו אומר שהוא לא יגיע לנמענים.
      */
     attachmentSkipped: {
       "not-media": "לא נכנס לטיוטה: אינו תמונה, וידאו, אודיו או PDF",

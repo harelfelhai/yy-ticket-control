@@ -1,6 +1,7 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { contentDisposition } from "./disposition";
 import { assertWritableObject } from "./limits";
 import type { MediaStorage } from "./types";
 
@@ -59,10 +60,15 @@ export function r2Storage(config: R2Config): MediaStorage {
       return { url, headers: { "Content-Type": contentType } };
     },
 
-    async createDownloadUrl(key) {
-      return getSignedUrl(client, new GetObjectCommand({ Bucket: config.bucket, Key: key }), {
-        expiresIn: DOWNLOAD_EXPIRY_SECONDS,
+    async createDownloadUrl(key, download) {
+      // מסמך מההתכתבות יורד בשמו המקורי: בלי הכותרת, R2 היה מגיש אותו בשם
+      // מפתח האחסון (`media/mail/<id>/2.docx`)
+      const command = new GetObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+        ...(download ? { ResponseContentDisposition: contentDisposition("attachment", download.filename) } : {}),
       });
+      return getSignedUrl(client, command, { expiresIn: DOWNLOAD_EXPIRY_SECONDS });
     },
 
     // אותו `PutObjectCommand` שנחתם עבור הדפדפן, רק שכאן הבתים נשלחים
@@ -70,8 +76,8 @@ export function r2Storage(config: R2Config): MediaStorage {
     // הוא מה ש-R2 יחזיר בהורדה, וזה מה שקובע אם הדפדפן יציג תמונה או
     // יוריד קובץ. בלעדיו האובייקט מקבל `application/octet-stream`, וקובץ
     // שנכתב מהשרת היה מתנהג אחרת מקובץ זהה שהועלה מהדפדפן.
-    async write(key, bytes, contentType) {
-      assertWritableObject(key, bytes, contentType);
+    async write(key, bytes, contentType, purpose) {
+      assertWritableObject(key, bytes, contentType, purpose);
       await client.send(
         new PutObjectCommand({
           Bucket: config.bucket,

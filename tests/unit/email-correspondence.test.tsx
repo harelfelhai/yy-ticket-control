@@ -166,6 +166,41 @@ describe("EmailCorrespondence", () => {
     expect(screen.getByText(he.emailDraft.fileSize("200"))).toBeInTheDocument();
   });
 
+  it("מסמך Word שנשמר בהתכתבות (§7 שורה 64): קישור הורדה, ולצדו שהוא לא נכנס לטיוטה", () => {
+    render(
+      <EmailCorrespondence
+        messages={[
+          message({
+            id: "m8",
+            attachments: [
+              {
+                id: "att-8",
+                filename: "הצעת מחיר.docx",
+                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                sizeBytes: 5000,
+                isMedia: false,
+                mediaFileId: null,
+                skippedReason: "not-media",
+                downloadable: true,
+              },
+            ],
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "הצעת מחיר.docx" })).toHaveAttribute("href", "/api/email-attachments/att-8");
+    // מי שמשלים את הטיוטה צריך לדעת שהקובץ לא יגיע לנמענים
+    expect(screen.getByText(he.emailDraft.attachmentSkipped["not-media"])).toBeInTheDocument();
+  });
+
+  it("מדיה שנכנסה לטיוטה: קישור בלי שום תג", () => {
+    render(<EmailCorrespondence messages={[message({ id: "m7", attachments: [THREAD[0].attachments[0]] })]} />);
+    const row = screen.getByRole("link", { name: "kitchen.jpg" }).closest("li");
+    for (const text of [...Object.values(he.emailDraft.attachmentSkipped), he.emailDraft.attachmentUnavailable]) {
+      expect(row).not.toHaveTextContent(text);
+    }
+  });
+
   it("קובץ בלי בתים ובלי סיבה מוכרת — נוסח כללי ולא קישור", () => {
     render(
       <EmailCorrespondence

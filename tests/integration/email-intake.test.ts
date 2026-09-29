@@ -12,6 +12,7 @@ import { aiError, emptyExtraction, fakeFieldExtractor } from "../helpers/fake-fi
 import { fakeMailSource } from "../helpers/fake-mail-source";
 import {
   ARRIVED_AT,
+  DOCX_BYTES,
   FIRST_MAIL_MESSAGE_ID,
   FIRST_MAIL_SUBJECT,
   MAILBOX,
@@ -910,7 +911,7 @@ describe("מסלול המייל החדש", () => {
 // ─────────────────────────────── קבצים מצורפים ───────────────────────────────
 
 describe("קבצים מצורפים", () => {
-  it("EM-06 · EM-06a — מדיה נכנסת לטיוטה, ומה שאינו מדיה נשאר בהתכתבות בלבד", async () => {
+  it("EM-06 · EM-06a — מדיה נכנסת לטיוטה, ו-Word נשמר בהתכתבות בלבד: עם בתים, בלי MediaFile (§7 שורה 64)", async () => {
     const mail = mailWithAttachments({
       subject: FIRST_MAIL_SUBJECT,
       text: HAPPY_TEXT,
@@ -933,10 +934,12 @@ describe("קבצים מצורפים", () => {
       ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", false, "not-media"],
     ]);
     expect(attachments[0].inline).toBe(true);
-    expect(attachments[2].storageKey).toBeNull();
+    // ה-Word נשמר — עם סיומת אמיתית במפתח — אבל אינו קובץ בטיוטה
+    expect(attachments[2].storageKey).toMatch(/\.docx$/);
     expect(attachments[2].mediaFileId).toBeNull();
 
-    // הודעת מדיה אחת בשרשור עם שני הקבצים, וג׳וב חילוץ טקסט לכל אחד
+    // הודעת מדיה אחת בשרשור עם שני הקבצים, וג׳וב חילוץ טקסט לכל אחד —
+    // ה-Word אינו ביניהם: הוא לא יגיע לנמענים ולא לחילוץ
     const media = await db.mediaFile.findMany();
     expect(media).toHaveLength(2);
     expect(media.every((file) => file.uploaded && file.aiStatus === "PENDING")).toBe(true);
@@ -951,8 +954,52 @@ describe("קבצים מצורפים", () => {
       expect(bytes.byteLength).toBe(file.sizeBytes);
     }
 
-    // קובץ שאינו מדיה אינו יורד כלל — אין מה לעשות בבתים שלו
-    expect(source.callsTo("getAttachment").map((call) => call.attachmentId)).toEqual(["attachment-pdf"]);
+    // ה-Word יורד ונשמר כפי שהגיע
+    expect(source.callsTo("getAttachment").map((call) => call.attachmentId)).toEqual([
+      "attachment-pdf",
+      "attachment-docx",
+    ]);
+    expect(await storage.read(attachments[2].storageKey as string)).toEqual(DOCX_BYTES);
+  });
+
+  it("EM-06a — קובץ ששמו docx ובתיו אינם Word (קובץ הרצה) אינו נשמר: השם בשליטת השולח", async () => {
+    const mail = mailWithAttachments({
+      subject: FIRST_MAIL_SUBJECT,
+      text: HAPPY_TEXT,
+      parts: [documentAttachmentPart({ bytes: Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00]) })],
+    });
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const id = await inbound(mail.envelope);
+
+    await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor: fakeFieldExtractor({ result: HAPPY_EXTRACTION }), now: NOW },
+    );
+
+    const [attachment] = await db.mailboxAttachment.findMany();
+    expect(attachment.skippedReason).toBe("not-media");
+    expect(attachment.storageKey).toBeNull();
+    expect(await db.mediaFile.count()).toBe(0);
+  });
+
+  it("EM-06a — ZIP נשאר בשמו בלבד: רק Word ו-Excel נשמרים בהתכתבות", async () => {
+    const mail = mailWithAttachments({
+      subject: FIRST_MAIL_SUBJECT,
+      text: HAPPY_TEXT,
+      parts: [documentAttachmentPart({ mimeType: "application/zip", filename: "photos.zip", attachmentId: "zip" })],
+    });
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const id = await inbound(mail.envelope);
+
+    await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor: fakeFieldExtractor({ result: HAPPY_EXTRACTION }), now: NOW },
+    );
+
+    const [attachment] = await db.mailboxAttachment.findMany();
+    expect(attachment.storageKey).toBeNull();
+    // ספציפי ואינו Word/Excel — אין סיבה להוריד
+    expect(source.callsTo("getAttachment")).toEqual([]);
   });
 
   it("EM-06 — הבתים של הקבצים נשלחים לחילוץ", async () => {
@@ -993,10 +1040,10 @@ describe("קבצים מצורפים", () => {
     expect(source.callsTo("getAttachment")).toEqual([]);
   });
 
-  it("EM-06a — הצהרה כללית נפתרת מהבתים ומהשם, וקובץ שאינו מדיה אינו נכנס לטיוטה", async () => {
+  it("EM-06a — הצהרה כללית נפתרת מהבתים ומהשם: Word נשמר בהתכתבות ואינו נכנס לטיוטה", async () => {
     // `application/octet-stream` הוא מה ש-Outlook שולח בפועל על קבצים
-    // רבים. כאן הוא ZIP בתחפושת: הוא **כן** יורד (אי אפשר לדעת בלי הבתים),
-    // ורק אחרי הסיווג מתברר שאין מה לעשות איתו
+    // רבים. הוא **כן** יורד (אי אפשר לדעת בלי הבתים), והסיומת והחתימה
+    // מכריעות שזה Word — ולכן הוא נשמר בהתכתבות (§7 שורה 64)
     const mail = mailWithAttachments({
       subject: FIRST_MAIL_SUBJECT,
       text: HAPPY_TEXT,
@@ -1015,8 +1062,9 @@ describe("קבצים מצורפים", () => {
     expect(source.callsTo("getAttachment").map((call) => call.attachmentId)).toEqual(["blob"]);
     const [attachment] = await db.mailboxAttachment.findMany();
     expect(attachment.isMedia).toBe(false);
+    expect(attachment.mimeType).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     expect(attachment.skippedReason).toBe("not-media");
-    expect(attachment.storageKey).toBeNull();
+    expect(attachment.storageKey).toMatch(/\.docx$/);
     // חתימת ה-ZIP נשמרת גם לקובץ שלא נכנס — זו ההתכתבות
     expect(attachment.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(await db.mediaFile.count()).toBe(0);

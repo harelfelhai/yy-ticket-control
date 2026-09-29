@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifyAttachment,
   decodeBody,
+  extensionForType,
+  isOfficeDocument,
   walkPayload,
   type GmailMessagePart,
 } from "@/lib/email-intake/mime";
@@ -728,12 +730,20 @@ describe("classifyAttachment — מה אינו מדיה (EM-06a)", () => {
     expect(classifyAttachment({ filename, mimeType })).toEqual({ mimeType, isMedia: false, isTnef: false });
   });
 
-  it("EM-06a — סוג כללי עם סיומת שאינה מדיה נשאר octet-stream ואינו מדיה", () => {
+  it("EM-06a — סוג כללי עם סיומת של Word/Excel נפתר לסוג המסמך, ואינו מדיה", () => {
+    // בלי זה, מסמך שהוצהר octet-stream נשאר "לא מזוהה" ולא נשמר בהתכתבות (§7 שורה 64)
     expect(classifyAttachment({ filename: "דוח.docx", mimeType: "application/octet-stream" })).toEqual({
-      mimeType: "application/octet-stream",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       isMedia: false,
       isTnef: false,
     });
+    expect(classifyAttachment({ filename: "טבלה.XLS", mimeType: "" }).mimeType).toBe("application/vnd.ms-excel");
+  });
+
+  it("EM-06a — סוג כללי בלי סיומת מוכרת נשאר octet-stream ואינו מדיה", () => {
+    expect(classifyAttachment({ filename: "archive.zip", mimeType: "application/octet-stream" }).mimeType).toBe(
+      "application/octet-stream",
+    );
     expect(classifyAttachment({ filename: null, mimeType: "" })).toEqual({ mimeType: "application/octet-stream", isMedia: false, isTnef: false });
     expect(classifyAttachment({ filename: "noext", mimeType: "application/octet-stream" }).isMedia).toBe(false);
   });
@@ -759,5 +769,52 @@ describe("classifyAttachment — מה אינו מדיה (EM-06a)", () => {
       isMedia: false,
       isTnef: true,
     });
+  });
+});
+
+describe("isOfficeDocument — מסמך שנשמר בהתכתבות רק כשהבתים הם באמת Office (§7 שורה 64)", () => {
+  const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const ZIP = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
+  const CFB = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00]);
+  const EXE = Buffer.from([0x4d, 0x5a, 0x90, 0x00]);
+
+  it.each([
+    [DOCX, ZIP],
+    [XLSX, ZIP],
+    ["application/msword", CFB],
+    ["application/vnd.ms-excel", CFB],
+  ])("%s עם המיכל הנכון — כן", (mimeType, head) => {
+    expect(isOfficeDocument(mimeType, head)).toBe(true);
+  });
+
+  it("קובץ הרצה ששמו docx — לא: השם וההצהרה בשליטת השולח", () => {
+    expect(isOfficeDocument(DOCX, EXE)).toBe(false);
+  });
+
+  it("מיכל שאינו של הסוג — לא: docx שבתיו CFB, doc שבתיו ZIP", () => {
+    expect(isOfficeDocument(DOCX, CFB)).toBe(false);
+    expect(isOfficeDocument("application/msword", ZIP)).toBe(false);
+  });
+
+  it("סוג שאינו Word או Excel — לא, גם כשהוא ZIP", () => {
+    expect(isOfficeDocument("application/zip", ZIP)).toBe(false);
+    expect(isOfficeDocument("application/vnd.openxmlformats-officedocument.presentationml.presentation", ZIP)).toBe(false);
+  });
+
+  it("בלי בתים, או חתימה קצוצה — לא", () => {
+    expect(isOfficeDocument(DOCX, null)).toBe(false);
+    expect(isOfficeDocument(DOCX, Buffer.from([0x50, 0x4b]))).toBe(false);
+  });
+});
+
+describe("extensionForType — הסיומת של סוג, מאותה טבלה", () => {
+  it("מסמכי Office מקבלים סיומת אמיתית", () => {
+    expect(extensionForType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")).toBe("docx");
+    expect(extensionForType("application/vnd.ms-excel")).toBe("xls");
+  });
+
+  it("סוג שאינו בטבלה — null", () => {
+    expect(extensionForType("application/zip")).toBeNull();
   });
 });

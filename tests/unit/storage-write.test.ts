@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { MAX_FILE_BYTES, assertWritableObject } from "@/lib/storage/limits";
+import { contentDisposition } from "@/lib/storage/disposition";
+import { MAX_FILE_BYTES, assertWritableObject, isAllowedMimeType } from "@/lib/storage/limits";
 import { localStorage, resolveKey } from "@/lib/storage/local";
 import { r2Storage } from "@/lib/storage/r2";
 
@@ -23,7 +24,16 @@ import { r2Storage } from "@/lib/storage/r2";
  * כפיל של `S3Client` שרק רושם את הפקודה שנשלחה אליו.
  */
 
-const { sent } = vi.hoisted(() => ({ sent: [] as unknown[] }));
+const { sent, signed } = vi.hoisted(() => ({ sent: [] as unknown[], signed: [] as unknown[] }));
+
+// הכתובת החתומה נבנית מקומית, אבל דורשת לקוח אמיתי; כאן נבדקת הפקודה
+// שנחתמה — ובפרט הכותרת שהיא נושאת — ולא החתימה עצמה
+vi.mock("@aws-sdk/s3-request-presigner", () => ({
+  getSignedUrl: async (_client: unknown, command: unknown) => {
+    signed.push(command);
+    return "https://signed.example/object";
+  },
+}));
 
 vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@aws-sdk/client-s3")>();
@@ -63,6 +73,7 @@ afterAll(async () => {
 
 afterEach(() => {
   sent.length = 0;
+  signed.length = 0;
 });
 
 /** מפתח ייחודי בתוך התיקייה הזמנית */
@@ -214,5 +225,64 @@ describe("EM-06 — דרייבר R2", () => {
     // לא שגיאה מהשרת אלא סירוב מקומי: אובייקט חלקי ב-R2 הוא מה שהשומר
     // נועד למנוע, והוא היחיד שיודע לעצור לפני שהבקשה יוצאת.
     expect(sent).toHaveLength(0);
+  });
+});
+
+const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+describe("מסמך בהתכתבות (§7 שורה 64) — רשימת היתר נפרדת", () => {
+  it("Word ו-Excel נכתבים כמסמך התכתבות, ולא כמדיה — ההעלאה מהדפדפן לא התרחבה", () => {
+    for (const type of [DOCX, "application/msword", "application/vnd.ms-excel"]) {
+      expect(() => assertWritableObject("media/mail/x/2.bin", Buffer.from("PK"), type, "correspondence")).not.toThrow();
+      expect(() => assertWritableObject("media/mail/x/2.bin", Buffer.from("PK"), type)).toThrow(/אינו מותר לאחסון/);
+    }
+    // רשימת ההיתר של ההעלאה מהדפדפן לא השתנתה
+    expect(isAllowedMimeType(DOCX)).toBe(false);
+  });
+
+  it("התכתבות אינה פרצה לסוגים אחרים: לא תמונה, לא ZIP, לא קובץ הרצה", () => {
+    for (const type of ["image/jpeg", "application/zip", "application/x-msdownload"]) {
+      expect(() => assertWritableObject("media/mail/x/2.bin", Buffer.from("x"), type, "correspondence")).toThrow(
+        /אינו מותר לאחסון/,
+      );
+    }
+  });
+
+  it("התקרה והבתים הריקים חלים גם על מסמך", () => {
+    expect(() => assertWritableObject("media/mail/x/2.docx", Buffer.alloc(0), DOCX, "correspondence")).toThrow(/ריק/);
+    expect(() =>
+      assertWritableObject("media/mail/x/2.docx", Buffer.alloc(MAX_FILE_BYTES + 1), DOCX, "correspondence"),
+    ).toThrow(/גדול מהמותר/);
+  });
+
+  it("הדרייבר המקומי כותב מסמך התכתבות", async () => {
+    const bytes = Buffer.from([0x50, 0x4b, 0x03, 0x04, 1, 2]);
+    await storage.write(key("quote.docx"), bytes, DOCX, "correspondence");
+    expect(await storage.head(key("quote.docx"))).toEqual({ sizeBytes: bytes.byteLength });
+  });
+});
+
+describe("R2 — מסמך מוגש להורדה בשמו המקורי", () => {
+  const r2 = r2Storage({ accountId: "account", accessKeyId: "key", secretAccessKey: "secret", bucket: "yy-media" });
+
+  it("עם שם — הכתובת החתומה נושאת Content-Disposition של הורדה", async () => {
+    await r2.createDownloadUrl("media/mail/x/2.docx", { filename: "הצעת מחיר.docx" });
+    const command = signed[0] as GetObjectCommand;
+    expect(command).toBeInstanceOf(GetObjectCommand);
+    expect(command.input.ResponseContentDisposition).toBe(contentDisposition("attachment", "הצעת מחיר.docx"));
+  });
+
+  it("בלי שם (מדיה) — בלי כותרת: תמונה נפתחת בדפדפן כמו קודם", async () => {
+    await r2.createDownloadUrl("media/mail/x/1.jpeg");
+    expect((signed[0] as GetObjectCommand).input.ResponseContentDisposition).toBeUndefined();
+  });
+});
+
+describe("contentDisposition", () => {
+  it("מקודד שם עברי עם רווח", () => {
+    expect(contentDisposition("attachment", "הצעת מחיר.docx")).toBe(
+      `attachment; filename*=UTF-8''${encodeURIComponent("הצעת מחיר.docx")}`,
+    );
+    expect(contentDisposition("inline", null)).toBe("inline; filename*=UTF-8''file");
   });
 });

@@ -1,3 +1,4 @@
+import { isCorrespondenceDocumentType } from "@/lib/storage/limits";
 import { decodeRfc2047, headerMap } from "./headers";
 import type { MailPart } from "./types";
 
@@ -320,6 +321,12 @@ const BY_EXTENSION: Readonly<Record<string, string>> = {
   aac: "audio/aac",
   amr: "audio/amr",
   "3gp": "video/3gpp",
+  // מסמכים שנשמרים בהתכתבות בלבד (§7 שורה 64) — כדי שמסמך שהוצהר
+  // `application/octet-stream` ייפתר לסוג שלו ולא יישאר "לא מזוהה"
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
 /**
@@ -453,6 +460,35 @@ function resolveType(declared: string, byName: string | null, sniffed: Sniffed |
   }
   if (!generic) return declared;
   return byName ?? OCTET_STREAM;
+}
+
+/** חתימת ZIP — המיכל של `docx` ו-`xlsx` */
+const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
+/** חתימת OLE/CFB — המיכל של `doc` ו-`xls` הישנים */
+const CFB_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+
+/**
+ * האם זה מסמך Word או Excel **אמיתי** — סוג שנשמר בהתכתבות (§7 שורה 64)
+ * **וגם** בתים שמתחילים במיכל של הסוג הזה.
+ *
+ * השם וההצהרה בשליטת השולח; קובץ הרצה ששמו `x.docx` היה נשמר ומוגש להורדה
+ * מהדומיין שלנו כמסמך. החתימה אינה מוכיחה שהמסמך תקין (כל ZIP מתחיל כך),
+ * אבל היא מוציאה את מה שאינו מסמך Office כלל.
+ */
+export function isOfficeDocument(mimeType: string, head: Uint8Array | null): boolean {
+  if (!head || !isCorrespondenceDocumentType(mimeType)) return false;
+  const legacy = mimeType === "application/msword" || mimeType === "application/vnd.ms-excel";
+  return startsWith(head, legacy ? CFB_SIGNATURE : ZIP_SIGNATURE);
+}
+
+/**
+ * הסיומת של סוג שנפתר — ההפך של `BY_EXTENSION`, מאותה טבלה. `null` לסוג
+ * שאין לו סיומת מוכרת כאן.
+ */
+export function extensionForType(mimeType: string): string | null {
+  const base = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  const entry = Object.entries(BY_EXTENSION).find(([, type]) => type === base);
+  return entry ? entry[0] : null;
 }
 
 function isMediaType(mimeType: string): boolean {

@@ -6,7 +6,7 @@ import { captureError } from "@/lib/observability/log";
 import type { Viewer } from "@/lib/permissions";
 import { canViewCorrespondence } from "@/lib/services/email-correspondence";
 import { resolveViewer } from "@/lib/services/viewer";
-import { selectStorage } from "@/lib/storage";
+import { contentDisposition, selectStorage } from "@/lib/storage";
 
 /**
  * הגשת קובץ מצורף מהתכתבות מייל (`MailboxAttachment`) — אחרי בדיקת הרשאה,
@@ -27,9 +27,10 @@ import { selectStorage } from "@/lib/storage";
  *    `ticketId` להעביר, ונופלות ל"לא נמצא" **לפני** שמגיעים לבדיקת K,
  *    בדיוק כמו מזהה לא קיים.
  * 2. **לא לכל קובץ יש בתים להגיש.** קובץ שסומן `skippedReason` (גדול מדי,
- *    כפילות לפי sha256, סוג שאינו מדיה שנשמר "בהתכתבות בלבד") נשאר בלי
+ *    כפילות לפי sha256, סוג שאינו מדיה ואינו Word/Excel) נשאר בלי
  *    `storageKey` — נרשם רק כשורה בהתכתבות, ולא הועלה לאחסון בפועל.
- *    "לא נמצא" הוא התשובה הנכונה: אין בתים, ולכן אין מה להגיש.
+ *    "לא נמצא" הוא התשובה הנכונה: אין בתים, ולכן אין מה להגיש. מסמך
+ *    Word/Excel **כן** נשמר (§7 שורה 64), ומוגש להורדה ולא לפתיחה.
  *
  * הקישור שקורא לנתיב הזה נבנה במסך שרשור המייל (S8) — לא כאן.
  */
@@ -63,8 +64,14 @@ export async function GET(
   // אחרת טיפוסי Prisma (`string | null`) לא מצטמצמים דרך גבול הפונקציה.
   if (!attachment || !attachment.storageKey) return notFound();
 
+  // מדיה נפתחת בדפדפן (inline); מסמך Word/Excel מההתכתבות **יורד**, בשמו
+  // המקורי — גם בהפניה ל-R2, שם הכותרת נמסרת כפרמטר של הכתובת החתומה
+  const download = !attachment.isMedia;
   const storage = selectStorage();
-  const directUrl = await storage.createDownloadUrl(attachment.storageKey);
+  const directUrl = await storage.createDownloadUrl(
+    attachment.storageKey,
+    download ? { filename: attachment.filename ?? "file" } : undefined,
+  );
   if (directUrl) return NextResponse.redirect(directUrl);
 
   const body = await storage.read(attachment.storageKey);
@@ -73,11 +80,7 @@ export async function GET(
     headers: {
       "Content-Type": attachment.mimeType,
       "Content-Length": String(body.byteLength),
-      // inline ולא attachment: תמונה בשרשור אמורה להיפתח, לא לרדת.
-      // שם הקובץ מקודד כי הוא מגיע מהמייל הנכנס ועשוי להכיל עברית או פסיקים.
-      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(
-        attachment.filename ?? "file",
-      )}`,
+      "Content-Disposition": contentDisposition(download ? "attachment" : "inline", attachment.filename),
       // פרטי ולא ציבורי: הקובץ שייך לפנייה, ואסור שיישמר במטמון משותף.
       "Cache-Control": "private, max-age=300",
     },
@@ -104,6 +107,7 @@ async function getViewableAttachment(viewer: Viewer, attachmentId: string) {
     select: {
       filename: true,
       mimeType: true,
+      isMedia: true,
       storageKey: true,
       message: { select: { thread: { select: { ticketId: true } } } },
     },

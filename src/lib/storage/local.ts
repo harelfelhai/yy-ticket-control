@@ -37,8 +37,8 @@ export function localStorage(baseUrl: string): MediaStorage {
     // הכתיבה עצמה נשארת ב-`writeLocalObject`, שה-route של ההעלאה כבר
     // קורא לו: שני המסלולים חייבים ליצור אותו קובץ באותו מקום, ושכפול
     // של שלוש שורות fs הוא בדיוק איך שהם מתפצלים בלי שאיש ישים לב.
-    async write(key, bytes, contentType) {
-      assertWritableObject(key, bytes, contentType);
+    async write(key, bytes, contentType, purpose) {
+      assertWritableObject(key, bytes, contentType, purpose);
       await writeLocalObject(key, bytes);
     },
 

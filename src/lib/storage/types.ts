@@ -11,6 +11,8 @@
  * ההעלאה — אותו שרת שאמור באותו רגע להגיש מסכים למנהל אחר.
  */
 
+import type { StoragePurpose } from "./limits";
+
 /** לאן הדפדפן שולח את הבתים, ועם אילו כותרות */
 export interface UploadTarget {
   url: string;
@@ -30,8 +32,12 @@ export interface MediaStorage {
    * ‏null פירושו "אין כתובת ישירה — הגש את הבתים בעצמך". כך הדרייבר המקומי
    * אינו נדרש לחשוף קבצים בכתובת ציבורית, והבקשה ממשיכה לעבור דרך בדיקת
    * ההרשאה של האפליקציה.
+   *
+   * `download` — כשהקובץ צריך לרדת בשמו ולא להיפתח (מסמך Word מההתכתבות):
+   * הכתובת החתומה נושאת `Content-Disposition` משלה, אחרת הדפדפן היה שומר
+   * אותו בשם מפתח האחסון.
    */
-  createDownloadUrl(key: string): Promise<string | null>;
+  createDownloadUrl(key: string, download?: DownloadDisposition): Promise<string | null>;
 
   /**
    * כתיבת בתים מתוך תהליך השרת.
@@ -47,8 +53,11 @@ export interface MediaStorage {
    * הקליטה) ואינו מומצא כאן. סוג שאינו ברשימת ההיתר, בתים ריקים או גדולים
    * מ-`MAX_FILE_BYTES` — זריקה, ולפני כל מגע באחסון (`assertWritableObject`).
    * זו שגיאת מפתח: הסינון האמיתי נעשה אצל הקורא.
+   *
+   * `purpose` בוחר את רשימת ההיתר (`limits.ts`): מדיה לפנייה (ברירת המחדל),
+   * או מסמך שנשמר בהתכתבות המייל בלבד.
    */
-  write(key: string, bytes: Buffer, contentType: string): Promise<void>;
+  write(key: string, bytes: Buffer, contentType: string, purpose?: StoragePurpose): Promise<void>;
 
   /** קריאת הקובץ בשרת — נדרש לתמלול, לחילוץ טקסט ולהגשה מקומית */
   read(key: string): Promise<Buffer>;
@@ -73,4 +82,10 @@ export interface MediaStorage {
 
   /** מחיקה. נדרשת לניקוי העלאה שנקטעה, ולא למחיקת מדיה של פנייה (Gate G5) */
   remove(key: string): Promise<void>;
+}
+
+/** איך הדפדפן יקבל קובץ שמוגש להורדה */
+export interface DownloadDisposition {
+  /** השם שהקובץ יישמר בו — שם הקובץ המקורי מהמייל */
+  filename: string;
 }
