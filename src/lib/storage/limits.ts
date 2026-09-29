@@ -30,13 +30,43 @@ export const ALLOWED_MIME_TYPES = [
   "audio/ogg",
 ] as const;
 
+/**
+ * מסמכים שנשמרים **בהתכתבות המייל בלבד** (§7 שורה 64): Word ו-Excel.
+ *
+ * רשימה נפרדת מ-`ALLOWED_MIME_TYPES` בכוונה. זו רשימת ההיתר של ההעלאה
+ * מהדפדפן, והוספת Word אליה הייתה מאפשרת להעלות מסמכים לשרשור של פנייה —
+ * לנמענים ולקבלנים. כאן הכותב היחיד הוא שירות קליטת המייל, והקובץ נגיש רק
+ * למי שרואה את ההתכתבות.
+ */
+export const CORRESPONDENCE_DOCUMENT_TYPES = [
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+] as const;
+
+/**
+ * למה נכתב הקובץ, ולכן איזו רשימת היתר חלה עליו: מדיה של פנייה, או מסמך
+ * שנשמר בהתכתבות המייל בלבד.
+ */
+export type StoragePurpose = "media" | "correspondence";
+
 /** תקרה לקובץ יחיד. וידאו קצר מהטלפון נכנס בנוחות. */
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
-export function isAllowedMimeType(value: string): boolean {
+/** הסוג בלי פרמטרים ובאותיות קטנות — `audio/webm;codecs=opus` הוא `audio/webm` */
+function baseType(value: string): string {
   // codecs מגיע מ-MediaRecorder בצורה `audio/webm;codecs=opus`
-  const base = value.split(";")[0]?.trim().toLowerCase() ?? "";
-  return (ALLOWED_MIME_TYPES as readonly string[]).includes(base);
+  return value.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+export function isAllowedMimeType(value: string): boolean {
+  return (ALLOWED_MIME_TYPES as readonly string[]).includes(baseType(value));
+}
+
+/** האם הסוג הוא מסמך שנשמר בהתכתבות בלבד (Word, Excel) */
+export function isCorrespondenceDocumentType(value: string): boolean {
+  return (CORRESPONDENCE_DOCUMENT_TYPES as readonly string[]).includes(baseType(value));
 }
 
 /**
@@ -54,9 +84,18 @@ export function isAllowedMimeType(value: string): boolean {
  * זו **שגיאת מפתח ולא הודעה למשתמש**: מי שקורא (שירות הקליטה) אמור לסנן
  * קבצים ב-`classifyAttachment` לפני שהוא מגיע לכאן, וזריקה כאן פירושה באג
  * שצריך להגיע ל-Sentry. מכאן גם הטקסט האנגלי-עברי המעורב, בלי `he.ts`.
+ *
+ * `purpose` בוחר את רשימת ההיתר: מדיה לפנייה, או מסמך להתכתבות בלבד. אין
+ * מטרה שמקבלת את שתיהן — Word אינו נכתב כמדיה, ותמונה אינה נכתבת כמסמך.
  */
-export function assertWritableObject(key: string, bytes: Buffer, contentType: string): void {
-  if (!isAllowedMimeType(contentType)) {
+export function assertWritableObject(
+  key: string,
+  bytes: Buffer,
+  contentType: string,
+  purpose: StoragePurpose = "media",
+): void {
+  const allowed = purpose === "media" ? isAllowedMimeType(contentType) : isCorrespondenceDocumentType(contentType);
+  if (!allowed) {
     throw new Error(`סוג הקובץ ${contentType} אינו מותר לאחסון (${key})`);
   }
 

@@ -4,16 +4,20 @@ import { localStorage } from "./local";
 import { r2Storage } from "./r2";
 import type { MediaStorage } from "./types";
 
-export type { MediaStorage, UploadTarget } from "./types";
+export type { DownloadDisposition, MediaStorage, UploadTarget } from "./types";
+export { contentDisposition } from "./disposition";
 
 // רשימת ההיתר והתקרה ישבו כאן, ועברו ל-`limits.ts` כשגם הדרייברים נזקקו
 // להן (`MediaStorage.write` נכתב מהשרת ואינו עובר ברישום המדיה). הייצוא
 // מכאן נשמר כדי שמסלול הייבוא `@/lib/storage` יישאר אחד.
 export {
   ALLOWED_MIME_TYPES,
+  CORRESPONDENCE_DOCUMENT_TYPES,
   MAX_FILE_BYTES,
   assertWritableObject,
   isAllowedMimeType,
+  isCorrespondenceDocumentType,
+  type StoragePurpose,
 } from "./limits";
 
 /**

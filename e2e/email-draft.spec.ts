@@ -49,7 +49,7 @@ async function hydrated(page: Page) {
   await expect(page.getByRole("button", { name: "מחק טיוטה" })).toBeEnabled();
 }
 
-test("EM-S7-02 — ההתכתבות בראש המסך: האחרון פתוח, הקודמים מקופלים, קובץ בלי בתים אינו קישור", async ({
+test("EM-S7-02 — ההתכתבות בראש המסך: האחרון פתוח, הקודמים מקופלים, ו-Excel יורד מההתכתבות", async ({
   page,
 }) => {
   const correspondence = page.getByRole("region", { name: "התכתבות המייל" });
@@ -65,17 +65,26 @@ test("EM-S7-02 — ההתכתבות בראש המסך: האחרון פתוח, ה
   // המייל היוצא מזוהה במילים
   await expect(correspondence.getByText("המערכת", { exact: true }).first()).toBeVisible();
 
-  // פתיחת הראשון: קובץ המדיה הוא קישור בתוך המערכת; קובץ שאינו מדיה, בלי
-  // בתים שמורים, מוצג בשמו ועם הסיבה — לא כקישור מת
+  // פתיחת הראשון: קובץ המדיה הוא קישור בתוך המערכת
   await correspondence.locator("details").first().locator("summary").click();
   await expect(correspondence.getByText(FIRST_BODY)).toBeVisible();
   await expect(correspondence.getByRole("link", { name: MEDIA_NAME })).toHaveAttribute(
     "href",
     /\/api\/email-attachments\/[a-z0-9]+$/,
   );
-  await expect(correspondence.getByRole("link", { name: NON_MEDIA_NAME })).toHaveCount(0);
-  await expect(correspondence.getByText(NON_MEDIA_NAME)).toBeVisible();
+
+  // Excel נשמר בהתכתבות (§7 שורה 64): קישור הורדה, ולצדו שהוא לא נכנס
+  // לטיוטה — מי שמשגר צריך לדעת שהקובץ לא יגיע לנמענים
+  const quote = correspondence.getByRole("link", { name: NON_MEDIA_NAME });
+  await expect(quote).toHaveAttribute("href", /\/api\/email-attachments\/[a-z0-9]+$/);
   await expect(correspondence.getByText("לא נכנס לטיוטה: אינו תמונה, וידאו, אודיו או PDF")).toBeVisible();
+
+  // והקובץ יורד דרך השרת, בשמו, ולא נפתח בדפדפן
+  const download = await page.request.get((await quote.getAttribute("href")) as string);
+  expect(download.status()).toBe(200);
+  expect(download.headers()["content-disposition"]).toBe(
+    `attachment; filename*=UTF-8''${encodeURIComponent(NON_MEDIA_NAME)}`,
+  );
 });
 
 test("EM-S7-03 / EM-M03 — כל השדות מוצגים, והתגים יושבים ליד השדה שהם מתארים", async ({ page }) => {

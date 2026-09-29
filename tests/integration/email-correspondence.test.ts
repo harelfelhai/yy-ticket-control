@@ -448,4 +448,31 @@ describe("canViewCorrespondence", () => {
     expect(byId.get(skippedOther.id)?.skippedAfterClose).toBe(false);
     expect(byId.get(inbound.id)?.skippedAfterClose).toBe(false);
   });
+
+  it("§7 שורה 64 — מסמך Word שנשמר בהתכתבות ניתן להורדה, ועדיין מסומן שלא נכנס לטיוטה", async () => {
+    const ticket = await emailDraftTicket();
+    const thread = await db.mailThread.create({ data: { ticketId: ticket.id } });
+    const inbound = await db.mailboxMessage.create({
+      data: { direction: "INBOUND", state: "DONE", outcome: "DRAFT_CREATED", threadId: thread.id },
+    });
+    await db.mailboxAttachment.create({
+      data: {
+        messageId: inbound.id,
+        partIndex: 1,
+        filename: "הצעת מחיר.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 5000,
+        isMedia: false,
+        storageKey: `media/mail/${inbound.id}/1.docx`,
+        skippedReason: "not-media",
+      },
+    });
+
+    const result = await getTicketCorrespondence(managerViewer(), ticket.id);
+    expect(result?.[0]?.attachments[0]).toMatchObject({
+      downloadable: true,
+      skippedReason: "not-media",
+      mediaFileId: null,
+    });
+  });
 });

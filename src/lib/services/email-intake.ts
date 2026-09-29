@@ -28,7 +28,7 @@ import {
   matchName,
   mentionedIn,
 } from "@/lib/email-intake/matching";
-import { classifyAttachment } from "@/lib/email-intake/mime";
+import { classifyAttachment, extensionForType, isOfficeDocument } from "@/lib/email-intake/mime";
 import { extractNewText, htmlToText } from "@/lib/email-intake/quote";
 import { MailSourceError, type MailSource } from "@/lib/email-intake/source";
 import { isIntakeSubject } from "@/lib/email-intake/subject";
@@ -48,8 +48,8 @@ import { he } from "@/lib/he";
 import { normalizeEmail, normalizeText } from "@/lib/normalize";
 import { captureError, logError, logInfo, logWarn } from "@/lib/observability/log";
 import { type Viewer, canCreateTicketInSite, canEditTicketFields } from "@/lib/permissions";
-import type { MediaStorage } from "@/lib/storage";
-import { MAX_FILE_BYTES, isAllowedMimeType, selectStorage } from "@/lib/storage";
+import type { MediaStorage, StoragePurpose } from "@/lib/storage";
+import { MAX_FILE_BYTES, isAllowedMimeType, isCorrespondenceDocumentType, selectStorage } from "@/lib/storage";
 import { DRAFT_TICKET_SELECT, type DraftTicket, lockAndLoadDraft, writeDraftState } from "./draft-fields";
 import type { Tx } from "./ticket-activity";
 
@@ -714,7 +714,7 @@ export async function createEmailDraft(
     ticketId,
     outcome,
     siteId: plan.values.siteId,
-    mediaCount: stored.filter((part) => part.storageKey !== null).length,
+    mediaCount: stored.filter((part) => part.storageKey !== null && part.storeAs === "media").length,
     attachmentCount: stored.length,
     notFound: plan.report.notFound.length,
     ambiguous: plan.report.ambiguous.length,
@@ -1123,10 +1123,10 @@ function markDedupedAttachments(parts: readonly PreparedPart[], shas: ThreadAtta
   return parts.map((part) => {
     if (!part.sha256) return part;
     if (shas.removed.has(part.sha256)) {
-      return { ...part, bytes: null, storageKey: null, skippedReason: "removed_before" };
+      return { ...part, bytes: null, storageKey: null, storeAs: null, skippedReason: "removed_before" };
     }
     if (shas.active.has(part.sha256)) {
-      return { ...part, bytes: null, storageKey: null, skippedReason: "already_in_draft" };
+      return { ...part, bytes: null, storageKey: null, storeAs: null, skippedReason: "already_in_draft" };
     }
     return part;
   });
@@ -1768,6 +1768,12 @@ interface PreparedPart {
   bytes: Buffer | null;
   sha256: string | null;
   storageKey: string | null;
+  /**
+   * האם הבתים נשמרים, ובאיזו רשימת היתר: `media` — נכנס לטיוטה כקובץ;
+   * `correspondence` — מסמך Word/Excel שנשמר בהתכתבות בלבד (§7 שורה 64);
+   * `null` — רק השם והסיבה נרשמים.
+   */
+  storeAs: StoragePurpose | null;
   /** למה הקובץ אינו נכנס לטיוטה. null — הוא כן נכנס. */
   skippedReason: string | null;
 }
@@ -1797,7 +1803,12 @@ async function collectAttachments(
       continue;
     }
 
-    const needsBytes = declared.isMedia || declared.mimeType === "application/octet-stream";
+    // מסמך Word/Excel מורד כדי להישמר בהתכתבות (§7 שורה 64), והחתימה שלו
+    // נבדקת — ההצהרה לבדה אינה מספיקה כדי לשמור קובץ
+    const needsBytes =
+      declared.isMedia ||
+      declared.mimeType === "application/octet-stream" ||
+      isCorrespondenceDocumentType(declared.mimeType);
     if (!needsBytes) {
       prepared.push(skipped(part, declared.mimeType, false, declared.isTnef ? "tnef" : "not-media"));
       continue;
@@ -1826,7 +1837,7 @@ async function collectAttachments(
 }
 
 function skipped(part: MailPart, mimeType: string, isMedia: boolean, reason: string): PreparedPart {
-  return { part, mimeType, isMedia, bytes: null, sha256: null, storageKey: null, skippedReason: reason };
+  return { part, mimeType, isMedia, bytes: null, sha256: null, storageKey: null, storeAs: null, skippedReason: reason };
 }
 
 /**
@@ -1849,17 +1860,26 @@ function classifyBytes(
     bytes,
     sha256,
     storageKey: null,
+    storeAs: "media",
     skippedReason: null,
   };
+  const notStored = { bytes: null, storeAs: null } as const;
 
-  if (resolved.isTnef) return { ...base, bytes: null, skippedReason: "tnef" };
-  if (!resolved.isMedia) return { ...base, bytes: null, skippedReason: "not-media" };
+  if (resolved.isTnef) return { ...base, ...notStored, skippedReason: "tnef" };
+  if (!resolved.isMedia) {
+    // מסמך Word/Excel אמיתי נשמר בהתכתבות — ועדיין "לא נכנס לטיוטה": הסיבה
+    // נשארת, וזה מה שמונע ממנו להפוך לקובץ בטיוטה (`writeMedia`)
+    if (bytes.byteLength > 0 && isOfficeDocument(resolved.mimeType, bytes.subarray(0, 8))) {
+      return { ...base, storeAs: "correspondence", skippedReason: "not-media" };
+    }
+    return { ...base, ...notStored, skippedReason: "not-media" };
+  }
   if (!isAllowedMimeType(resolved.mimeType)) {
-    return { ...base, bytes: null, skippedReason: "unsupported-type" };
+    return { ...base, ...notStored, skippedReason: "unsupported-type" };
   }
   // בתים ריקים נדחים באחסון ממילא (`assertWritableObject`), ורשומת מדיה
   // שמצביעה על כלום גרועה מהיעדרה
-  if (bytes.byteLength === 0) return { ...base, bytes: null, skippedReason: "empty" };
+  if (bytes.byteLength === 0) return { ...base, ...notStored, skippedReason: "empty" };
 
   return base;
 }
@@ -1910,12 +1930,12 @@ async function writeAttachments(
   const written: PreparedPart[] = [];
 
   for (const prepared of parts) {
-    if (!prepared.bytes || prepared.skippedReason) {
+    if (!prepared.bytes || !prepared.storeAs) {
       written.push(prepared);
       continue;
     }
     const key = attachmentStorageKey(envelope, prepared);
-    await storage.write(key, prepared.bytes, prepared.mimeType);
+    await storage.write(key, prepared.bytes, prepared.mimeType, prepared.storeAs);
     written.push({ ...prepared, storageKey: key });
   }
 
@@ -1929,8 +1949,13 @@ function attachmentStorageKey(envelope: MailEnvelope, prepared: PreparedPart): s
   return `media/mail/${source}/${prepared.part.index}.${extensionOf(prepared.mimeType)}`;
 }
 
-/** הסיומת נגזרת מהסוג שנפתר — מקור אחד, בלי טבלת המרה שנייה */
+/**
+ * הסיומת נגזרת מהסוג שנפתר. מסמך מההתכתבות מקבל את הסיומת האמיתית שלו
+ * (`.docx`, ולא `vndopenxmlformats…` שנגזר מתת-הסוג); למדיה המפתחות נשארים
+ * כפי שהיו, כדי שריצה חוזרת תכתוב לאותו מפתח.
+ */
 function extensionOf(mimeType: string): string {
+  if (isCorrespondenceDocumentType(mimeType)) return extensionForType(mimeType) ?? "bin";
   const subtype = mimeType.split("/")[1]?.split(";")[0]?.replace(/[^a-z0-9]/gi, "").toLowerCase() ?? "";
   return subtype || "bin";
 }
@@ -1949,7 +1974,9 @@ async function writeMedia(
   parts: readonly PreparedPart[],
 ): Promise<Map<number, string>> {
   const created = new Map<number, string>();
-  const media = parts.filter((part) => part.storageKey !== null);
+  // רק מה שנשמר **כמדיה**: מסמך Word שנשמר בהתכתבות יש לו מפתח, ואסור
+  // שיהפוך לקובץ בטיוטה — ואיתו לנמענים ולג׳וב AI
+  const media = parts.filter((part) => part.storageKey !== null && part.storeAs === "media");
   if (media.length === 0) return created;
 
   const message = await tx.message.create({
