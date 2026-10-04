@@ -1,0 +1,41 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "200000000000002",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550001234",
+              "phone_number_id": "300000000000002"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "בודק 2"
+                },
+                "wa_id": "972500000002",
+                "user_id": "IL.1000000000000000002"
+              }
+            ],
+            "messages": [
+              {
+                "from": "972500000002",
+                "from_user_id": "IL.1000000000000000002",
+                "id": "wamid.HBgMOTcyNTAwMDAwMDAxFQIAEhgUM0EwMDAwMDAwMDAwMDAwMDAwM3A=",
+                "timestamp": "1791132821",
+                "text": {
+                  "body": "תקלה"
+                },
+                "type": "text"
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
