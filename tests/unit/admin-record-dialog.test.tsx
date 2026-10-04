@@ -30,6 +30,12 @@ const actions = vi.hoisted(() => ({
   setUserActiveAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   deleteUserAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
   setUserEmailIntakeAction: vi.fn(async () => ({ ok: true as const, data: undefined })),
+  setUserWhatsappIntakeAction: vi.fn(
+    async (): Promise<{ ok: true; data: undefined } | { ok: false; error: string }> => ({
+      ok: true as const,
+      data: undefined,
+    }),
+  ),
   addUserEmailAliasAction: vi.fn(
     async (): Promise<{ ok: true; data: undefined } | { ok: false; error: string }> => ({
       ok: true as const,
@@ -79,6 +85,7 @@ const USERS = [
     active: true,
     emailIntakeEnabled: true,
     emailAliases: [{ id: "a1", address: "shira.private@gmail.com" }],
+    whatsappIntakeEnabled: true,
   },
 ];
 
@@ -418,5 +425,44 @@ describe("EM-S12-01 — פתיחה במייל בדיאלוג המשתמש", () =
     expect(within(dialog).getByText(he.admin.noEmailAliases)).toBeVisible();
     expect(within(dialog).getByRole("checkbox", { name: he.admin.emailIntakeEnabled })).not.toBeChecked();
     expect(within(dialog).getByRole("button", { name: he.admin.addAlias })).toBeDisabled();
+  });
+});
+
+/**
+ * WA-S12-01 (מסך 12, §3.7 שדה 5): המתג "רשאי לפתוח פניות בוואטסאפ" באותו
+ * גוש של מתג המייל, ונשמר מיד כמוהו. אין לו שדה נוסף — הזהות היא הטלפון.
+ */
+describe("WA-S12-01 — פתיחה בוואטסאפ בדיאלוג המשתמש", () => {
+  async function openDialog(users = USERS) {
+    render(<UsersManager sites={[]} users={users} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "שירה לוי" }));
+    return { user, dialog: screen.getByRole("dialog") };
+  }
+
+  it("WA-U01 — המתג משקף את ההרשאה, וכיבויו נשמר מיד", async () => {
+    const { user, dialog } = await openDialog();
+    const toggle = within(dialog).getByRole("checkbox", { name: he.admin.whatsappIntakeEnabled });
+    expect(toggle).toBeChecked();
+
+    await user.click(toggle);
+    expect(actions.setUserWhatsappIntakeAction).toHaveBeenCalledWith("u1", false);
+  });
+
+  it("WA-U01 — משתמש שההרשאה שלו כבויה: המתג כבוי, והדלקתו נשמרת", async () => {
+    const { user, dialog } = await openDialog([{ ...USERS[0]!, whatsappIntakeEnabled: false }]);
+    const toggle = within(dialog).getByRole("checkbox", { name: he.admin.whatsappIntakeEnabled });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+    expect(actions.setUserWhatsappIntakeAction).toHaveBeenCalledWith("u1", true);
+  });
+
+  it("שגיאה מהשרת מוצגת מתחת למתג", async () => {
+    actions.setUserWhatsappIntakeAction.mockResolvedValueOnce({ ok: false, error: he.admin.forbidden });
+    const { user, dialog } = await openDialog();
+
+    await user.click(within(dialog).getByRole("checkbox", { name: he.admin.whatsappIntakeEnabled }));
+    expect(await within(dialog).findByText(he.admin.forbidden)).toBeVisible();
   });
 });

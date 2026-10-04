@@ -501,6 +501,18 @@ export async function setUserEmailIntake(actor: SessionUser, userId: string, ena
 }
 
 /**
+ * "רשאי לפתוח פניות בוואטסאפ" (§3.7 שדה 5, עדכון 1.4) — נקבע בידי מנהל המערכת בלבד.
+ * אין כאן שדה נוסף: הזהות בוואטסאפ היא הטלפון שבכרטיס (§7 שורה 104).
+ */
+export async function setUserWhatsappIntake(actor: SessionUser, userId: string, enabled: boolean) {
+  assertAdmin(actor);
+  const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AdminError(he.admin.userNotFound);
+
+  return db.user.update({ where: { id: userId }, data: { whatsappIntakeEnabled: enabled } });
+}
+
+/**
  * מוסיף כתובת נוספת למשתמש (§3.7 שדה 3).
  *
  * הכתובת נשמרת מנורמלת — אותה `normalizeEmail` שהקליטה משווה דרכה את כתובת

@@ -130,6 +130,19 @@ jobs:
       # בגיט, ובלעדיו שום דבר לא מתקמפל.
       - run: npm ci
 
+      # **המיגרציות מתארות בדיוק את הסכימה.** מיגרציה נכתבת לפעמים ביד: מכונת
+      # הפיתוח חוסמת את מנוע המיגרציות של Prisma (Smart App Control), ולכן
+      # `migrate dev` אינו רץ בה. מיגרציה שסוטה מ-`schema.prisma` עוברת את כל
+      # הבדיקות — הן רצות על הלקוח שנוצר מהסכימה — ונכשלת רק בפרודקשן, או
+      # גרוע מזה מצליחה ומשאירה עמודה בלי אינדקס. כאן מחילים את כל המיגרציות
+      # על בסיס צל ריק ומשווים לסכימה: כל הבדל מפיל את השער (exit 2).
+      - name: אין סטייה בין המיגרציות לסכימה
+        env:
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/yy_shadow
+        run: |
+          PGPASSWORD=postgres /usr/lib/postgresql/18/bin/psql -h localhost -p 5433 -U postgres -d yy_test -c 'CREATE DATABASE yy_shadow'
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+
       - run: npm run verify
 
   # ── חבילת ה-E2E: 104 בדיקות, מובייל + דסקטופ + WebKit ───────────────────

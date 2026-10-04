@@ -42,6 +42,12 @@ function allSource(): string {
     .join("\n");
 }
 
+/**
+ * המודולים היחידים שרשאים לשלוח תבנית וואטסאפ: "שלח הודעת בדיקה" במסך 17
+ * (אפיון 1.4). רשימה קצרה בכוונה — ראו SC-OUT-01.
+ */
+const TEMPLATE_SENDERS = ["src/lib/services/wa-number.ts"];
+
 describe("§6 — מה שנדחה במפורש אינו קיים במערכת", () => {
   const source = allSource();
 
@@ -50,12 +56,27 @@ describe("§6 — מה שנדחה במפורש אינו קיים במערכת", 
     expect(source).not.toMatch(/twilio|nexmo|vonage|019sms|smsProvider|sendSms/i);
   });
 
-  it("SC-OUT-01 — ערוץ הוואטסאפ הוא שיתוף ידני בלבד, בלי API נכנס", () => {
+  /**
+   * **נכתב מחדש ב-1.4.** עד 1.3 הבדיקה אסרה כל API של וואטסאפ, כי הערוץ היה
+   * רדום. אפיון 1.4 מכניס לתחולה את פתיחת הפנייה בוואטסאפ (§2.7), ומה שנשאר
+   * מחוץ לתחולה הוא מה שהבדיקה אוכפת עכשיו (§6, מטריצה SC-OUT-01):
+   * - **יידוע קבלן נשאר `wa.me`** (§5.ה2). השליחה מהמספר העסקי היא השלב הבא.
+   * - **אין בוט שמנהל שיחה** — אין הודעות אינטראקטיביות (כפתורים, רשימות).
+   * - **אין קליטה מקבוצות** — אין טיפול במזהה קבוצה.
+   * - **אין שליחה יזומה** — תבנית נשלחת רק כ"הודעת בדיקה" במסך 17, ממודול
+   *   אחד. כל קובץ אחר ששולח תבנית הוא שליחה יזומה שאיש לא אישר.
+   */
+  it("SC-OUT-01 — וואטסאפ לקליטה בלבד: wa.me לקבלנים, בלי בוט, בלי קבוצות ובלי שליחה יזומה", () => {
     expect(source).toMatch(/wa\.me/);
-    expect(source).not.toMatch(/graph\.facebook\.com|whatsapp.*business.*api/i);
-    // ‏Channel.WHATSAPP קיים במודל (רדום, Gate G8) אך אין נתיב קליטה.
     expect(SCHEMA).toMatch(/WHATSAPP/);
-    expect(source).not.toMatch(/webhook.*whatsapp|whatsapp.*webhook/i);
+    expect(source).not.toMatch(/["']interactive["']/);
+    expect(source).not.toMatch(/group_id|groupId/);
+
+    const templateSenders = sourceFiles(SRC)
+      .filter((file) => !file.includes(join("src", "generated")))
+      .filter((file) => /type:\s*["']template["']/.test(stripComments(readFileSync(file, "utf8"))))
+      .map((file) => file.slice(process.cwd().length + 1).split("\\").join("/"));
+    for (const file of templateSenders) expect(TEMPLATE_SENDERS).toContain(file);
   });
 
   /**

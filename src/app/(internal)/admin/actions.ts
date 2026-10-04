@@ -29,6 +29,7 @@ import {
   setSiteManagers,
   setUserActive,
   setUserEmailIntake,
+  setUserWhatsappIntake,
   updateProfessional,
   updateUser,
 } from "@/lib/services/admin";
@@ -226,6 +227,17 @@ export async function setUserEmailIntakeAction(
 ): Promise<ActionResult> {
   return guard(async () => {
     await setUserEmailIntake(await requireUser(), id(userId), z.boolean().parse(enabled));
+    revalidatePath("/admin/users");
+  });
+}
+
+/** "רשאי לפתוח פניות בוואטסאפ" (§3.7 שדה 5). ההרשאה — בשירות. */
+export async function setUserWhatsappIntakeAction(
+  userId: string,
+  enabled: boolean,
+): Promise<ActionResult> {
+  return guard(async () => {
+    await setUserWhatsappIntake(await requireUser(), id(userId), z.boolean().parse(enabled));
     revalidatePath("/admin/users");
   });
 }

@@ -339,6 +339,8 @@ export const he = {
     emailAliases: "כתובות נוספות לפתיחת פניות במייל",
     noEmailAliases: "אין כתובות נוספות",
     aliasAddress: "כתובת נוספת",
+    // פתיחת פניות בוואטסאפ (אפיון §3.7 שדה 5, עדכון 1.4) — הזהות היא הטלפון שבכרטיס
+    whatsappIntakeEnabled: "רשאי לפתוח פניות בוואטסאפ",
     addAlias: "הוסף",
     removeAlias: (address: string) => `הסר ${address}`,
     aliasNotFound: "הכתובת לא נמצאה",
