@@ -28,6 +28,8 @@ import type { FieldExtractor } from "@/lib/intake/extraction";
 import type { MailSource } from "@/lib/email-intake/source";
 import type { EmailIntakeOutcome } from "@/lib/services/email-intake";
 import { type EmailReplyOutcome, markReplyFailed, sendEmailReply } from "@/lib/services/email-reply";
+import { type WaIntakeOutcome, handleWaIntake } from "@/lib/services/wa-intake";
+import { type WaEventOutcome, processWebhookEvent } from "@/lib/services/wa-webhook";
 import { cleanupRateLimits } from "@/lib/rate-limit";
 import { captureError } from "@/lib/observability/log";
 import { HEARTBEAT, seedHeartbeat } from "@/watchdog/heartbeat";
@@ -39,6 +41,8 @@ import {
   type EmailReplyJobPayload,
   type JobLane,
   type NotifyJobPayload,
+  type WaEventJobPayload,
+  type WaIntakeJobPayload,
 } from "./types";
 
 /**
@@ -126,7 +130,9 @@ export type JobOutcome =
   | EscalationOutcome
   | BackupOutcome
   | EmailIntakeOutcome
-  | EmailReplyOutcome;
+  | EmailReplyOutcome
+  | WaEventOutcome
+  | WaIntakeOutcome;
 
 export type JobResult =
   | { job: Job; status: "done"; outcome?: JobOutcome }
@@ -294,6 +300,14 @@ async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome
 
     case JOB_TYPES.emailReply:
       return runEmailReply(job, deps, now);
+
+    // שני ג׳ובי הוואטסאפ — באותו נתיב `mail`, מאותה הבטחה של חמש דקות.
+    // `now` של הסבב: הוא מה שקובע אם דיווח כבר "שקט" מספיק כדי להכריע עליו.
+    case JOB_TYPES.waEvent:
+      return processWebhookEvent(job.payload as unknown as WaEventJobPayload, { now });
+
+    case JOB_TYPES.waIntake:
+      return handleWaIntake(job.payload as unknown as WaIntakeJobPayload, { now });
 
     case JOB_TYPES.backup: {
       const outcome = await runDailyBackup(now);

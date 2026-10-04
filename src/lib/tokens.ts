@@ -78,11 +78,15 @@ const AUTH_TAG_BYTES = 16;
  * בדיוק לשתי מטרות שונות הוא דפוס שגוי מוכר — הוא יוצר תלות שבה חולשה
  * במנגנון אחד נשפכת לשני. HKDF עם `info` קבוע מייצר מפתח נפרד מאותו סוד,
  * בלי להוסיף עוד משתנה סביבה שמישהו ישכח להגדיר.
+ *
+ * **תחום לכל סוג טוקן.** הקורא יכול להעביר `info` משלו — כך טוקן העסק של
+ * וואטסאפ (`whatsapp/token.ts`) מוצפן במפתח אחר מזה של קישורי הפורטל, ומי
+ * שמחזיק אחד אינו מפענח את השני.
  */
 const KEY_INFO = "yy-portal-access-token-v1";
 
-function deriveKey(secret: string): Buffer {
-  return Buffer.from(hkdfSync("sha256", secret, "", KEY_INFO, KEY_BYTES));
+function deriveKey(secret: string, info: string): Buffer {
+  return Buffer.from(hkdfSync("sha256", secret, "", info, KEY_BYTES));
 }
 
 /**
@@ -91,9 +95,9 @@ function deriveKey(secret: string): Buffer {
  * ‏GCM ולא CBC: הוא כולל אימות שלמות מובנה, ולכן שינוי של תו אחד בבסיס
  * הנתונים מתגלה בפענוח במקום להחזיר זבל שנראה כמו טוקן.
  */
-export function encryptToken(token: string, secret: string): string {
+export function encryptToken(token: string, secret: string, info: string = KEY_INFO): string {
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv(CIPHER_ALGORITHM, deriveKey(secret), iv);
+  const cipher = createCipheriv(CIPHER_ALGORITHM, deriveKey(secret, info), iv);
   const encrypted = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
 
   return [iv, encrypted, cipher.getAuthTag()]
@@ -109,7 +113,7 @@ export function encryptToken(token: string, secret: string): string {
  * או שמישהו נגע בנתונים. בכל אלה התשובה הנכונה למנהל היא "אי אפשר לשחזר
  * את הקישור, צור חדש" — ולא מסך שגיאה.
  */
-export function decryptToken(stored: string, secret: string): string | null {
+export function decryptToken(stored: string, secret: string, info: string = KEY_INFO): string | null {
   const parts = stored.split(".");
   if (parts.length !== 3) return null;
 
@@ -117,7 +121,7 @@ export function decryptToken(stored: string, secret: string): string | null {
     const [iv, encrypted, tag] = parts.map((part) => Buffer.from(part, "base64url"));
     if (iv.length !== IV_BYTES || tag.length !== AUTH_TAG_BYTES) return null;
 
-    const decipher = createDecipheriv(CIPHER_ALGORITHM, deriveKey(secret), iv);
+    const decipher = createDecipheriv(CIPHER_ALGORITHM, deriveKey(secret, info), iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
   } catch {

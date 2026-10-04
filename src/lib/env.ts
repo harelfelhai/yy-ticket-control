@@ -9,7 +9,7 @@
  * ב-R2 או ב-AI לא ייכשל רק משום שהמפתחות האלה לא מוגדרים אצלו.
  */
 
-import { normalizeEmail } from "@/lib/normalize";
+import { normalizeEmail, normalizePhone } from "@/lib/normalize";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -138,6 +138,48 @@ export const env = {
 
     // Set: פסיק כפול או אותה כתובת פעמיים הם שגיאת הקלדה, לא שני שולחים.
     return [...new Set(raw.split(",").map(normalizeEmail).filter(Boolean))];
+  },
+
+  /**
+   * **הצד של Meta לקליטת הוואטסאפ (1.4)** — כול-או-כלום, או undefined.
+   *
+   * `WHATSAPP_APP_SECRET` מאמת את החתימה של כל משלוח webhook, ו-
+   * `WHATSAPP_VERIFY_TOKEN` עונה לאימות של כתובת ה-webhook. בלי אחד מהם אין
+   * דרך לדעת שמשלוח בא מ-Meta, ולכן ה-route מחזיר 404 ואינו מקבל דבר — זה
+   * המצב בפיתוח ובבדיקות (`e2e/server-env.ts` מאפס את שניהם).
+   *
+   * `WHATSAPP_GRAPH_VERSION` — גרסת ה-Graph API בכל הקריאות, במקום אחד.
+   * ה-Dashboard מציג v26.0 ל-webhook; הקריאות נבדקו בספייק על v25.0.
+   */
+  whatsapp: () => {
+    const appSecret = optional("WHATSAPP_APP_SECRET");
+    const verifyToken = optional("WHATSAPP_VERIFY_TOKEN");
+    if (!appSecret || !verifyToken) return undefined;
+    return { appSecret, verifyToken, graphVersion: optional("WHATSAPP_GRAPH_VERSION") ?? "v25.0" };
+  },
+
+  /**
+   * **הדגל שמפעיל את קליטת הוואטסאפ (1.4)** — באותם שני תנאים של המייל
+   * (`emailIntakeEnabled`), ומאותו נימוק: `WHATSAPP_INTAKE_ENABLED=1`, **וגם**
+   * פרודקשן או ויתור מפורש (`WHATSAPP_INTAKE_NONPROD=1`). מפתח שמעתיק את משתני
+   * הפרודקשן לשרת הפיתוח אינו אמור להתחיל לקלוט — ובהמשך לענות — מהמספר העסקי.
+   *
+   * כבוי: ה-webhook עדיין מאמת ורושם, וכל הודעה מקבלת `IGNORED_DISABLED` (§7
+   * שורה 103) — הודעה שהגיעה כשהקליטה כבויה אינה נקלטת גם בדיעבד.
+   */
+  whatsappIntakeEnabled: (): boolean =>
+    optional("WHATSAPP_INTAKE_ENABLED") === "1" &&
+    (isProductionEnv() || optional("WHATSAPP_INTAKE_NONPROD") === "1"),
+
+  /**
+   * טלפונים לפיילוט — **חיתוך** מעל המשתמשים המורשים, כמו
+   * `emailIntakePilotAddresses`. ריקה — בלי פיילוט. מנורמלים ב-`normalizePhone`,
+   * הצורה שבה הטלפון שמור בכרטיס.
+   */
+  whatsappPilotPhones: (): string[] => {
+    const raw = optional("WHATSAPP_INTAKE_PILOT_PHONES");
+    if (!raw) return [];
+    return [...new Set(raw.split(",").map(normalizePhone).filter(Boolean))];
   },
 
   /**

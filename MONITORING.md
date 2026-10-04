@@ -65,6 +65,20 @@
 | `email.reply.sent` | תשובה יצאה. `latencySec` נמדד מ-`receivedAt` |
 | `email.reply.late` | אותה תשובה מעבר ל-300 שניות — **ההבטחה של §2.6 שלב 4 הופרה** |
 
+**אירועי קליטת הוואטסאפ (1.4):**
+
+| אירוע | מה הוא אומר |
+|---|---|
+| `wa.webhook.bad_signature` (warn) | משלוח שהחתימה שלו אינה של Meta — נדחה ב-401 ולא נכתב דבר |
+| `wa.webhook.processed` | משלוח פוענח: `pending`, `ignored`, `duplicates`, `unknownNumber`, `statuses`, `invalid` |
+| `wa.webhook.unknown_number` | הודעות למספר עסקי שאינו מחובר כאן — מערכת אחרת על אותה אפליקציה של Meta |
+| `wa.webhook.other` | שדה שאינו `messages` (`account_update` ודומיו) — רק השם |
+| `wa.intake.unit` | הוכרע דיווח: `size`, `outcome`, `shadow`, `latencySec` מההודעה האחרונה בו |
+| `wa.sender.bsuid_conflict` (warn) | המזהה שוואטסאפ מצמידה לשולח כבר שמור על משתמש אחר — לא נדרס |
+
+**ה-wamid אינו באף לוג**: הוא מכיל את הטלפון של השולח. הלוגים נושאים את המזהה
+הפנימי של השורה או של המשלוח.
+
 `email.reply.late` אינו תקלה שמישהו ידווח עליה: השולח קיבל תשובה, רק מאוחר.
 הוא קיים כדי שהמספר שבאפיון — חמש דקות — יהיה **נמדד** ולא מוצהר, וכדי
 שהחמרה הדרגתית תיראה לפני שהיא הופכת לשעה.
@@ -107,6 +121,8 @@ Logs בלבד, וה-stdout של הקונטיינר מציג רק את העליי
 | `email-poll-heartbeat` | < 15 דקות, **רק כשהיכולת דלוקה** | טיימר הקליטה (כל 60 שניות) מת — אף מייל אינו נקרא |
 | `email-intake-not-stuck` | אין `MailboxMessage` ב-PENDING מעל 30 דקות | הודעה שנקלטה ואיש לא הכריע בה, או תשובה שלא יצאה |
 | `email-intake-configured` | היכולת דלוקה בפרודקשן ⇒ יש טוקן Gmail ו-`GEMINI_API_KEY` | **תצורה שאינה מייצרת ג׳וב** — יכולת דלוקה שאינה יכולה לקרוא, או שכל מייל בה נוחת ב"החילוץ אינו זמין" |
+| `wa-intake-not-stuck` | אין `WaMessage` ב-PENDING מעל 30 דקות שמועד ההכרעה שלה עבר | הודעת וואטסאפ שאיש לא הכריע בה, או אישור שלא יצא |
+| `wa-webhook-buffer` | אין `WaWebhookEvent` שלא פוענח מעל 5 דקות | משלוח שנשמר והתור לא עיבד — העותק היחיד, כי אין API לשליפה חוזרת |
 
 כל invariant שנכשל → issue נפרד (`fingerprint: ["watchdog", <name>]`).
 **אם התהליך עצמו מת** — ה-check-in נעצר, ו-Sentry מתריע על "missed" (‏interval
