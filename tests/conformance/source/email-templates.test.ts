@@ -57,7 +57,7 @@ const EXAMPLE: ComposeIntakeReplyInput = {
     recipients: [],
   },
   missing: ["RECIPIENTS"],
-  conflicts: [{ field: "APARTMENT", emailValue: "14", systemValue: "12" }],
+  conflicts: [{ field: "APARTMENT", channelValue: "14", systemValue: "12" }],
   report: {
     updated: [{ field: "ROOM", before: "מטבח", after: "חדר רחצה" }],
     notFound: [{ field: "DOMAIN", written: "מיזוג", options: ["חשמל", "אינסטלציה", "אלומיניום"] }],

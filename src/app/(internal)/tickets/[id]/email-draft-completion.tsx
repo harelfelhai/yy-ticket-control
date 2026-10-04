@@ -467,7 +467,7 @@ export function EmailDraftCompletion({
  * שהתג יושב ליד השדה הנכון ולא רק שקיים תג כזה במסך.
  */
 function FieldBlock({ display, children }: { display: DraftFieldDisplay; children: ReactNode }) {
-  const tags = display.fromEmail || display.conflict || display.missing;
+  const tags = display.fromChannel || display.conflict || display.missing;
   return (
     <div
       data-field={display.field}
@@ -478,7 +478,7 @@ function FieldBlock({ display, children }: { display: DraftFieldDisplay; childre
         <p className="flex flex-wrap gap-1">
           {display.missing ? <span className={chipClasses("danger")}>{he.emailDraft.missingTag}</span> : null}
           {display.conflict ? <span className={chipClasses("danger")}>{he.emailDraft.conflictTag}</span> : null}
-          {display.fromEmail ? <span className={chipClasses("info")}>{he.emailDraft.fromEmailTag}</span> : null}
+          {display.fromChannel ? <span className={chipClasses("info")}>{he.emailDraft.fromEmailTag}</span> : null}
         </p>
       ) : null}
     </div>

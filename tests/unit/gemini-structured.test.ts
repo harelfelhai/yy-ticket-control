@@ -9,7 +9,7 @@ import {
   selectFieldExtractor,
   toFieldExtraction,
   type ExtractionInput,
-} from "@/lib/email-intake/extraction";
+} from "@/lib/intake/extraction";
 import * as log from "@/lib/observability/log";
 
 /**

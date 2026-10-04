@@ -1,5 +1,5 @@
 import { selectMailSource } from "@/lib/email-intake";
-import { selectFieldExtractor } from "@/lib/email-intake/extraction";
+import { selectFieldExtractor } from "@/lib/intake/extraction";
 import {
   type EmailIntakeDeps,
   type EmailIntakeOutcome,

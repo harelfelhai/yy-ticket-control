@@ -177,8 +177,13 @@ export async function confirmUpload(viewer: Viewer, mediaId: string) {
   });
 }
 
-/** אודיו מתומלל, תמונה ו-PDF נקראים, וידאו אינו מעובד בגרסה זו */
-function aiJobFor(mimeType: string): JobType | null {
+/**
+ * אודיו מתומלל, תמונה ו-PDF נקראים, וידאו אינו מעובד בגרסה זו.
+ *
+ * **מקור אחד** לקובץ שהועלה במערכת ולקובץ שהגיע בערוץ קליטה
+ * (`intake-draft.ts`): שני הכללים היו חייבים להישאר זהים.
+ */
+export function aiJobFor(mimeType: string): JobType | null {
   const base = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
   if (base.startsWith("audio/")) return JOB_TYPES.transcribe;
   if (canExtractText(base)) return JOB_TYPES.extract;

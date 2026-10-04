@@ -1,6 +1,6 @@
 import { HTMLElement, parse, TextNode, type Node as HtmlNode } from "node-html-parser";
 import { normalizeText } from "@/lib/normalize";
-import { INVISIBLE_CHARS } from "./subject";
+import { INVISIBLE_CHARS } from "@/lib/intake/keyword";
 
 /**
  * הפרדת הטקסט החדש בתשובה במייל מהציטוט של המייל הקודם (אפיון §5.ה3 כלל 6,

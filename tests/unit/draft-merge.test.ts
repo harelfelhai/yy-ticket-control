@@ -11,12 +11,12 @@ import {
   emptyDraftValues,
 } from "@/lib/draft/fields";
 import {
-  type EmailProposal,
+  type ChannelProposal,
   type MergeResult,
   type ScalarDecision,
   applySystemEdit,
   decideScalar,
-  mergeEmailIntoDraft,
+  mergeChannelIntoDraft,
   resolveChoices,
 } from "@/lib/draft/merge";
 
@@ -58,8 +58,8 @@ function draft(overrides: DraftOverrides = {}): DraftState {
   return { values: { ...emptyDraftValues(), ...overrides.values }, meta };
 }
 
-function merge(state: DraftState, proposal: EmailProposal, receivedAt: Date, messageId = "msg-1"): MergeResult {
-  return mergeEmailIntoDraft({ state: deepFreeze(state), proposal: deepFreeze(proposal), receivedAt, messageId });
+function merge(state: DraftState, proposal: ChannelProposal, receivedAt: Date, messageId = "msg-1"): MergeResult {
+  return mergeChannelIntoDraft({ state: deepFreeze(state), proposal: deepFreeze(proposal), receivedAt, messageId });
 }
 
 const pro = (id: string): RecipientRef => ({ kind: "professional", id });
@@ -89,7 +89,7 @@ describe("decideScalar — ההכרעה לשדה סקלרי אחד", () => {
   }[] = [
     { name: "לא נערך במערכת, ערך שונה", meta: {}, current: "a", proposed: "b", expected: "apply" },
     { name: "שדה ריק שלא נערך", meta: {}, current: null, proposed: "b", expected: "apply" },
-    { name: "ערך קודם מהמייל", meta: { fromEmail: true }, current: "a", proposed: "b", expected: "apply" },
+    { name: "ערך קודם מהמייל", meta: { fromChannel: true }, current: "a", proposed: "b", expected: "apply" },
     { name: "זהה, בלי סתירה", meta: {}, current: "a", proposed: "a", expected: "noop" },
     { name: "זהה לערך במערכת, בלי סתירה", meta: { systemEditedAt: at(10) }, current: "a", proposed: "a", expected: "noop" },
     {
@@ -125,22 +125,22 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
 
     expect(result.state.values.buildingId).toBe("bld-a");
     expect(result.state.values.room).toBe("KITCHEN");
-    expect(result.state.meta.BUILDING).toMatchObject({ fromEmail: true, conflict: false, systemEditedAt: null });
+    expect(result.state.meta.BUILDING).toMatchObject({ fromChannel: true, conflict: false, systemEditedAt: null });
     expect(result.changes).toEqual([
-      { field: "BUILDING", before: null, after: "bld-a", cause: "email" },
-      { field: "ROOM", before: null, after: "KITCHEN", cause: "email" },
+      { field: "BUILDING", before: null, after: "bld-a", cause: "channel" },
+      { field: "ROOM", before: null, after: "KITCHEN", cause: "channel" },
     ]);
     expect(result.conflictsOpened).toEqual([]);
     expect(result.ignored).toEqual([]);
   });
 
   it("EM-C03 — שורה 1: ערך שחולץ ממייל קודם מוחלף בשקט בערך מהתשובה", () => {
-    const state = draft({ values: { room: "KITCHEN" }, meta: { ROOM: { fromEmail: true } } });
+    const state = draft({ values: { room: "KITCHEN" }, meta: { ROOM: { fromChannel: true } } });
     const result = merge(state, { room: "BATHROOM" }, at(30));
 
     expect(result.state.values.room).toBe("BATHROOM");
     expect(result.state.meta.ROOM.conflict).toBe(false);
-    expect(result.changes).toEqual([{ field: "ROOM", before: "KITCHEN", after: "BATHROOM", cause: "email" }]);
+    expect(result.changes).toEqual([{ field: "ROOM", before: "KITCHEN", after: "BATHROOM", cause: "channel" }]);
   });
 
   it("EM-C04 — שורה 2: ערך שונה לשדה שנערך במערכת לפני המייל ⇒ סתירה, ושני הערכים נשמרים", () => {
@@ -148,11 +148,11 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
 
     expect(result.state.values.apartmentId).toBe("apt-12");
     expect(result.state.meta.APARTMENT).toEqual({
-      fromEmail: false,
+      fromChannel: false,
       systemEditedAt: at(10),
       conflict: true,
-      emailValue: { field: "APARTMENT", apartmentId: "apt-14" },
-      emailMessageId: "msg-7",
+      channelValue: { field: "APARTMENT", apartmentId: "apt-14" },
+      channelMessageId: "msg-7",
     });
     expect(result.conflictsOpened).toEqual(["APARTMENT"]);
     expect(result.changes).toEqual([]);
@@ -174,11 +174,11 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
 
     expect(edited.values.apartmentId).toBe("apt-13");
     expect(edited.meta.APARTMENT).toEqual({
-      fromEmail: false,
+      fromChannel: false,
       systemEditedAt: at(40),
       conflict: false,
-      emailValue: null,
-      emailMessageId: null,
+      channelValue: null,
+      channelMessageId: null,
     });
     expect(conflictFields(edited.meta)).toEqual([]);
   });
@@ -197,8 +197,8 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
     const second = merge(first, { apartment: "apt-15" }, at(50), "msg-2");
 
     expect(second.state.values.apartmentId).toBe("apt-12");
-    expect(second.state.meta.APARTMENT.emailValue).toEqual({ field: "APARTMENT", apartmentId: "apt-15" });
-    expect(second.state.meta.APARTMENT.emailMessageId).toBe("msg-2");
+    expect(second.state.meta.APARTMENT.channelValue).toEqual({ field: "APARTMENT", apartmentId: "apt-15" });
+    expect(second.state.meta.APARTMENT.channelMessageId).toBe("msg-2");
     expect(second.conflictsOpened).toEqual(["APARTMENT"]);
     expect(second.conflictsClosed).toEqual([]);
   });
@@ -211,9 +211,9 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
     const result = merge(state, { description: { op: "append", text: "  וגם יש רטיבות   בתקרה " } }, at(30));
 
     expect(result.state.values.description).toBe("נזילה בכיור\n\nוגם יש רטיבות בתקרה");
-    expect(result.state.meta.DESCRIPTION).toMatchObject({ conflict: false, fromEmail: true, systemEditedAt: at(10) });
+    expect(result.state.meta.DESCRIPTION).toMatchObject({ conflict: false, fromChannel: true, systemEditedAt: at(10) });
     expect(result.changes).toEqual([
-      { field: "DESCRIPTION", before: "נזילה בכיור", after: "נזילה בכיור\n\nוגם יש רטיבות בתקרה", cause: "email" },
+      { field: "DESCRIPTION", before: "נזילה בכיור", after: "נזילה בכיור\n\nוגם יש רטיבות בתקרה", cause: "channel" },
     ]);
     expect(result.conflictsOpened).toEqual([]);
   });
@@ -228,8 +228,8 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
     expect(result.state.values.description).toBe("נזילה בכיור");
     expect(result.state.meta.DESCRIPTION).toMatchObject({
       conflict: true,
-      emailValue: { field: "DESCRIPTION", text: "רטיבות בתקרה" },
-      emailMessageId: "msg-3",
+      channelValue: { field: "DESCRIPTION", text: "רטיבות בתקרה" },
+      channelMessageId: "msg-3",
     });
   });
 
@@ -242,11 +242,11 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
 
     expect(result.state.values.recipients).toEqual([
       recipient(pro("p-1"), "SYSTEM"),
-      recipient(pro("p-2"), "EMAIL"),
+      recipient(pro("p-2"), "CHANNEL"),
     ]);
-    expect(result.state.meta.RECIPIENTS).toMatchObject({ fromEmail: true, conflict: false, systemEditedAt: at(10) });
+    expect(result.state.meta.RECIPIENTS).toMatchObject({ fromChannel: true, conflict: false, systemEditedAt: at(10) });
     expect(result.changes).toEqual([
-      { field: "RECIPIENTS", before: [pro("p-1")], after: [pro("p-1"), pro("p-2")], cause: "email" },
+      { field: "RECIPIENTS", before: [pro("p-1")], after: [pro("p-1"), pro("p-2")], cause: "channel" },
     ]);
   });
 
@@ -260,8 +260,8 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
     expect(result.state.values.recipients).toEqual([recipient(pro("p-1"), "SYSTEM")]);
     expect(result.state.meta.RECIPIENTS).toMatchObject({
       conflict: true,
-      emailValue: { field: "RECIPIENTS", add: [], remove: [pro("p-1")] },
-      emailMessageId: "msg-4",
+      channelValue: { field: "RECIPIENTS", add: [], remove: [pro("p-1")] },
+      channelMessageId: "msg-4",
     });
     expect(result.conflictsOpened).toEqual(["RECIPIENTS"]);
     expect(result.changes).toEqual([]);
@@ -277,8 +277,8 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
     expect(result.state.values.recipients).toEqual(state.values.recipients);
     expect(result.state.meta.RECIPIENTS).toMatchObject({
       conflict: true,
-      emailValue: { field: "RECIPIENTS", add: [pro("p-2")], remove: [] },
-      emailMessageId: "msg-5",
+      channelValue: { field: "RECIPIENTS", add: [pro("p-2")], remove: [] },
+      channelMessageId: "msg-5",
     });
   });
 
@@ -288,30 +288,30 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
       meta: { DOMAIN: { systemEditedAt: at(10) } },
     });
     const conflicted = merge(state, { domain: "dom-plumb" }, at(30)).state;
-    const resolved = resolveChoices(deepFreeze(conflicted), { DOMAIN: "email" }, at(40));
+    const resolved = resolveChoices(deepFreeze(conflicted), { DOMAIN: "channel" }, at(40));
 
     expect(resolved.values.domainId).toBe("dom-plumb");
     expect(resolved.meta.DOMAIN).toEqual({
-      fromEmail: false,
+      fromChannel: false,
       systemEditedAt: at(40),
       conflict: false,
-      emailValue: null,
-      emailMessageId: null,
+      channelValue: null,
+      channelMessageId: null,
     });
 
     const later = merge(resolved, { domain: "dom-alu" }, at(50), "msg-9");
     expect(later.state.values.domainId).toBe("dom-plumb");
-    expect(later.state.meta.DOMAIN).toMatchObject({ conflict: true, emailValue: { field: "DOMAIN", domainId: "dom-alu" } });
+    expect(later.state.meta.DOMAIN).toMatchObject({ conflict: true, channelValue: { field: "DOMAIN", domainId: "dom-alu" } });
   });
 
   it("EM-C10 — שורה 11: שינוי אתר בתשובה מאפס בניין ודירה, האיפוס נרשם בערוץ המייל, והנמענים אינם מתאפסים", () => {
-    const recipients = [recipient(pro("p-1"), "SYSTEM"), recipient(user("u-1"), "EMAIL")];
+    const recipients = [recipient(pro("p-1"), "SYSTEM"), recipient(user("u-1"), "CHANNEL")];
     const state = draft({
       values: { siteId: "site-1", buildingId: "bld-a", apartmentId: "apt-12", recipients },
       meta: {
-        SITE: { fromEmail: true },
+        SITE: { fromChannel: true },
         BUILDING: { systemEditedAt: at(5) },
-        APARTMENT: { fromEmail: true },
+        APARTMENT: { fromChannel: true },
         RECIPIENTS: { systemEditedAt: at(5) },
       },
     });
@@ -323,7 +323,7 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
     expect(result.state.meta.APARTMENT).toEqual(emptyDraftMeta().APARTMENT);
     expect(result.state.meta.RECIPIENTS.systemEditedAt).toEqual(at(5));
     expect(result.changes).toEqual([
-      { field: "SITE", before: "site-1", after: "site-2", cause: "email" },
+      { field: "SITE", before: "site-1", after: "site-2", cause: "channel" },
       { field: "BUILDING", before: "bld-a", after: null, cause: "reset" },
       { field: "APARTMENT", before: "apt-12", after: null, cause: "reset" },
     ]);
@@ -332,13 +332,13 @@ describe("§5.ה4 — תשובה במייל מול עריכה במערכת", () 
   it("EM-C10 — שורה 11: שינוי בניין בתשובה מאפס דירה בלבד", () => {
     const state = draft({
       values: { siteId: "site-1", buildingId: "bld-a", apartmentId: "apt-12", room: "SALON" },
-      meta: { BUILDING: { fromEmail: true }, APARTMENT: { fromEmail: true } },
+      meta: { BUILDING: { fromChannel: true }, APARTMENT: { fromChannel: true } },
     });
     const result = merge(state, { building: "bld-b" }, at(30));
 
     expect(result.state.values).toMatchObject({ siteId: "site-1", buildingId: "bld-b", apartmentId: null, room: "SALON" });
     expect(result.changes).toEqual([
-      { field: "BUILDING", before: "bld-a", after: "bld-b", cause: "email" },
+      { field: "BUILDING", before: "bld-a", after: "bld-b", cause: "channel" },
       { field: "APARTMENT", before: "apt-12", after: null, cause: "reset" },
     ]);
   });
@@ -375,11 +375,11 @@ describe("§3.5 — סתירה פתוחה", () => {
     const result = merge(conflicted, { apartment: "apt-12" }, at(50), "msg-2");
 
     expect(result.state.meta.APARTMENT).toEqual({
-      fromEmail: false,
+      fromChannel: false,
       systemEditedAt: at(10),
       conflict: false,
-      emailValue: null,
-      emailMessageId: null,
+      channelValue: null,
+      channelMessageId: null,
     });
     expect(result.conflictsClosed).toEqual(["APARTMENT"]);
     expect(result.changes).toEqual([]);
@@ -402,8 +402,8 @@ describe("EM-C07 — תיאור", () => {
         DESCRIPTION: {
           systemEditedAt: at(40),
           conflict: true,
-          emailValue: { field: "DESCRIPTION", text: "רטיבות" },
-          emailMessageId: "msg-1",
+          channelValue: { field: "DESCRIPTION", text: "רטיבות" },
+          channelMessageId: "msg-1",
         },
       },
     });
@@ -412,9 +412,9 @@ describe("EM-C07 — תיאור", () => {
     expect(result.state.values.description).toBe("נזילה\n\nגם בתקרה");
     expect(result.state.meta.DESCRIPTION).toMatchObject({
       conflict: true,
-      emailValue: { field: "DESCRIPTION", text: "רטיבות" },
-      emailMessageId: "msg-1",
-      fromEmail: true,
+      channelValue: { field: "DESCRIPTION", text: "רטיבות" },
+      channelMessageId: "msg-1",
+      fromChannel: true,
     });
     expect(result.ignored).toEqual([]);
     expect(result.conflictsClosed).toEqual([]);
@@ -429,11 +429,11 @@ describe("EM-C07 — תיאור", () => {
   });
 
   it("EM-C03 — set לתיאור שלא נערך במערכת מחליף בשקט, מנורמל", () => {
-    const state = draft({ values: { description: "נזילה" }, meta: { DESCRIPTION: { fromEmail: true } } });
+    const state = draft({ values: { description: "נזילה" }, meta: { DESCRIPTION: { fromChannel: true } } });
     const result = merge(state, { description: { op: "set", text: "  רטיבות   בתקרה  " } }, at(30));
 
     expect(result.state.values.description).toBe("רטיבות בתקרה");
-    expect(result.changes).toEqual([{ field: "DESCRIPTION", before: "נזילה", after: "רטיבות בתקרה", cause: "email" }]);
+    expect(result.changes).toEqual([{ field: "DESCRIPTION", before: "נזילה", after: "רטיבות בתקרה", cause: "channel" }]);
   });
 
   it("EM-C04 — replace בטקסט זהה לתיאור שנערך במערכת (אחרי נרמול) אינו סתירה", () => {
@@ -451,15 +451,15 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
 
   it("EM-C08 — הסרה של נמען שנוסף ממייל ולא נערך במערכת — מוסר לגמרי, בשקט", () => {
     const state = draft({
-      values: { recipients: [recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "EMAIL")] },
-      meta: { RECIPIENTS: { systemEditedAt: at(10), fromEmail: true } },
+      values: { recipients: [recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "CHANNEL")] },
+      meta: { RECIPIENTS: { systemEditedAt: at(10), fromChannel: true } },
     });
     const result = merge(state, { recipients: { add: [], remove: [pro("p-2")] } }, at(30));
 
     expect(result.state.values.recipients).toEqual([recipient(pro("p-1"), "SYSTEM")]);
     expect(result.state.meta.RECIPIENTS.conflict).toBe(false);
     expect(result.changes).toEqual([
-      { field: "RECIPIENTS", before: [pro("p-1"), pro("p-2")], after: [pro("p-1")], cause: "email" },
+      { field: "RECIPIENTS", before: [pro("p-1"), pro("p-2")], after: [pro("p-1")], cause: "channel" },
     ]);
   });
 
@@ -482,7 +482,7 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
     const state = draft({ values: { recipients: [recipient(pro("x-1"), "SYSTEM")] }, meta: systemEdited });
     const result = merge(state, { recipients: { add: [user("x-1")], remove: [] } }, at(30));
 
-    expect(result.state.values.recipients).toEqual([recipient(pro("x-1"), "SYSTEM"), recipient(user("x-1"), "EMAIL")]);
+    expect(result.state.values.recipients).toEqual([recipient(pro("x-1"), "SYSTEM"), recipient(user("x-1"), "CHANNEL")]);
   });
 
   it("EM-C05 — הוספת נמען שהוסר במערכת אחרי שהמייל הגיע — המערכת מכריעה, בלי סתירה", () => {
@@ -517,7 +517,7 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
     expect(result.ignored).toEqual([]);
     expect(result.state.meta.RECIPIENTS).toMatchObject({
       conflict: true,
-      emailValue: { field: "RECIPIENTS", add: [pro("p-2")], remove: [] },
+      channelValue: { field: "RECIPIENTS", add: [pro("p-2")], remove: [] },
     });
   });
 
@@ -552,7 +552,7 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
       meta: systemEdited,
     });
     const first = merge(state, { recipients: { add: [pro("p-2")], remove: [pro("p-1")] } }, at(30), "msg-1").state;
-    expect(first.meta.RECIPIENTS.emailValue).toEqual({ field: "RECIPIENTS", add: [pro("p-2")], remove: [pro("p-1")] });
+    expect(first.meta.RECIPIENTS.channelValue).toEqual({ field: "RECIPIENTS", add: [pro("p-2")], remove: [pro("p-1")] });
 
     // המייל המאוחר חוזר בו מהוספת p-2 (מבקש להסיר אותו — וזה כבר המצב במערכת),
     // ומבקש להסיר גם את p-3. הבקשה להסיר את p-1 לא הוזכרה ונשארת.
@@ -560,8 +560,8 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
 
     expect(second.state.meta.RECIPIENTS).toMatchObject({
       conflict: true,
-      emailValue: { field: "RECIPIENTS", add: [], remove: [pro("p-1"), pro("p-3")] },
-      emailMessageId: "msg-2",
+      channelValue: { field: "RECIPIENTS", add: [], remove: [pro("p-1"), pro("p-3")] },
+      channelMessageId: "msg-2",
     });
     expect(second.state.values.recipients).toEqual(state.values.recipients);
   });
@@ -571,7 +571,7 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
     const conflicted = merge(state, { recipients: { add: [], remove: [pro("p-1")] } }, at(30), "msg-1").state;
     const result = merge(conflicted, { recipients: { add: [pro("p-1")], remove: [] } }, at(50), "msg-2");
 
-    expect(result.state.meta.RECIPIENTS).toMatchObject({ conflict: false, emailValue: null, emailMessageId: null });
+    expect(result.state.meta.RECIPIENTS).toMatchObject({ conflict: false, channelValue: null, channelMessageId: null });
     expect(result.conflictsClosed).toEqual(["RECIPIENTS"]);
   });
 
@@ -585,8 +585,8 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
 
     expect(result.state.meta.RECIPIENTS).toMatchObject({
       conflict: true,
-      emailValue: { field: "RECIPIENTS", add: [], remove: [pro("p-2")] },
-      emailMessageId: "msg-1",
+      channelValue: { field: "RECIPIENTS", add: [], remove: [pro("p-2")] },
+      channelMessageId: "msg-1",
     });
     expect(result.conflictsOpened).toEqual([]);
     expect(result.conflictsClosed).toEqual([]);
@@ -603,17 +603,17 @@ describe("EM-C08 — נמענים, ברמת פריט", () => {
   it("EM-C08 — נמען שמופיע פעמיים בהוספה נוסף פעם אחת", () => {
     const result = merge(draft(), { recipients: { add: [pro("p-1"), pro("p-1")], remove: [] } }, at(30));
 
-    expect(result.state.values.recipients).toEqual([recipient(pro("p-1"), "EMAIL")]);
+    expect(result.state.values.recipients).toEqual([recipient(pro("p-1"), "CHANNEL")]);
   });
 
   it("EM-C08 — הוספה ששינתה את הרשימה והסרה שנכנסה לסתירה באותו מייל: שינוי אחד וסתירה אחת", () => {
     const state = draft({ values: { recipients: [recipient(pro("p-1"), "SYSTEM")] }, meta: systemEdited });
     const result = merge(state, { recipients: { add: [pro("p-2")], remove: [pro("p-1")] } }, at(30), "msg-1");
 
-    expect(result.state.values.recipients).toEqual([recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "EMAIL")]);
+    expect(result.state.values.recipients).toEqual([recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "CHANNEL")]);
     expect(result.changes).toHaveLength(1);
     expect(result.conflictsOpened).toEqual(["RECIPIENTS"]);
-    expect(result.state.meta.RECIPIENTS).toMatchObject({ fromEmail: true, conflict: true });
+    expect(result.state.meta.RECIPIENTS).toMatchObject({ fromChannel: true, conflict: true });
   });
 });
 
@@ -623,16 +623,16 @@ describe("EM-C10 — שדות תלויים", () => {
   it("EM-C10 — שינוי אתר בתשובה מאפס בניין ודירה, והבניין והדירה מאותה תשובה נכנסים — שינוי אחד לכל שדה", () => {
     const state = draft({
       values: { siteId: "site-1", buildingId: "bld-a", apartmentId: "apt-12" },
-      meta: { SITE: { fromEmail: true }, BUILDING: { systemEditedAt: at(10) }, APARTMENT: { systemEditedAt: at(10) } },
+      meta: { SITE: { fromChannel: true }, BUILDING: { systemEditedAt: at(10) }, APARTMENT: { systemEditedAt: at(10) } },
     });
     const result = merge(state, { site: "site-2", building: "bld-x", apartment: "apt-3" }, at(30));
 
     expect(result.state.values).toMatchObject({ siteId: "site-2", buildingId: "bld-x", apartmentId: "apt-3" });
-    expect(result.state.meta.BUILDING).toMatchObject({ fromEmail: true, systemEditedAt: null, conflict: false });
+    expect(result.state.meta.BUILDING).toMatchObject({ fromChannel: true, systemEditedAt: null, conflict: false });
     expect(result.changes).toEqual([
-      { field: "SITE", before: "site-1", after: "site-2", cause: "email" },
-      { field: "BUILDING", before: "bld-a", after: "bld-x", cause: "email" },
-      { field: "APARTMENT", before: "apt-12", after: "apt-3", cause: "email" },
+      { field: "SITE", before: "site-1", after: "site-2", cause: "channel" },
+      { field: "BUILDING", before: "bld-a", after: "bld-x", cause: "channel" },
+      { field: "APARTMENT", before: "apt-12", after: "apt-3", cause: "channel" },
     ]);
     expect(result.conflictsOpened).toEqual([]);
   });
@@ -641,12 +641,12 @@ describe("EM-C10 — שדות תלויים", () => {
     const state = draft({
       values: { siteId: "site-1", buildingId: "bld-a", apartmentId: null },
       meta: {
-        BUILDING: { fromEmail: true },
+        BUILDING: { fromChannel: true },
         APARTMENT: {
           systemEditedAt: at(10),
           conflict: true,
-          emailValue: { field: "APARTMENT", apartmentId: "apt-14" },
-          emailMessageId: "msg-1",
+          channelValue: { field: "APARTMENT", apartmentId: "apt-14" },
+          channelMessageId: "msg-1",
         },
       },
     });
@@ -655,7 +655,7 @@ describe("EM-C10 — שדות תלויים", () => {
     expect(result.state.meta.APARTMENT).toEqual(emptyDraftMeta().APARTMENT);
     expect(result.conflictsClosed).toEqual(["APARTMENT"]);
     // ערך הדירה היה ריק ממילא — אין מה לדווח לשולח
-    expect(result.changes).toEqual([{ field: "BUILDING", before: "bld-a", after: "bld-b", cause: "email" }]);
+    expect(result.changes).toEqual([{ field: "BUILDING", before: "bld-a", after: "bld-b", cause: "channel" }]);
   });
 
   it("EM-C10 — אתר מהתשובה שנכנס לסתירה: בניין ודירה מאותה תשובה אינם ממוזגים", () => {
@@ -716,8 +716,8 @@ describe("EM-C10 — שדות תלויים", () => {
 
   it("EM-C10 — שינוי אתר במערכת מאפס בניין ודירה, והשדות נשארים לא-ערוכים: מייל מאוחר ממלא אותם בשקט", () => {
     const state = draft({
-      values: { siteId: "site-1", buildingId: "bld-a", apartmentId: "apt-12", recipients: [recipient(pro("p-1"), "EMAIL")] },
-      meta: { BUILDING: { systemEditedAt: at(5) }, APARTMENT: { fromEmail: true } },
+      values: { siteId: "site-1", buildingId: "bld-a", apartmentId: "apt-12", recipients: [recipient(pro("p-1"), "CHANNEL")] },
+      meta: { BUILDING: { systemEditedAt: at(5) }, APARTMENT: { fromChannel: true } },
     });
     const edited = applySystemEdit(deepFreeze(state), { field: "SITE", siteId: "site-2" }, at(20));
 
@@ -725,7 +725,7 @@ describe("EM-C10 — שדות תלויים", () => {
     expect(edited.values.recipients).toEqual(state.values.recipients);
     expect(edited.meta.BUILDING).toEqual(emptyDraftMeta().BUILDING);
     expect(edited.meta.APARTMENT).toEqual(emptyDraftMeta().APARTMENT);
-    expect(edited.meta.SITE).toMatchObject({ systemEditedAt: at(20), fromEmail: false });
+    expect(edited.meta.SITE).toMatchObject({ systemEditedAt: at(20), fromChannel: false });
 
     const later = merge(edited, { building: "bld-x" }, at(30));
     expect(later.state.values.buildingId).toBe("bld-x");
@@ -742,12 +742,12 @@ describe("EM-C10 — שדות תלויים", () => {
   it("EM-C10 — שמירת אותו אתר במערכת אינה מאפסת את התלויים", () => {
     const state = draft({
       values: { siteId: "site-1", buildingId: "bld-a", apartmentId: "apt-12" },
-      meta: { BUILDING: { fromEmail: true } },
+      meta: { BUILDING: { fromChannel: true } },
     });
     const edited = applySystemEdit(state, { field: "SITE", siteId: "site-1" }, at(20));
 
     expect(edited.values).toMatchObject({ buildingId: "bld-a", apartmentId: "apt-12" });
-    expect(edited.meta.BUILDING.fromEmail).toBe(true);
+    expect(edited.meta.BUILDING.fromChannel).toBe(true);
     expect(edited.meta.SITE.systemEditedAt).toEqual(at(20));
   });
 });
@@ -756,15 +756,15 @@ describe("EM-C10 — שדות תלויים", () => {
 
 describe("EM-C05 — applySystemEdit", () => {
   it("EM-C05 — עריכת תיאור במערכת עוברת נרמול ומורידה את תג \"מהמייל\"", () => {
-    const state = draft({ values: { description: "נזילה" }, meta: { DESCRIPTION: { fromEmail: true } } });
+    const state = draft({ values: { description: "נזילה" }, meta: { DESCRIPTION: { fromChannel: true } } });
     const edited = applySystemEdit(state, { field: "DESCRIPTION", text: "  נזילה   בכיור \r\n" }, at(20));
 
     expect(edited.values.description).toBe("נזילה בכיור");
-    expect(edited.meta.DESCRIPTION).toMatchObject({ fromEmail: false, systemEditedAt: at(20) });
+    expect(edited.meta.DESCRIPTION).toMatchObject({ fromChannel: false, systemEditedAt: at(20) });
   });
 
   it("EM-C05 — עריכת חדר לריק במערכת", () => {
-    const state = draft({ values: { room: "KITCHEN" }, meta: { ROOM: { fromEmail: true } } });
+    const state = draft({ values: { room: "KITCHEN" }, meta: { ROOM: { fromChannel: true } } });
     const edited = applySystemEdit(state, { field: "ROOM", room: null }, at(20));
 
     expect(edited.values.room).toBeNull();
@@ -775,12 +775,12 @@ describe("EM-C05 — applySystemEdit", () => {
     const state = draft({
       values: {
         recipients: [
-          recipient(pro("p-1"), "EMAIL"),
+          recipient(pro("p-1"), "CHANNEL"),
           recipient(pro("p-2"), "SYSTEM"),
           recipient(pro("p-3"), "SYSTEM", at(5)),
         ],
       },
-      meta: { RECIPIENTS: { fromEmail: true } },
+      meta: { RECIPIENTS: { fromChannel: true } },
     });
     const edited = applySystemEdit(deepFreeze(state), { field: "RECIPIENTS", recipients: [user("u-1"), pro("p-1")] }, at(20));
 
@@ -790,7 +790,7 @@ describe("EM-C05 — applySystemEdit", () => {
       recipient(pro("p-2"), "SYSTEM", at(20)),
       recipient(pro("p-3"), "SYSTEM", at(5)),
     ]);
-    expect(edited.meta.RECIPIENTS).toMatchObject({ fromEmail: false, systemEditedAt: at(20), conflict: false });
+    expect(edited.meta.RECIPIENTS).toMatchObject({ fromChannel: false, systemEditedAt: at(20), conflict: false });
   });
 
   it("EM-C08 — נמען שהוסר במערכת ומוחזר במערכת חוזר לחיים (המצבה מתבטלת)", () => {
@@ -809,7 +809,7 @@ describe("EM-C05 — applySystemEdit", () => {
     const conflicted = merge(state, { recipients: { add: [], remove: [pro("p-1")] } }, at(30)).state;
     const edited = applySystemEdit(conflicted, { field: "RECIPIENTS", recipients: [pro("p-1")] }, at(40));
 
-    expect(edited.meta.RECIPIENTS).toMatchObject({ conflict: false, emailValue: null, emailMessageId: null });
+    expect(edited.meta.RECIPIENTS).toMatchObject({ conflict: false, channelValue: null, channelMessageId: null });
   });
 });
 
@@ -824,13 +824,13 @@ describe("EM-C09 — resolveChoices (מסך 7א)", () => {
         apartmentId: "apt-12",
         domainId: "dom-elec",
         description: "נזילה",
-        recipients: [recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "SYSTEM", at(5)), recipient(pro("p-4"), "EMAIL")],
+        recipients: [recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "SYSTEM", at(5)), recipient(pro("p-4"), "CHANNEL")],
       },
       meta: {
         APARTMENT: { systemEditedAt: at(10) },
         DOMAIN: { systemEditedAt: at(10) },
         DESCRIPTION: { systemEditedAt: at(10) },
-        RECIPIENTS: { systemEditedAt: at(10), fromEmail: true },
+        RECIPIENTS: { systemEditedAt: at(10), fromChannel: true },
       },
     });
     return merge(
@@ -846,17 +846,17 @@ describe("EM-C09 — resolveChoices (מסך 7א)", () => {
   }
 
   it("EM-C09 — בחירה בצד המייל בשדות סקלריים ובתיאור: הערך מהמייל נכתב כעריכה במערכת", () => {
-    const resolved = resolveChoices(deepFreeze(conflictedDraft()), { APARTMENT: "email", DESCRIPTION: "email" }, at(40));
+    const resolved = resolveChoices(deepFreeze(conflictedDraft()), { APARTMENT: "channel", DESCRIPTION: "channel" }, at(40));
 
     expect(resolved.values.apartmentId).toBe("apt-14");
     expect(resolved.values.description).toBe("רטיבות");
     for (const field of ["APARTMENT", "DESCRIPTION"] as const) {
       expect(resolved.meta[field]).toEqual({
-        fromEmail: false,
+        fromChannel: false,
         systemEditedAt: at(40),
         conflict: false,
-        emailValue: null,
-        emailMessageId: null,
+        channelValue: null,
+        channelMessageId: null,
       });
     }
     // שדות שלא נבחר בהם ערך נשארים בסתירה
@@ -868,23 +868,23 @@ describe("EM-C09 — resolveChoices (מסך 7א)", () => {
 
     expect(resolved.values.domainId).toBe("dom-elec");
     expect(resolved.meta.DOMAIN).toEqual({
-      fromEmail: false,
+      fromChannel: false,
       systemEditedAt: at(40),
       conflict: false,
-      emailValue: null,
-      emailMessageId: null,
+      channelValue: null,
+      channelMessageId: null,
     });
   });
 
   it("EM-C09 — נמענים, צד המייל: ההוספה מחיה את המצבה, ההסרה הופכת למצבה, וכל הפעילים SYSTEM", () => {
-    const resolved = resolveChoices(conflictedDraft(), { RECIPIENTS: "email" }, at(40));
+    const resolved = resolveChoices(conflictedDraft(), { RECIPIENTS: "channel" }, at(40));
 
     expect(resolved.values.recipients).toEqual([
       recipient(pro("p-4"), "SYSTEM"),
       recipient(pro("p-2"), "SYSTEM"),
       recipient(pro("p-1"), "SYSTEM", at(40)),
     ]);
-    expect(resolved.meta.RECIPIENTS).toMatchObject({ fromEmail: false, systemEditedAt: at(40), conflict: false, emailValue: null });
+    expect(resolved.meta.RECIPIENTS).toMatchObject({ fromChannel: false, systemEditedAt: at(40), conflict: false, channelValue: null });
   });
 
   it("EM-C09 — נמענים, צד המערכת: הרשימה נשארת, והנמען שנוסף ממייל הופך ל-SYSTEM", () => {
@@ -896,7 +896,7 @@ describe("EM-C09 — resolveChoices (מסך 7א)", () => {
       recipient(pro("p-4"), "SYSTEM"),
       recipient(pro("p-2"), "SYSTEM", at(5)),
     ]);
-    expect(resolved.meta.RECIPIENTS).toMatchObject({ fromEmail: false, systemEditedAt: at(40), conflict: false });
+    expect(resolved.meta.RECIPIENTS).toMatchObject({ fromChannel: false, systemEditedAt: at(40), conflict: false });
 
     // ומרגע ההכרעה, הסרת p-4 בתשובה מאוחרת היא סתירה
     const later = merge(resolved, { recipients: { add: [], remove: [pro("p-4")] } }, at(50));
@@ -907,11 +907,11 @@ describe("EM-C09 — resolveChoices (מסך 7א)", () => {
     const state = draft({
       values: { siteId: "site-1", buildingId: "bld-a", apartmentId: "apt-12" },
       meta: {
-        SITE: { systemEditedAt: at(10), conflict: true, emailValue: { field: "SITE", siteId: "site-2" }, emailMessageId: "m" },
-        BUILDING: { systemEditedAt: at(10), conflict: true, emailValue: { field: "BUILDING", buildingId: "bld-x" }, emailMessageId: "m" },
+        SITE: { systemEditedAt: at(10), conflict: true, channelValue: { field: "SITE", siteId: "site-2" }, channelMessageId: "m" },
+        BUILDING: { systemEditedAt: at(10), conflict: true, channelValue: { field: "BUILDING", buildingId: "bld-x" }, channelMessageId: "m" },
       },
     });
-    const resolved = resolveChoices(state, { SITE: "email", BUILDING: "email" }, at(40));
+    const resolved = resolveChoices(state, { SITE: "channel", BUILDING: "channel" }, at(40));
 
     expect(resolved.values).toMatchObject({ siteId: "site-2", buildingId: null, apartmentId: null });
     expect(resolved.meta.BUILDING).toEqual(emptyDraftMeta().BUILDING);
@@ -919,15 +919,15 @@ describe("EM-C09 — resolveChoices (מסך 7א)", () => {
   });
 
   it("EM-C09 — בחירה לשדה שאינו בסתירה אינה חלה", () => {
-    const state = draft({ values: { room: "KITCHEN" }, meta: { ROOM: { fromEmail: true } } });
-    const resolved = resolveChoices(state, { ROOM: "system", SITE: "email" }, at(40));
+    const state = draft({ values: { room: "KITCHEN" }, meta: { ROOM: { fromChannel: true } } });
+    const resolved = resolveChoices(state, { ROOM: "system", SITE: "channel" }, at(40));
 
     expect(resolved).toEqual(state);
   });
 
   it("EM-C09 — סתירה בלי ערך מהמייל שמור (מצב פגום): בחירה בצד המייל אינה ממציאה ערך והסתירה נשארת", () => {
     const state = draft({ values: { domainId: "dom-elec" }, meta: { DOMAIN: { systemEditedAt: at(10), conflict: true } } });
-    const resolved = resolveChoices(state, { DOMAIN: "email" }, at(40));
+    const resolved = resolveChoices(state, { DOMAIN: "channel" }, at(40));
 
     expect(resolved).toEqual(state);
   });
@@ -960,12 +960,12 @@ describe("המנוע — תכונות כלליות", () => {
         buildingId: "bld-a",
         apartmentId: "apt-12",
         description: "נזילה",
-        recipients: [recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "EMAIL")],
+        recipients: [recipient(pro("p-1"), "SYSTEM"), recipient(pro("p-2"), "CHANNEL")],
       },
       meta: { RECIPIENTS: { systemEditedAt: at(10) }, DOMAIN: { systemEditedAt: at(10) } },
     });
     const snapshot = structuredCloneJson(state);
-    const proposal: EmailProposal = {
+    const proposal: ChannelProposal = {
       site: "site-2",
       building: "bld-x",
       apartment: "apt-3",
@@ -976,7 +976,7 @@ describe("המנוע — תכונות כלליות", () => {
     };
     // ההקפאה העמוקה בתוך `merge` מפילה כל כתיבה לקלט; ההשוואה תופסת גם החלפה
     const result = merge(state, proposal, at(30));
-    const resolved = resolveChoices(deepFreeze(result.state), { DOMAIN: "email", RECIPIENTS: "email" }, at(40));
+    const resolved = resolveChoices(deepFreeze(result.state), { DOMAIN: "channel", RECIPIENTS: "channel" }, at(40));
     applySystemEdit(deepFreeze(resolved), { field: "RECIPIENTS", recipients: [] }, at(50));
 
     expect(structuredCloneJson(state)).toEqual(snapshot);

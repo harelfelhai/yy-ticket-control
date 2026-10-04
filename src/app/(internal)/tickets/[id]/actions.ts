@@ -169,7 +169,7 @@ const ticketFieldsSchema = z.object({
 // `partialRecord` ולא `record`: ב-Zod 4 רשומה עם מפתחות enum היא ממצה, כלומר
 // `record` היה דורש בחירה לכל שבעת השדות ודוחה כל הכרעה אמיתית, שנוגעת רק
 // בשדות שבסתירה (נתפס בחיבור המסך, S8).
-const choicesSchema = z.partialRecord(z.enum(DRAFT_FIELDS), z.enum(["system", "email"]));
+const choicesSchema = z.partialRecord(z.enum(DRAFT_FIELDS), z.enum(["system", "channel"]));
 
 /** טביעות השדות כפי שמסך 7 הציג אותם (`fieldVersion`) — ראה `updateDraftFields` */
 const expectedSchema = z.partialRecord(z.enum(DRAFT_FIELDS), z.string());

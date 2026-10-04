@@ -24,7 +24,7 @@ import {
 } from "./handlers/escalation";
 import { runEmailIntake } from "./handlers/email";
 import { startEmailPoller } from "./email-poller";
-import type { FieldExtractor } from "@/lib/email-intake/extraction";
+import type { FieldExtractor } from "@/lib/intake/extraction";
 import type { MailSource } from "@/lib/email-intake/source";
 import type { EmailIntakeOutcome } from "@/lib/services/email-intake";
 import { type EmailReplyOutcome, markReplyFailed, sendEmailReply } from "@/lib/services/email-reply";

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isIntakeSubject, normalizeHebrew } from "@/lib/email-intake/subject";
+import { isIntakeSubject } from "@/lib/email-intake/subject";
+import { normalizeHebrew } from "@/lib/intake/keyword";
 
 /**
  * כלל הכותרת (אפיון §2.6 שלב 1, §5.ה3 כלל 1, §7 שורה 79).

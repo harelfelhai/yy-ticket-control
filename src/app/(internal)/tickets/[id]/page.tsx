@@ -24,7 +24,7 @@ import { missingRequiredFields, getTicketDetail, recipientName } from "@/lib/ser
 import { activeRecipients } from "@/lib/draft/fields";
 import { draftValuesOf, emailDraftCounts, toDraftState } from "@/lib/draft/state";
 import { describeDraftState } from "@/lib/services/draft-display";
-import { emailMediaIds, isEmailDraft } from "@/lib/services/draft-fields";
+import { emailMediaIds, isChannelDraft } from "@/lib/services/draft-fields";
 import { getTicketCorrespondence } from "@/lib/services/email-correspondence";
 import { canTagTicket } from "@/lib/permissions";
 import {
@@ -102,7 +102,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
    * אינה משתנה (§7 שורה 82).
    */
   const draftValues = draftValuesOf(ticket);
-  const emailDraft = isEmailDraft(ticket)
+  const emailDraft = isChannelDraft(ticket)
     ? emailDraftCounts(draftValues, ticket.draftFields.filter((field) => field.conflict).length)
     : null;
 
@@ -124,7 +124,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
    * השיגור בחלון "פרטים" — **רק מה שקדם לשיגור** (מסך 2, EM-S2-01). השיגור
    * הוא שיוך הנמענים, ולכן מועדו הוא מועד השיוך הראשון.
    */
-  const emailDraftState = isEmailDraft(ticket) ? toDraftState(ticket, ticket.draftFields) : null;
+  const emailDraftState = isChannelDraft(ticket) ? toDraftState(ticket, ticket.draftFields) : null;
   const dispatchedAt = ticket.isDraft ? undefined : ticket.assignments[0]?.createdAt;
   const [emailDisplay, correspondence, removableMedia] = await Promise.all([
     emailDraftState && canEdit ? describeDraftState(emailDraftState) : Promise.resolve(null),
@@ -227,7 +227,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
         ).map((u) => ({ id: u.id, label: u.name, hint: he.emailDraft.inactiveRecipient, kind: "user" as const }))
       : [];
   // האתר שהמייל הציע בסתירה — מנהל עבודה אינו רשאי לבחור אתר אחר משלו
-  const emailSite = emailDraftState?.meta.SITE.emailValue;
+  const emailSite = emailDraftState?.meta.SITE.channelValue;
   const emailSiteAllowed =
     emailSite?.field === "SITE" ? canCreateTicketInSite(viewer, emailSite.siteId) : true;
   // נמעני טיוטת המייל בסדר שבו נשמרו — כולל מי שהושבת מאז

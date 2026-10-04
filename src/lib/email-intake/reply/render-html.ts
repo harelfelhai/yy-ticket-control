@@ -1,24 +1,16 @@
+import type { ReplyParagraph, ReplySegment } from "@/lib/intake/reply-model";
 import { EMAIL_CONTAINER_OPEN, EMAIL_PARAGRAPH_STYLE, escapeHtml } from "@/lib/notifier/compose";
 
 /**
- * המבנה של מייל חוזר לשולח, והרינדור שלו ל-HTML.
+ * הרינדור של מייל חוזר לשולח ל-HTML.
  *
  * **הטקסט וה-HTML נגזרים מאותו מבנה, ולא ה-HTML מהטקסט.** המייל הכללי
  * מדגיש כותרות ומכיל קישור באמצע משפט ("…לנמענים: [קישור]. אם משהו לא
  * נכון…"). ניחוש של גבולות הקישור או הכותרת מתוך טקסט שטוח היה נשבר על
  * הערך הראשון שמכיל נקודתיים או כתובת — ושני מסלולי ניסוח נפרדים היו
- * נפרדים בנוסח עם הזמן. כאן יש מסלול אחד: `compose.ts` בונה פסקאות
- * ממקטעים, והקובץ הזה הופך אותן לטקסט (`paragraphText`) ול-HTML.
+ * נפרדים בנוסח עם הזמן. כאן יש מסלול אחד: `intake/reply-model.ts` בונה
+ * פסקאות ממקטעים, ומשם הן הופכות לטקסט (`paragraphText`) ול-HTML (כאן).
  */
-
-export type ReplySegment =
-  | { kind: "text"; text: string }
-  /** כותרת חלק, או המשפט שהאפיון מדגיש ("הטיוטה עוד לא נשלחה לאיש.") */
-  | { kind: "strong"; text: string }
-  | { kind: "link"; href: string };
-
-/** פסקה = רצף מקטעים. ירידת שורה בתוך מקטע נשמרת (`<br>`). */
-export type ReplyParagraph = readonly ReplySegment[];
 
 /**
  * קישור לחיץ רק כשהוא http(s). הקישורים נבנים מכתובת המערכת ולא מקלט של
@@ -44,11 +36,6 @@ function segmentHtml(segment: ReplySegment): string {
       return isWebLink(segment.href) ? `<a href="${href}">${href}</a>` : href;
     }
   }
-}
-
-/** הטקסט השטוח של פסקה — אותו רצף מקטעים, בלי סימון */
-export function paragraphText(paragraph: ReplyParagraph): string {
-  return paragraph.map((segment) => (segment.kind === "link" ? segment.href : segment.text)).join("");
 }
 
 /**

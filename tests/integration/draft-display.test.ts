@@ -40,18 +40,18 @@ beforeEach(async () => {
 function state(): DraftState {
   const meta = emptyDraftMeta();
   meta.SITE = {
-    fromEmail: false,
+    fromChannel: false,
     systemEditedAt: new Date(),
     conflict: true,
-    emailValue: { field: "SITE", siteId: otherSiteId },
-    emailMessageId: null,
+    channelValue: { field: "SITE", siteId: otherSiteId },
+    channelMessageId: null,
   };
   meta.DOMAIN = {
-    fromEmail: false,
+    fromChannel: false,
     systemEditedAt: new Date(),
     conflict: true,
-    emailValue: { field: "DOMAIN", domainId: "domain-that-was-deleted" },
-    emailMessageId: null,
+    channelValue: { field: "DOMAIN", domainId: "domain-that-was-deleted" },
+    channelMessageId: null,
   };
   return {
     values: {
@@ -62,7 +62,7 @@ function state(): DraftState {
       domainId,
       description: "נזילה",
       recipients: [
-        { kind: "professional", id: proId, origin: "EMAIL", removedBySystemAt: null },
+        { kind: "professional", id: proId, origin: "CHANNEL", removedBySystemAt: null },
         { kind: "user", id: userId, origin: "SYSTEM", removedBySystemAt: null },
       ],
     },
@@ -75,7 +75,7 @@ describe("describeDraftState", () => {
     const display = await describeDraftState(state());
     const by = Object.fromEntries(display.fields.map((f) => [f.field, f]));
     expect(by.SITE.systemText).toBe("גני אלון");
-    expect(by.SITE.emailText).toBe("נווה שקד");
+    expect(by.SITE.channelText).toBe("נווה שקד");
     expect(by.BUILDING.systemText).toBe("בניין א");
     expect(by.APARTMENT.systemText).toBe("12");
     expect(by.DOMAIN.systemText).toBe("חשמל");
@@ -86,6 +86,6 @@ describe("describeDraftState", () => {
   it("מזהה שאינו קיים עוד מוצג במילים ואינו מפיל את התצוגה", async () => {
     const display = await describeDraftState(state());
     const domain = display.fields.find((f) => f.field === "DOMAIN");
-    expect(domain?.emailText).toBe(he.emailDraft.unknownRecord);
+    expect(domain?.channelText).toBe(he.emailDraft.unknownRecord);
   });
 });

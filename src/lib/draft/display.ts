@@ -3,7 +3,7 @@ import { he } from "@/lib/he";
 import {
   DRAFT_FIELDS,
   type DraftState,
-  type EmailValue,
+  type ChannelValue,
   type RecipientRef,
   activeRecipients,
   isMissing,
@@ -20,7 +20,7 @@ import { conflictsVersion, fieldVersion } from "./state";
  * נבדק בלי בסיס נתונים, ואותה שורה משרתת את שני המסכים: התג "מהמייל"
  * וסימון הסתירה בטופס (מסך 7), ושתי העמודות "במערכת" / "מהמייל" בחלון.
  *
- * הערך מהמייל מוצג **רק בסתירה**: `emailValue` נשמר בדיוק למקרה הזה
+ * הערך מהמייל מוצג **רק בסתירה**: `channelValue` נשמר בדיוק למקרה הזה
  * (§5.ה4 — "מחליף ממתין קודם"), ומחוץ לסתירה אין ערך מהמייל שאדם צריך
  * להכריע עליו.
  */
@@ -43,10 +43,10 @@ export interface DraftFieldDisplay {
   /** הערך במערכת כטקסט; ריק — `he.emailIntake.empty` ("—"), כמו במייל החוזר */
   systemText: string;
   /** הערך מהמייל האחרון, כטקסט, כשיש סתירה; אחרת null */
-  emailText: string | null;
+  channelText: string | null;
   conflict: boolean;
   /** תג "מהמייל" (EM-M03) */
-  fromEmail: boolean;
+  fromChannel: boolean;
   /** שדה חובה ריק */
   missing: boolean;
   /** `fieldVersion` — נשלח עם שמירת השדה, כדי שהשרת ידחה שמירה על ערך שהשתנה מאז */
@@ -82,7 +82,7 @@ export function draftLabelIds(state: DraftState): Record<DraftLabelKind, Set<str
   values.recipients.forEach(addRef);
 
   for (const field of DRAFT_FIELDS) {
-    const email = state.meta[field].emailValue;
+    const email = state.meta[field].channelValue;
     if (!email) continue;
     switch (email.field) {
       case "SITE":
@@ -116,9 +116,9 @@ export function describeDraftFields(state: DraftState, labels: DraftLabels): Dra
       field,
       label: DRAFT_FIELD_LABEL[field],
       systemText: systemText(state, field, labels),
-      emailText: meta.conflict && meta.emailValue ? emailText(meta.emailValue, labels) : null,
+      channelText: meta.conflict && meta.channelValue ? channelText(meta.channelValue, labels) : null,
       conflict: meta.conflict,
-      fromEmail: meta.fromEmail,
+      fromChannel: meta.fromChannel,
       missing: isMissing(state.values, field),
       version: fieldVersion(state, field),
     };
@@ -165,7 +165,7 @@ function systemText(state: DraftState, field: DraftFieldName, labels: DraftLabel
   }
 }
 
-function emailText(value: EmailValue, labels: DraftLabels): string {
+function channelText(value: ChannelValue, labels: DraftLabels): string {
   switch (value.field) {
     case "SITE":
       return nameOf(labels.site, value.siteId);

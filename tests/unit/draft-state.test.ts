@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { emptyDraftMeta, emptyMeta } from "@/lib/draft/fields";
-import { applySystemEdit, mergeEmailIntoDraft } from "@/lib/draft/merge";
+import { applySystemEdit, mergeChannelIntoDraft } from "@/lib/draft/merge";
 import {
   type DraftFieldRow,
   type DraftTicketRow,
   conflictsVersion,
   diffDraftState,
   emailDraftCounts,
-  parseEmailValue,
+  parseChannelValue,
   toDraftState,
 } from "@/lib/draft/state";
 
@@ -34,24 +34,24 @@ function ticket(overrides: Partial<DraftTicketRow> = {}): DraftTicketRow {
 }
 
 function row(overrides: Partial<DraftFieldRow> & Pick<DraftFieldRow, "field">): DraftFieldRow {
-  return { fromEmail: false, systemEditedAt: null, conflict: false, emailValue: null, emailMessageId: null, ...overrides };
+  return { fromChannel: false, systemEditedAt: null, conflict: false, channelValue: null, emailMessageId: null, ...overrides };
 }
 
 describe("toDraftState", () => {
   it("EM-M03 — ערכים מהפנייה, מטא מהשורות, ושדה בלי שורה מקבל מטא ריק", () => {
     const state = toDraftState(ticket(), [
-      row({ field: "BUILDING", fromEmail: true }),
-      row({ field: "DOMAIN", conflict: true, systemEditedAt: T0, emailValue: { field: "DOMAIN", domainId: "d-2" }, emailMessageId: "m-1" }),
+      row({ field: "BUILDING", fromChannel: true }),
+      row({ field: "DOMAIN", conflict: true, systemEditedAt: T0, channelValue: { field: "DOMAIN", domainId: "d-2" }, emailMessageId: "m-1" }),
     ]);
 
     expect(state.values).toMatchObject({ siteId: "site-a", buildingId: "b-1", description: "נזילה" });
-    expect(state.meta.BUILDING.fromEmail).toBe(true);
+    expect(state.meta.BUILDING.fromChannel).toBe(true);
     expect(state.meta.DOMAIN).toEqual({
-      fromEmail: false,
+      fromChannel: false,
       systemEditedAt: T0,
       conflict: true,
-      emailValue: { field: "DOMAIN", domainId: "d-2" },
-      emailMessageId: "m-1",
+      channelValue: { field: "DOMAIN", domainId: "d-2" },
+      channelMessageId: "m-1",
     });
     expect(state.meta.APARTMENT).toEqual(emptyMeta());
   });
@@ -60,15 +60,20 @@ describe("toDraftState", () => {
     const state = toDraftState(ticket(), []);
     expect(state.values.recipients).toEqual([{ kind: "professional", id: "p-1", origin: "SYSTEM", removedBySystemAt: null }]);
   });
+
+  it("EM-C08 — נמען שנשמר לפני 1.4 עם המקור EMAIL נקרא כנמען מהערוץ", () => {
+    const state = toDraftState(ticket({ draftRecipients: [{ kind: "professional", id: "p-1", origin: "EMAIL" }] }), []);
+    expect(state.values.recipients).toEqual([{ kind: "professional", id: "p-1", origin: "CHANNEL", removedBySystemAt: null }]);
+  });
 });
 
-describe("parseEmailValue", () => {
+describe("parseChannelValue", () => {
   it("EM-C06 — ערך תקין לכל שדה נקרא כמות שהוא", () => {
-    expect(parseEmailValue("SITE", { field: "SITE", siteId: "s" })).toEqual({ field: "SITE", siteId: "s" });
-    expect(parseEmailValue("ROOM", { field: "ROOM", room: "KITCHEN" })).toEqual({ field: "ROOM", room: "KITCHEN" });
-    expect(parseEmailValue("DESCRIPTION", { field: "DESCRIPTION", text: "חדש" })).toEqual({ field: "DESCRIPTION", text: "חדש" });
+    expect(parseChannelValue("SITE", { field: "SITE", siteId: "s" })).toEqual({ field: "SITE", siteId: "s" });
+    expect(parseChannelValue("ROOM", { field: "ROOM", room: "KITCHEN" })).toEqual({ field: "ROOM", room: "KITCHEN" });
+    expect(parseChannelValue("DESCRIPTION", { field: "DESCRIPTION", text: "חדש" })).toEqual({ field: "DESCRIPTION", text: "חדש" });
     expect(
-      parseEmailValue("RECIPIENTS", { field: "RECIPIENTS", add: [{ kind: "user", id: "u" }, { kind: "x", id: "bad" }], remove: null }),
+      parseChannelValue("RECIPIENTS", { field: "RECIPIENTS", add: [{ kind: "user", id: "u" }, { kind: "x", id: "bad" }], remove: null }),
     ).toEqual({ field: "RECIPIENTS", add: [{ kind: "user", id: "u" }], remove: [] });
   });
 
@@ -79,13 +84,13 @@ describe("parseEmailValue", () => {
     ["מזהה ריק", { field: "SITE", siteId: "" }],
     ["מזהה שאינו מחרוזת", { field: "SITE", siteId: 7 }],
   ])("EM-C06 — ערך פגום (%s) נקרא כ-null ולא מפיל את הטיוטה", (_name, raw) => {
-    expect(parseEmailValue("SITE", raw)).toBeNull();
+    expect(parseChannelValue("SITE", raw)).toBeNull();
   });
 });
 
 describe("diffDraftState", () => {
   it("EM-C05 — עריכה במערכת כותבת רק את מה שהשתנה, ומטא רק בטיוטה ממייל", () => {
-    const before = toDraftState(ticket(), [row({ field: "DOMAIN", fromEmail: true })]);
+    const before = toDraftState(ticket(), [row({ field: "DOMAIN", fromChannel: true })]);
     const after = applySystemEdit(before, { field: "DOMAIN", domainId: "d-9" }, T1);
 
     const email = diffDraftState(before, after, true);
@@ -99,13 +104,13 @@ describe("diffDraftState", () => {
   });
 
   it("EM-C09 — שמירה מפורשת בלי שינוי ערך: אין כתיבה לפנייה ואין אירוע, אבל תג 'מהמייל' יורד", () => {
-    const before = toDraftState(ticket({ domainId: "d-1" }), [row({ field: "DOMAIN", fromEmail: true })]);
+    const before = toDraftState(ticket({ domainId: "d-1" }), [row({ field: "DOMAIN", fromChannel: true })]);
     const after = applySystemEdit(before, { field: "DOMAIN", domainId: "d-1" }, T1);
 
     const write = diffDraftState(before, after, true);
     expect(write.ticket).toEqual({});
     expect(write.changedValues).toEqual([]);
-    expect(write.fields.map((f) => [f.field, f.meta.fromEmail, f.meta.systemEditedAt])).toEqual([["DOMAIN", false, T1]]);
+    expect(write.fields.map((f) => [f.field, f.meta.fromChannel, f.meta.systemEditedAt])).toEqual([["DOMAIN", false, T1]]);
   });
 
   it("EM-C10 — החלפת אתר מאפסת בניין ודירה, והנמענים נשארים", () => {
@@ -141,13 +146,13 @@ describe("diffDraftState", () => {
 describe("conflictsVersion", () => {
   function conflicted() {
     const edited = applySystemEdit(toDraftState(ticket({ domainId: "d-1" }), []), { field: "DOMAIN", domainId: "d-1" }, T0);
-    return mergeEmailIntoDraft({ state: edited, proposal: { domain: "d-2" }, receivedAt: T1, messageId: "m-1" }).state;
+    return mergeChannelIntoDraft({ state: edited, proposal: { domain: "d-2" }, receivedAt: T1, messageId: "m-1" }).state;
   }
 
   it("EM-C06 — משתנה כשתשובה חדשה מחליפה את הערך הממתין", () => {
     const first = conflicted();
     expect(first.meta.DOMAIN.conflict).toBe(true);
-    const second = mergeEmailIntoDraft({ state: first, proposal: { domain: "d-3" }, receivedAt: T2, messageId: "m-2" }).state;
+    const second = mergeChannelIntoDraft({ state: first, proposal: { domain: "d-3" }, receivedAt: T2, messageId: "m-2" }).state;
 
     expect(conflictsVersion(second)).not.toBe(conflictsVersion(first));
   });
