@@ -64,3 +64,6 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# ספייק וואטסאפ (W0): payloads ומדיה גולמיים — עשויים להכיל הודעות אמיתיות
+.wa-spike/
