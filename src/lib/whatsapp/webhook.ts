@@ -65,9 +65,27 @@ export interface WaStatusUpdate {
   errorTitle: string | null;
 }
 
+/**
+ * אירוע חשבון (`account_update`) — ניתוק מהטלפון ודומיו (מסך 17).
+ *
+ * **הניתוב לפי ה-WABA**: באירוע אין `phone_number_id`, רק המספר כפי שמוצג. ו-Meta
+ * שולחת אותו לכתובת הקבועה של האפליקציה ולא לזו שהמערכת רושמת (§7 שורה 109),
+ * ולכן הוא עשוי שלא להגיע כלל — הבדיקה התקופתית היא שמגלה ניתוק.
+ */
+export interface WaAccountEvent {
+  wabaId: string;
+  /** PARTNER_REMOVED, ACCOUNT_OFFBOARDED, ACCOUNT_RECONNECTED — ומה ש-Meta תוסיף */
+  event: string;
+  /** המספר כפי שמוצג (`phone_number`), כשנמסר */
+  phoneNumber: string | null;
+  /** `disconnection_info.reason`, למשל PRIMARY_INACTIVITY */
+  reason: string | null;
+}
+
 export type WebhookItem =
   | { kind: "message"; message: WaInboundMessage }
   | { kind: "status"; status: WaStatusUpdate }
+  | { kind: "account"; account: WaAccountEvent }
   /** שדה אחר (`account_update`, `message_template_status_update`...) — רק השם */
   | { kind: "other"; field: string; wabaId: string; phoneNumberId: string | null }
   /** הודעה או סטטוס שאינם עומדים במבנה המינימלי — אינם נבלעים */
@@ -139,6 +157,12 @@ const payloadSchema = z.object({
   ),
 });
 
+const accountUpdateSchema = z.object({
+  event: z.string().min(1),
+  phone_number: z.union([z.string(), z.number()]).optional(),
+  disconnection_info: z.object({ reason: z.string().optional() }).optional(),
+});
+
 // ─────────────────────────────── הפענוח ───────────────────────────────
 
 /** מפענח את גוף המשלוח (כטקסט, כפי שנשמר). זורק `WebhookParseError` על מבנה שבור. */
@@ -162,10 +186,29 @@ export function parseWebhook(rawBody: string): WebhookItem[] {
   return items;
 }
 
+/** אירוע חשבון בלי `event` אינו נבלע — הוא חוזר כפריט `invalid`, כמו הודעה שבורה */
+function parseAccountUpdate(wabaId: string, raw: unknown): WebhookItem {
+  const parsed = accountUpdateSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { kind: "invalid", field: "account_update", reason: "אירוע חשבון בלי event", phoneNumberId: null };
+  }
+  const phone = parsed.data.phone_number;
+  return {
+    kind: "account",
+    account: {
+      wabaId,
+      event: parsed.data.event,
+      phoneNumber: phone === undefined ? null : String(phone),
+      reason: parsed.data.disconnection_info?.reason || null,
+    },
+  };
+}
+
 function parseChange(wabaId: string, field: string, raw: unknown): WebhookItem[] {
   const value = valueSchema.safeParse(raw);
   const phoneNumberId = value.success ? (value.data.metadata?.phone_number_id ?? null) : null;
 
+  if (field === "account_update") return [parseAccountUpdate(wabaId, raw)];
   if (field !== "messages") return [{ kind: "other", field, wabaId, phoneNumberId }];
   if (!value.success || !phoneNumberId) {
     return [{ kind: "invalid", field, reason: "אין phone_number_id", phoneNumberId: null }];

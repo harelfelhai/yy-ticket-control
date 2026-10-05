@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  FACEBOOK_SDK_PATHS,
   buildContentSecurityPolicy,
   buildSecurityHeaders,
 } from "@/lib/security-headers";
@@ -48,6 +49,33 @@ describe("buildContentSecurityPolicy", () => {
       expect(csp).not.toContain("frame-src 'self' blob: https:");
     },
   );
+});
+
+/**
+ * **מסך 17 בלבד טוען סקריפט חיצוני** — ה-SDK של Meta לחלון החיבור של וואטסאפ.
+ * ההרחבה אינה דולפת: בלי הדגל אין facebook בשום דירקטיבה, ועם הדגל כל ההגנות
+ * האחרות נשארות כמו שהן.
+ */
+describe("ה-CSP של חלון החיבור לוואטסאפ (מסך 17)", () => {
+  it.each([true, false])("ברירת המחדל אינה מזכירה את facebook (dev=%s)", (isDev) => {
+    expect(buildContentSecurityPolicy(isDev)).not.toContain("facebook");
+  });
+
+  it.each([true, false])("עם הדגל — הסקריפט מ-connect.facebook.net והמסגרות של facebook.com (dev=%s)", (isDev) => {
+    const csp = buildContentSecurityPolicy(isDev, { facebookSdk: true });
+    const directive = (name: string) => csp.split("; ").find((part) => part.startsWith(`${name} `)) ?? "";
+    expect(directive("script-src")).toContain("https://connect.facebook.net");
+    expect(directive("frame-src")).toBe("frame-src 'self' blob: https://*.facebook.com");
+    // שאר ההגנות נשארות: אין הטמעה של המסך, אין object, הטפסים אלינו בלבד
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("form-action 'self'");
+    expect(directive("default-src")).toBe("default-src 'self'");
+  });
+
+  it("ההרחבה חלה על מסך החיבור בלבד", () => {
+    expect(FACEBOOK_SDK_PATHS).toEqual(["/admin/whatsapp"]);
+  });
 });
 
 describe("buildSecurityHeaders", () => {

@@ -70,9 +70,15 @@
 | אירוע | מה הוא אומר |
 |---|---|
 | `wa.webhook.bad_signature` (warn) | משלוח שהחתימה שלו אינה של Meta — נדחה ב-401 ולא נכתב דבר |
-| `wa.webhook.processed` | משלוח פוענח: `pending`, `ignored`, `duplicates`, `unknownNumber`, `statuses`, `invalid` |
+| `wa.webhook.processed` | משלוח פוענח: `pending`, `ignored`, `duplicates`, `unknownNumber`, `statuses`, `invalid`, `accountEvents` |
 | `wa.webhook.unknown_number` | הודעות למספר עסקי שאינו מחובר כאן — מערכת אחרת על אותה אפליקציה של Meta |
-| `wa.webhook.other` | שדה שאינו `messages` (`account_update` ודומיו) — רק השם |
+| `wa.webhook.other` | שדה שאינו `messages` או `account_update` — רק השם |
+| `wa.number.connected` · `wa.number.disconnected` | מסך 17: מנהל המערכת חיבר או ניתק את המספר (`actorId`) |
+| `wa.number.connect_failed` (warn) | החיבור נכשל מול Meta: `step` (exchange, inspect, phone-numbers), `kind`, `code` |
+| `wa.number.issue` (warn) | המספר עבר ל"תקלה": `issue` — הקוד שמסך 17 מתרגם להוראה (`whatsapp/connection-issue.ts`) |
+| `wa.number.sync_deferred` (warn) | הסנכרון שהחיבור מחייב נדחה — ינוסה שוב בבדיקה התקופתית, עד 24 שעות מהחיבור |
+| `wa.health.unreachable` (warn) | הבדיקה התקופתית לא הגיעה ל-Meta — המצב לא השתנה, והפעימה לא נרשמה |
+| `wa.number.test_sent` | נשלחה הודעת בדיקה. מצב המסירה מתעדכן על השורה היוצאת מהסטטוסים של Meta |
 | `wa.intake.unit` | הוכרע דיווח: `size`, `outcome`, `shadow`, `latencySec` מההודעה האחרונה בו |
 | `wa.sender.bsuid_conflict` (warn) | המזהה שוואטסאפ מצמידה לשולח כבר שמור על משתמש אחר — לא נדרס |
 
@@ -123,6 +129,7 @@ Logs בלבד, וה-stdout של הקונטיינר מציג רק את העליי
 | `email-intake-configured` | היכולת דלוקה בפרודקשן ⇒ יש טוקן Gmail ו-`GEMINI_API_KEY` | **תצורה שאינה מייצרת ג׳וב** — יכולת דלוקה שאינה יכולה לקרוא, או שכל מייל בה נוחת ב"החילוץ אינו זמין" |
 | `wa-intake-not-stuck` | אין `WaMessage` ב-PENDING מעל 30 דקות שמועד ההכרעה שלה עבר | הודעת וואטסאפ שאיש לא הכריע בה, או אישור שלא יצא |
 | `wa-webhook-buffer` | אין `WaWebhookEvent` שלא פוענח מעל 5 דקות | משלוח שנשמר והתור לא עיבד — העותק היחיד, כי אין API לשליפה חוזרת |
+| `wa-subscription-intact` | המספר המחובר אינו ב"תקלה", ופעימת `wa-health` < 13 שעות | **ניתוק שלא נודע לאיש.** הודעת הניתוק של Meta אינה מגיעה לכתובת שלנו (אפיון §7 שורה 109), ולכן ג׳וב `WA_HEALTH` בודק כל 6 שעות את המנוי, את המספר ואת הסנכרון, ומעביר ל"תקלה"; כאן — שהבדיקה רצה, ושאין תקלה פתוחה |
 
 כל invariant שנכשל → issue נפרד (`fingerprint: ["watchdog", <name>]`).
 **אם התהליך עצמו מת** — ה-check-in נעצר, ו-Sentry מתריע על "missed" (‏interval

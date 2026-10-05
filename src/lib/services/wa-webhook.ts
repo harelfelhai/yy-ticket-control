@@ -6,6 +6,7 @@ import { captureError, logInfo, logWarn } from "@/lib/observability/log";
 import { BURST_QUIET_MS } from "@/lib/whatsapp/burst";
 import { type SenderMatch, cheapDecision } from "@/lib/whatsapp/decision";
 import { phoneFromWaId } from "@/lib/whatsapp/phone";
+import { applyAccountUpdate } from "./wa-number";
 import {
   type WaInboundMessage,
   type WaStatusUpdate,
@@ -53,6 +54,8 @@ export interface WaEventCounts {
   unknownNumber: number;
   statuses: number;
   invalid: number;
+  /** אירועי חשבון שחלו על המספר שלנו (ניתוק מהטלפון) */
+  accountEvents: number;
 }
 
 export type WaEventOutcome = { kind: "wa-event" } & (
@@ -92,7 +95,15 @@ export async function processWebhookEvent(
     return { kind: KIND, status: "unparseable" };
   }
 
-  const counts: WaEventCounts = { pending: 0, ignored: 0, duplicates: 0, unknownNumber: 0, statuses: 0, invalid: 0 };
+  const counts: WaEventCounts = {
+    pending: 0,
+    ignored: 0,
+    duplicates: 0,
+    unknownNumber: 0,
+    statuses: 0,
+    invalid: 0,
+    accountEvents: 0,
+  };
   const numbers = await loadNumbers(items);
   const invalidReasons: string[] = [];
 
@@ -114,6 +125,10 @@ export async function processWebhookEvent(
         } else {
           counts.unknownNumber += 1;
         }
+        break;
+      case "account":
+        // הודעת ניתוק של Meta — כשהיא בכל זאת מגיעה (§7 שורה 109)
+        if ((await applyAccountUpdate(item.account)) === "applied") counts.accountEvents += 1;
         break;
       case "other":
         logInfo("wa.webhook.other", { field: item.field, webhookEventId: event.id });

@@ -26,6 +26,8 @@ export const JOB_TYPES = {
   waEvent: "WA_EVENT",
   /** הכרעה על הדיווחים הממתינים של שולח אחד בוואטסאפ */
   waIntake: "WA_INTAKE",
+  /** בדיקת חיבור המספר העסקי מול Meta — כל 6 שעות, ומתזמנת את עצמה מחדש (מסך 17) */
+  waHealth: "WA_HEALTH",
 } as const;
 
 export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];

@@ -22,6 +22,7 @@ import {
   ensureDailyEscalationScheduled,
   runDailyEscalation,
 } from "./handlers/escalation";
+import { ensureWaHealthScheduled, runWaHealth } from "./handlers/wa-health";
 import { runEmailIntake } from "./handlers/email";
 import { startEmailPoller } from "./email-poller";
 import type { FieldExtractor } from "@/lib/intake/extraction";
@@ -29,6 +30,7 @@ import type { MailSource } from "@/lib/email-intake/source";
 import type { EmailIntakeOutcome } from "@/lib/services/email-intake";
 import { type EmailReplyOutcome, markReplyFailed, sendEmailReply } from "@/lib/services/email-reply";
 import { type WaIntakeOutcome, handleWaIntake } from "@/lib/services/wa-intake";
+import type { WaHealthOutcome } from "@/lib/services/wa-number";
 import { type WaEventOutcome, processWebhookEvent } from "@/lib/services/wa-webhook";
 import { cleanupRateLimits } from "@/lib/rate-limit";
 import { captureError } from "@/lib/observability/log";
@@ -132,7 +134,8 @@ export type JobOutcome =
   | EmailIntakeOutcome
   | EmailReplyOutcome
   | WaEventOutcome
-  | WaIntakeOutcome;
+  | WaIntakeOutcome
+  | WaHealthOutcome;
 
 export type JobResult =
   | { job: Job; status: "done"; outcome?: JobOutcome }
@@ -236,6 +239,8 @@ export async function processNextJob(
 export async function ensureDailyRescheduled(jobType: string, now: Date): Promise<void> {
   if (jobType === JOB_TYPES.escalate) await ensureDailyEscalationScheduled(now);
   else if (jobType === JOB_TYPES.backup) await ensureDailyBackupScheduled(now);
+  // לא יומי, אבל שרשרת שמתזמנת את עצמה באותה צורה — ונעצרת באותה צורה בלי זה
+  else if (jobType === JOB_TYPES.waHealth) await ensureWaHealthScheduled(now);
 }
 
 /**
@@ -308,6 +313,12 @@ async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome
 
     case JOB_TYPES.waIntake:
       return handleWaIntake(job.payload as unknown as WaIntakeJobPayload, { now });
+
+    case JOB_TYPES.waHealth: {
+      const outcome = await runWaHealth(now);
+      await ensureWaHealthScheduled(now);
+      return outcome;
+    }
 
     case JOB_TYPES.backup: {
       const outcome = await runDailyBackup(now);
@@ -464,6 +475,7 @@ export function startWorker(): void {
     const now = new Date();
     await ensureDailyEscalationScheduled(now);
     await ensureDailyBackupScheduled(now);
+    await ensureWaHealthScheduled(now);
     // זריעת פעימות-לב בעלייה: בהפעלה ראשונה הג'וב היומי עדיין לא רץ,
     // וה-watchdog היה מתריע על "פעימה חסרה" על שווא.
     //
@@ -472,6 +484,7 @@ export function startWorker(): void {
     // השתיקה את ה-watchdog ל-27 שעות אחרי כל push ל-main. ראה `heartbeat.ts`.
     await seedHeartbeat(HEARTBEAT.escalation, now);
     await seedHeartbeat(HEARTBEAT.backup, now);
+    await seedHeartbeat(HEARTBEAT.waHealth, now);
   })().catch((error) => {
     // אתחול שנכשל פירושו שהגיבוי וההסלמה היומיים אולי לא תוזמנו כלל —
     // כשל שקט של כל מנגנון ההתראות. קריטי, ולכן ל-Sentry.

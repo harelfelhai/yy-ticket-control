@@ -821,7 +821,7 @@
 
 ---
 
-## 8.2 דלתות גרסה 1.4 — פתיחת פנייה בוואטסאפ (§2.7, §3.7, §5.ה5, מסכים 1, 2, 7, 7א, 12, 17, §7 #88–107)
+## 8.2 דלתות גרסה 1.4 — פתיחת פנייה בוואטסאפ (§2.7, §3.7, §5.ה5, מסכים 1, 2, 7, 7א, 12, 17, §7 #88–111)
 
 > **אף שורה כאן אינה ממומשת.** האפיון נכתב ב-4.10.2026, לפני הקוד, ולכן עמודת
 > "מימוש" מציינת את השלב בתוכנית שבו השורה תמומש (W0–W9), ועמודת "בדיקה" את הקובץ
@@ -859,7 +859,13 @@
 | WA-18 | §7 #102 · §5.ו | הודעת אישור שלא יצאה תוך 24 שעות מהודעת השולח **אינה נשלחת בדרך אחרת**, ומסומנת בשיחה "לא נשלחה" | W6 | `wa-reply.test.ts` WA-18 | INT | 🆕 |
 | WA-19 | §7 #103 · §5.ו · מסך 17 | הודעות שהגיעו כשהמספר מנותק או הקליטה כבויה **אינן נקלטות גם בדיעבד** | `env.whatsappIntakeEnabled()` כבוי, או מספר שאינו `CONNECTED` ⇒ `IGNORED_DISABLED`, בלי זיהוי ובלי תוכן | `wa-env-decision.test.ts` WA-19 · `wa-webhook.test.ts` WA-19 | UNIT+INT | ✅ |
 | WA-20 | §7 #96 · §5.ו | הודעה **שנערכה או נמחקה** בוואטסאפ אחרי שנקלטה **אינה משנה את הטיוטה** | עריכה ומחיקה מגיעות כסוג שאינו נקלט → `IGNORED_UNSUPPORTED`, ואינן נוגעות בהודעה שכבר נרשמה (W4); מול טיוטה קיימת (W6) | `wa-env-decision.test.ts` WA-06 · `wa-intake.test.ts` WA-20 (W6) | UNIT+INT | ⚠️ |
-| WA-21 | §2.7.2 · §7 #107 · מסך 17 | משתמש שהסתיר את המספר ב**שם משתמש** מזוהה לפי המזהה שוואטסאפ מצמידה לו, אחרי שזוהה פעם אחת לפי הטלפון; הודעה עם "תקלה" **בלי מספר ובלי מזהה מוכר** אינה נקלטת, אבל **נספרת ומוצגת** במסך 17 | `findSender` — המזהה (BSUID) משמש רק כשהטלפון הוסתר, ונשמר על המשתמש בהודעה הראשונה שזוהתה לפי טלפון (W4); `IGNORED_UNIDENTIFIED` כשהייתה המילה; הספירה במסך 17 (W5) | `schema.test.ts` WA-21 · `wa-webhook.test.ts` WA-21 · `wa-env-decision.test.ts` WA-21 · `whatsapp-admin.spec.ts` WA-21 (W5) | UNIT+INT+PW | ⚠️ |
+| WA-21 | §2.7.2 · §7 #107 · מסך 17 | משתמש שהסתיר את המספר ב**שם משתמש** מזוהה לפי המזהה שוואטסאפ מצמידה לו, אחרי שזוהה פעם אחת לפי הטלפון; הודעה עם "תקלה" **בלי מספר ובלי מזהה מוכר** אינה נקלטת, אבל **נספרת ומוצגת** במסך 17 | `findSender` — המזהה (BSUID) משמש רק כשהטלפון הוסתר, ונשמר על המשתמש בהודעה הראשונה שזוהתה לפי טלפון (W4); `IGNORED_UNIDENTIFIED` כשהייתה המילה; הספירה במסך 17 — `getWhatsappScreen`, 30 יום לפי `receivedAt` (W5) | `schema.test.ts` WA-21 · `wa-webhook.test.ts` WA-21 · `wa-env-decision.test.ts` WA-21 · `wa-number.test.ts` WA-S17-01 · `admin-whatsapp.spec.ts` WA-S17-01 | UNIT+INT+PW | ✅ |
+| WA-22 | §7 #109 · מסך 17 | **ניתוק מתגלה בבדיקה תקופתית**, כל 6 שעות: המנוי עדיין מצביע על המערכת, המספר קיים ועדיין באפליקציה, הטוקן בתוקף, והסנכרון הושלם; כל כשל — מצב "תקלה" בנוסח שאומר מה לעשות. הודעת הניתוק של Meta (`account_update`) מטופלת כשהיא בכל זאת מגיעה | `checkWhatsappConnection` בג׳וב `WA_HEALTH` (`jobs/handlers/wa-health.ts`); `applyAccountUpdate` מה-webhook; invariant `wa-subscription-intact` (W5) | `wa-number.test.ts` WA-22 · `wa-number.test.ts` account_update · `wa-webhook.test.ts` (unit) account_update | UNIT+INT | ✅ |
+| WA-23 | מסך 17 · §5.ה5 #5 · §7 #103 | **כל חיבור, גם חוזר, קובע מחדש את הרגע שממנו הקליטה חלה** — הודעה מלפני החיבור החוזר אינה נקלטת גם כשנמסרה באיחור | `connectWhatsappNumber` — `activatedAt` בכל חיבור (W5) | `wa-number.test.ts` WA-23 | INT | ✅ |
+| WA-24 | מסך 17 | **"נתק" מבטל את המנוי אצל Meta ומוחק את ההרשאה השמורה**; כש-Meta אינה זמינה דבר אינו משתנה | `disconnectWhatsappNumber`; `WaNumber.tokenCipher` אופציונלי (מיגרציה `whatsapp_connection`) (W5) | `wa-number.test.ts` WA-24 · `wa-number.test.ts` WA-S17-03 | INT | ✅ |
+| WA-25 | §7 #108 · מסך 17 | **מתחבר רק מספר שנשאר באפליקציה בטלפון** — אירוע `FINISH` מהחלון, או מספר ש-Meta מדווחת שאינו `is_on_biz_app`, נדחים בהסבר | `connectWhatsappNumber` · `pickConnectedNumber`; `whatsapp/signup.ts` (W5) | `wa-number.test.ts` "§7 שורה 108" · `wa-signup.test.ts` | UNIT+INT | ✅ |
+| WA-26 | §7 #110 | **הטלפון העסקי פותח את האפליקציה לפחות פעם בשבועיים** — אחרת Meta מנתקת (`PRIMARY_INACTIVITY`), והמסך אומר זאת במילים | אילוץ תפעולי; הנוסח `he.whatsappAdmin.disconnectReason` (W5) | `wa-number.test.ts` account_update PRIMARY_INACTIVITY · `admin-whatsapp.spec.ts` WA-S17-01 | INT+PW | ✅ |
+| WA-27 | §7 #111 · מסך 17 | **הודעת הבדיקה היא תבנית** (מחוץ לחלון 24 השעות), נשלחת רק כשהתבנית אושרה, ומצב המסירה שלה מוצג | `sendWhatsappTestMessage` — הקובץ היחיד ששולח תבנית (SC-OUT-01) (W5) | `wa-number.test.ts` WA-S17-05 | INT | ✅ |
 
 ### 8.2.2 מודל המידע, המשתמש והסתירות (§3.1, §3.2, §3.5, §3.7, §5.ה4)
 
@@ -883,11 +889,11 @@
 | WA-S7-03 | מסך 7 · §3.2 #14–15 | **"הסר קובץ"** חל על מדיה **שהגיעה בוואטסאפ** בלבד (מקביל ל-EM-S7-05, EM-A16) | הכללה של `removeDraftMedia` (W7) | `wa-intake.test.ts` WA-S7-03 | INT | 🆕 |
 | WA-S7A-01 | מסך 7א | כותרת **"סתירות בין הוואטסאפ למערכת"**, עמודה **"מוואטסאפ"**; כל השאר כמו EM-S7A-01–06 | W8 | `whatsapp-draft.spec.ts` WA-S7A-01 | PW | 🆕 |
 | WA-S12-01 | מסכים 11–16 (משתמשים) | מתג **"רשאי לפתוח פניות בוואטסאפ"**, דלוק כברירת מחדל, ליד מתג המייל | `admin/(manage)/users/whatsapp-intake-field.tsx`, באותו גוש של מתג המייל (DESIGN.md § פתיחה במייל ובוואטסאפ בכרטיס המשתמש) | `admin-whatsapp.spec.ts` WA-S12-01 · `admin-record-dialog.test.tsx` WA-S12-01 | PW+UNIT | ⏳ |
-| WA-S17-01 | מסך 17 | **מנהל מערכת בלבד**; מצב החיבור — מספר, שם עסקי, `מחובר`/`מנותק`/`תקלה`, ההודעה האחרונה, והתקלה **במילים שאומרות מה נדרש** | W5 | `whatsapp-admin.spec.ts` WA-S17-01 | PW | 🆕 |
-| WA-S17-02 | מסך 17 | **"חבר מספר"** (חלון החיבור של Meta) — בסיומו המספר מחובר; **מספר אחד בלבד** | W5 | ריצה חיה מול Meta (W5, W9) | PROD | 🆕 |
-| WA-S17-03 | מסך 17 | **"נתק"** עם האישור `"הודעות למספר הזה לא ייקלטו עוד במערכת, וגם לא בדיעבד. לנתק?"` | W5 | `whatsapp-admin.spec.ts` WA-S17-03 | PW | 🆕 |
-| WA-S17-04 | מסך 17 | **תבניות הודעה**: רשימה ומצב אישור, ויצירת תבניות המערכת; **בלי שליחה יזומה** בגרסה 1.4 | W5 | `whatsapp-admin.spec.ts` WA-S17-04 | PW | 🆕 |
-| WA-S17-05 | מסך 17 | **"שלח הודעת בדיקה"** לטלפון של מנהל המערכת המחובר | W5 | ריצה חיה (W5) | PROD | 🆕 |
+| WA-S17-01 | מסך 17 | **מנהל מערכת בלבד**; מצב החיבור — מספר, שם עסקי, `מחובר`/`מנותק`/`תקלה`, ההודעה האחרונה, השולחים שלא זוהו ב-30 יום, והתקלה **במילים שאומרות מה נדרש** | `admin/(manage)/whatsapp/page.tsx` · `getWhatsappScreen`; הנוסח מהקוד שב-`lastError` (`whatsapp/connection-issue.ts`) (W5) | `wa-number.test.ts` WA-S17-01 · `admin-whatsapp.spec.ts` WA-S17-01 | INT+PW | ✅ |
+| WA-S17-02 | מסך 17 | **"חבר מספר"** (חלון החיבור של Meta) — בסיומו המספר מחובר, המנוי מצביע על המערכת והסנכרון מבוקש; **מספר אחד בלבד** | `connect-button.tsx` (Embedded Signup v4, CSP למסך בלבד) · `connectWhatsappNumber` (W5) | `wa-number.test.ts` WA-S17-02 · `wa-signup.test.ts` · `wa-account.test.ts` · `security-headers.test.ts` · ריצה חיה מול Meta (חסומה בנעילת החשבון) | UNIT+INT+PROD | ⚠️ |
+| WA-S17-03 | מסך 17 | **"נתק"** עם האישור `"הודעות למספר הזה לא ייקלטו עוד במערכת, וגם לא בדיעבד. לנתק?"` | `DisconnectButton` · `disconnectWhatsappNumber` (W5) | `admin-whatsapp.spec.ts` WA-S17-03 · `wa-number.test.ts` WA-S17-03 | INT+PW | ✅ |
+| WA-S17-04 | מסך 17 | **תבניות הודעה**: רשימה ומצב אישור, ויצירת תבניות המערכת — בגרסה 1.4 תבנית הבדיקה בלבד; **בלי שליחה יזומה** | `templates-section.tsx` · `listWhatsappTemplates` · `createWhatsappSystemTemplates` · `whatsapp/system-templates.ts` (W5) | `wa-number.test.ts` WA-S17-04 · `wa-account.test.ts` תבניות · `admin-whatsapp.spec.ts` WA-S17-01 (בלי Meta: "לא ניתן לטעון") | UNIT+INT+PW | ✅ |
+| WA-S17-05 | מסך 17 | **"שלח הודעת בדיקה"** לטלפון של מנהל המערכת המחובר — תבנית מאושרת, ומצב המסירה מוצג | `TestMessageButton` · `sendWhatsappTestMessage` (W5) | `wa-number.test.ts` WA-S17-05 · ריצה חיה (חסומה בנעילת החשבון) | INT+PROD | ⚠️ |
 
 ### 8.2.4 ההודעות היוצאות בוואטסאפ (סוף §4)
 

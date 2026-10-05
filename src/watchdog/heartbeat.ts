@@ -20,6 +20,11 @@ export const HEARTBEAT = {
    * ה-worker כמו שתיים האחרות — אחרת ההפעלה הראשונה הייתה מתריעה על שווא.
    */
   emailPoll: "email-poll",
+  /**
+   * הבדיקה התקופתית של חיבור הוואטסאפ (`jobs/handlers/wa-health.ts`), כל 6 שעות.
+   * נכתבת רק כשהבדיקה הגיעה לתשובה — גם "אין מספר מחובר" היא תשובה.
+   */
+  waHealth: "wa-health",
 } as const;
 
 export type HeartbeatName = (typeof HEARTBEAT)[keyof typeof HEARTBEAT];

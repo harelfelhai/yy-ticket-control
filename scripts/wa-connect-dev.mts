@@ -12,8 +12,12 @@
  * **רק מול בסיס מקומי.** כתובת בסיס שאינה localhost נדחית: הסקריפט כותב שורת
  * חיבור, ובפרודקשן שורה כזו פירושה שהמערכת מתחילה לקלוט מהמספר.
  *
- * `activatedAt` נקבע רק ביצירה (§5.ה5 כלל 5): חיבור חוזר מחליף את הטוקן ואינו
- * מזיז את הרצפה.
+ * `activatedAt` נקבע **בכל חיבור, גם חוזר** — אותו כלל של מסך 17 (§5.ה5 כלל 5,
+ * §7 שורה 103): הודעה מלפני החיבור אינה נקלטת, גם כשוואטסאפ מוסרת אותה באיחור.
+ *
+ * בשונה מחיבור ממסך 17, התסריט **אינו** נרשם ל-WABA עם עקיפת כתובת: מספר הבדיקה
+ * של Meta מקבל את ההודעות בכתובת ה-callback של האפליקציה (ה-Dashboard), שבפיתוח
+ * מצביעה על המנהרה (`docs/whatsapp-setup.md`).
  */
 import { config } from "dotenv";
 
@@ -82,6 +86,8 @@ async function main(): Promise<void> {
       verifiedName: info.verified_name ?? null,
       tokenCipher,
       status: "CONNECTED",
+      activatedAt: new Date(),
+      connectedAt: new Date(),
       lastError: null,
     },
     select: { activatedAt: true },

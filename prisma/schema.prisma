@@ -826,12 +826,14 @@ model WaNumber {
   verifiedName  String?
 
   /// הטוקן של העסק, מוצפן (`encryptToken`). לעולם לא נשמר ולא נרשם בטקסט גלוי.
-  tokenCipher String
+  /// null אחרי "נתק" (מסך 17): מספר מנותק אינו מחזיק הרשאה לחשבון של העסק.
+  tokenCipher String?
   /// המספר נשאר פעיל באפליקציית WhatsApp Business בטלפון (Coexistence)
   coexistence Boolean        @default(false)
   status      WaNumberStatus @default(CONNECTED)
 
-  /// **נקבע פעם אחת**, בחיבור הראשון: הודעות שנשלחו לפניו אינן נקלטות (§5.ה5 כלל 5)
+  /// **נקבע בכל חיבור, גם חוזר**: הודעות שנשלחו לפניו אינן נקלטות, גם כשוואטסאפ
+  /// מוסרת אותן באיחור (§5.ה5 כלל 5, §7 שורה 103, מסך 17)
   activatedAt   DateTime
   connectedAt   DateTime @default(now())
   connectedById String?
@@ -953,6 +955,8 @@ model WaMessage {
   @@index([contextWamid])
   @@index([threadId, createdAt])
   @@index([outcome, receivedAt])
+  // מסך 17: ההודעה האחרונה שהתקבלה, והודעת הבדיקה האחרונה שנשלחה
+  @@index([numberId, direction, createdAt])
 }
 
 /// קובץ של הודעת וואטסאפ — המקבילה של `MailboxAttachment`. לכל הודעה קובץ אחד

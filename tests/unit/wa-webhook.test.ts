@@ -207,10 +207,33 @@ describe("parseWebhook — מה שאינו במבנה אינו נבלע", () => 
     expect(items[1]?.kind).toBe("message");
   });
 
-  it("שדה שאינו `messages` (account_update) — רק השם, בלי פענוח", () => {
-    const body = { object: "whatsapp_business_account", entry: [{ id: "200000000000002", changes: [{ field: "account_update", value: { event: "PARTNER_REMOVED" } }] }] };
+  it("שדה אחר (message_template_status_update) — רק השם, בלי פענוח", () => {
+    const body = { object: "whatsapp_business_account", entry: [{ id: "200000000000002", changes: [{ field: "message_template_status_update", value: { event: "APPROVED" } }] }] };
     expect(parseWebhook(JSON.stringify(body))).toEqual([
-      { kind: "other", field: "account_update", wabaId: "200000000000002", phoneNumberId: null },
+      { kind: "other", field: "message_template_status_update", wabaId: "200000000000002", phoneNumberId: null },
+    ]);
+  });
+
+  /**
+   * **W5:** `account_update` נושא את הודעת הניתוק מהטלפון (מסך 17), ולכן הוא מפוענח:
+   * האירוע, המספר כפי שמוצג, וסיבת הניתוק. המבנה מהתיעוד של Meta — אין לו fixture
+   * אמיתי, כי האירוע אינו מגיע לכתובת שהמערכת רושמת (§7 שורה 109).
+   */
+  it("account_update — האירוע, המספר והסיבה", () => {
+    const value = { event: "PARTNER_REMOVED", phone_number: "15550001234", disconnection_info: { reason: "PRIMARY_INACTIVITY", initiated_by: "SYSTEM" } };
+    const body = { object: "whatsapp_business_account", entry: [{ id: "200000000000002", changes: [{ field: "account_update", value }] }] };
+    expect(parseWebhook(JSON.stringify(body))).toEqual([
+      {
+        kind: "account",
+        account: { wabaId: "200000000000002", event: "PARTNER_REMOVED", phoneNumber: "15550001234", reason: "PRIMARY_INACTIVITY" },
+      },
+    ]);
+  });
+
+  it("account_update בלי event — פריט `invalid`, לא נבלע", () => {
+    const body = { object: "whatsapp_business_account", entry: [{ id: "200000000000002", changes: [{ field: "account_update", value: { phone_number: "1" } }] }] };
+    expect(parseWebhook(JSON.stringify(body))).toEqual([
+      { kind: "invalid", field: "account_update", reason: "אירוע חשבון בלי event", phoneNumberId: null },
     ]);
   });
 
