@@ -1,6 +1,10 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
-import { buildSecurityHeaders } from "./src/lib/security-headers";
+import {
+  FACEBOOK_SDK_PATHS,
+  buildContentSecurityPolicy,
+  buildSecurityHeaders,
+} from "./src/lib/security-headers";
 
 /**
  * כותרות האבטחה מוגדרות במקור אחד (`src/lib/security-headers.ts`) ומוחלות
@@ -10,11 +14,20 @@ import { buildSecurityHeaders } from "./src/lib/security-headers";
  */
 const nextConfig: NextConfig = {
   async headers() {
+    const isDev = process.env.NODE_ENV !== "production";
     return [
       {
         source: "/:path*",
-        headers: buildSecurityHeaders(process.env.NODE_ENV !== "production"),
+        headers: buildSecurityHeaders(isDev),
       },
+      // מסך 17 בלבד: ה-SDK של Meta לחלון החיבור. כשאותה כותרת מוגדרת פעמיים,
+      // Next מחיל את האחרונה — כך ההרחבה אינה דולפת לשום נתיב אחר.
+      ...FACEBOOK_SDK_PATHS.map((source) => ({
+        source,
+        headers: [
+          { key: "Content-Security-Policy", value: buildContentSecurityPolicy(isDev, { facebookSdk: true }) },
+        ],
+      })),
     ];
   },
 };

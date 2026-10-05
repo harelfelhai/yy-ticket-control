@@ -13,8 +13,11 @@ const GRAPH_HOST = "https://graph.facebook.com";
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface GraphConfig {
-  /** טוקן העסק — בפענוח, ממש לפני הבקשה */
-  token: string;
+  /**
+   * טוקן העסק — בפענוח, ממש לפני הבקשה. **ריק רק בהחלפת הקוד מ-Embedded
+   * Signup בטוקן** (`account.ts`): שם עוד אין טוקן, והאפליקציה מזדהה בפרמטרים.
+   */
+  token: string | null;
   /** גרסת ה-API, למשל `v25.0` (`WHATSAPP_GRAPH_VERSION`) */
   version: string;
   /** מוזרק בבדיקות. ברירת המחדל — `fetch` של הסביבה. */
@@ -30,10 +33,13 @@ export function graphUrl(config: Pick<GraphConfig, "version">, path: string): st
  * בקשה עם הטוקן, והחזרת התשובה כמו שהיא — או `WaApiError` כשהיא נכשלה.
  * משמשת גם להורדת הבתים של מדיה, שאינם JSON.
  */
+/** `DELETE` — לביטול המנוי של המערכת על חשבון הוואטסאפ בניתוק (מסך 17) */
+export type GraphMethod = "GET" | "POST" | "DELETE";
+
 export async function graphFetch(
   config: GraphConfig,
   url: string,
-  init: { method?: "GET" | "POST"; json?: unknown } = {},
+  init: { method?: GraphMethod; json?: unknown } = {},
 ): Promise<Response> {
   const doFetch = config.fetch ?? fetch;
   let response: Response;
@@ -41,7 +47,7 @@ export async function graphFetch(
     response = await doFetch(url, {
       method: init.method ?? "GET",
       headers: {
-        Authorization: `Bearer ${config.token}`,
+        ...(config.token === null ? {} : { Authorization: `Bearer ${config.token}` }),
         ...(init.json === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: init.json === undefined ? undefined : JSON.stringify(init.json),
@@ -68,7 +74,7 @@ export async function graphFetch(
 export async function graphJson<T>(
   config: GraphConfig,
   path: string,
-  init: { method?: "GET" | "POST"; json?: unknown } = {},
+  init: { method?: GraphMethod; json?: unknown } = {},
 ): Promise<T> {
   const response = await graphFetch(config, graphUrl(config, path), init);
   try {

@@ -33,11 +33,15 @@ export default async function AdminHubPage() {
   const sites = await getOwnerOverview();
   const canManage = canManageAdmin(toViewer(user));
 
-  const cards: { href: string; label: string }[] = [
+  const cards: { href: string; label: string; document?: true }[] = [
     { href: "/admin/sites", label: he.admin.sites },
     { href: "/admin/users", label: he.admin.users },
     { href: "/admin/professionals", label: he.admin.professionals },
     { href: "/admin/domains", label: he.admin.domains },
+    // **טעינת מסמך מלאה** (`<a>`): ל-CSP של מסך 17 יש היתר ל-SDK של Meta שאין
+    // לשום מסך אחר, ו-CSP חל על המסמך — ניווט בצד הלקוח היה חוסם אותו בשקט
+    // (`FACEBOOK_SDK_PATHS` ב-`security-headers.ts`).
+    { href: "/admin/whatsapp", label: he.admin.whatsapp, document: true },
     // התגיות מנוהלות במסך הקיים (`/tags`) ולכן זהו קישור החוצה ולא מסך
     // נוסף — מקור אמת אחד. מאז שהקישור ירד מסרגל הניווט, זו גם הדרך
     // היחידה להגיע לרשימת התגיות בלי לעבור דרך פנייה מתויגת.
@@ -86,19 +90,22 @@ export default async function AdminHubPage() {
         <>
           <h2 className={TITLE_DESCRIPTIVE}>{he.admin.title}</h2>
           <ul className="grid gap-2 sm:grid-cols-3 xl:grid-cols-5">
-            {cards.map((card) => (
-              <li key={card.href}>
-                <Link
-                  href={card.href}
-                  className={cardClasses(
-                    "flex min-h-8 items-center font-semibold",
-                    { padding: "compact" },
+            {cards.map((card) => {
+              const className = cardClasses("flex min-h-8 items-center font-semibold", { padding: "compact" });
+              return (
+                <li key={card.href}>
+                  {card.document ? (
+                    <a href={card.href} className={className}>
+                      {card.label}
+                    </a>
+                  ) : (
+                    <Link href={card.href} className={className}>
+                      {card.label}
+                    </Link>
                   )}
-                >
-                  {card.label}
-                </Link>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </>
       ) : null}

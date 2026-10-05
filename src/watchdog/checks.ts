@@ -44,6 +44,13 @@ const MAIL_STUCK_MS = 30 * 60_000;
  */
 const WA_EVENT_STALE_MS = 5 * 60_000;
 
+/**
+ * כמה זמן מותר לבדיקת חיבור הוואטסאפ לא להגיע לתשובה. היא רצה כל 6 שעות, ולכן
+ * 13 שעות הן שתי ריצות שלא הסתיימו ועוד מרווח — Meta שאינה עונה חצי יום כבר
+ * אומרת שגם ההודעות אינן מגיעות.
+ */
+const WA_HEALTH_STALE_MS = 13 * HOUR_MS;
+
 export interface WatchdogCheck {
   name: string;
   /** זורק כשה-invariant מופר */
@@ -277,6 +284,36 @@ export const checks: WatchdogCheck[] = [
       });
       if (queueStuck(stale)) {
         throw new Error(`${stale} משלוחי וואטסאפ נשמרו ולא פוענחו מעל חמש דקות`);
+      }
+    },
+  },
+  {
+    /**
+     * **ניתוק שלא נודע לאיש** — המקבילה של reconciliation, שאינה אפשרית מול Cloud API.
+     *
+     * הודעת הניתוק של Meta אינה מגיעה לכתובת שלנו (§7 שורה 109), ולכן הבדיקה
+     * התקופתית (`WA_HEALTH`) היא שמגלה ניתוק, ומעבירה את המספר ל"תקלה". כאן שתי
+     * שאלות, בקריאה בלבד: המספר במצב "תקלה"? והבדיקה עצמה רצה? בלעדי השנייה,
+     * תור שנתקע היה משאיר מספר מנותק במצב "מחובר" — שקט מוחלט, ובדיוק מה שהבדיקה
+     * קיימת כדי למנוע.
+     *
+     * **"מנותק" אינו כשל**: מנהל המערכת ניתק בכוונה (מסך 17), ומספר שלא חובר
+     * מעולם — כמו בכל הסביבות עד W9 — אינו נבדק כלל.
+     */
+    name: "wa-subscription-intact",
+    async run(now) {
+      const number = await db.waNumber.findFirst({
+        where: { status: { in: ["CONNECTED", "ERROR"] } },
+        orderBy: { connectedAt: "desc" },
+        select: { status: true, lastError: true },
+      });
+      if (!number) return;
+      if (number.status === "ERROR") {
+        throw new Error(`חיבור הוואטסאפ במצב תקלה (${number.lastError ?? "בלי פירוט"}) — מסך 17`);
+      }
+      const at = await getHeartbeat(HEARTBEAT.waHealth);
+      if (heartbeatStale(at, now, WA_HEALTH_STALE_MS)) {
+        throw new Error(`בדיקת חיבור הוואטסאפ לא הגיעה לתשובה: ${at ? at.toISOString() : "מעולם לא רצה"}`);
       }
     },
   },

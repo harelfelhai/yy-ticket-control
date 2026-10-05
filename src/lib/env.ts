@@ -159,6 +159,21 @@ export const env = {
   },
 
   /**
+   * **חלון החיבור של Meta (Embedded Signup, מסך 17)** — כול-או-כלום, או undefined.
+   *
+   * `WHATSAPP_APP_ID` נדרש ל-SDK בדפדפן ולהחלפת הקוד בטוקן, ו-`WHATSAPP_CONFIG_ID`
+   * הוא הקונפיגורציה שבוחרת את סוג החיבור — המספר שנשאר באפליקציה בטלפון. שניהם
+   * **אינם סודות** (הדפדפן מקבל אותם), אבל הם מזהים, ולכן אינם בריפו הציבורי.
+   * בלעדיהם, או בלי `whatsapp()`, אין "חבר מספר": החלפת הקוד דורשת גם את הסוד.
+   */
+  whatsappSignup: () => {
+    const appId = optional("WHATSAPP_APP_ID");
+    const configId = optional("WHATSAPP_CONFIG_ID");
+    if (!appId || !configId) return undefined;
+    return { appId, configId };
+  },
+
+  /**
    * **הדגל שמפעיל את קליטת הוואטסאפ (1.4)** — באותם שני תנאים של המייל
    * (`emailIntakeEnabled`), ומאותו נימוק: `WHATSAPP_INTAKE_ENABLED=1`, **וגם**
    * פרודקשן או ויתור מפורש (`WHATSAPP_INTAKE_NONPROD=1`). מפתח שמעתיק את משתני

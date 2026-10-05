@@ -9,6 +9,10 @@ export const metadata = { title: `${he.privacy.title} — ${he.app.name}` };
  * נוצרה לצורך O1 (פתיחת פנייה במייל): Google דורשת URL יציב למדיניות
  * פרטיות בתהליך האימות של ההיקף `gmail.readonly`. התוכן ב-`he.privacy`
  * מתאר את מה שהמערכת עושה בפועל בתיבת המייל — לא נוסח גנרי.
+ *
+ * 1.4: גם Meta דורשת מדיניות פרטיות והוראות למחיקת נתונים כדי לאשר את
+ * ההרשאות של וואטסאפ. ההוראות הן סעיף בעמוד הזה, עם עוגן קבוע
+ * (`/privacy#data-deletion`), ולא עמוד נפרד.
  */
 export default function PrivacyPage() {
   return (
@@ -21,7 +25,7 @@ export default function PrivacyPage() {
         </div>
 
         {he.privacy.sections.map((section) => (
-          <section key={section.title} className="flex flex-col gap-2">
+          <section key={section.title} id={"id" in section ? section.id : undefined} className="flex flex-col gap-2">
             <h2 className={TITLE_DESCRIPTIVE}>{section.title}</h2>
             {section.paragraphs.map((paragraph, index) => (
               <p key={index} className="text-base leading-relaxed">

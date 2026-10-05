@@ -34,7 +34,7 @@ import {
 
 export class AdminError extends UserFacingError {}
 
-function assertAdmin(actor: SessionUser): void {
+export function assertAdmin(actor: SessionUser): void {
   if (!canManageAdmin(toViewer(actor))) throw new AdminError(he.admin.forbidden);
 }
 

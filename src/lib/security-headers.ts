@@ -28,10 +28,24 @@ export interface HttpHeader {
   value: string;
 }
 
-export function buildContentSecurityPolicy(isDev: boolean): string {
+/**
+ * **המסכים שטוענים את ה-SDK של Meta** — מסך 17 בלבד, לחלון החיבור של וואטסאפ
+ * (Embedded Signup). `next.config.ts` מחיל עליהם CSP מורחב, וכל השאר נשאר בלי
+ * שום סקריפט חיצוני.
+ *
+ * **CSP הוא של המסמך, לא של המסלול.** ניווט בצד הלקוח אינו טוען מסמך חדש, ולכן
+ * הגעה למסך 17 ב-`<Link>` הייתה משאירה את ה-CSP של המסך הקודם — וה-SDK נחסם
+ * בשקט. כל קישור אליו הוא `<a>` רגיל, שטוען את המסמך מחדש (`admin/page.tsx`).
+ */
+export const FACEBOOK_SDK_PATHS = ["/admin/whatsapp"] as const;
+
+export function buildContentSecurityPolicy(isDev: boolean, options: { facebookSdk?: boolean } = {}): string {
+  // ה-SDK נטען מ-connect.facebook.net, ופותח מסגרות נסתרות תחת facebook.com
+  const facebookScript = options.facebookSdk ? " https://connect.facebook.net" : "";
+  const facebookFrames = options.facebookSdk ? " https://*.facebook.com" : "";
   const scriptSrc = isDev
-    ? "'self' 'unsafe-inline' 'unsafe-eval'"
-    : "'self' 'unsafe-inline'";
+    ? `'self' 'unsafe-inline' 'unsafe-eval'${facebookScript}`
+    : `'self' 'unsafe-inline'${facebookScript}`;
   const connectSrc = isDev ? "'self' https: ws:" : "'self' https:";
 
   return [
@@ -60,7 +74,7 @@ export function buildContentSecurityPolicy(isDev: boolean): string {
      * ‏`object-src 'none'` נשאר — ‏`<embed>`/`<object>` הם וקטור נפרד, ואין
      * לנו שימוש בהם.
      */
-    "frame-src 'self' blob:",
+    `frame-src 'self' blob:${facebookFrames}`,
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
