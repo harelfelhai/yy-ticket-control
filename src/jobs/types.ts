@@ -22,6 +22,10 @@ export const JOB_TYPES = {
   emailIntake: "EMAIL_INTAKE",
   /** שליחת מייל התשובה על מייל נכנס שכבר הוכרע */
   emailReply: "EMAIL_REPLY",
+  /** פענוח משלוח webhook של וואטסאפ שנשמר, ורישום ההודעות שבו ביומן */
+  waEvent: "WA_EVENT",
+  /** הכרעה על הדיווחים הממתינים של שולח אחד בוואטסאפ */
+  waIntake: "WA_INTAKE",
 } as const;
 
 export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];
@@ -39,14 +43,20 @@ export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];
 export type JobLane = "mail" | "general";
 
 /**
- * הסוגים שרצים בנתיב הדואר — **מקור האמת היחיד** לחלוקה לנתיבים.
+ * הסוגים שרצים בנתיב הדואר — **מקור האמת היחיד** לחלוקה לנתיבים. ג׳ובי
+ * הוואטסאפ רצים בו מאותה סיבה בדיוק: הבטחת המענה תוך חמש דקות (§2.7 שלב 4).
  *
  * הרשימה מונה את נתיב הדואר, והנתיב הכללי מוגדר כ"כל השאר" ולא כרשימה
  * משלו. זה מכוון: סוג עבודה חדש שיתווסף מחר נופל אוטומטית לנתיב הכללי
  * ונלקח. שתי רשימות מפורשות היו מייצרות את הכשל השקט הגרוע ביותר בתור —
  * ג'וב שאף לולאה אינה תופסת, ולכן נשאר PENDING לנצח בלי שגיאה.
  */
-export const MAIL_JOB_TYPES = [JOB_TYPES.emailIntake, JOB_TYPES.emailReply] as const;
+export const MAIL_JOB_TYPES = [
+  JOB_TYPES.emailIntake,
+  JOB_TYPES.emailReply,
+  JOB_TYPES.waEvent,
+  JOB_TYPES.waIntake,
+] as const;
 
 /**
  * לאיזה נתיב שייך סוג עבודה. מקבל `string` ולא `JobType` כי בטבלה הסוג הוא
@@ -99,4 +109,18 @@ export interface EmailIntakeJobPayload {
 /** מזהה שורת ה-`MailboxMessage` **היוצאת** שיש לשלוח */
 export interface EmailReplyJobPayload {
   mailboxMessageId: string;
+}
+
+/** מזהה ה-`WaWebhookEvent` שיש לפענח — הגוף עצמו שמור בשורה, לא במטען */
+export interface WaEventJobPayload {
+  webhookEventId: string;
+}
+
+/**
+ * מזהה **הודעה אחת** של השולח. הג׳וב טוען את כל ההודעות הממתינות של אותו
+ * שולח ומקבץ אותן לדיווחים (`whatsapp/burst.ts`) — ולכן ג׳וב כפול על אותו
+ * שולח אינו מזיק: הראשון מכריע, והשני אינו מוצא מה להכריע.
+ */
+export interface WaIntakeJobPayload {
+  waMessageId: string;
 }

@@ -37,6 +37,13 @@ const EMAIL_POLL_STALE_MS = 15 * 60_000;
 /** גיל ההודעה הנכנסת שממנו PENDING אינו "בדרך" אלא "נשכח". */
 const MAIL_STUCK_MS = 30 * 60_000;
 
+/**
+ * כמה זמן משלוח webhook של וואטסאפ יכול לחכות לפענוח. הג׳וב רץ בנתיב המהיר
+ * תוך שניות, ולכן חמש דקות הן כבר תור שאינו רץ — ומשלוח שאין עליו API
+ * לשליפה חוזרת (§7 שורה 103).
+ */
+const WA_EVENT_STALE_MS = 5 * 60_000;
+
 export interface WatchdogCheck {
   name: string;
   /** זורק כשה-invariant מופר */
@@ -230,6 +237,46 @@ export const checks: WatchdogCheck[] = [
         throw new Error(
           `קליטת פניות במייל דלוקה בפרודקשן בלי תצורה מלאה. חסר: ${missing.join(", ")}`,
         );
+      }
+    },
+  },
+  {
+    /**
+     * **הודעת וואטסאפ שנשכחה** — המקבילה של `email-intake-not-stuck`, ומאותו
+     * מבנה. הודעה של משתמש מורשה ממתינה עד שהדיווח שלה שקט (90 שניות) או
+     * מגיע לתקרה (10 דקות), ו-`nextAttemptAt` הוא המועד שבו הג׳וב אמור להכריע;
+     * ביוצא — הודעת אישור שממתינה לשליחה. 30 דקות, ומועד שעבר — הג׳וב נעלם או
+     * נכשל, ומישהו דיווח בוואטסאפ ולא קיבל דבר. מועד עתידי הוא המתנה מתוכננת.
+     */
+    name: "wa-intake-not-stuck",
+    async run(now) {
+      const stuck = await db.waMessage.count({
+        where: {
+          state: "PENDING",
+          createdAt: { lt: new Date(now.getTime() - MAIL_STUCK_MS) },
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+        },
+      });
+      if (queueStuck(stuck)) {
+        throw new Error(`${stuck} הודעות וואטסאפ ממתינות מעל 30 דקות ללא הכרעה`);
+      }
+    },
+  },
+  {
+    /**
+     * **משלוח webhook שנשמר ולא פוענח.** הגוף הוא העותק היחיד של ההודעות שבו
+     * — ל-Cloud API אין שליפה חוזרת — ולכן משלוח שלא עובד תוך חמש דקות הוא
+     * תור שאינו רץ, וכל דקה נוספת מרחיקה את המענה מחמש הדקות שהובטחו.
+     * משלוח שהפענוח שלו נכשל אינו כאן: הוא מסומן מעובד עם השגיאה, ודווח
+     * ל-Sentry כשנכשל.
+     */
+    name: "wa-webhook-buffer",
+    async run(now) {
+      const stale = await db.waWebhookEvent.count({
+        where: { processedAt: null, receivedAt: { lt: new Date(now.getTime() - WA_EVENT_STALE_MS) } },
+      });
+      if (queueStuck(stale)) {
+        throw new Error(`${stale} משלוחי וואטסאפ נשמרו ולא פוענחו מעל חמש דקות`);
       }
     },
   },

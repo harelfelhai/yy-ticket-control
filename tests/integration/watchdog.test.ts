@@ -365,3 +365,81 @@ describe("EM-12 — email-intake-configured", () => {
     await expect(check("email-intake-configured").run(now)).resolves.toBeUndefined();
   });
 });
+
+describe("wa-intake-not-stuck — הודעת וואטסאפ שנשכחה", () => {
+  async function waMessage(data: {
+    direction?: "INBOUND" | "OUTBOUND";
+    state?: "PENDING" | "DONE";
+    ageMinutes: number;
+    nextAttemptAt?: Date;
+  }) {
+    const number =
+      (await db.waNumber.findFirst()) ??
+      (await db.waNumber.create({
+        data: { phoneNumberId: "1", wabaId: "1", displayPhone: "1", tokenCipher: "x", activatedAt: now },
+      }));
+    await db.waMessage.create({
+      data: {
+        direction: data.direction ?? "INBOUND",
+        state: data.state ?? "PENDING",
+        numberId: number.id,
+        type: "text",
+        createdAt: new Date(now.getTime() - data.ageMinutes * 60_000),
+        nextAttemptAt: data.nextAttemptAt ?? null,
+      },
+    });
+  }
+
+  it("אין הודעות — עובר", async () => {
+    await expect(check("wa-intake-not-stuck").run(now)).resolves.toBeUndefined();
+  });
+
+  it("הודעה בת 40 דקות שמועד ההכרעה שלה עבר — זורקת", async () => {
+    await waMessage({ ageMinutes: 40, nextAttemptAt: new Date(now.getTime() - 60_000) });
+    await expect(check("wa-intake-not-stuck").run(now)).rejects.toThrow(/1/);
+  });
+
+  it("הודעה בת 5 דקות — בדרך לקיבוץ, לא תקועה", async () => {
+    await waMessage({ ageMinutes: 5, nextAttemptAt: new Date(now.getTime() - 60_000) });
+    await expect(check("wa-intake-not-stuck").run(now)).resolves.toBeUndefined();
+  });
+
+  it("הודעה ישנה עם מועד עתידי — המתנה מתוכננת", async () => {
+    await waMessage({ ageMinutes: 40, nextAttemptAt: new Date(now.getTime() + 60_000) });
+    await expect(check("wa-intake-not-stuck").run(now)).resolves.toBeUndefined();
+  });
+
+  it("הודעה שהוכרעה אינה נספרת; אישור יוצא שלא נשלח — נספר", async () => {
+    await waMessage({ ageMinutes: 40, state: "DONE" });
+    await expect(check("wa-intake-not-stuck").run(now)).resolves.toBeUndefined();
+    await waMessage({ direction: "OUTBOUND", ageMinutes: 40 });
+    await expect(check("wa-intake-not-stuck").run(now)).rejects.toThrow();
+  });
+});
+
+describe("wa-webhook-buffer — משלוח שנשמר ולא פוענח", () => {
+  async function event(ageMinutes: number, processed = false) {
+    await db.waWebhookEvent.create({
+      data: {
+        body: "{}",
+        receivedAt: new Date(now.getTime() - ageMinutes * 60_000),
+        processedAt: processed ? now : null,
+      },
+    });
+  }
+
+  it("אין משלוחים — עובר", async () => {
+    await expect(check("wa-webhook-buffer").run(now)).resolves.toBeUndefined();
+  });
+
+  it("משלוח בן 10 דקות שלא פוענח — זורק", async () => {
+    await event(10);
+    await expect(check("wa-webhook-buffer").run(now)).rejects.toThrow(/1/);
+  });
+
+  it("משלוח בן דקה — בדרך; משלוח ישן שפוענח (גם עם שגיאה) — אינו נספר", async () => {
+    await event(1);
+    await event(60, true);
+    await expect(check("wa-webhook-buffer").run(now)).resolves.toBeUndefined();
+  });
+});

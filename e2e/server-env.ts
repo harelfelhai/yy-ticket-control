@@ -1,5 +1,5 @@
 /**
- * משתני ערוץ המייל — **מאופסים בכל שרת שבדיקות מרימות.**
+ * משתני ערוצי הקליטה — מייל ווואטסאפ — **מאופסים בכל שרת שבדיקות מרימות.**
  *
  * שרת הבדיקות הוא `next dev`/`next start` רגיל, ו-Next טוען בעצמו את
  * `.env.local` של המכונה. בלי האיפוס, מכונה שהוגדר בה חשבון Gmail הייתה
@@ -11,7 +11,11 @@
  * ו-`env.ts` מתייחס לריק כלא-מוגדר. זו אותה טכניקה של `GEMINI_API_KEY`
  * ו-`NEXT_PUBLIC_SENTRY_DSN` בקונפיגים.
  *
- * בדיקה שצריכה ערוץ מייל מקבלת אותו כפיל מוזרק, לא דרך הסביבה.
+ * מ-1.4 אותו דבר לוואטסאפ: בלי `WHATSAPP_APP_SECRET` ה-webhook מחזיר 404, ובלי
+ * הדגל שום הודעה אינה נקלטת — כך שרת בדיקות לעולם אינו קולט מהמספר העסקי
+ * ואינו עונה ממנו.
+ *
+ * בדיקה שצריכה ערוץ מקבלת אותו כפיל מוזרק, לא דרך הסביבה.
  * `tests/conformance/source/email-intake.test.ts` מוודא שכל קונפיג של
  * Playwright פורש את האובייקט הזה.
  */
@@ -23,4 +27,10 @@ export const MAIL_ISOLATION_ENV = {
   EMAIL_INTAKE_ENABLED: "",
   EMAIL_INTAKE_NONPROD: "",
   EMAIL_INTAKE_PILOT_ADDRESSES: "",
+  WHATSAPP_APP_SECRET: "",
+  WHATSAPP_VERIFY_TOKEN: "",
+  WHATSAPP_INTAKE_ENABLED: "",
+  WHATSAPP_INTAKE_NONPROD: "",
+  WHATSAPP_INTAKE_PILOT_PHONES: "",
+  WHATSAPP_DEV_ACCESS_TOKEN: "",
 } as const;
