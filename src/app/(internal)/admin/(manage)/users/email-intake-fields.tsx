@@ -47,7 +47,7 @@ export function EmailIntakeFields({
   const busy = toggle.busy || add.busy || remove.busy;
 
   return (
-    <div className="flex flex-col gap-3 border-t border-border pt-3">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <label className="flex min-h-7 items-center gap-2">
           <input

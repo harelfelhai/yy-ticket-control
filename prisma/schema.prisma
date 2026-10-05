@@ -109,14 +109,25 @@ model User {
   /// "כתובות נוספות לפתיחת פניות במייל" (§3.7 שדה 3). לא לכניסה עם Google.
   emailAliases UserEmailAlias[]
 
-  createdTickets  Ticket[]     @relation("TicketCreatedBy")
-  handlingTickets Ticket[]     @relation("TicketHandler")
-  closedTickets   Ticket[]     @relation("TicketClosedBy")
+  /// "רשאי לפתוח פניות בוואטסאפ" (§3.7 שדה 5, עדכון 1.4). ברירת המחדל דלוקה,
+  /// כמו במייל. הזהות היא הטלפון שבכרטיס, בלי טלפונים נוספים (§7 שורה 104).
+  whatsappIntakeEnabled Boolean @default(true)
+
+  /// המזהה שוואטסאפ מצמידה למשתמש מול העסק (BSUID, `user_id`). נשמר בהודעה
+  /// הראשונה שזוהתה לפי הטלפון, ומזהה את המשתמש כשוואטסאפ מסתירה את הטלפון
+  /// שלו מאחורי "שם משתמש" (§2.7 שלב 2, §7 שורה 107).
+  whatsappUserId String? @unique
+
+  createdTickets  Ticket[]         @relation("TicketCreatedBy")
+  handlingTickets Ticket[]         @relation("TicketHandler")
+  closedTickets   Ticket[]         @relation("TicketClosedBy")
   assignments     Assignment[] // כנמען פנימי, כולל תזכורן לעצמו
   messages        Message[]
   createdTags     Tag[]
   uploadedMedia   MediaFile[] // קבצים שהמשתמש רשם
   mailMessages    MailboxMessage[] // מיילים שנקלטו ממנו
+  waMessages      WaMessage[] // הודעות וואטסאפ שזוהו כשלו
+  waNumbers       WaNumber[] // מספרים שחיבר (מסך 17)
 
   @@index([siteId, active])
 }
@@ -206,10 +217,10 @@ model Professional {
   // "חובה טלפון או מייל" נאכף בשכבת השירות: זהו אילוץ עסקי שתלוי בערוץ
   // השליחה בפועל, ועדיף שיחזיר שגיאה מוסברת בעברית ולא כשל אילוץ גולמי.
 
-  tokens      AccessToken[]
-  assignments Assignment[]
-  messages    Message[]
-  tagAccess   TagAccess[]
+  tokens        AccessToken[]
+  assignments   Assignment[]
+  messages      Message[]
+  tagAccess     TagAccess[]
   uploadedMedia MediaFile[] // קבצים שהקבלן רשם דרך הפורטל
 }
 
@@ -302,6 +313,8 @@ model Ticket {
   draftFields DraftField[]
   /// ההתכתבות, בפנייה שנפתחה במייל בלבד (§3.2 שדה 20)
   mailThread  MailThread?
+  /// שיחת הוואטסאפ, בפנייה שנפתחה בוואטסאפ בלבד (§3.2 שדה 20, עדכון 1.4)
+  waThread    WaThread?
 
   @@index([siteId, closedAt])
   @@index([lastActivityAt])
@@ -440,9 +453,9 @@ model MediaFile {
 
   /// הקובץ המצורף למייל שממנו נוצר הקובץ הזה, בטיוטה ממייל
   mailboxAttachment MailboxAttachment?
+  waMedia           WaMedia?
 
   @@index([aiStatus])
-
   // ────────────────────────────────────────────────────────────────────
   // אינדקסי החיפוש החופשי — **מוצהרים כאן, וזה תיקון של תקלה.**
   //
@@ -541,20 +554,27 @@ model RateLimit {
 
 // ─────────────────────── פתיחת פנייה במייל (אפיון 1.3) ───────────────────────
 
-enum MailDirection {
-  INBOUND // נקלט מהתיבה
+/// כיוון של שורת יומן בערוץ קליטה — מייל או וואטסאפ. שם הטיפוס במסד נשאר
+/// מ-1.3 (`@@map`), כדי שהשם הכללי לא ידרוש מיגרציה.
+enum MessageDirection {
+  INBOUND // נקלט מהערוץ
   OUTBOUND // נשלח מהמערכת לשולח
+
+  @@map("MailDirection")
 }
 
-/// מצב הטיפול בשורת יומן. **PENDING אינו "נכשל"**: כשל זמני דוחה את
-/// ההודעה (`nextAttemptAt`) ולעולם אינו הופך בשקט להכרעה.
-enum MailState {
+/// מצב הטיפול בשורת יומן, בכל ערוץ קליטה. **PENDING אינו "נכשל"**: כשל זמני
+/// דוחה את ההודעה (`nextAttemptAt`) ולעולם אינו הופך בשקט להכרעה. שם הטיפוס
+/// במסד נשאר מ-1.3 (`@@map`).
+enum MessageState {
   PENDING
   DONE // נכנס: הוכרע (ראה `outcome`)
   SENT // יוצא: נשלח בפועל
-  SIMULATED // יוצא: נכתב ללוג בלבד — אין ערוץ מייל בסביבה
+  SIMULATED // יוצא: נכתב ללוג בלבד — אין ערוץ שליחה בסביבה
   SKIPPED // יוצא: לא נשלח במכוון (הטיוטה שוגרה/נמחקה לפני השליחה, §7 שורה 77)
-  FAILED // יוצא: מיצה את הניסיונות
+  FAILED // יוצא: מיצה את הניסיונות, או שהספק דיווח שנכשל
+
+  @@map("MailState")
 }
 
 /// ההכרעה על הודעה נכנסת — אוצר מילים סגור, כדי שכל הודעה בתיבה תסתיים
@@ -617,6 +637,10 @@ model DraftField {
   emailMessageId String?
   emailMessage   MailboxMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
 
+  /// הודעת הוואטסאפ שממנה הגיע `channelValue`, כשהטיוטה מוואטסאפ
+  waMessageId String?
+  waMessage   WaMessage? @relation(fields: [waMessageId], references: [id], onDelete: SetNull)
+
   updatedAt DateTime @updatedAt
 
   @@id([ticketId, field])
@@ -646,9 +670,9 @@ model MailThread {
 /// **מייל שהמערכת התעלמה ממנו נשמר בלי כותרת ובלי גוף** — רק מזהים, שולח
 /// והכרעה. התיבה משותפת עם מערכות אחרות, ותוכן שאינו שלנו אינו נשמר כאן.
 model MailboxMessage {
-  id        String        @id @default(cuid())
-  direction MailDirection
-  state     MailState     @default(PENDING)
+  id        String           @id @default(cuid())
+  direction MessageDirection
+  state     MessageState     @default(PENDING)
   outcome   MailOutcome?
 
   /// מזהה Gmail. null ביוצא שטרם נשלח.
@@ -720,9 +744,9 @@ model MailboxAttachment {
   sizeBytes Int
   sha256    String?
 
-  storageKey    String?  @unique
+  storageKey    String? @unique
   isMedia       Boolean
-  inline        Boolean  @default(false)
+  inline        Boolean @default(false)
   /// למה הקובץ לא נשמר או לא נכנס לטיוטה (גדול מדי, זהה לקיים, הוסר...)
   skippedReason String?
 
@@ -752,4 +776,216 @@ model MailChannelState {
   lastPollError String?
 
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────── קליטת וואטסאפ (אפיון 1.4, §2.7) ───────────────────────
+//
+// **יומן נפרד מזה של המייל, ולא שורות וואטסאפ ב-`MailboxMessage`.** היומן של
+// המייל נשען על מבנה המייל (מזהה Gmail ייחודי, כותרות RFC), ועשרות שאילתות
+// פונות אליו: סריקת התקועים, ה-watchdog, שליחת התשובה. שורות וואטסאפ באותה
+// טבלה היו מחייבות סינון לפי ערוץ בכל אחת מהן, וסינון אחד שנשכח פירושו קוד
+// מייל שפועל על הודעת וואטסאפ בצינור חי.
+
+/// ההכרעה על הודעת וואטסאפ נכנסת — אוצר מילים סגור, כמו `MailOutcome`.
+/// שמות ההכרעות שיש להן מקבילה במייל זהים לשם, כדי שהליבה המשותפת תכתוב אותן כמות שהן.
+enum WaOutcome {
+  IGNORED_DISABLED // הקליטה כבויה, או שהמספר אינו מחובר (§7 שורה 103)
+  IGNORED_BEFORE_ACTIVATION // נשלחה לפני חיבור המספר (§5.ה5 כלל 5)
+  IGNORED_ECHO // הודעה שהצוות כתב מהאפליקציה בטלפון (§5.ה5 כלל 7)
+  IGNORED_UNSUPPORTED // סטיקר, תגובת אימוג'י, מיקום, איש קשר, סקר (§7 שורה 96)
+  IGNORED_UNAUTHORIZED // שולח שאינו משתמש מורשה ופעיל (§2.7 שלב 2)
+  IGNORED_UNIDENTIFIED // "תקלה" ממי שוואטסאפ הסתירה את הטלפון שלו, בלי מזהה מוכר (§7 שורה 107)
+  IGNORED_NO_KEYWORD // בלי "תקלה" ובלי תגובה לשיחה של טיוטה (§5.ה5 כלל 1)
+  NO_SITE // מנהל עבודה שאינו משויך לאתר — לא נוצרה טיוטה
+  DRAFT_CREATED
+  DRAFT_CREATED_UNPROCESSED // החילוץ אינו זמין
+  REPLY_APPLIED
+  REPLY_STORED_UNPROCESSED // תגובה כשהחילוץ אינו זמין
+  REPLY_NOT_PERMITTED // משתמש מורשה שאינו רשאי עוד לערוך (§5.ה5 כלל 9)
+  REPLY_AFTER_DISPATCH // הטיוטה כבר שוגרה
+  REPLY_AFTER_DELETION // הטיוטה נמחקה
+}
+
+/// מצב החיבור של המספר העסקי (מסך 17)
+enum WaNumberStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR // ההרשאה בוטלה, המנוי הוסר או שהמספר אינו פעיל — מסך 17 אומר מה לעשות
+}
+
+/// המספר העסקי שמחובר למערכת (מסך 17). **מספר אחד בלבד בגרסה 1.4** — נאכף
+/// בשירות, לא בסכימה, כדי שהמעבר לכמה מספרים לא ידרוש מיגרציה.
+model WaNumber {
+  id String @id @default(cuid())
+
+  /// מזהה המספר ב-Graph (`phone_number_id`) — מפתח הניתוב של ה-webhook: אפליקציית
+  /// Meta אחת משרתת כמה מערכות, ומספר שאינו מוכר כאן שייך למערכת אחרת
+  phoneNumberId String  @unique
+  wabaId        String
+  displayPhone  String
+  verifiedName  String?
+
+  /// הטוקן של העסק, מוצפן (`encryptToken`). לעולם לא נשמר ולא נרשם בטקסט גלוי.
+  tokenCipher String
+  /// המספר נשאר פעיל באפליקציית WhatsApp Business בטלפון (Coexistence)
+  coexistence Boolean        @default(false)
+  status      WaNumberStatus @default(CONNECTED)
+
+  /// **נקבע פעם אחת**, בחיבור הראשון: הודעות שנשלחו לפניו אינן נקלטות (§5.ה5 כלל 5)
+  activatedAt   DateTime
+  connectedAt   DateTime @default(now())
+  connectedById String?
+  connectedBy   User?    @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+
+  /// הסנכרון שהחיבור ב-Coexistence מחייב תוך 24 שעות. ההיסטוריה עצמה אינה נקלטת (§7 שורה 101).
+  contactsSyncedAt DateTime?
+  historySyncedAt  DateTime?
+
+  lastWebhookAt DateTime?
+  lastError     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages WaMessage[]
+}
+
+/// הגוף של כל משלוח webhook, כפי שהגיע — **נשמר לפני כל פענוח**.
+///
+/// ל-Cloud API אין דרך לשלוף הודעות שכבר נמסרו, ולכן המשלוח הוא העותק היחיד:
+/// כשל בפענוח או באג בהכרעה אינם מאבדים אותו, ואפשר להריץ אותו מחדש. אחרי
+/// עיבוד מוצלח הגוף מאופס — תוכן של שיחות שלא נקלטו אינו נשמר אצלנו.
+model WaWebhookEvent {
+  id          String    @id @default(cuid())
+  receivedAt  DateTime  @default(now())
+  /// הגוף הגולמי כטקסט (לא JSON): כך הוא נשמר גם כשאינו מתפענח
+  body        String?
+  processedAt DateTime?
+  error       String?
+
+  @@index([processedAt, receivedAt])
+}
+
+/// השיחה של טיוטה אחת מוואטסאפ — המקבילה של `MailThread`.
+///
+/// **`ticketId` מתאפס כשהטיוטה נמחקת** (SetNull) והשיחה נשארת: תגובה שמגיעה
+/// אחר כך צריכה לדעת שהייתה כאן טיוטה ושהיא נמחקה (§2.7 שלב 6).
+model WaThread {
+  id       String  @id @default(cuid())
+  ticketId String? @unique
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  /// ההסבר החד-פעמי כבר נשלח על הטיוטה הזו (§7 שורה 98)
+  hintSentAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  messages WaMessage[]
+}
+
+/// הודעת וואטסאפ אחת — נכנסת או יוצאת. כל הודעה שהגיעה למספר נרשמת כאן עם
+/// הכרעה, גם כשלא נקלטה; תוכן נשמר רק להודעה שנקלטה ולמה שהמערכת שלחה.
+model WaMessage {
+  id        String           @id @default(cuid())
+  direction MessageDirection
+  state     MessageState     @default(PENDING)
+  outcome   WaOutcome?
+  /// ההכרעה חושבה במצב shadow: נרשמה, ולא נוצרה טיוטה ולא נשלח דבר
+  shadow    Boolean          @default(false)
+
+  /// המספר העסקי שההודעה הגיעה אליו או נשלחה ממנו
+  numberId String
+  number   WaNumber @relation(fields: [numberId], references: [id], onDelete: Restrict)
+
+  /// מזהה ההודעה בוואטסאפ. **מכיל את הטלפון של הצד השני** (base64), ולכן אינו
+  /// נרשם בלוגים. ייחודי — כך משלוח כפול של Meta נרשם פעם אחת (§5.ה5 כלל 4).
+  wamid       String? @unique
+  /// הטלפון של הצד השני כפי שוואטסאפ מסרה (`wa_id`, בצורה `972…`), או null כשהוסתר
+  waId        String?
+  /// המזהה שוואטסאפ מצמידה לצד השני מול העסק (BSUID)
+  bsuid       String?
+  /// השם שהצד השני הגדיר באפליקציה (`profile.name`)
+  profileName String?
+
+  /// הסוג כפי שוואטסאפ מסרה (text, image, audio…). מחרוזת ולא enum: Meta מוסיפה סוגים
+  type         String
+  /// הטקסט או הכיתוב — רק להודעה שנקלטה, וביוצא מה שנשלח
+  text         String?
+  /// ההודעה שזו תגובה (Reply) אליה (`context.id`) — כך מזוהה השלמה (§5.ה5 כלל 2)
+  contextWamid String?
+  /// הודעה מועברת: דיווח של מי שהעביר (§7 שורה 97)
+  forwarded    Boolean @default(false)
+
+  threadId String?
+  thread   WaThread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  /// ביוצא: ההודעה הנכנסת שעליה הוא עונה — האחרונה בדיווח. ייחודי: **אישור אחד לדיווח**.
+  repliesToId String?    @unique
+  repliesTo   WaMessage? @relation("WaReply", fields: [repliesToId], references: [id], onDelete: SetNull)
+  reply       WaMessage? @relation("WaReply")
+
+  /// המשתמש שזוהה כשולח (בנכנס) או כנמען (ביוצא)
+  authorUserId String?
+  authorUser   User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  /// מתי ההודעה נכתבה בוואטסאפ (`timestamp`), לא מתי הגיעה אלינו
+  receivedAt  DateTime?
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  /// קוד השגיאה של Meta בסטטוס `failed` (למשל 131047 — חלון 24 השעות נסגר)
+  errorCode   Int?
+
+  /// מה עלה מעיבוד הדיווח: מה עודכן, מה לא נמצא, מה נמצא בכמה התאמות
+  report Json?
+
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
+  detail        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  media       WaMedia[]
+  draftFields DraftField[]
+
+  @@index([authorUserId, state])
+  @@index([state, nextAttemptAt])
+  @@index([contextWamid])
+  @@index([threadId, createdAt])
+  @@index([outcome, receivedAt])
+}
+
+/// קובץ של הודעת וואטסאפ — המקבילה של `MailboxAttachment`. לכל הודעה קובץ אחד
+/// לכל היותר; `partIndex` נשאר כדי שהמבנה יהיה זהה לזה של המייל.
+model WaMedia {
+  id        String    @id @default(cuid())
+  messageId String
+  message   WaMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  partIndex Int       @default(0)
+
+  /// מזהה המדיה ב-Graph — תקף 7 ימים. הכתובת להורדה אינה נשמרת: היא פגה תוך דקות.
+  waMediaId String
+  mimeType  String
+  filename  String?
+  sizeBytes Int?
+  /// sha256 בקידוד hex, כמו `MailboxAttachment.sha256` (ה-webhook מוסר אותו ב-base64)
+  sha256    String?
+
+  /// הקלטה קולית (`voice: true`) — מתומללת כדי לבדוק אם נאמרה בה המילה (§7 שורה 95)
+  voice      Boolean @default(false)
+  transcript String?
+
+  storageKey    String? @unique
+  isMedia       Boolean @default(false)
+  /// למה הקובץ לא נשמר או לא נכנס לטיוטה (גדול מדי, זהה לקיים, הוסר...)
+  skippedReason String?
+
+  mediaFileId        String?    @unique
+  mediaFile          MediaFile? @relation(fields: [mediaFileId], references: [id], onDelete: SetNull)
+  removedFromDraftAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, partIndex])
+  @@index([sha256])
 }

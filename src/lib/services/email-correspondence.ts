@@ -1,4 +1,4 @@
-import type { MailDirection, MailOutcome, MailState } from "@/generated/prisma/enums";
+import type { MailOutcome, MessageDirection, MessageState } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { type Viewer, type AssignmentAccessView, type TicketAccessView, canViewTicket } from "@/lib/permissions";
 import { SKIPPED_AFTER_CLOSE } from "./email-reply";
@@ -72,8 +72,8 @@ export interface CorrespondenceAttachment {
 /** הודעת מייל אחת בהתכתבות — נכנסת או יוצאת, לפי הסדר */
 export interface CorrespondenceMessage {
   id: string;
-  direction: MailDirection;
-  state: MailState;
+  direction: MessageDirection;
+  state: MessageState;
   outcome: MailOutcome | null;
   fromAddress: string | null;
   fromName: string | null;
@@ -188,8 +188,8 @@ export async function getTicketCorrespondence(
 
 function toCorrespondenceMessage(message: {
   id: string;
-  direction: MailDirection;
-  state: MailState;
+  direction: MessageDirection;
+  state: MessageState;
   outcome: MailOutcome | null;
   fromAddress: string | null;
   fromName: string | null;

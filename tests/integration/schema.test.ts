@@ -102,8 +102,9 @@ describe("אילוצי מודל הנתונים", () => {
 
   /**
    * EM-M02 (אפיון §3.2 שדה 3): אתר חובה **למעט** טיוטה ממייל שלא זוהה בה
-   * אתר. האילוץ הוא CHECK שנכתב במיגרציה `email_intake` — Prisma אינו מבטא
-   * CHECK, ולכן רק הבדיקה הזו מבטיחה שהוא קיים ושלא נמחק במיגרציה עתידית.
+   * אתר. האילוץ הוא CHECK שנכתב במיגרציה `email_intake` והוחלף ב-
+   * `whatsapp_intake` (ראו WA-M03) — Prisma אינו מבטא CHECK, ולכן רק הבדיקות
+   * האלה מבטיחות שהוא קיים ושלא נמחק במיגרציה עתידית.
    */
   it("EM-M02 — פנייה בלי אתר נדחית במסד, למעט טיוטה ממייל", async () => {
     const admin = await db.user.create({
@@ -128,6 +129,85 @@ describe("אילוצי מודל הנתונים", () => {
     // ושיגור שלה בלי לקבוע אתר נחסם באותו אילוץ.
     await expect(
       db.ticket.update({ where: { id: draft.id }, data: { isDraft: false } }),
+    ).rejects.toThrow();
+  });
+
+  /**
+   * WA-M03 (אפיון §2.7 שלב 3, §3.2 שדה 3): טיוטה מוואטסאפ של מנהל מערכת שלא
+   * זוהה בה אתר נשמרת בלי אתר, בדיוק כמו במייל. האילוץ הקודם התיר זאת לערוץ
+   * `EMAIL` בלבד; המיגרציה `whatsapp_intake` החליפה אותו.
+   */
+  it("WA-M03 — טיוטה מוואטסאפ בלי אתר מתקבלת במסד, ושיגור שלה בלי אתר נחסם", async () => {
+    const admin = await db.user.create({
+      data: { role: "ADMIN", name: "מנהל", phone: "0500000004", passwordHash: "x" },
+    });
+    const base = { createdById: admin.id, description: "תקלה" };
+
+    await expect(
+      db.ticket.create({ data: { ...base, siteId: null, channel: "WHATSAPP", isDraft: false } }),
+    ).rejects.toThrow();
+
+    const draft = await db.ticket.create({
+      data: { ...base, siteId: null, channel: "WHATSAPP", isDraft: true },
+    });
+    expect(draft.siteId).toBeNull();
+
+    await expect(
+      db.ticket.update({ where: { id: draft.id }, data: { isDraft: false } }),
+    ).rejects.toThrow();
+  });
+
+  /** המספר העסקי ושיחה אחת עם הודעה נכנסת — הבסיס לבדיקות של יומן הוואטסאפ */
+  async function waConversation() {
+    const admin = await db.user.create({
+      data: { role: "ADMIN", name: "מנהל", phone: "0500000005", passwordHash: "x" },
+    });
+    const number = await db.waNumber.create({
+      data: {
+        phoneNumberId: "300000000000001",
+        wabaId: "200000000000001",
+        displayPhone: "15550001234",
+        tokenCipher: "cipher",
+        activatedAt: new Date(),
+      },
+    });
+    return { admin, number };
+  }
+
+  it("WA-13 — אותו wamid נרשם פעם אחת: משלוח כפול של Meta נדחה במסד", async () => {
+    const { number } = await waConversation();
+    const message = { direction: "INBOUND" as const, numberId: number.id, type: "text", wamid: "wamid.A" };
+
+    await db.waMessage.create({ data: message });
+    await expect(db.waMessage.create({ data: message })).rejects.toThrow();
+    expect(await db.waMessage.count()).toBe(1);
+  });
+
+  it("WA-M01 — מחיקת הטיוטה משאירה את שיחת הוואטסאפ, בלי פנייה", async () => {
+    const { admin, number } = await waConversation();
+    const ticket = await db.ticket.create({
+      data: { createdById: admin.id, siteId: null, channel: "WHATSAPP", isDraft: true, description: "" },
+    });
+    const thread = await db.waThread.create({ data: { ticketId: ticket.id } });
+    await db.waMessage.create({
+      data: { direction: "INBOUND", numberId: number.id, type: "text", wamid: "wamid.B", threadId: thread.id },
+    });
+
+    await db.ticket.delete({ where: { id: ticket.id } });
+
+    const kept = await db.waThread.findUniqueOrThrow({ where: { id: thread.id }, include: { messages: true } });
+    expect(kept.ticketId).toBeNull();
+    expect(kept.messages).toHaveLength(1);
+  });
+
+  it("WA-21 — המזהה שוואטסאפ מצמידה למשתמש שייך למשתמש אחד בלבד", async () => {
+    await db.user.create({
+      data: { role: "ADMIN", name: "א", phone: "0500000006", passwordHash: "x", whatsappUserId: "IL.1" },
+    });
+    await expect(
+      db.user.create({
+        data: { role: "ADMIN", name: "ב", phone: "0500000007", passwordHash: "x", whatsappUserId: "IL.1" },
+      }),
     ).rejects.toThrow();
   });
 

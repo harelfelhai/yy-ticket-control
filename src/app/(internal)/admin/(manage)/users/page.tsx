@@ -34,6 +34,7 @@ export default async function AdminUsersPage() {
           active: u.active,
           emailIntakeEnabled: u.emailIntakeEnabled,
           emailAliases: u.emailAliases,
+          whatsappIntakeEnabled: u.whatsappIntakeEnabled,
         }))}
       />
     </div>

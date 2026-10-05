@@ -33,6 +33,7 @@ import {
   setSiteManagers,
   setUserActive,
   setUserEmailIntake,
+  setUserWhatsappIntake,
   updateProfessional,
   updateUser,
 } from "@/lib/services/admin";
@@ -161,6 +162,41 @@ describe("createInternalUser", () => {
         password: "password1",
       }),
     ).rejects.toThrow(he.admin.phoneTaken);
+  });
+});
+
+/**
+ * פתיחת פניות בוואטסאפ — המתג בכרטיס המשתמש (אפיון §3.7 שדה 5, עדכון 1.4).
+ * אין כאן שדה נוסף: הזהות היא הטלפון שבכרטיס (§7 שורה 104).
+ */
+describe("פתיחה בוואטסאפ — הרשאה", () => {
+  async function makeUser(name: string, phone: string) {
+    return createInternalUser(admin, { name, phone, role: "OWNER", password: "sod-chazak-9" });
+  }
+
+  it("WA-U01 — משתמש חדש רשאי לפתוח פניות בוואטסאפ כברירת מחדל, ומנהל המערכת מכבה ומדליק", async () => {
+    const user = await makeUser("דנה", "0521111111");
+    expect(user.whatsappIntakeEnabled).toBe(true);
+
+    await setUserWhatsappIntake(admin, user.id, false);
+    expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).whatsappIntakeEnabled).toBe(false);
+
+    await setUserWhatsappIntake(admin, user.id, true);
+    expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).whatsappIntakeEnabled).toBe(true);
+  });
+
+  it("WA-U01 — רק מנהל המערכת נותן ולוקח את ההרשאה, והמתג של המייל אינו זז", async () => {
+    const user = await makeUser("דנה", "0521111111");
+    await expect(setUserWhatsappIntake(manager, user.id, false)).rejects.toThrow(he.admin.forbidden);
+
+    await setUserWhatsappIntake(admin, user.id, false);
+    const stored = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(stored.whatsappIntakeEnabled).toBe(false);
+    expect(stored.emailIntakeEnabled).toBe(true);
+  });
+
+  it("WA-U01 — משתמש שאינו קיים: הודעה ברורה ולא קריסה", async () => {
+    await expect(setUserWhatsappIntake(admin, "no-such-user", true)).rejects.toThrow(he.admin.userNotFound);
   });
 });
 

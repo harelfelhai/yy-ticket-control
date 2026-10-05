@@ -26,6 +26,7 @@ import {
   updateUserAction,
 } from "../../actions";
 import { type EmailAliasRow, EmailIntakeFields } from "./email-intake-fields";
+import { WhatsappIntakeField } from "./whatsapp-intake-field";
 
 interface SiteOption {
   id: string;
@@ -43,6 +44,8 @@ interface UserRow {
   /** "רשאי לפתוח פניות במייל" (אפיון §3.7) */
   emailIntakeEnabled: boolean;
   emailAliases: EmailAliasRow[];
+  /** "רשאי לפתוח פניות בוואטסאפ" (אפיון §3.7 שדה 5) */
+  whatsappIntakeEnabled: boolean;
 }
 
 const ROLES: Role[] = ["SITE_MANAGER", "OWNER", "ADMIN"];
@@ -363,11 +366,18 @@ function UserDetailsDialog({ user, onClose }: { user: UserRow; onClose: () => vo
 
             {error ? <FormError>{error}</FormError> : null}
 
-            <EmailIntakeFields
-              userId={user.id}
-              enabled={user.emailIntakeEnabled}
-              aliases={user.emailAliases}
-            />
+            {/*
+             * גוש אחד לשני הערוצים: שני המתגים עונים על אותה שאלה — מאיפה
+             * המשתמש רשאי לפתוח פנייה (DESIGN.md § פתיחה במייל ובוואטסאפ).
+             */}
+            <div className="flex flex-col gap-3 border-t border-border pt-3">
+              <EmailIntakeFields
+                userId={user.id}
+                enabled={user.emailIntakeEnabled}
+                aliases={user.emailAliases}
+              />
+              <WhatsappIntakeField userId={user.id} enabled={user.whatsappIntakeEnabled} />
+            </div>
 
             <ResetPasswordRow userId={user.id} userName={user.name} />
 
