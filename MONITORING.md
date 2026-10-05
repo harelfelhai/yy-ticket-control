@@ -80,6 +80,19 @@
 | `wa.health.unreachable` (warn) | הבדיקה התקופתית לא הגיעה ל-Meta — המצב לא השתנה, והפעימה לא נרשמה |
 | `wa.number.test_sent` | נשלחה הודעת בדיקה. מצב המסירה מתעדכן על השורה היוצאת מהסטטוסים של Meta |
 | `wa.intake.unit` | הוכרע דיווח: `size`, `outcome`, `shadow`, `latencySec` מההודעה האחרונה בו |
+| `wa.intake.transcribed` | הקלטות תומללו לפני הקיבוץ, כדי לבדוק אם נאמרה "תקלה" (`messages`) |
+| `wa.intake.draft_created` | נפתחה טיוטה מדיווח: `ticketId`, `outcome`, `messages`, `mediaCount`, `notFound`, `ambiguous` |
+| `wa.intake.deferred` (warn) | כשל זמני — תמלול, הורדת קובץ או חילוץ (`reason`) — והשולח נדחה כולו עד `nextAttemptAt`. בניסיון השישי גם issue ב-Sentry |
+| `wa.intake.exhausted` (error) | הודעות מיצו כיום של ניסיונות ונעצרו בלי הכרעה (`FAILED`) — issue ב-Sentry |
+| `wa.intake.extraction_unavailable` (warn) | החילוץ אינו זמין אחרי התקציב — טיוטה שתוכן ההודעות הוא התיאור שלה (EM-11) |
+| `wa.intake.unit_changed` | הדיווח השתנה בין ההכרעה לכתיבה (הודעה שנמסרה באיחור) — לא נכתב דבר, וג׳וב מיידי מקבץ מחדש |
+| `wa.intake.dropped` | הודעות שעוד המתינו אינן נקלטות, בלי עיבוד: המספר נותק (`IGNORED_DISABLED`), או שהשולח אינו מורשה עוד (`IGNORED_UNAUTHORIZED`) |
+| `wa.intake.voice_unavailable` · `wa.intake.voice_too_large` (warn) | הקלטה שאי אפשר לתמלל — נחשבת בלי "תקלה" |
+| `wa.media.skipped` (warn) | קובץ שלא נכנס לטיוטה (פג אחרי 7 ימים, נדחה לגופו) — הסיבה על `WaMedia.skippedReason` |
+| `wa.reply.sent` | יצאה הודעת אישור: `template`, `latencySec` מההודעה האחרונה בדיווח |
+| `wa.reply.late` (warn) | האישור יצא אחרי יותר מחמש דקות — ההבטחה של §7 שורה 94 הופרה |
+| `wa.reply.failed` (warn) | האישור לא נשלח ולא יישלח: החלון של 24 שעות נסגר (131047), המספר נותק, או שהניסיונות נגמרו |
+| `wa.reply.skipped` (warn) | האישור דולג: הטיוטה שוגרה או נמחקה לפני שיצא (§7 שורה 77) — או מצב שלא היה אמור להיווצר, ואז גם Sentry |
 | `wa.sender.bsuid_conflict` (warn) | המזהה שוואטסאפ מצמידה לשולח כבר שמור על משתמש אחר — לא נדרס |
 
 **ה-wamid אינו באף לוג**: הוא מכיל את הטלפון של השולח. הלוגים נושאים את המזהה

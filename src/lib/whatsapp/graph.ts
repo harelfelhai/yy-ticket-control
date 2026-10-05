@@ -20,13 +20,19 @@ export interface GraphConfig {
   token: string | null;
   /** גרסת ה-API, למשל `v25.0` (`WHATSAPP_GRAPH_VERSION`) */
   version: string;
+  /**
+   * כתובת חלופית ל-Graph — שרת מדומה בבדיקה מקומית (`env.whatsappGraphHost`,
+   * שאינו נקרא בפרודקשן). ברירת המחדל — Meta.
+   */
+  host?: string;
   /** מוזרק בבדיקות. ברירת המחדל — `fetch` של הסביבה. */
   fetch?: typeof fetch;
 }
 
 /** הכתובת של נתיב ב-Graph, בגרסה שנקבעה */
-export function graphUrl(config: Pick<GraphConfig, "version">, path: string): string {
-  return `${GRAPH_HOST}/${config.version}/${path.replace(/^\/+/, "")}`;
+export function graphUrl(config: Pick<GraphConfig, "version" | "host">, path: string): string {
+  const host = (config.host ?? GRAPH_HOST).replace(/\/+$/, "");
+  return `${host}/${config.version}/${path.replace(/^\/+/, "")}`;
 }
 
 /**

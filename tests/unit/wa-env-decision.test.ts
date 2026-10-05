@@ -63,6 +63,30 @@ describe("whatsappIntakeEnabled — הדגל שמתחיל לקלוט מהמספ�
   });
 });
 
+describe("whatsappIntakeMode — shadow אלא אם נאמר במפורש live", () => {
+  it.each([undefined, "", "shadow", "LIVE", "Live ", "true"])("%s — shadow", (value) => {
+    setEnv({ WHATSAPP_INTAKE_MODE: value });
+    expect(env.whatsappIntakeMode()).toBe("shadow");
+  });
+
+  it("live — live", () => {
+    setEnv({ WHATSAPP_INTAKE_MODE: "live" });
+    expect(env.whatsappIntakeMode()).toBe("live");
+  });
+});
+
+describe("whatsappGraphHost — שרת מדומה לבדיקה מקומית, ולעולם לא בפרודקשן", () => {
+  it("מחוץ לפרודקשן — הכתובת שהוגדרה", () => {
+    setEnv({ NODE_ENV: "development", WHATSAPP_GRAPH_HOST: "http://127.0.0.1:3199" });
+    expect(env.whatsappGraphHost()).toBe("http://127.0.0.1:3199");
+  });
+
+  it("בפרודקשן — המשתנה אינו נקרא: הטוקן של העסק נשלח רק ל-Meta", () => {
+    setEnv({ NODE_ENV: "production", WHATSAPP_GRAPH_HOST: "http://127.0.0.1:3199" });
+    expect(env.whatsappGraphHost()).toBeUndefined();
+  });
+});
+
 describe("whatsappPilotPhones — חיתוך הפיילוט", () => {
   it("ריק — בלי פיילוט", () => {
     setEnv({ WHATSAPP_INTAKE_PILOT_PHONES: undefined });

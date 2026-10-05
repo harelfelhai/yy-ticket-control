@@ -187,6 +187,22 @@ export const env = {
     (isProductionEnv() || optional("WHATSAPP_INTAKE_NONPROD") === "1"),
 
   /**
+   * **האם הקליטה מבצעת את מה שהכריעה** — `WHATSAPP_INTAKE_MODE=live`. כל ערך אחר,
+   * וגם היעדרו, הוא `shadow`: ההכרעה נרשמת, ואין טיוטה ואין הודעה לשולח.
+   *
+   * ברירת המחדל היא הזהירה בכוונה. מעבר ל-live הוא החלטה (W9: כמה ימים של shadow
+   * על המספר האמיתי, ואז פיילוט), וטעות הקלדה בערך אינה אמורה להתחיל לענות לאנשים.
+   */
+  whatsappIntakeMode: (): "shadow" | "live" => (optional("WHATSAPP_INTAKE_MODE") === "live" ? "live" : "shadow"),
+
+  /**
+   * כתובת חלופית ל-Graph API — **לבדיקה מקומית בלבד**, מול שרת מדומה. בפרודקשן
+   * המשתנה אינו נקרא כלל: הטוקן של העסק נשלח לכתובת הזו, ומשתנה שהועתק בטעות לא
+   * יכול להפנות אותו לשום מקום מלבד Meta.
+   */
+  whatsappGraphHost: (): string | undefined => (isProductionEnv() ? undefined : optional("WHATSAPP_GRAPH_HOST")),
+
+  /**
    * טלפונים לפיילוט — **חיתוך** מעל המשתמשים המורשים, כמו
    * `emailIntakePilotAddresses`. ריקה — בלי פיילוט. מנורמלים ב-`normalizePhone`,
    * הצורה שבה הטלפון שמור בכרטיס.

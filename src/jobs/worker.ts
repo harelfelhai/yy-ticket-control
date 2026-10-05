@@ -30,6 +30,9 @@ import type { MailSource } from "@/lib/email-intake/source";
 import type { EmailIntakeOutcome } from "@/lib/services/email-intake";
 import { type EmailReplyOutcome, markReplyFailed, sendEmailReply } from "@/lib/services/email-reply";
 import { type WaIntakeOutcome, handleWaIntake } from "@/lib/services/wa-intake";
+import { type WaReplyOutcome, markWaReplyFailed, sendWaReply } from "@/lib/services/wa-reply";
+import type { WaApi } from "@/lib/whatsapp/api";
+import type { MediaStorage } from "@/lib/storage";
 import type { WaHealthOutcome } from "@/lib/services/wa-number";
 import { type WaEventOutcome, processWebhookEvent } from "@/lib/services/wa-webhook";
 import { cleanupRateLimits } from "@/lib/rate-limit";
@@ -45,6 +48,7 @@ import {
   type NotifyJobPayload,
   type WaEventJobPayload,
   type WaIntakeJobPayload,
+  type WaReplyJobPayload,
 } from "./types";
 
 /**
@@ -135,6 +139,7 @@ export type JobOutcome =
   | EmailReplyOutcome
   | WaEventOutcome
   | WaIntakeOutcome
+  | WaReplyOutcome
   | WaHealthOutcome;
 
 export type JobResult =
@@ -168,6 +173,13 @@ export interface WorkerDeps {
    * `null` מפורש פירושו "אין מנוע בסביבה" — המסלול של EM-11.
    */
   fieldExtractor?: FieldExtractor | null;
+  /**
+   * וואטסאפ — הורדת קבצים ושליחת הודעת האישור. בלעדיו נבנה לפי הטוקן של המספר
+   * (`wa-client.ts`); בדיקה מזריקה את המימוש המזויף, ולעולם אינה נוגעת ברשת.
+   */
+  waApi?: WaApi;
+  /** האחסון לקבצים שמגיעים בוואטסאפ. ברירת המחדל — לפי הסביבה. */
+  storage?: MediaStorage;
 }
 
 /**
@@ -311,8 +323,19 @@ async function runJob(job: Job, deps: WorkerDeps, now: Date): Promise<JobOutcome
     case JOB_TYPES.waEvent:
       return processWebhookEvent(job.payload as unknown as WaEventJobPayload, { now });
 
+    // התמלול והחילוץ מאותם מנועים של המייל ושל המדיה: `transcriber` מתמלל הקלטה כדי
+    // לבדוק אם נאמרה בה "תקלה" (§7 שורה 95), ו-`fieldExtractor` קורא את הדיווח
     case JOB_TYPES.waIntake:
-      return handleWaIntake(job.payload as unknown as WaIntakeJobPayload, { now });
+      return handleWaIntake(job.payload as unknown as WaIntakeJobPayload, {
+        now,
+        api: deps.waApi,
+        transcriber: deps.transcriber,
+        extractor: deps.fieldExtractor,
+        storage: deps.storage,
+      });
+
+    case JOB_TYPES.waReply:
+      return runWaReply(job, deps, now);
 
     case JOB_TYPES.waHealth: {
       const outcome = await runWaHealth(now);
@@ -404,6 +427,21 @@ async function runEmailReply(job: Job, deps: WorkerDeps, now: Date): Promise<Ema
     });
   } catch (error) {
     if (job.attempts >= MAX_ATTEMPTS) await markReplyFailed(payload, error);
+    throw error;
+  }
+}
+
+/**
+ * שולח את הודעת האישור בוואטסאפ, ומסמן את השורה היוצאת ככשל **רק כשנגמרו
+ * הניסיונות** — מבנה זהה ל-`runEmailReply`, ומאותו נימוק: לשורה יוצאת אין מסלול
+ * חזרה לתור, ושורה שנשארה PENDING הייתה נספרת ב-`wa-intake-not-stuck` לנצח.
+ */
+async function runWaReply(job: Job, deps: WorkerDeps, now: Date): Promise<WaReplyOutcome> {
+  const payload = job.payload as unknown as WaReplyJobPayload;
+  try {
+    return await sendWaReply(payload, { api: deps.waApi, now });
+  } catch (error) {
+    if (job.attempts >= MAX_ATTEMPTS) await markWaReplyFailed(payload, error);
     throw error;
   }
 }

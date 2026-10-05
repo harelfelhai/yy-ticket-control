@@ -14,11 +14,18 @@ import { type GraphConfig, graphJson } from "./graph";
 /** הגג של וואטסאפ לגוף הודעת טקסט */
 export const MAX_TEXT_LENGTH = 4096;
 
+/**
+ * הנמען: הטלפון כפי שוואטסאפ מסרה (`wa_id`, `972…`), ובלעדיו — המזהה שוואטסאפ
+ * מצמידה לו מול העסק (BSUID), למשתמש שהסתיר את הטלפון שלו ב"שם משתמש" (§7
+ * שורה 107). Meta מקבלת את המזהה בשדה `recipient` מיולי 2026; כשנמסרים שניהם
+ * הטלפון גובר, ולכן נשלח רק אחד.
+ */
+export type WaRecipient = { phone: string } | { bsuid: string };
+
 export interface SendTextInput {
   /** המספר העסקי ששולח (`WaNumber.phoneNumberId`) */
   phoneNumberId: string;
-  /** הנמען — `wa_id` כפי שנמסר (`972…`) */
-  to: string;
+  to: WaRecipient;
   body: string;
   /** ההודעה שעליה עונים — מופיעה מצוטטת אצל הנמען */
   contextWamid?: string | null;
@@ -40,7 +47,7 @@ export async function sendText(config: GraphConfig, input: SendTextInput): Promi
     json: {
       messaging_product: "whatsapp",
       recipient_type: "individual",
-      to: input.to,
+      ...("phone" in input.to ? { to: input.to.phone } : { recipient: input.to.bsuid }),
       type: "text",
       text: { body: input.body, preview_url: false },
       ...(input.contextWamid ? { context: { message_id: input.contextWamid } } : {}),

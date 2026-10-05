@@ -26,6 +26,8 @@ export const JOB_TYPES = {
   waEvent: "WA_EVENT",
   /** הכרעה על הדיווחים הממתינים של שולח אחד בוואטסאפ */
   waIntake: "WA_INTAKE",
+  /** שליחת הודעת האישור בוואטסאפ על דיווח שכבר הוכרע (§2.7 שלב 4) */
+  waReply: "WA_REPLY",
   /** בדיקת חיבור המספר העסקי מול Meta — כל 6 שעות, ומתזמנת את עצמה מחדש (מסך 17) */
   waHealth: "WA_HEALTH",
 } as const;
@@ -58,6 +60,7 @@ export const MAIL_JOB_TYPES = [
   JOB_TYPES.emailReply,
   JOB_TYPES.waEvent,
   JOB_TYPES.waIntake,
+  JOB_TYPES.waReply,
 ] as const;
 
 /**
@@ -124,5 +127,10 @@ export interface WaEventJobPayload {
  * שולח אינו מזיק: הראשון מכריע, והשני אינו מוצא מה להכריע.
  */
 export interface WaIntakeJobPayload {
+  waMessageId: string;
+}
+
+/** מזהה שורת ה-`WaMessage` **היוצאת** שיש לשלוח — הנוסח מורכב בזמן השליחה */
+export interface WaReplyJobPayload {
   waMessageId: string;
 }

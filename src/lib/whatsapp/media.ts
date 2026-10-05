@@ -41,7 +41,7 @@ export async function downloadMedia(
   options: { maxBytes: number },
 ): Promise<MediaDownload> {
   const info = await graphJson<MediaInfo>(config, encodeURIComponent(mediaId));
-  if (typeof info.url !== "string" || !info.url.startsWith("https://")) {
+  if (typeof info.url !== "string" || !isDownloadUrl(info.url, config)) {
     throw new WaApiError("Graph לא החזיר כתובת להורדת המדיה", "permanent");
   }
   const declaredSize = typeof info.file_size === "number" ? info.file_size : null;
@@ -73,4 +73,19 @@ export async function downloadMedia(
 
   const mimeType = typeof info.mime_type === "string" && info.mime_type ? info.mime_type : "application/octet-stream";
   return { ok: true, media: { bytes, mimeType, sha256, sizeBytes: bytes.byteLength } };
+}
+
+/**
+ * הטוקן נשלח גם לכתובת ההורדה, ולכן היא חייבת להיות HTTPS. החריג היחיד הוא שרת
+ * Graph מדומה בבדיקה מקומית (`GraphConfig.host`, שאינו נקרא בפרודקשן): שם הכתובת
+ * היא של **אותו שרת** — לא של כל כתובת שהתשובה תציע.
+ */
+function isDownloadUrl(url: string, config: GraphConfig): boolean {
+  if (url.startsWith("https://")) return true;
+  if (!config.host) return false;
+  try {
+    return new URL(url).origin === new URL(config.host).origin;
+  } catch {
+    return false;
+  }
 }

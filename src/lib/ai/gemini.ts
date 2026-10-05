@@ -85,37 +85,54 @@ async function ask(
   prompt: string,
 ): Promise<string> {
   if (file.byteLength > MAX_INLINE_BYTES) {
-    throw new Error(
+    throw new AiRequestError(
       `הקובץ גדול מדי לעיבוד מוטבע: ${Math.round(file.byteLength / 1024 / 1024)}MB, ` +
         `הגג הוא ${MAX_INLINE_BYTES / 1024 / 1024}MB`,
+      "permanent",
     );
   }
 
-  const response = await fetch(ENDPOINT, {
-    method: "POST",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    headers: {
-      // Gemini מאמת בכותרת ייעודית, לא ב-`Authorization: Bearer`.
-      "x-goog-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      input: [
-        { type: kind, data: file.toString("base64"), mime_type: baseMime(mimeType) },
-        { type: "text", text: prompt },
-      ],
-    }),
-  });
+  // הכשלים מסווגים כמו ב-`askStructured`: ג׳ובי ה-AI זורקים וחוזרים בכל מקרה, אבל
+  // מי שמכריע לפי הכשל — הקליטה בוואטסאפ, שמתמללת הקלטה כדי לבדוק את המילה (§7
+  // שורה 95) — חייב לדעת אם לנסות שוב. כשל רשת גולמי (`TypeError: fetch failed`)
+  // נראה לו כבאג, והג׳וב היה מת אחרי שלושה ניסיונות במקום להידחות.
+  let response: Response;
+  try {
+    response = await fetch(ENDPOINT, {
+      method: "POST",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: {
+        // Gemini מאמת בכותרת ייעודית, לא ב-`Authorization: Bearer`.
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        input: [
+          { type: kind, data: file.toString("base64"), mime_type: baseMime(mimeType) },
+          { type: "text", text: prompt },
+        ],
+      }),
+    });
+  } catch (error) {
+    throw asRequestError(error);
+  }
 
   if (!response.ok) {
     // הטקסט המלא נכנס לשגיאה כדי שיישמר ב-`Job.lastError` ויהיה אפשר
     // לאבחן בלי לשחזר — אותה מדיניות כמו בשליחת המייל.
     const details = await response.text().catch(() => "");
-    throw new Error(`Gemini החזיר ${response.status}: ${details}`);
+    throw new AiRequestError(`Gemini החזיר ${response.status}: ${details}`, classifyStatus(response.status), response.status);
   }
 
-  return readText(await response.json());
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    // גוף שנקטע אחרי שהכותרות חזרו — הבקשה תקינה, והניסיון הבא יצליח
+    throw asRequestError(error);
+  }
+  return readText(payload);
 }
 
 /**
