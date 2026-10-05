@@ -32,9 +32,9 @@ function field(
     field: name,
     label,
     systemText,
-    emailText: null,
+    channelText: null,
     conflict: false,
-    fromEmail: false,
+    fromChannel: false,
     missing: false,
     version: `${name}-v1`,
     ...extra,
@@ -43,12 +43,12 @@ function field(
 
 const FIELDS: DraftFieldDisplay[] = [
   field("SITE", "אתר", "אתר לדוגמה"),
-  field("BUILDING", "בניין", "בניין א", { conflict: true, emailText: "בניין ב" }),
+  field("BUILDING", "בניין", "בניין א", { conflict: true, channelText: "בניין ב" }),
   field("APARTMENT", "דירה", "12"),
   field("ROOM", "חדר", "—"),
   field("DOMAIN", "תחום", "חשמל"),
-  field("DESCRIPTION", "תיאור", "נזילה", { fromEmail: true }),
-  field("RECIPIENTS", "נמענים", "יוסי", { conflict: true, emailText: "להוסיף: דנה" }),
+  field("DESCRIPTION", "תיאור", "נזילה", { fromChannel: true }),
+  field("RECIPIENTS", "נמענים", "יוסי", { conflict: true, channelText: "להוסיף: דנה" }),
 ];
 
 beforeEach(() => {
@@ -85,7 +85,7 @@ describe("ConflictDialog", () => {
     expect(rows.filter((row) => row.classList.contains("hidden"))).toHaveLength(5);
   });
 
-  it("שורה שאינה בסתירה: הערך מהמייל מוצג כשהוא ידוע (fromEmail), ואחרת התא ריק — לא '—'", async () => {
+  it("שורה שאינה בסתירה: הערך מהמייל מוצג כשהוא ידוע (fromChannel), ואחרת התא ריק — לא '—'", async () => {
     await open();
     const rows = within(screen.getByRole("dialog")).getAllByRole("listitem");
     // התיאור הגיע מהמייל: הערך במערכת הוא הערך מהמייל, ותא ריק היה נקרא "המייל לא נתן כלום"
@@ -129,7 +129,7 @@ describe("ConflictDialog", () => {
     await user.click(apply);
     expect(actions.resolveDraftConflictsAction).toHaveBeenCalledWith(
       "t1",
-      { BUILDING: "system", RECIPIENTS: "email" },
+      { BUILDING: "system", RECIPIENTS: "channel" },
       "v1",
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("ConflictDialog", () => {
     await user.click(within(group("נמענים")).getByRole("radio", { name: /יוסי/ }));
 
     // תשובה חדשה במייל נקלטה והעמוד התרענן: ערך אחר מהמייל, גרסה אחרת
-    const refreshed = FIELDS.map((f) => (f.field === "BUILDING" ? { ...f, emailText: "בניין ג" } : f));
+    const refreshed = FIELDS.map((f) => (f.field === "BUILDING" ? { ...f, channelText: "בניין ג" } : f));
     rerender(<ConflictDialog ticketId="t1" fields={refreshed} version="v2" />);
 
     expect(within(group("בניין")).queryByRole("radio", { name: /בניין ג/ })).not.toBeInTheDocument();
@@ -197,7 +197,7 @@ describe("ConflictDialog", () => {
 
   it("אתר מהמייל שהצופה אינו רשאי לבחור: האפשרות מושבתת עם הסבר, וצד המערכת עדיין אפשרי", async () => {
     const fields = FIELDS.map((f) =>
-      f.field === "SITE" ? { ...f, conflict: true, emailText: "אתר שני" } : f.field === "BUILDING" ? { ...f, conflict: false } : f,
+      f.field === "SITE" ? { ...f, conflict: true, channelText: "אתר שני" } : f.field === "BUILDING" ? { ...f, conflict: false } : f,
     );
     const { user } = await open(fields, { emailSiteAllowed: false });
     const site = group("אתר");

@@ -552,7 +552,7 @@ describe("EM-11 — החילוץ אינו זמין", () => {
     expect(outcome).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED_UNPROCESSED" });
     expect((await rowOf(id)).attempts).toBe(0);
     const [field] = await db.draftField.findMany();
-    expect(field).toMatchObject({ field: "DESCRIPTION", fromEmail: true });
+    expect(field).toMatchObject({ field: "DESCRIPTION", fromChannel: true });
   });
 
   it("EM-09 · EM-10 — מנהל עבודה מקבל את האתר שלו גם כשהחילוץ אינו זמין", async () => {
@@ -688,7 +688,7 @@ describe("מסלול המייל החדש", () => {
       description: "יש נזילה מתחת לכיור במטבח",
     });
     expect(ticket.draftRecipients).toEqual([
-      { kind: "professional", id: professionalId, origin: "EMAIL", removedBySystemAt: null },
+      { kind: "professional", id: professionalId, origin: "CHANNEL", removedBySystemAt: null },
     ]);
 
     // שורת `DraftField` לכל שדה שהמייל מילא, ורק לו
@@ -696,7 +696,7 @@ describe("מסלול המייל החדש", () => {
     expect(fields.map((row) => row.field).sort()).toEqual(
       ["APARTMENT", "BUILDING", "DESCRIPTION", "DOMAIN", "RECIPIENTS", "SITE"].sort(),
     );
-    expect(fields.every((row) => row.fromEmail && !row.conflict && row.systemEditedAt === null)).toBe(true);
+    expect(fields.every((row) => row.fromChannel && !row.conflict && row.systemEditedAt === null)).toBe(true);
 
     const thread = await db.mailThread.findFirstOrThrow();
     expect(thread.ticketId).toBe(ticket.id);
@@ -829,7 +829,7 @@ describe("מסלול המייל החדש", () => {
     expect(outcome).toMatchObject({ outcome: "DRAFT_CREATED" });
     expect((await db.ticket.findFirstOrThrow()).room).toBe("KITCHEN");
     const field = await db.draftField.findFirstOrThrow({ where: { field: "ROOM" } });
-    expect(field.fromEmail).toBe(true);
+    expect(field.fromChannel).toBe(true);
   });
 
   it("EM-09 — מנהל עבודה: האתר נגזר ממנו ואינו נושא תג מהמייל", async () => {
@@ -1436,7 +1436,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
     const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
     expect(ticket.domainId).toBe(domainId);
     const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
-    expect(field).toMatchObject({ fromEmail: true, conflict: false });
+    expect(field).toMatchObject({ fromChannel: true, conflict: false });
 
     const row = await rowOf(id);
     const report = row.report as { updated: { field: string; before: string | null; after: string | null }[] };
@@ -1447,7 +1447,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
     const otherDomain = await db.domain.create({ data: { name: "חשמל" } });
     const { ticketId } = await existingThread({
       ticket: { domainId: otherDomain.id },
-      fields: { DOMAIN: { systemEditedAt: ARRIVED_AT, fromEmail: false } },
+      fields: { DOMAIN: { systemEditedAt: ARRIVED_AT, fromChannel: false } },
     });
 
     const { id, outcome } = await replyRun(
@@ -1461,7 +1461,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
     expect(ticket.domainId).toBe(otherDomain.id);
     const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
     expect(field.conflict).toBe(true);
-    expect(field.emailValue).toMatchObject({ field: "DOMAIN", domainId });
+    expect(field.channelValue).toMatchObject({ field: "DOMAIN", domainId });
 
     const row = await rowOf(id);
     const report = row.report as { updated: unknown[] };
@@ -1477,8 +1477,8 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
         DOMAIN: {
           conflict: true,
           systemEditedAt: ARRIVED_AT,
-          emailValue: { field: "DOMAIN", domainId: otherDomain.id },
-          fromEmail: false,
+          channelValue: { field: "DOMAIN", domainId: otherDomain.id },
+          fromChannel: false,
         },
       },
     });
@@ -1493,7 +1493,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
     expect(ticket.domainId).toBe(domainId);
     const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
     expect(field.conflict).toBe(false);
-    expect(field.emailValue).toBeNull();
+    expect(field.channelValue).toBeNull();
   });
 
   it("EM-C05 — עריכה במערכת מאוחרת לערך מהמייל: המערכת מכריעה, בלי סתירה", async () => {
@@ -1502,7 +1502,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
     const { ticketId } = await existingThread({
       ticket: { domainId: otherDomain.id },
       // "נערך" **אחרי** שהתשובה תגיע — למרות שהג׳וב עצמו רץ אחר כך (REPLY_NOW)
-      fields: { DOMAIN: { systemEditedAt: future, fromEmail: false } },
+      fields: { DOMAIN: { systemEditedAt: future, fromChannel: false } },
     });
 
     const { outcome } = await replyRun(
@@ -1539,7 +1539,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
       ticket: {
         draftRecipients: [{ kind: "professional", id: professionalId, origin: "SYSTEM", removedBySystemAt: null }],
       },
-      fields: { RECIPIENTS: { systemEditedAt: ARRIVED_AT, fromEmail: false } },
+      fields: { RECIPIENTS: { systemEditedAt: ARRIVED_AT, fromChannel: false } },
     });
 
     const { outcome } = await replyRun(
@@ -1564,7 +1564,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
       ticket: {
         draftRecipients: [{ kind: "professional", id: professionalId, origin: "SYSTEM", removedBySystemAt: removedAt }],
       },
-      fields: { RECIPIENTS: { systemEditedAt: ARRIVED_AT, fromEmail: false } },
+      fields: { RECIPIENTS: { systemEditedAt: ARRIVED_AT, fromChannel: false } },
     });
 
     const { outcome } = await replyRun(
@@ -1577,7 +1577,7 @@ describe("מסלול התשובה — §5.ה4 (תשובה מול עריכה במ
       where: { ticketId_field: { ticketId, field: "RECIPIENTS" } },
     });
     expect(field.conflict).toBe(true);
-    expect(field.emailValue).toMatchObject({ field: "RECIPIENTS", add: [{ kind: "professional", id: professionalId }] });
+    expect(field.channelValue).toMatchObject({ field: "RECIPIENTS", add: [{ kind: "professional", id: professionalId }] });
   });
 
   it("EM-C10 — שינוי אתר מאפס בניין ודירה, אך לא נמענים; האיפוס נזכר גם לצד המערכת", async () => {

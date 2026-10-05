@@ -19,24 +19,24 @@ import { he } from "@/lib/he";
 
 function state(): DraftState {
   const meta = emptyDraftMeta();
-  meta.DESCRIPTION.fromEmail = true;
+  meta.DESCRIPTION.fromChannel = true;
   meta.BUILDING = {
-    fromEmail: false,
+    fromChannel: false,
     systemEditedAt: new Date("2026-09-20T10:00:00Z"),
     conflict: true,
-    emailValue: { field: "BUILDING", buildingId: "b-gone" },
-    emailMessageId: "m2",
+    channelValue: { field: "BUILDING", buildingId: "b-gone" },
+    channelMessageId: "m2",
   };
   meta.RECIPIENTS = {
-    fromEmail: false,
+    fromChannel: false,
     systemEditedAt: new Date("2026-09-20T10:00:00Z"),
     conflict: true,
-    emailValue: {
+    channelValue: {
       field: "RECIPIENTS",
       add: [{ kind: "professional", id: "p2" }],
       remove: [{ kind: "professional", id: "p1" }],
     },
-    emailMessageId: "m2",
+    channelMessageId: "m2",
   };
   return {
     values: {
@@ -47,7 +47,7 @@ function state(): DraftState {
       domainId: null,
       description: "נזילה מהתקרה",
       recipients: [
-        { kind: "professional", id: "p1", origin: "EMAIL", removedBySystemAt: null },
+        { kind: "professional", id: "p1", origin: "CHANNEL", removedBySystemAt: null },
         // מצבה: הוסר במערכת, אינו מוצג כנמען אבל שמו נדרש להצעה להחזירו
         { kind: "user", id: "u9", origin: "SYSTEM", removedBySystemAt: "2026-09-19T08:00:00.000Z" },
       ],
@@ -113,18 +113,18 @@ describe("describeDraftFields — מסך 7 ומסך 7א", () => {
     expect(display.conflictCount).toBe(2);
     expect(by.BUILDING.conflict).toBe(true);
     // מזהה שאין לו שם — בניין שנמחק אחרי שהמייל הציע אותו — במילים, לא כמזהה
-    expect(by.BUILDING.emailText).toBe(he.emailDraft.unknownRecord);
-    expect(by.RECIPIENTS.emailText).toBe(
+    expect(by.BUILDING.channelText).toBe(he.emailDraft.unknownRecord);
+    expect(by.RECIPIENTS.channelText).toBe(
       `${he.emailDraft.recipientsAdd("דנה האינסטלטורית")}${he.emailIntake.summarySeparator}${he.emailDraft.recipientsRemove("יוסי החשמלאי")}`,
     );
     expect(by.DESCRIPTION.conflict).toBe(false);
-    expect(by.DESCRIPTION.emailText).toBeNull();
+    expect(by.DESCRIPTION.channelText).toBeNull();
   });
 
   it("תג 'מהמייל' וסימון 'חסר' נגזרים מהמטא ומהערכים", () => {
     const by = Object.fromEntries(describeDraftFields(state(), LABELS).fields.map((f) => [f.field, f]));
-    expect(by.DESCRIPTION.fromEmail).toBe(true);
-    expect(by.BUILDING.fromEmail).toBe(false);
+    expect(by.DESCRIPTION.fromChannel).toBe(true);
+    expect(by.BUILDING.fromChannel).toBe(false);
     expect(by.DOMAIN.missing).toBe(true);
     expect(by.ROOM.missing).toBe(false);
     expect(by.RECIPIENTS.missing).toBe(false);
@@ -154,16 +154,16 @@ describe("fieldVersion — טביעת שדה לשמירה במסך 7 (§7 שור
 
     const conflicted = state();
     conflicted.meta.DOMAIN = {
-      fromEmail: false,
+      fromChannel: false,
       systemEditedAt: new Date(),
       conflict: true,
-      emailValue: { field: "DOMAIN", domainId: "d2" },
-      emailMessageId: "m3",
+      channelValue: { field: "DOMAIN", domainId: "d2" },
+      channelMessageId: "m3",
     };
     expect(fieldVersion(conflicted, "DOMAIN")).not.toBe(domainBefore);
 
     const replaced = state();
-    replaced.meta.BUILDING = { ...replaced.meta.BUILDING, emailValue: { field: "BUILDING", buildingId: "b9" } };
+    replaced.meta.BUILDING = { ...replaced.meta.BUILDING, channelValue: { field: "BUILDING", buildingId: "b9" } };
     expect(fieldVersion(replaced, "BUILDING")).not.toBe(fieldVersion(before, "BUILDING"));
 
     // שינוי בשדה אחד אינו נוגע בטביעה של אחר
@@ -173,7 +173,7 @@ describe("fieldVersion — טביעת שדה לשמירה במסך 7 (§7 שור
   it("נמען שהמייל הוסיף משנה את טביעת הנמענים", () => {
     const before = state();
     const added = state();
-    added.values.recipients.push({ kind: "professional", id: "p7", origin: "EMAIL", removedBySystemAt: null });
+    added.values.recipients.push({ kind: "professional", id: "p7", origin: "CHANNEL", removedBySystemAt: null });
     expect(fieldVersion(added, "RECIPIENTS")).not.toBe(fieldVersion(before, "RECIPIENTS"));
   });
 });

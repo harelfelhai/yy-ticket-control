@@ -376,7 +376,7 @@ describe("getBoard — טיוטה ממייל", () => {
   it("טיוטה שלמה — מוכנה לשליחה", async () => {
     const ticket = await emailDraft({
       ...base,
-      draftRecipients: [{ kind: "professional", id: electrician, origin: "EMAIL" }] as never,
+      draftRecipients: [{ kind: "professional", id: electrician, origin: "CHANNEL" }] as never,
     });
 
     const board = await getBoard(asUser(manager), {}, NOW);

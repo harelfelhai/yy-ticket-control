@@ -9,7 +9,7 @@ import {
   matchRoom,
   mentionedIn,
   normalizeForMatch,
-} from "@/lib/email-intake/matching";
+} from "@/lib/intake/matching";
 import { ROOMS } from "@/lib/rooms";
 
 type RecipientKind = "professional" | "user";

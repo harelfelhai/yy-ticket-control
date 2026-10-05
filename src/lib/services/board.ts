@@ -5,7 +5,7 @@ import { firstLine } from "@/lib/format";
 import type { SessionUser } from "@/lib/session";
 import { compareApartmentNumbers } from "@/lib/normalize";
 import { draftValuesOf, emailDraftCounts } from "@/lib/draft/state";
-import { isEmailDraft } from "@/lib/services/draft-fields";
+import { isChannelDraft } from "@/lib/services/draft-fields";
 import { tagChatTextMatch } from "@/lib/services/tags";
 import type { DerivedTicketStatus } from "@/lib/ticket-status";
 import {
@@ -149,7 +149,7 @@ type BoardTicket = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
  * ממשיכה להציג "טיוטה — חסרים פרטים" גם כשהיא שלמה.
  */
 function emailDraftCountsOf(ticket: BoardTicket) {
-  if (!isEmailDraft(ticket)) return null;
+  if (!isChannelDraft(ticket)) return null;
   return emailDraftCounts(draftValuesOf(ticket), ticket.draftFields.length);
 }
 

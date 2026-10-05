@@ -8,7 +8,7 @@ import {
   type DraftRecipient,
   type DraftState,
   type DraftValues,
-  type EmailValue,
+  type ChannelValue,
   type FieldMeta,
   type RecipientRef,
   type RecipientsProposal,
@@ -19,8 +19,12 @@ import {
 } from "./fields";
 
 /**
- * מנוע המיזוג של טיוטה ממייל — §5.ה4 ("תשובה במייל מול עריכה במערכת") ו-§3.5
+ * מנוע המיזוג של טיוטה מערוץ — §5.ה4 ("תשובה במייל מול עריכה במערכת") ו-§3.5
  * ("סתירה פתוחה").
+ *
+ * **המנוע אינו יודע מאיזה ערוץ הגיעה ההודעה.** הכללים של המייל (1.3) חלים
+ * כמות שהם על תגובה בוואטסאפ (1.4), ולכן הדוגמאות כאן מדברות על מייל, והשמות
+ * — `ChannelProposal`, `fromChannel`, `channelValue` — על ערוץ.
  *
  * טיוטה ממייל נערכת בשני ערוצים שאינם מתואמים: השולח עונה במייל, ומישהו
  * (לא בהכרח השולח) עורך במערכת. הקובץ הזה הוא המקום היחיד שמכריע מה קורה
@@ -34,7 +38,7 @@ import {
  * ממנו, ו"עריכה מאוחרת במערכת מכריעה".
  *
  * **הנחת סדר:** מיילים של אותה טיוטה ממוזגים לפי סדר ההגעה. `FieldMeta` אינו
- * שומר מתי הגיע המייל שהציע את `emailValue`, ולכן מייל ישן שמעובד אחרי מייל
+ * שומר מתי הגיע המייל שהציע את `channelValue`, ולכן מייל ישן שמעובד אחרי מייל
  * חדש יחליף את הערך הממתין שלו. שכבת השירות אחראית לסדר.
  */
 
@@ -45,7 +49,7 @@ import {
  * שדה שאינו כאן (או מזהה ריק) — המייל לא אמר עליו דבר. אין דרך לרוקן שדה
  * במייל, כי האפיון אינו מגדיר כזו.
  */
-export interface EmailProposal {
+export interface ChannelProposal {
   site?: string;
   building?: string;
   apartment?: string;
@@ -71,7 +75,7 @@ export interface FieldChange {
   before: unknown;
   after: unknown;
   /** `reset` — שדה תלוי שהתאפס כי האתר או הבניין השתנו מהמייל (EM-C10) */
-  cause: "email" | "reset";
+  cause: "channel" | "reset";
 }
 
 export interface MergeResult {
@@ -97,7 +101,7 @@ export interface MergeResult {
   ignored: DraftFieldName[];
   /**
    * בניין או דירה מהמייל שלא מוזגו, כי השדה שהם תלויים בו הופיע באותו מייל
-   * ולא נכנס (סתירה או עריכה מאוחרת במערכת). ראה `mergeEmailIntoDraft`.
+   * ולא נכנס (סתירה או עריכה מאוחרת במערכת). ראה `mergeChannelIntoDraft`.
    */
   skippedDependents: DraftFieldName[];
 }
@@ -112,7 +116,7 @@ export type SystemEdit =
   | { field: "RECIPIENTS"; recipients: RecipientRef[] };
 
 /** הצד שנבחר במסך 7א */
-export type Choice = "system" | "email";
+export type Choice = "system" | "channel";
 
 // ──────────────────────────── ההכרעה הסקלרית ────────────────────────────
 
@@ -161,9 +165,9 @@ export function decideScalar(meta: FieldMeta, current: unknown, proposed: unknow
  * למזג את התלויים ולדווח עליהם ב-`skippedDependents`. השולח רואה במייל החוזר
  * את הסתירה באתר, ויכתוב את הבניין שוב אחרי ההכרעה.
  */
-export function mergeEmailIntoDraft(input: {
+export function mergeChannelIntoDraft(input: {
   state: DraftState;
-  proposal: EmailProposal;
+  proposal: ChannelProposal;
   receivedAt: Date;
   messageId: string;
 }): MergeResult {
@@ -214,8 +218,8 @@ export function mergeEmailIntoDraft(input: {
     switch (decision) {
       case "apply":
         writeScalar(draft.values, proposed);
-        draft.meta[field] = { ...emptyMeta(), fromEmail: true, systemEditedAt: meta.systemEditedAt };
-        recordChange(changes, { field, before: current, after: proposed.value, cause: "email" });
+        draft.meta[field] = { ...emptyMeta(), fromChannel: true, systemEditedAt: meta.systemEditedAt };
+        recordChange(changes, { field, before: current, after: proposed.value, cause: "channel" });
         resetDependents(draft, field, (dependent, before) =>
           recordChange(changes, { field: dependent, before, after: null, cause: "reset" }),
         );
@@ -224,14 +228,14 @@ export function mergeEmailIntoDraft(input: {
         draft.meta[field] = {
           ...meta,
           conflict: true,
-          emailValue: toEmailValue(proposed),
-          emailMessageId: messageId,
+          channelValue: toChannelValue(proposed),
+          channelMessageId: messageId,
         };
         conflictsOpened.push(field);
         blockDependents(field);
         break;
       case "close":
-        draft.meta[field] = { ...meta, conflict: false, emailValue: null, emailMessageId: null };
+        draft.meta[field] = { ...meta, conflict: false, channelValue: null, channelMessageId: null };
         break;
       case "ignore":
         ignored.push(field);
@@ -267,15 +271,15 @@ function appendDescription(draft: DraftState, text: string, changes: FieldChange
   const before = normalizeText(draft.values.description);
   const after = before ? `${before}\n\n${addition}` : addition;
   draft.values.description = after;
-  draft.meta.DESCRIPTION = { ...draft.meta.DESCRIPTION, fromEmail: true };
-  recordChange(changes, { field: "DESCRIPTION", before, after, cause: "email" });
+  draft.meta.DESCRIPTION = { ...draft.meta.DESCRIPTION, fromChannel: true };
+  recordChange(changes, { field: "DESCRIPTION", before, after, cause: "channel" });
 }
 
 /**
  * נמענים — ההכרעה נעשית **לכל נמען בנפרד** (EM-C08), כי הרשימה היא כמה
  * החלטות עצמאיות: הוספת קבלן אחד אינה סותרת את ההחלטה במערכת על קבלן אחר.
  *
- * הפריטים הממתינים נשמרים ב-`emailValue` של השדה. פריט שמוזכר שוב במייל
+ * הפריטים הממתינים נשמרים ב-`channelValue` של השדה. פריט שמוזכר שוב במייל
  * מאוחר מחליף את הממתין שלו (EM-C06, ברמת פריט) — כולל מייל שחוזר למצב
  * שבמערכת וסוגר אותו — ופריטים שלא הוזכרו נשארים ממתינים.
  *
@@ -301,7 +305,7 @@ function mergeRecipients(
   const contradictory = (ref: RecipientRef) =>
     adds.some((r) => sameRecipient(r, ref)) && removes.some((r) => sameRecipient(r, ref));
 
-  const pending = pendingRecipients(meta.emailValue);
+  const pending = pendingRecipients(meta.channelValue);
   const recipients = draft.values.recipients;
   let changedSilently = false;
   let replacedPending = false;
@@ -336,7 +340,7 @@ function mergeRecipients(
       continue;
     }
     setPending(ref, null);
-    recipients.push({ ...toRef(ref), origin: "EMAIL", removedBySystemAt: null });
+    recipients.push({ ...toRef(ref), origin: "CHANNEL", removedBySystemAt: null });
     changedSilently = true;
   }
 
@@ -350,7 +354,7 @@ function mergeRecipients(
     // נמען שנוסף ממייל ואיש לא אישר אותו במערכת — הסרתו במייל היא תיקון של
     // השולח לעצמו, לא היפוך של החלטה. הוא יורד לגמרי ולא כמצבה, כי מצבה
     // מסמנת החלטה של המערכת
-    if (recipients[index].origin === "EMAIL") {
+    if (recipients[index].origin === "CHANNEL") {
       recipients.splice(index, 1);
       setPending(ref, null);
       changedSilently = true;
@@ -366,12 +370,12 @@ function mergeRecipients(
   const conflict = pending.add.length + pending.remove.length > 0;
   draft.meta.RECIPIENTS = {
     ...meta,
-    fromEmail: meta.fromEmail || changedSilently,
+    fromChannel: meta.fromChannel || changedSilently,
     conflict,
-    emailValue: conflict ? { field: "RECIPIENTS", add: pending.add, remove: pending.remove } : null,
+    channelValue: conflict ? { field: "RECIPIENTS", add: pending.add, remove: pending.remove } : null,
     // מזהה אחד לשדה: המייל האחרון שהציע פריט ממתין. פריטים ממתינים ממייל
     // קודם נשארים עם המזהה החדש — הסכימה אינה שומרת מזהה לכל פריט
-    emailMessageId: !conflict ? null : replacedPending ? messageId : meta.emailMessageId,
+    channelMessageId: !conflict ? null : replacedPending ? messageId : meta.channelMessageId,
   };
 
   if (replacedPending && conflict) out.conflictsOpened.push("RECIPIENTS");
@@ -379,7 +383,7 @@ function mergeRecipients(
 
   const after = fieldValue(draft.values, "RECIPIENTS") as RecipientRef[];
   if (!sameRefList(before, after)) {
-    recordChange(out.changes, { field: "RECIPIENTS", before, after, cause: "email" });
+    recordChange(out.changes, { field: "RECIPIENTS", before, after, cause: "channel" });
   }
 }
 
@@ -462,9 +466,9 @@ export function resolveChoices(
 
   for (const field of DRAFT_FIELDS) {
     const choice = choices[field];
-    if (!draft.meta[field].conflict || (choice !== "email" && choice !== "system")) continue;
+    if (!draft.meta[field].conflict || (choice !== "channel" && choice !== "system")) continue;
 
-    const edit = choice === "email" ? editFromEmailValue(draft, field) : editFromCurrent(draft.values, field);
+    const edit = choice === "channel" ? editFromChannelValue(draft, field) : editFromCurrent(draft.values, field);
     // סתירה בלי ערך מהמייל היא מצב פגום. המנוע אינו ממציא ערך, והסתירה
     // נשארת — עריכה ישירה של השדה בטופס עדיין סוגרת אותה
     if (!edit) continue;
@@ -474,8 +478,8 @@ export function resolveChoices(
   return draft;
 }
 
-function editFromEmailValue(draft: DraftState, field: DraftFieldName): SystemEdit | null {
-  const value = draft.meta[field].emailValue;
+function editFromChannelValue(draft: DraftState, field: DraftFieldName): SystemEdit | null {
+  const value = draft.meta[field].channelValue;
   if (!value || value.field !== field) return null;
   switch (value.field) {
     case "SITE":
@@ -535,7 +539,7 @@ type ProposedScalar =
   | { field: "ROOM"; value: Room }
   | { field: "DESCRIPTION"; value: string };
 
-function proposedScalar(proposal: EmailProposal, field: Exclude<DraftFieldName, "RECIPIENTS">): ProposedScalar | null {
+function proposedScalar(proposal: ChannelProposal, field: Exclude<DraftFieldName, "RECIPIENTS">): ProposedScalar | null {
   switch (field) {
     case "SITE":
       return proposedId(field, proposal.site);
@@ -598,7 +602,7 @@ function scalarOfEdit(edit: Exclude<SystemEdit, { field: "RECIPIENTS" }>): Scala
   }
 }
 
-function toEmailValue(proposed: ProposedScalar): EmailValue {
+function toChannelValue(proposed: ProposedScalar): ChannelValue {
   switch (proposed.field) {
     case "SITE":
       return { field: "SITE", siteId: proposed.value };
@@ -631,7 +635,7 @@ function resetDependents(
     const before = fieldValue(draft.values, dependent);
     const meta = draft.meta[dependent];
     const touched =
-      meta.fromEmail || meta.systemEditedAt !== null || meta.conflict || meta.emailValue !== null || meta.emailMessageId !== null;
+      meta.fromChannel || meta.systemEditedAt !== null || meta.conflict || meta.channelValue !== null || meta.channelMessageId !== null;
     if (before === null && !touched) continue;
 
     writeScalar(draft.values, clearWrite(dependent));
@@ -670,7 +674,7 @@ function recordChange(changes: FieldChange[], change: FieldChange): void {
   else changes[index] = merged;
 }
 
-function pendingRecipients(value: EmailValue | null): { add: RecipientRef[]; remove: RecipientRef[] } {
+function pendingRecipients(value: ChannelValue | null): { add: RecipientRef[]; remove: RecipientRef[] } {
   if (value?.field !== "RECIPIENTS") return { add: [], remove: [] };
   return { add: value.add.map(toRef), remove: value.remove.map(toRef) };
 }
@@ -697,7 +701,7 @@ function cloneState(state: DraftState): DraftState {
   const meta = {} as DraftState["meta"];
   for (const field of DRAFT_FIELDS) {
     const source = state.meta[field];
-    meta[field] = { ...source, emailValue: cloneEmailValue(source.emailValue) };
+    meta[field] = { ...source, channelValue: cloneChannelValue(source.channelValue) };
   }
   return {
     values: { ...state.values, recipients: state.values.recipients.map((r) => ({ ...r })) },
@@ -705,7 +709,7 @@ function cloneState(state: DraftState): DraftState {
   };
 }
 
-function cloneEmailValue(value: EmailValue | null): EmailValue | null {
+function cloneChannelValue(value: ChannelValue | null): ChannelValue | null {
   if (!value) return null;
   if (value.field === "RECIPIENTS") {
     return { field: "RECIPIENTS", add: value.add.map(toRef), remove: value.remove.map(toRef) };

@@ -160,7 +160,7 @@ describe("הצינור המלא של תשובה — מקצה לקצה", () => {
     // אין עריכה קודמת במערכת — כל מה שהטיוטה מחזיקה הגיע מהמייל הראשון בלבד
     const before = await db.draftField.findMany({ where: { ticketId } });
     expect(before.length).toBeGreaterThan(0);
-    expect(before.every((f) => f.fromEmail && !f.conflict && f.systemEditedAt === null)).toBe(true);
+    expect(before.every((f) => f.fromChannel && !f.conflict && f.systemEditedAt === null)).toBe(true);
 
     const extractor = fakeFieldExtractor({ result: { domain: DOMAIN_NAME, recipientsAdd: [PRO_NAME] } });
     const { id: replyId, outcome } = await intake(
@@ -174,14 +174,14 @@ describe("הצינור המלא של תשובה — מקצה לקצה", () => {
     const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
     expect(ticket.domainId).toBe(domainId);
     expect(ticket.draftRecipients).toEqual([
-      expect.objectContaining({ kind: "professional", id: professionalId, origin: "EMAIL" }),
+      expect.objectContaining({ kind: "professional", id: professionalId, origin: "CHANNEL" }),
     ]);
 
     // כל שדה — גם מה שהמייל הראשון מילא וגם מה שהתשובה השלימה — נושא את
     // תג "מהמייל", בלי סתירה ובלי חותמת עריכת מערכת: אף אדם לא נגע בטיוטה
     const fields = await db.draftField.findMany({ where: { ticketId } });
     expect(fields.map((f) => f.field).sort()).toEqual(["APARTMENT", "BUILDING", "DESCRIPTION", "DOMAIN", "RECIPIENTS", "SITE"]);
-    expect(fields.every((f) => f.fromEmail && !f.conflict && f.systemEditedAt === null)).toBe(true);
+    expect(fields.every((f) => f.fromChannel && !f.conflict && f.systemEditedAt === null)).toBe(true);
 
     const row = await db.mailboxMessage.findUniqueOrThrow({ where: { id: replyId } });
     const report = row.report as { updated: { field: string }[] };
@@ -224,7 +224,7 @@ describe("הצינור המלא של תשובה — מקצה לקצה", () => {
 
     const field = await db.draftField.findUniqueOrThrow({ where: { ticketId_field: { ticketId, field: "DOMAIN" } } });
     expect(field.conflict).toBe(true);
-    expect(field.emailValue).toMatchObject({ field: "DOMAIN", domainId });
+    expect(field.channelValue).toMatchObject({ field: "DOMAIN", domainId });
     expect(field.systemEditedAt).toEqual(systemEditAt);
 
     // סתירה אינה "עודכן מהתשובה שלך"

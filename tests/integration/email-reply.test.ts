@@ -4,7 +4,7 @@ import type { MailOutcome } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { DRAFT_FIELD_LABEL } from "@/lib/draft/labels";
 import type { MailEnvelope } from "@/lib/email-intake/types";
-import type { ReplyTemplate } from "@/lib/email-intake/reply/compose";
+import type { ReplyTemplate } from "@/lib/intake/reply-model";
 import { he } from "@/lib/he";
 import type { EmailMessage, EmailSendResult, EmailTransport } from "@/lib/notifier/types";
 import { logWarn } from "@/lib/observability/log";
@@ -139,7 +139,7 @@ type TicketShape = "complete" | "incomplete" | "no-site" | "dispatched" | "none"
  */
 async function createTicket(shape: TicketShape): Promise<string | null> {
   if (shape === "none") return null;
-  const recipients = [{ kind: "professional", id: professionalId, origin: "EMAIL", removedBySystemAt: null }];
+  const recipients = [{ kind: "professional", id: professionalId, origin: "CHANNEL", removedBySystemAt: null }];
   const ticket = await db.ticket.create({
     data: {
       channel: "EMAIL",
@@ -327,7 +327,7 @@ describe("בחירת הנוסח לפי ההכרעה על ההודעה הנכנס
         ticketId: ticketId as string,
         field: "APARTMENT",
         conflict: true,
-        emailValue: { field: "APARTMENT", apartmentId } as unknown as Prisma.InputJsonValue,
+        channelValue: { field: "APARTMENT", apartmentId } as unknown as Prisma.InputJsonValue,
       },
     });
     const { transport, sent } = fakeTransport();
@@ -408,7 +408,7 @@ describe("המייל מתאר את הטיוטה ברגע השליחה", () => {
         ticketId: ticketId as string,
         field: "DOMAIN",
         conflict: true,
-        emailValue: { field: "DOMAIN", domainId: otherDomain.id } as unknown as Prisma.InputJsonValue,
+        channelValue: { field: "DOMAIN", domainId: otherDomain.id } as unknown as Prisma.InputJsonValue,
       },
     });
     const { transport, sent } = fakeTransport();

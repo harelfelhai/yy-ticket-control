@@ -1,7 +1,7 @@
 import type { Room } from "@/generated/prisma/enums";
 import { AiRequestError, type AiErrorKind } from "@/lib/ai/gemini";
-import type { ExtractionInput, FieldExtractor } from "@/lib/email-intake/extraction";
-import type { FieldExtraction, Mention, MentionSource } from "@/lib/email-intake/types";
+import type { ExtractionInput, FieldExtractor } from "@/lib/intake/extraction";
+import type { FieldExtraction, Mention, MentionSource } from "@/lib/intake/types";
 
 /**
  * מחלץ שדות מזויף — לכל בדיקה של מסלול המייל הראשון והתשובה (S6).

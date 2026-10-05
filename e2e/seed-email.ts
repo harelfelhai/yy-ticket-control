@@ -244,15 +244,15 @@ async function main(): Promise<void> {
   // הציעה "בניין ב" — סתירה פתוחה (§5.ה4)
   await db.draftField.createMany({
     data: [
-      { ticketId: draft.id, field: "DESCRIPTION", fromEmail: true, emailMessageId: first.id },
-      { ticketId: draft.id, field: "DOMAIN", fromEmail: true, emailMessageId: first.id },
+      { ticketId: draft.id, field: "DESCRIPTION", fromChannel: true, emailMessageId: first.id },
+      { ticketId: draft.id, field: "DOMAIN", fromChannel: true, emailMessageId: first.id },
       {
         ticketId: draft.id,
         field: "BUILDING",
-        fromEmail: false,
+        fromChannel: false,
         systemEditedAt: minutesAgo(45),
         conflict: true,
-        emailValue: { field: "BUILDING", buildingId: buildingB.id },
+        channelValue: { field: "BUILDING", buildingId: buildingB.id },
         emailMessageId: reply.id,
       },
     ],
@@ -376,7 +376,7 @@ async function main(): Promise<void> {
     },
   });
   await db.draftField.create({
-    data: { ticketId: noSite.id, field: "DESCRIPTION", fromEmail: true },
+    data: { ticketId: noSite.id, field: "DESCRIPTION", fromChannel: true },
   });
 
   console.log(`DRAFT_ID=${draft.id}`);

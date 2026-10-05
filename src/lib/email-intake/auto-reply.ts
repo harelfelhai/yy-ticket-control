@@ -1,4 +1,4 @@
-import { normalizeHebrew } from "./subject";
+import { normalizeHebrew } from "@/lib/intake/keyword";
 import type { MailAddress } from "./types";
 
 /**

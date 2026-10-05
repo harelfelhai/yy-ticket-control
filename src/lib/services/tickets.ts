@@ -37,7 +37,7 @@ import {
 } from "./directory";
 import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
 import { type Tx, actorName, recordEvent, touchData } from "./ticket-activity";
-import { countDraftConflicts, isEmailDraft, lockTicket, updateDraftFields } from "./draft-fields";
+import { countDraftConflicts, isChannelDraft, lockTicket, updateDraftFields } from "./draft-fields";
 
 /**
  * יצירה ושיגור של פניות.
@@ -272,7 +272,7 @@ export async function submitDraft(
     await assertProfessionalsActive(professionalIds(unique), tx);
     await assertUsersAssignable(userIds(unique), tx);
 
-    if (isEmailDraft(fresh)) {
+    if (isChannelDraft(fresh)) {
       // §2.6 שלב 6: שיגור חסום עד שכל הסתירות הוכרעו, אחרת לא ברור איזה ערך
       // יגיע לנמען. אותו נוסח כמו ההודעה במסך 7 — זו אותה סיבה.
       const conflicts = await countDraftConflicts(tx, ticketId);

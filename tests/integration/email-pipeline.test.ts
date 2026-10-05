@@ -307,13 +307,13 @@ describe("הצינור מקצה לקצה", () => {
       "SITE",
     ]);
     // התג הוא הדרישה עצמה: ערך שהגיע ממייל ואיש לא ערך אותו מאז
-    expect(fields.every((field) => field.fromEmail)).toBe(true);
+    expect(fields.every((field) => field.fromChannel)).toBe(true);
     // חדר לא הוזכר בגוף, ולכן אין לו שורה — היעדר שורה נקרא כשדה ריק
     expect(fields.some((field) => field.field === "ROOM")).toBe(false);
 
     const ticket = await db.ticket.findFirstOrThrow();
     expect(ticket.draftRecipients).toEqual([
-      expect.objectContaining({ kind: "professional", id: professionalId, origin: "EMAIL" }),
+      expect.objectContaining({ kind: "professional", id: professionalId, origin: "CHANNEL" }),
     ]);
   });
 

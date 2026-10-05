@@ -597,8 +597,10 @@ model DraftField {
   ticket   Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   field    DraftFieldName
 
-  /// תג "מהמייל": הערך הנוכחי נקבע מתוך מייל ואיש לא ערך אותו במערכת מאז
-  fromEmail Boolean @default(false)
+  /// תג "מהמייל": הערך הנוכחי נקבע מתוך הודעה בערוץ (מייל, וואטסאפ) ואיש לא
+  /// ערך אותו במערכת מאז. העמודה שומרת את שמה מ-1.3 (`@map`), כדי שהשם הכללי
+  /// לא ידרוש מיגרציה.
+  fromChannel Boolean @default(false) @map("fromEmail")
 
   /// מתי נערך השדה במערכת לאחרונה (כולל הכרעה במסך 7א). השוואה מול זמן
   /// הגעת התשובה קובעת מי מאוחר יותר — "עריכה מאוחרת במערכת מכריעה".
@@ -607,11 +609,11 @@ model DraftField {
   /// סתירה פתוחה: המייל האחרון נתן ערך שונה מזה שנקבע במערכת לפניו
   conflict Boolean @default(false)
 
-  /// הערך מהמייל האחרון, כשהשדה בסתירה. מחליף ממתין קודם (§5.ה4 — "שתי
-  /// אפשרויות, לא שלוש").
-  emailValue Json?
+  /// הערך מההודעה האחרונה בערוץ, כשהשדה בסתירה. מחליף ממתין קודם (§5.ה4 —
+  /// "שתי אפשרויות, לא שלוש").
+  channelValue Json? @map("emailValue")
 
-  /// ההודעה שממנה הגיע `emailValue`
+  /// המייל שממנו הגיע `channelValue`, כשהטיוטה ממייל
   emailMessageId String?
   emailMessage   MailboxMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
 

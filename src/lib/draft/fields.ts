@@ -1,7 +1,7 @@
 import type { DraftFieldName, Room } from "@/generated/prisma/enums";
 
 /**
- * מודל השדות של טיוטה ממייל — מה שמנוע המיזוג (`merge.ts`) עובד עליו.
+ * מודל השדות של טיוטה מערוץ (מייל, וואטסאפ) — מה שמנוע המיזוג (`merge.ts`) עובד עליו.
  *
  * **טהור לחלוטין:** בלי DB, בלי שעון ובלי מזהים שנוצרים כאן. שכבת השירות
  * טוענת את הפנייה ואת שורות `DraftField` לתוך `DraftState`, מריצה עליו את
@@ -10,9 +10,9 @@ import type { DraftFieldName, Room } from "@/generated/prisma/enums";
  *
  * **שני חלקים לכל טיוטה, ובכוונה נפרדים:**
  * - `values` — הערכים עצמם, כפי שהם יושבים על `Ticket` ובנמעני הטיוטה. אלה
- *   הערכים של כל טיוטה, גם כזו שלא נפתחה במייל.
- * - `meta` — מה שהמייל מוסיף לשאלה: מי קבע כל ערך, מתי נערך במערכת, והאם
- *   יש סתירה עם המייל האחרון. זו השורה ב-`DraftField`.
+ *   הערכים של כל טיוטה, גם כזו שלא נפתחה בערוץ.
+ * - `meta` — מה שהערוץ מוסיף לשאלה: מי קבע כל ערך, מתי נערך במערכת, והאם
+ *   יש סתירה עם ההודעה האחרונה. זו השורה ב-`DraftField`.
  */
 
 export type { DraftFieldName };
@@ -58,12 +58,15 @@ export interface RecipientRef {
 /**
  * מי קבע את נוכחותו של נמען בטיוטה.
  *
- * - `EMAIL` — נוסף מתוך מייל ואיש לא ערך את רשימת הנמענים במערכת מאז.
- *   הסרה שלו בתשובה במייל אינה סתירה.
+ * - `CHANNEL` — נוסף מתוך הודעה בערוץ (מייל, וואטסאפ) ואיש לא ערך את רשימת
+ *   הנמענים במערכת מאז. הסרה שלו בתשובה באותו ערוץ אינה סתירה.
  * - `SYSTEM` — היה ברשימה כשנערכה במערכת (או הוכרע במסך 7א). הסרה שלו
  *   בתשובה מאוחרת היא סתירה (§5.ה4).
+ *
+ * עד 1.4 הערך הראשון נשמר בשם `EMAIL`, והוא נקרא כ-`CHANNEL` — ראה
+ * `parseDraftRecipients`.
  */
-export type RecipientOrigin = "EMAIL" | "SYSTEM";
+export type RecipientOrigin = "CHANNEL" | "SYSTEM";
 
 /**
  * נמען בטיוטה, כפי שהוא נשמר ב-`Ticket.draftRecipients`.
@@ -83,7 +86,7 @@ export interface DraftRecipient extends RecipientRef {
 }
 
 export interface DraftValues {
-  /** null בטיוטה ממייל שלא זוהה בה אתר */
+  /** null בטיוטה מערוץ שלא זוהה בה אתר */
   siteId: string | null;
   buildingId: string | null;
   apartmentId: string | null;
@@ -94,25 +97,25 @@ export interface DraftValues {
   recipients: DraftRecipient[];
 }
 
-/** הצעת המייל לנמענים, ברמת פריט — מה שנשמר ב-`emailValue` של RECIPIENTS */
+/** הצעת ההודעה לנמענים, ברמת פריט — מה שנשמר ב-`channelValue` של RECIPIENTS */
 export interface RecipientsProposal {
   add: RecipientRef[];
   remove: RecipientRef[];
 }
 
-/** הצעת המייל לתיאור */
+/** הצעת ההודעה לתיאור */
 export interface DescriptionProposal {
   op: "set" | "append" | "replace";
   text: string;
 }
 
 /**
- * הערך מהמייל שנשמר בסתירה (`DraftField.emailValue`), לפי שדה.
+ * הערך מההודעה שנשמר בסתירה (`DraftField.channelValue`), לפי שדה.
  *
  * לשדות סקלריים זה הערך עצמו; לתיאור — הטקסט המוצע כולו (append אינו סתירה
  * ולכן לעולם אינו כאן); לנמענים — הפריטים שבסתירה בלבד.
  */
-export type EmailValue =
+export type ChannelValue =
   | { field: "SITE"; siteId: string }
   | { field: "BUILDING"; buildingId: string }
   | { field: "APARTMENT"; apartmentId: string }
@@ -122,14 +125,14 @@ export type EmailValue =
   | { field: "RECIPIENTS"; add: RecipientRef[]; remove: RecipientRef[] };
 
 export interface FieldMeta {
-  /** תג "מהמייל" */
-  fromEmail: boolean;
+  /** תג "מהמייל": הערך נקבע מהודעה בערוץ, ואיש לא ערך אותו במערכת מאז */
+  fromChannel: boolean;
   /** מתי נערך במערכת לאחרונה (כולל הכרעה במסך 7א) */
   systemEditedAt: Date | null;
   conflict: boolean;
-  emailValue: EmailValue | null;
-  /** `MailboxMessage.id` של המייל שהציע את `emailValue` */
-  emailMessageId: string | null;
+  channelValue: ChannelValue | null;
+  /** שורת היומן של ההודעה שהציעה את `channelValue` (`MailboxMessage.id` בטיוטה ממייל) */
+  channelMessageId: string | null;
 }
 
 export type DraftMeta = Record<DraftFieldName, FieldMeta>;
@@ -140,7 +143,7 @@ export interface DraftState {
 }
 
 export function emptyMeta(): FieldMeta {
-  return { fromEmail: false, systemEditedAt: null, conflict: false, emailValue: null, emailMessageId: null };
+  return { fromChannel: false, systemEditedAt: null, conflict: false, channelValue: null, channelMessageId: null };
 }
 
 export function emptyDraftMeta(): DraftMeta {
@@ -202,7 +205,7 @@ export function parseDraftRecipients(raw: unknown): DraftRecipient[] {
       {
         kind,
         id,
-        origin: origin === "EMAIL" ? "EMAIL" : "SYSTEM",
+        origin: origin === "CHANNEL" || origin === "EMAIL" ? "CHANNEL" : "SYSTEM",
         removedBySystemAt: typeof removedBySystemAt === "string" ? removedBySystemAt : null,
       },
     ];

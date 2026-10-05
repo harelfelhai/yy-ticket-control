@@ -1,56 +1,48 @@
-import { createHash } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
-import type { MailOutcome, Role, Room } from "@/generated/prisma/enums";
+import type { MailOutcome } from "@/generated/prisma/enums";
 import { enqueue } from "@/jobs/queue";
-import { JOB_TYPES, type JobType } from "@/jobs/types";
-import { AiRequestError, canExtractText } from "@/lib/ai/gemini";
+import { JOB_TYPES } from "@/jobs/types";
+import { AiRequestError } from "@/lib/ai/gemini";
 import { db } from "@/lib/db";
-import type {
-  DraftFieldName,
-  DraftRecipient,
-  DraftState,
-  DraftValues,
-  RecipientRef,
-  RecipientsProposal,
-} from "@/lib/draft/fields";
-import { type EmailProposal, type FieldChange, mergeEmailIntoDraft } from "@/lib/draft/merge";
+import type { DraftFieldName, DraftState } from "@/lib/draft/fields";
+import { mergeChannelIntoDraft } from "@/lib/draft/merge";
 import { isAutoReply } from "@/lib/email-intake/auto-reply";
-import type {
-  ExtractionAttachment,
-  FieldExtractor,
-  Gazetteer,
-} from "@/lib/email-intake/extraction";
-import {
-  type Candidate,
-  type MatchResult,
-  matchApartment,
-  matchBuilding,
-  matchName,
-  mentionedIn,
-} from "@/lib/email-intake/matching";
-import { classifyAttachment, extensionForType, isOfficeDocument } from "@/lib/email-intake/mime";
+import { classifyAttachment } from "@/lib/email-intake/mime";
 import { extractNewText, htmlToText } from "@/lib/email-intake/quote";
 import { MailSourceError, type MailSource } from "@/lib/email-intake/source";
 import { isIntakeSubject } from "@/lib/email-intake/subject";
+import type { MailEnvelope, MailPart } from "@/lib/email-intake/types";
 import {
-  type AmbiguousItem,
-  type FieldExtraction,
-  type IntakeReport,
-  type MailEnvelope,
-  type MailPart,
-  type Mention,
-  type NotFoundItem,
-  type UpdatedItem,
-  emptyReport,
-} from "@/lib/email-intake/types";
+  DEFER_ALARM_ATTEMPTS,
+  EXTRACTION_RETRY_MS,
+  MAX_DEFER_ATTEMPTS,
+  deferDelayMs,
+  shouldRetryExtraction,
+} from "@/lib/intake/defer-policy";
+import type { FieldExtractor } from "@/lib/intake/extraction";
+import { type FieldExtraction, type IntakeReport, emptyReport } from "@/lib/intake/types";
 import { env } from "@/lib/env";
-import { he } from "@/lib/he";
 import { normalizeEmail, normalizeText } from "@/lib/normalize";
 import { captureError, logError, logInfo, logWarn } from "@/lib/observability/log";
-import { type Viewer, canCreateTicketInSite, canEditTicketFields } from "@/lib/permissions";
-import type { MediaStorage, StoragePurpose } from "@/lib/storage";
-import { MAX_FILE_BYTES, isAllowedMimeType, isCorrespondenceDocumentType, selectStorage } from "@/lib/storage";
+import type { MediaStorage } from "@/lib/storage";
+import { MAX_FILE_BYTES, isCorrespondenceDocumentType, selectStorage } from "@/lib/storage";
 import { DRAFT_TICKET_SELECT, type DraftTicket, lockAndLoadDraft, writeDraftState } from "./draft-fields";
+import {
+  type PreparedPart,
+  type SenderUser,
+  buildReplyProposal,
+  classifyBytes,
+  decideReplyVerdict,
+  extractionAttachments,
+  loadGazetteer,
+  planDraft,
+  skippedPart,
+  storageExtension,
+  storePreparedParts,
+  toUpdatedItems,
+  unprocessedValues,
+  writeMedia,
+} from "./intake-draft";
 import type { Tx } from "./ticket-activity";
 
 /**
@@ -76,64 +68,6 @@ import type { Tx } from "./ticket-activity";
  * לעומת זאת חילוץ שאינו זמין **הוא** הכרעה — אחרי תקציב ניסיונות קצר
  * (EM-11), כי ההבטחה לשולח היא מייל חוזר תוך חמש דקות.
  */
-
-// ─────────────────────────────── קבועים ───────────────────────────────
-
-/**
- * ההשהיות של דחיית הודעה, בדקות, לפי מספר הניסיונות שכבר נעשו. הערך
- * האחרון חוזר על עצמו עד `MAX_DEFER_ATTEMPTS`.
- */
-const DEFER_MINUTES = [1, 2, 5, 10, 20, 40, 60] as const;
-
-/**
- * מאיזה ניסיון הדחייה מדווחת ל-Sentry כ-issue ולא כלוג.
- *
- * כאן הבקאוף כבר מתייצב על שעה, כלומר ההודעה נדחית מעל שעה ורבע ואין שום
- * סיכוי לקיים את ההבטחה של חמש הדקות (§2.6 שלב 4). **ההנחה הקודמת שנרשמה
- * כאן — ש-`email-intake-not-stuck` יתריע ממילא — שגויה:** ה-check סופר רק
- * שורות שבהן `nextAttemptAt` ריק או עבר, ושורה בלולאת דחייה נמצאת במצב
- * הזה שניות ספורות בכל שעה. אותו תנאי בדיוק מוציא אותה גם מסריקת התקועים
- * של הסבב. בלי הדיווח כאן אין בכל המערכת מי שרואה אותה.
- *
- * הדיווח הוא אירוע **אחד** להודעה (שוויון מדויק), ולכן אינו זקוק לחניקה.
- */
-const DEFER_ALARM_ATTEMPTS = 6;
-
-/**
- * הגג: אחרי כך וכך דחיות ההודעה נעצרת, ולא נוצר לה ג׳וב נוסף.
- *
- * 24 ניסיונות הם כ-19 שעות (78 דקות לשש הראשונות, ואז שעה לכל אחד). זהו
- * שינוי מכוון מול "לנסות שוב לנצח": דחייה בלי גג יוצרת שורת `Job` חדשה
- * כל שעה לנצח, והשורה נשארת PENDING לעד — בניגוד ל-invariant שבראש
- * הקובץ, שלפיו לכל הודעה יש בדיוק הכרעה אחת. העצירה **אינה הכרעה**
- * (`outcome` נשאר ריק): היא אומרת "לא הצלחנו לקרוא", ומשאירה את התיקון
- * לאדם שמקבל את ה-issue.
- */
-const MAX_DEFER_ATTEMPTS = 24;
-
-const MINUTE_MS = 60_000;
-
-/** ההשהיה בין ניסיונות חילוץ — קצרה, כי התקציב כולו הוא ארבע דקות */
-const EXTRACTION_RETRY_MS = 30_000;
-
-/**
- * התקציב לחילוץ, נמדד **מהגעת המייל** ולא מתחילת העיבוד: ההבטחה בשלב 4
- * של §2.6 היא חמש דקות מהגעה, והמייל החוזר עוד צריך להישלח אחרי זה.
- */
-const EXTRACTION_BUDGET_MS = 4 * MINUTE_MS;
-
-/**
- * מינימום **קריאות למחלץ**, גם כשהתקציב כבר אזל.
- *
- * מייל שנקלט באיחור (סבב שנתקע, שרת שהיה למטה) מגיע לכאן כשארבע הדקות
- * מאחוריו, ובלי הרצפה הזו תקלה רגעית אחת אצל הספק הייתה נרשמת מיד כהכרעה
- * "החילוץ אינו זמין" — הכרעה שאין ממנה חזרה.
- *
- * **נספרות דחיות החילוץ בלבד, ולא `attempts`.** `attempts` הוא מונה משותף
- * לשלוש סיבות הדחייה, ושתי דחיות מול Gmail היו שוחקות את הרצפה עד אפס —
- * כלומר הכרעה סופית אחרי קריאה אחת למחלץ, בדיוק במקרה שהרצפה נכתבה בשבילו.
- */
-const MIN_EXTRACTION_ATTEMPTS = 2;
 
 // ─────────────────────────────── החוזה ───────────────────────────────
 
@@ -167,14 +101,6 @@ export type EmailIntakeOutcome = { kind: "email-intake" } & (
 );
 
 const KIND = "email-intake" as const;
-
-/** המשתמש שמאחורי כתובת השולח — הוא גם השחקן של הטיוטה (§2.6 שלב 3) */
-export interface SenderUser {
-  id: string;
-  name: string;
-  role: Role;
-  siteId: string | null;
-}
 
 /** השדות של שורת היומן שהסולם נשען עליהם */
 export interface InboundRow {
@@ -530,8 +456,7 @@ async function defer(
   const attempts = row.attempts + 1;
   if (attempts >= MAX_DEFER_ATTEMPTS) return exhaust(row, reason, detail, attempts);
 
-  const minutes = DEFER_MINUTES[Math.min(row.attempts, DEFER_MINUTES.length - 1)];
-  const nextAttemptAt = new Date(now.getTime() + (delayMs ?? minutes * MINUTE_MS));
+  const nextAttemptAt = new Date(now.getTime() + (delayMs ?? deferDelayMs(row.attempts)));
 
   await db.$transaction(async (tx) => {
     await tx.mailboxMessage.update({
@@ -650,7 +575,7 @@ export async function createEmailDraft(
   // השדות ריקים. **הקבצים נכנסים בכל מקרה** (§7 שורה 75) — קליטת קובץ
   // אינה תלויה בשירות החילוץ.
   const plan = extraction.value
-    ? await planDraft(extraction.value, envelope, sender, body)
+    ? await planDraft(extraction.value, sender, haystackOf(envelope, body))
     : { values: unprocessedValues(body, sender), filled: ["DESCRIPTION"] as DraftFieldName[], report: emptyReport() };
 
   const outcome: MailOutcome = extraction.value ? "DRAFT_CREATED" : "DRAFT_CREATED_UNPROCESSED";
@@ -677,7 +602,7 @@ export async function createEmailDraft(
     // (`toDraftState`), ושורה ריקה הייתה אותו דבר בעלות של כתיבה.
     if (plan.filled.length > 0) {
       await tx.draftField.createMany({
-        data: plan.filled.map((field) => ({ ticketId: ticket.id, field, fromEmail: true })),
+        data: plan.filled.map((field) => ({ ticketId: ticket.id, field, fromChannel: true })),
       });
     }
 
@@ -815,38 +740,6 @@ async function scheduleReply(
 
 // ─────────────────────────────── מסלול התשובה (S7) ───────────────────────────────
 
-/**
- * מי משלושת המצבים חל על תשובה שמגיעה **עכשיו** לטיוטה, או שיש למזג
- * (§2.6 שלבים 5–6, §5.ה3 כלל 9, §7 שורה 76).
- *
- * **סדר הבדיקות הוא הכלל, לא מקרה.** הרשאת העריכה נבדקת **לפני** מצב
- * השיגור: תשובה ממשתמש מורשה שאינו רשאי לערוך מקבלת "אין לך הרשאה" **גם
- * כשהפנייה כבר שוגרה** — לא "כבר נשלחה" (§7 שורה 76, EM-A07). מייל "כבר
- * נשלחה" נושא מספר פנייה וקישור אליה, ואלה אינם שייכים למי שאין לו הרשאה
- * עליה. מחיקה נבדקת ראשונה מטעם מבני ולא לפי סדר עדיפות: בלי טיוטה אין
- * `siteId`/`createdById` לבדוק מולם הרשאה כלל.
- *
- * **מקרה 3 של כלל 9 (זר) אינו כאן.** "כתובת שאינה של משתמש מורשה" כבר
- * הוכרע בשלב 6 של הסולם — `findSender` — **לפני** שהגענו לכאן: הפונקציה
- * הזו נקראת אך ורק כשיש `sender` לא-null, וזה בדיוק ה"מורשה" של כלל 9.
- * שולח שהושבת או שההרשאה שלו בוטלה נכשל באותו `findSender`, כי הוא נבדק
- * מול הנתונים **החיים** ולא מול מה שהיה נכון כשהטיוטה נוצרה — ולכן הוא
- * "זר" באותה מידה בדיוק, גם אם הוא השולח המקורי.
- */
-type ReplyVerdict = "merge" | Extract<MailOutcome, "REPLY_AFTER_DELETION" | "REPLY_NOT_PERMITTED" | "REPLY_AFTER_DISPATCH">;
-
-function decideReplyVerdict(ticket: DraftTicket | null, sender: SenderUser): ReplyVerdict {
-  if (!ticket) return "REPLY_AFTER_DELETION";
-  if (!canEditTicketFields(viewerOf(sender), ticket)) return "REPLY_NOT_PERMITTED";
-  if (!ticket.isDraft) return "REPLY_AFTER_DISPATCH";
-  return "merge";
-}
-
-/** השחקן שמאחורי התשובה, כפי שהרשאות המערכת רואות אותו (§5.ז) */
-function viewerOf(sender: SenderUser): Viewer {
-  return { kind: "user", id: sender.id, role: sender.role, siteId: sender.siteId };
-}
-
 /** הוכחת type-safety בלבד: `decideReplyVerdict` מחזירה "merge" רק כשיש טיוטה */
 function assertTicketForMerge(ticket: DraftTicket | null): asserts ticket is DraftTicket {
   if (!ticket) throw new Error("applyEmailReply: הכרעת המיזוג הגיעה בלי טיוטה");
@@ -981,8 +874,8 @@ async function applyEmailReply(
 
     let report = emptyReport();
     if (extraction.value) {
-      const built = await buildReplyProposal(tx, extraction.value, envelope, freshSender, newText, state.values);
-      const merged = mergeEmailIntoDraft({
+      const built = await buildReplyProposal(tx, extraction.value, freshSender, haystackOf(envelope, newText), state.values);
+      const merged = mergeChannelIntoDraft({
         state,
         proposal: built.proposal,
         receivedAt: envelope.receivedAt,
@@ -1119,7 +1012,7 @@ async function loadThreadAttachmentShas(tx: Tx, threadId: string): Promise<Threa
  * בפועל; הוא נשמר מפורש לקריאות. חלק שנפסל מסיבה אחרת (`skippedReason` כבר
  * קיים) אינו כאן: ל-`skipped()` תמיד `sha256: null`.
  */
-function markDedupedAttachments(parts: readonly PreparedPart[], shas: ThreadAttachmentShas): PreparedPart[] {
+function markDedupedAttachments(parts: readonly MailPreparedPart[], shas: ThreadAttachmentShas): MailPreparedPart[] {
   return parts.map((part) => {
     if (!part.sha256) return part;
     if (shas.removed.has(part.sha256)) {
@@ -1130,213 +1023,6 @@ function markDedupedAttachments(parts: readonly PreparedPart[], shas: ThreadAtta
     }
     return part;
   });
-}
-
-/**
- * בונה `EmailProposal` מחילוץ של **תשובה** — המקבילה של `planDraft` למסלול
- * הזה. ההבדל המהותי: אין כאן טיוטה חדשה שנוצרת, יש טיוטה **קיימת** שכבר
- * יש לה אתר/בניין אפשריים. התאמת בניין ודירה חייבת להתבצע מול **האתר
- * שהמייל הזה מדבר עליו** — האתר שהמייל הציע, ורק אם הוא לא הציע דבר, האתר
- * שכבר בטיוטה (ראה ההערה הארוכה מעל `mergeEmailIntoDraft` ב-`draft/merge.ts`
- * על "תלויים מאותו מייל כשהאתר או הבניין לא נכנסו").
- *
- * רץ תחת הנעילה (`tx`) ולא לפניה: "האתר שכבר בטיוטה" חייב להיות **הערך
- * הנעול**, לא זה שנקרא לפני שהמתנו לקבצים ולמחלץ.
- */
-async function buildReplyProposal(
-  tx: Tx,
-  extraction: FieldExtraction,
-  envelope: MailEnvelope,
-  sender: SenderUser,
-  newText: string,
-  current: DraftValues,
-): Promise<{ proposal: EmailProposal; report: IntakeReport }> {
-  const report = emptyReport();
-  const haystack = `${envelope.subject}\n${newText}`;
-  const written = (mention: Mention, field: DraftFieldName): string | null => quotedText(mention, field, haystack);
-  const proposal: EmailProposal = {};
-
-  // ── אתר ── מנהל עבודה: בלי התאמה כלל, בדיוק כמו `planDraft` — האתר נגזר
-  // מהשולח ותשובה אינה יכולה לשנות אותו. מנהל מערכת/בעלים: כמו במייל ראשון.
-  if (sender.role !== "SITE_MANAGER") {
-    const siteText = written(extraction.site, "SITE");
-    if (siteText) {
-      const sites = await candidates(tx.site.findMany({ select: { id: true, name: true } }));
-      const resolved = resolve("SITE", siteText, matchName(siteText, sites), report, sites);
-      // "בתשובה, שינוי אתר חל רק אם הכותב רשאי לפתוח פנייה באתר החדש"
-      // (הכרעת מימוש, לא אפיון מפורש). כיום תמיד true למנהל מערכת/בעלים —
-      // הבדיקה נשארת כרשת ביטחון לתפקיד עתידי; אתר שאין הרשאה לפתוח בו
-      // נזרק בשקט (לא מדווח כ"לא נמצא" — הוא נמצא, רק אין הרשאה עליו).
-      if (resolved && canCreateTicketInSite(viewerOf(sender), resolved)) proposal.site = resolved;
-    }
-  }
-
-  const effectiveSiteId = proposal.site ?? current.siteId;
-  // האתר משתנה מהמייל הזה — גם כשהוא זהה למה שכבר בטיוטה `proposal.site`
-  // עדיין "undefined" כלומר לא הוצע, ולכן ההשוואה ל-`current.siteId` נכונה
-  const siteChanging = proposal.site !== undefined && proposal.site !== current.siteId;
-
-  if (effectiveSiteId) {
-    const buildingText = written(extraction.building, "BUILDING");
-    if (buildingText) {
-      const buildings = await candidates(
-        tx.building.findMany({ where: { siteId: effectiveSiteId }, select: { id: true, name: true } }),
-      );
-      const resolved = resolve("BUILDING", buildingText, matchBuilding(buildingText, buildings), report, buildings);
-      if (resolved) proposal.building = resolved;
-    }
-
-    // הבניין להתאמת דירה: מה שהמייל הזה נתן, ואם לא — הבניין שכבר בטיוטה,
-    // **רק אם האתר לא השתנה מהמייל הזה**. אם האתר השתנה והמייל לא נתן
-    // בניין, אין בניין בהקשר הנכון להתאים דירה מולו.
-    const effectiveBuildingId = proposal.building ?? (siteChanging ? null : current.buildingId);
-    if (effectiveBuildingId) {
-      const apartmentText = written(extraction.apartment, "APARTMENT");
-      if (apartmentText) {
-        const rows = await tx.apartment.findMany({
-          where: { buildingId: effectiveBuildingId },
-          select: { id: true, number: true },
-        });
-        const apartments = rows.map((row) => ({ id: row.id, label: row.number }));
-        const resolved = resolve("APARTMENT", apartmentText, matchApartment(apartmentText, apartments), report, null);
-        if (resolved) proposal.apartment = resolved;
-      }
-    }
-  }
-
-  // ── חדר ── כמו במייל ראשון: ערך של הספירה, לא טקסט — אין כאן התאמה
-  if (extraction.room.value && extraction.room.source !== "none") proposal.room = extraction.room.value;
-
-  // ── תחום ──
-  const domainText = written(extraction.domain, "DOMAIN");
-  if (domainText) {
-    const domains = await candidates(tx.domain.findMany({ select: { id: true, name: true } }));
-    const resolved = resolve("DOMAIN", domainText, matchName(domainText, domains), report, domains);
-    if (resolved) proposal.domain = resolved;
-  }
-
-  // ── תיאור ── `append`/`replace`/`set` כולם עוברים למנוע המיזוג כמו שהם;
-  // רק המנוע יודע אם זו תוספת (EM-C07) או שדה שיוכרע מול עריכה במערכת.
-  if (extraction.description.op !== "none") {
-    const text = normalizeText(extraction.description.text);
-    if (text) proposal.description = { op: extraction.description.op, text };
-  }
-
-  // ── נמענים ── הוספה **והסרה** (§5.ה4) — בשונה ממייל ראשון
-  const recipients = await resolveRecipientsProposal(extraction, report, haystack, tx);
-  if (recipients) proposal.recipients = recipients;
-
-  return { proposal, report };
-}
-
-interface ReplyLabels {
-  site: Map<string, string>;
-  building: Map<string, string>;
-  apartment: Map<string, string>;
-  domain: Map<string, string>;
-  professional: Map<string, string>;
-  user: Map<string, string>;
-}
-
-async function idLabelMap(
-  ids: ReadonlySet<string>,
-  load: (ids: string[]) => Promise<{ id: string; name: string }[]>,
-): Promise<Map<string, string>> {
-  if (ids.size === 0) return new Map();
-  return new Map((await load([...ids])).map((row) => [row.id, row.name]));
-}
-
-/**
- * ממיר את `MergeResult.changes` (מזהים גולמיים) ל-`UpdatedItem[]` — תוויות
- * להצגה, הבסיס ל"עודכן מהתשובה שלך" (EM-C03). ממחזר את **דפוס** תרגום
- * המזהים לתוויות שכבר קיים ב-`services/email-reply.ts` (S6, `systemLabel`/
- * `emailLabel`/`loadLabels`, סביב שורה 600) — אבל לא את הפונקציות עצמן,
- * שאינן מיוצאות משם. שתי קריאות ל-DB לכל סוג רשומה, לא אחת לכל שינוי.
- */
-async function toUpdatedItems(tx: Tx, changes: readonly FieldChange[]): Promise<UpdatedItem[]> {
-  if (changes.length === 0) return [];
-
-  const siteIds = new Set<string>();
-  const buildingIds = new Set<string>();
-  const apartmentIds = new Set<string>();
-  const domainIds = new Set<string>();
-  const professionalIds = new Set<string>();
-  const userIds = new Set<string>();
-  const addRef = (ref: RecipientRef) => (ref.kind === "professional" ? professionalIds : userIds).add(ref.id);
-
-  for (const change of changes) {
-    for (const value of [change.before, change.after]) {
-      switch (change.field) {
-        case "SITE":
-          if (typeof value === "string") siteIds.add(value);
-          break;
-        case "BUILDING":
-          if (typeof value === "string") buildingIds.add(value);
-          break;
-        case "APARTMENT":
-          if (typeof value === "string") apartmentIds.add(value);
-          break;
-        case "DOMAIN":
-          if (typeof value === "string") domainIds.add(value);
-          break;
-        case "RECIPIENTS":
-          (value as RecipientRef[] | undefined)?.forEach(addRef);
-          break;
-        case "ROOM":
-        case "DESCRIPTION":
-          break;
-      }
-    }
-  }
-
-  const [site, building, apartment, domain, professional, user] = await Promise.all([
-    idLabelMap(siteIds, (ids) => tx.site.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })),
-    idLabelMap(buildingIds, (ids) =>
-      tx.building.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
-    ),
-    idLabelMap(apartmentIds, async (ids) =>
-      (await tx.apartment.findMany({ where: { id: { in: ids } }, select: { id: true, number: true } })).map((row) => ({
-        id: row.id,
-        name: row.number,
-      })),
-    ),
-    idLabelMap(domainIds, (ids) => tx.domain.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })),
-    idLabelMap(professionalIds, (ids) =>
-      tx.professional.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
-    ),
-    idLabelMap(userIds, (ids) => tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })),
-  ]);
-  const labels: ReplyLabels = { site, building, apartment, domain, professional, user };
-
-  return changes.map((change) => ({
-    field: change.field,
-    before: replyDisplayValue(change.field, change.before, labels),
-    after: replyDisplayValue(change.field, change.after, labels),
-  }));
-}
-
-function replyDisplayValue(field: DraftFieldName, raw: unknown, labels: ReplyLabels): string | null {
-  switch (field) {
-    case "SITE":
-      return typeof raw === "string" ? (labels.site.get(raw) ?? null) : null;
-    case "BUILDING":
-      return typeof raw === "string" ? (labels.building.get(raw) ?? null) : null;
-    case "APARTMENT":
-      return typeof raw === "string" ? (labels.apartment.get(raw) ?? null) : null;
-    case "DOMAIN":
-      return typeof raw === "string" ? (labels.domain.get(raw) ?? null) : null;
-    case "ROOM":
-      return raw ? he.room[raw as Room] : null;
-    case "DESCRIPTION":
-      return typeof raw === "string" && raw !== "" ? raw : null;
-    case "RECIPIENTS": {
-      const refs = (raw as RecipientRef[] | undefined) ?? [];
-      const names = refs
-        .map((ref) => (ref.kind === "professional" ? labels.professional : labels.user).get(ref.id) ?? "")
-        .filter(Boolean);
-      return names.length > 0 ? names.join(he.emailIntake.listSeparator) : null;
-    }
-  }
 }
 
 // ─────────────────────────────── החילוץ ───────────────────────────────
@@ -1356,7 +1042,7 @@ async function extract(input: {
   envelope: MailEnvelope;
   sender: SenderUser;
   body: string;
-  parts: readonly PreparedPart[];
+  parts: readonly MailPreparedPart[];
   deps: EmailIntakeDeps;
   now: Date;
   /** תשובה בשרשרת (S7): `body` הוא הטקסט החדש בלבד, ו-`op` יכול להיות append/replace/none */
@@ -1380,12 +1066,16 @@ async function extract(input: {
   } catch (error) {
     if (!(error instanceof AiRequestError)) throw error;
 
-    const retryable = error.kind === "transient" || error.kind === "quota";
-    const inBudget = now.getTime() + EXTRACTION_RETRY_MS < envelope.receivedAt.getTime() + EXTRACTION_BUDGET_MS;
     // הקריאה הנוכחית בכלל הספירה: דחיות החילוץ שכבר נרשמו, ועוד זו
     const attemptsSoFar = deferralsOf(row.detail, "extraction") + 1;
+    const retry = shouldRetryExtraction({
+      kind: error.kind,
+      now,
+      receivedAt: envelope.receivedAt,
+      extractionAttempts: attemptsSoFar,
+    });
 
-    if (retryable && (inBudget || attemptsSoFar < MIN_EXTRACTION_ATTEMPTS)) {
+    if (retry) {
       return {
         deferred: true,
         outcome: await defer(row, "extraction", error.message, now, EXTRACTION_RETRY_MS),
@@ -1403,380 +1093,10 @@ async function extract(input: {
   }
 }
 
-/** הקבצים שנכנסים לקריאת החילוץ — רק מה שהבתים שלו בידינו */
-function extractionAttachments(parts: readonly PreparedPart[]): ExtractionAttachment[] {
-  return parts.flatMap((part) =>
-    part.bytes && part.isMedia
-      ? [{ filename: part.part.filename, mimeType: part.mimeType, bytes: part.bytes }]
-      : [],
-  );
-}
-
-/**
- * הרשומות הקיימות כטקסט, להקשר זיהוי בלבד (`Gazetteer`).
- *
- * **הרשימה תחומה בהרשאה של השולח**: מנהל עבודה רואה את האתר שלו בלבד,
- * ולכן גם המחלץ מקבל רק אותו — אחרת המודל היה "מזהה" אתר שהשולח אינו
- * רשאי לפתוח בו פנייה, וההתאמה הייתה נכשלת אחר כך בלי הסבר. מנהל מערכת
- * ובעלים פותחים בכל אתר, ולכן מקבלים את הכול.
- */
-async function loadGazetteer(sender: SenderUser): Promise<Gazetteer> {
-  const siteFilter = sender.role === "SITE_MANAGER" && sender.siteId ? { id: sender.siteId } : {};
-
-  const [sites, buildings, apartments, domains, professionals, users] = await Promise.all([
-    db.site.findMany({ where: siteFilter, select: { name: true } }),
-    db.building.findMany({ where: { site: siteFilter }, select: { name: true } }),
-    db.apartment.findMany({ where: { building: { site: siteFilter } }, select: { number: true } }),
-    db.domain.findMany({ select: { name: true } }),
-    // מושבת אינו מועמד להתאמה (§2.6 שלב 3), ולכן גם אינו בהקשר: שם
-    // שהמודל יקרא ולא יימצא אחר כך היה מדווח "לא נמצא ברשימה" על אדם קיים.
-    db.professional.findMany({ where: { active: true }, select: { name: true } }),
-    db.user.findMany({ where: { active: true }, select: { name: true } }),
-  ]);
-
-  return {
-    sites: sites.map((site) => site.name),
-    buildings: buildings.map((building) => building.name),
-    apartments: apartments.map((apartment) => apartment.number),
-    domains: domains.map((domain) => domain.name),
-    professionals: professionals.map((professional) => professional.name),
-    users: users.map((user) => user.name),
-  };
-}
-
-// ─────────────────────────────── מהחילוץ לטיוטה ───────────────────────────────
-
-interface DraftValuesPlan {
-  siteId: string | null;
-  buildingId: string | null;
-  apartmentId: string | null;
-  room: Room | null;
-  domainId: string | null;
-  description: string;
-  recipients: DraftRecipient[];
-}
-
-interface DraftPlan {
-  values: DraftValuesPlan;
-  filled: DraftFieldName[];
-  report: IntakeReport;
-}
-
-function emptyValues(): DraftValuesPlan {
-  return {
-    siteId: null,
-    buildingId: null,
-    apartmentId: null,
-    room: null,
-    domainId: null,
-    description: "",
-    recipients: [],
-  };
-}
-
-/**
- * האתר שנגזר **מהשולח** (§2.6 שלב 3), ולא מהמייל.
- *
- * מקור אחד לשתי הכניסות — המסלול המלא ומסלול EM-11 — כי זה בדיוק מה
- * שנשמט: כלל "מנהל עבודה — האתר נגזר ממנו" אינו מותנה בחילוץ, וטיוטה בלי
- * אתר שמורה למנהל מערכת ולבעלים (EM-10). טיוטה בלי אתר שנוצרת למנהל
- * עבודה אינה גלויה לשולח שלה עצמו — לא במסך הפנייה, לא בלוח ולא במסנן
- * "פתחתי" — והמייל החוזר מפנה אותו לקישור שיחזיר 404.
- */
-function siteOfSender(sender: SenderUser): string | null {
-  return sender.role === "SITE_MANAGER" ? sender.siteId : null;
-}
-
-/**
- * המסלול של EM-11: תוכן המייל הוא התיאור, ושאר השדות ריקים.
- *
- * "שאר השדות ריקים" מדבר על מה שנקרא מהמייל. האתר של מנהל עבודה אינו
- * נקרא מהמייל אלא נגזר מהמשתמש, ולכן הוא כאן — ובלי שורת `DraftField`,
- * בדיוק כמו במסלול המלא.
- */
-function unprocessedValues(body: string, sender: SenderUser): DraftValuesPlan {
-  return { ...emptyValues(), siteId: siteOfSender(sender), description: normalizeText(body) };
-}
-
-/**
- * מתרגם חילוץ אחד לערכי הטיוטה ולדוח לשולח.
- *
- * **הסדר הוא חלק מהכלל:** בניין מותאם מול האתר שנקבע, ודירה מול הבניין.
- * בלי זה "דירה 12" הייתה מתאימה לדירה 12 של כל בניין בחברה, והקבלן היה
- * נשלח לכתובת אחרת (§2.5).
- *
- * **בטיוטה בלי אתר אין התאמת בניין ודירה כלל** (§7 שורה 66): אין מול מה
- * להתאים, והם מדווחים כחסרים ולא כ"לא נמצאו ברשימה" — השולח אכן כתב
- * אותם, ומה שחסר הוא האתר.
- */
-async function planDraft(
-  extraction: FieldExtraction,
-  envelope: MailEnvelope,
-  sender: SenderUser,
-  body: string,
-): Promise<DraftPlan> {
-  const values = emptyValues();
-  const filled: DraftFieldName[] = [];
-  const report = emptyReport();
-  const haystack = `${envelope.subject}\n${body}`;
-
-  const written = (mention: Mention, field: DraftFieldName): string | null =>
-    quotedText(mention, field, haystack);
-
-  // ── אתר ──
-  if (sender.role === "SITE_MANAGER") {
-    // "השולח מנהל עבודה: האתר נגזר ממנו, כמו בפתיחה במערכת" (§2.6 שלב 3).
-    // לכן אין כאן התאמה ואין דיווח: מה שכתב על אתר אינו יכול לשנות דבר.
-    values.siteId = siteOfSender(sender);
-  } else {
-    const siteText = written(extraction.site, "SITE");
-    if (siteText) {
-      const sites = await candidates(db.site.findMany({ select: { id: true, name: true } }));
-      values.siteId = resolve("SITE", siteText, matchName(siteText, sites), report, sites);
-      if (values.siteId) filled.push("SITE");
-    }
-  }
-
-  // ── בניין ודירה, בתוך האתר בלבד ──
-  if (values.siteId) {
-    const buildingText = written(extraction.building, "BUILDING");
-    if (buildingText) {
-      const buildings = await candidates(
-        db.building.findMany({ where: { siteId: values.siteId }, select: { id: true, name: true } }),
-      );
-      values.buildingId = resolve("BUILDING", buildingText, matchBuilding(buildingText, buildings), report, buildings);
-      if (values.buildingId) filled.push("BUILDING");
-    }
-
-    if (values.buildingId) {
-      const apartmentText = written(extraction.apartment, "APARTMENT");
-      if (apartmentText) {
-        const rows = await db.apartment.findMany({
-          where: { buildingId: values.buildingId },
-          select: { id: true, number: true },
-        });
-        const apartments = rows.map((row) => ({ id: row.id, label: row.number }));
-        values.apartmentId = resolve(
-          "APARTMENT",
-          apartmentText,
-          matchApartment(apartmentText, apartments),
-          report,
-          // רשימת הדירות אינה נשלחת לשולח (EM-L02) — כ-50 באתר
-          null,
-        );
-        if (values.apartmentId) filled.push("APARTMENT");
-      }
-    }
-  }
-
-  // ── חדר ──
-  // החדר חוזר מהמחלץ כערך של הספירה (`Room`) ולא כטקסט, ולכן אין כאן
-  // התאמה (`matchRoom` משרת את מי שקורא טקסט חופשי). הוא גם אינו שדה חובה
-  // ואינו מדווח כ"לא נמצא": ערך שאינו ברשימה הסגורה פשוט לא נכתב.
-  if (extraction.room.value && extraction.room.source !== "none") {
-    values.room = extraction.room.value;
-    filled.push("ROOM");
-  }
-
-  // ── תחום ──
-  const domainText = written(extraction.domain, "DOMAIN");
-  if (domainText) {
-    const domains = await candidates(db.domain.findMany({ select: { id: true, name: true } }));
-    values.domainId = resolve("DOMAIN", domainText, matchName(domainText, domains), report, domains);
-    if (values.domainId) filled.push("DOMAIN");
-  }
-
-  // ── תיאור ──
-  // `set` בלבד: מייל ראשון פותח תיאור, ו-`append`/`replace` הם של תשובה.
-  if (extraction.description.op === "set") {
-    const description = normalizeText(extraction.description.text);
-    if (description) {
-      values.description = description;
-      filled.push("DESCRIPTION");
-    }
-  }
-
-  // ── נמענים ──
-  const recipients = await resolveRecipients(extraction, report, haystack);
-  if (recipients.length > 0) {
-    values.recipients = recipients;
-    filled.push("RECIPIENTS");
-  }
-
-  return { values, filled, report };
-}
-
-/**
- * הערך כפי שנכתב, או null כשאין לקחת אותו.
- *
- * **שומר מפני הזיה** (S0 ממצא 3): ערך שסומן `source: "text"` ואינו מופיע
- * מילה במילה בכותרת או בגוף נזרק. ערך מקובץ מצורף אינו נבדק — אין לו טקסט
- * להשוות אליו.
- */
-function quotedText(mention: Mention, field: DraftFieldName, haystack: string): string | null {
-  if (mention.source === "none" || mention.text.trim() === "") return null;
-  if (mention.source === "text" && !mentionedIn(mention.text, haystack)) {
-    logWarn("email.extraction.dropped_unquoted", { field, chars: mention.text.length });
-    return null;
-  }
-  return mention.text;
-}
-
-async function candidates(query: Promise<{ id: string; name: string }[]>): Promise<Candidate[]> {
-  return (await query).map((row) => ({ id: row.id, label: row.name }));
-}
-
-/**
- * מזהה אחד, או null + שורה בדוח.
- *
- * "לא נמצא" ו"כמה התאמות" אינם כשל אלא **מידע לשולח** (EM-07, EM-08):
- * המערכת אינה יוצרת רשומה ואינה מנחשת, והמייל החוזר אומר מה נכתב ומה
- * קיים. `options` נמסר רק לשדות שרשימתם קצרה מספיק למייל (EM-L02).
- */
-function resolve(
-  field: DraftFieldName,
-  writtenText: string,
-  result: MatchResult<Candidate>,
-  report: IntakeReport,
-  options: readonly Candidate[] | null,
-): string | null {
-  if (result.kind === "match") return result.candidate.id;
-
-  if (result.kind === "ambiguous") {
-    const item: AmbiguousItem = {
-      field,
-      written: writtenText,
-      // תוויות ייחודיות: איש מקצוע ומשתמש יכולים לשאת אותו שם, ושורה
-      // שאומרת לשולח `כתבת "יוסי" — יוסי לוי, יוסי לוי` אינה עוזרת לו
-      // לבחור. העמימות עצמה נשארת — אף רשומה לא נבחרה
-      matches: [...new Set(result.candidates.map((candidate) => candidate.label))],
-    };
-    report.ambiguous.push(item);
-    return null;
-  }
-
-  const item: NotFoundItem = {
-    field,
-    written: writtenText,
-    options: options ? options.map((candidate) => candidate.label) : null,
-  };
-  report.notFound.push(item);
-  return null;
-}
-
-/**
- * מאגר המועמדים לנמענים — אנשי מקצוע ומשתמשים **ברשימה אחת**: השולח כתב
- * שם, ולא "קבלן" או "משתמש". שם שמתאים לשניהם הוא עמימות אמיתית (EM-08)
- * ולא ברירה שרירותית לפי סוג הרשומה.
- *
- * מקור אחד למייל ראשון (`resolveRecipients`) ולתשובה (`resolveRecipientsProposal`,
- * S7) — שתיהן צריכות בדיוק אותו מאגר, ובנייתו פעמיים הייתה מסתכנת בהבדל
- * שקט (למשל שכחת `active: true`) בין שני המסלולים.
- */
-async function recipientPool(client: Tx | typeof db = db): Promise<(Candidate & { ref: RecipientRef })[]> {
-  const [professionals, users] = await Promise.all([
-    client.professional.findMany({ where: { active: true }, select: { id: true, name: true } }),
-    client.user.findMany({ where: { active: true }, select: { id: true, name: true } }),
-  ]);
-
-  return [
-    ...professionals.map((row) => ({
-      id: `professional:${row.id}`,
-      label: row.name,
-      ref: { kind: "professional" as const, id: row.id },
-    })),
-    ...users.map((row) => ({
-      id: `user:${row.id}`,
-      label: row.name,
-      ref: { kind: "user" as const, id: row.id },
-    })),
-  ];
-}
-
-/**
- * מתאים רשימת אזכורים (מה שהמחלץ החזיר ב-`recipients.add` או ב-`recipients.remove`)
- * לנמענים קיימים במאגר. הליבה המשותפת של הוספה והסרה — ראה `recipientPool`.
- */
-function matchRecipientRefs(
-  mentions: readonly Mention[],
-  pool: readonly (Candidate & { ref: RecipientRef })[],
-  report: IntakeReport,
-  haystack: string,
-): RecipientRef[] {
-  const wanted = mentions
-    .map((mention) => quotedText(mention, "RECIPIENTS", haystack))
-    .filter((text): text is string => text !== null);
-
-  const chosen: RecipientRef[] = [];
-  for (const writtenText of wanted) {
-    const result = matchName(writtenText, pool);
-    if (result.kind === "match") {
-      const { ref } = result.candidate;
-      // שם שנכתב פעמיים הוא הדגשה, לא שני נמענים
-      if (!chosen.some((item) => item.kind === ref.kind && item.id === ref.id)) chosen.push(ref);
-      continue;
-    }
-    resolve("RECIPIENTS", writtenText, result, report, null);
-  }
-  return chosen;
-}
-
-/**
- * הנמענים שהמייל ביקש להוסיף (מייל ראשון).
- *
- * `remove` אינו מטופל כאן — אין ממה להסיר במייל שפותח טיוטה. ההסרה שייכת
- * לתשובה בשרשרת (§5.ה4, `resolveRecipientsProposal`).
- */
-async function resolveRecipients(
-  extraction: FieldExtraction,
-  report: IntakeReport,
-  haystack: string,
-): Promise<DraftRecipient[]> {
-  if (extraction.recipients.add.length === 0) return [];
-  const pool = await recipientPool();
-  const refs = matchRecipientRefs(extraction.recipients.add, pool, report, haystack);
-  return refs.map((ref) => ({ ...ref, origin: "EMAIL" as const, removedBySystemAt: null }));
-}
-
-/**
- * הצעת הנמענים של תשובה — הוספה **והסרה** (§5.ה4), כ-`RecipientsProposal`
- * שמנוע המיזוג (`merge.ts`) מכריע לפיו לכל נמען בנפרד. `undefined` כשהמייל
- * לא הזכיר אף נמען — כדי ש-`mergeEmailIntoDraft` לא יראה בכך "הרשימה ריקה".
- */
-async function resolveRecipientsProposal(
-  extraction: FieldExtraction,
-  report: IntakeReport,
-  haystack: string,
-  client: Tx | typeof db = db,
-): Promise<RecipientsProposal | undefined> {
-  if (extraction.recipients.add.length === 0 && extraction.recipients.remove.length === 0) return undefined;
-  const pool = await recipientPool(client);
-  const add = matchRecipientRefs(extraction.recipients.add, pool, report, haystack);
-  const remove = matchRecipientRefs(extraction.recipients.remove, pool, report, haystack);
-  if (add.length === 0 && remove.length === 0) return undefined;
-  return { add, remove };
-}
-
 // ─────────────────────────────── קבצים מצורפים ───────────────────────────────
 
-/** חלק אחד אחרי הורדה וסיווג — מה שהטרנזאקציה תכתוב ממנו */
-interface PreparedPart {
-  part: MailPart;
-  /** הסוג **שנפתר** (`classifyAttachment`), ולא מה שהוצהר */
-  mimeType: string;
-  isMedia: boolean;
-  bytes: Buffer | null;
-  sha256: string | null;
-  storageKey: string | null;
-  /**
-   * האם הבתים נשמרים, ובאיזו רשימת היתר: `media` — נכנס לטיוטה כקובץ;
-   * `correspondence` — מסמך Word/Excel שנשמר בהתכתבות בלבד (§7 שורה 64);
-   * `null` — רק השם והסיבה נרשמים.
-   */
-  storeAs: StoragePurpose | null;
-  /** למה הקובץ אינו נכנס לטיוטה. null — הוא כן נכנס. */
-  skippedReason: string | null;
-}
+/** חלק של מייל אחרי הורדה וסיווג — ראה `PreparedPart` */
+type MailPreparedPart = PreparedPart<MailPart>;
 
 /**
  * מוריד ומסווג את כל חלקי ההודעה.
@@ -1792,14 +1112,14 @@ async function collectAttachments(
   envelope: MailEnvelope,
   deps: EmailIntakeDeps,
   now: Date,
-): Promise<{ deferred: false; parts: PreparedPart[] } | { deferred: true; outcome: EmailIntakeOutcome }> {
-  const prepared: PreparedPart[] = [];
+): Promise<{ deferred: false; parts: MailPreparedPart[] } | { deferred: true; outcome: EmailIntakeOutcome }> {
+  const prepared: MailPreparedPart[] = [];
 
   for (const part of envelope.parts) {
     const declared = classifyAttachment({ filename: part.filename, mimeType: part.mimeType }, null);
 
     if (part.sizeBytes > MAX_FILE_BYTES) {
-      prepared.push(skipped(part, declared.mimeType, declared.isMedia, "too-large"));
+      prepared.push(skippedPart(part, declared.mimeType, declared.isMedia, "too-large"));
       continue;
     }
 
@@ -1810,7 +1130,7 @@ async function collectAttachments(
       declared.mimeType === "application/octet-stream" ||
       isCorrespondenceDocumentType(declared.mimeType);
     if (!needsBytes) {
-      prepared.push(skipped(part, declared.mimeType, false, declared.isTnef ? "tnef" : "not-media"));
+      prepared.push(skippedPart(part, declared.mimeType, false, declared.isTnef ? "tnef" : "not-media"));
       continue;
     }
 
@@ -1822,7 +1142,7 @@ async function collectAttachments(
       return { deferred: true, outcome: await defer(row, "attachment", detail, now) };
     }
     if (bytes === null) {
-      prepared.push(skipped(part, declared.mimeType, declared.isMedia, "download-failed"));
+      prepared.push(skippedPart(part, declared.mimeType, declared.isMedia, "download-failed"));
       continue;
     }
 
@@ -1834,54 +1154,6 @@ async function collectAttachments(
   }
 
   return { deferred: false, parts: prepared };
-}
-
-function skipped(part: MailPart, mimeType: string, isMedia: boolean, reason: string): PreparedPart {
-  return { part, mimeType, isMedia, bytes: null, sha256: null, storageKey: null, storeAs: null, skippedReason: reason };
-}
-
-/**
- * מה נעשה בחלק שהבתים שלו בידינו.
- *
- * מדיה = תמונה, וידאו, אודיו או PDF (§3.1). **גם מדיה אינה נכנסת אם היא
- * מחוץ לרשימת ההיתר של האחסון** — למשל SVG, שהוא מסמך XML שיכול להריץ
- * סקריפט כשהוא מוגש מהדומיין שלנו.
- */
-function classifyBytes(
-  part: MailPart,
-  resolved: { mimeType: string; isMedia: boolean; isTnef: boolean },
-  bytes: Buffer,
-): PreparedPart {
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
-  const base: PreparedPart = {
-    part,
-    mimeType: resolved.mimeType,
-    isMedia: resolved.isMedia,
-    bytes,
-    sha256,
-    storageKey: null,
-    storeAs: "media",
-    skippedReason: null,
-  };
-  const notStored = { bytes: null, storeAs: null } as const;
-
-  if (resolved.isTnef) return { ...base, ...notStored, skippedReason: "tnef" };
-  if (!resolved.isMedia) {
-    // מסמך Word/Excel אמיתי נשמר בהתכתבות — ועדיין "לא נכנס לטיוטה": הסיבה
-    // נשארת, וזה מה שמונע ממנו להפוך לקובץ בטיוטה (`writeMedia`)
-    if (bytes.byteLength > 0 && isOfficeDocument(resolved.mimeType, bytes.subarray(0, 8))) {
-      return { ...base, storeAs: "correspondence", skippedReason: "not-media" };
-    }
-    return { ...base, ...notStored, skippedReason: "not-media" };
-  }
-  if (!isAllowedMimeType(resolved.mimeType)) {
-    return { ...base, ...notStored, skippedReason: "unsupported-type" };
-  }
-  // בתים ריקים נדחים באחסון ממילא (`assertWritableObject`), ורשומת מדיה
-  // שמצביעה על כלום גרועה מהיעדרה
-  if (bytes.byteLength === 0) return { ...base, ...notStored, skippedReason: "empty" };
-
-  return base;
 }
 
 /**
@@ -1916,97 +1188,22 @@ async function downloadPart(
 }
 
 /**
- * כותב את הבתים לאחסון — **לפני** הטרנזאקציה.
- *
- * המפתח דטרמיניסטי (הודעה + מספר חלק), ולא אקראי כמו ב-`buildStorageKey`:
- * ריצה חוזרת אחרי קריסה כותבת לאותו מקום במקום להשאיר עותק יתום נוסף.
+ * כותב את הבתים לאחסון — **לפני** הטרנזאקציה (ראה `storePreparedParts`),
+ * במפתח שנגזר מההודעה ומספר החלק.
  */
 async function writeAttachments(
   envelope: MailEnvelope,
-  parts: readonly PreparedPart[],
+  parts: readonly MailPreparedPart[],
   deps: EmailIntakeDeps,
-): Promise<PreparedPart[]> {
-  const storage = deps.storage ?? selectStorage();
-  const written: PreparedPart[] = [];
-
-  for (const prepared of parts) {
-    if (!prepared.bytes || !prepared.storeAs) {
-      written.push(prepared);
-      continue;
-    }
-    const key = attachmentStorageKey(envelope, prepared);
-    await storage.write(key, prepared.bytes, prepared.mimeType, prepared.storeAs);
-    written.push({ ...prepared, storageKey: key });
-  }
-
-  return written;
+): Promise<MailPreparedPart[]> {
+  return storePreparedParts(parts, (prepared) => attachmentStorageKey(envelope, prepared), deps.storage ?? selectStorage());
 }
 
-function attachmentStorageKey(envelope: MailEnvelope, prepared: PreparedPart): string {
+function attachmentStorageKey(envelope: MailEnvelope, prepared: MailPreparedPart): string {
   // מזהה ההודעה נכנס למפתח כפי שהוא, אחרי ניקוי: הוא מגיע משירות חיצוני,
   // והאחסון המקומי פותר מפתח לנתיב על הדיסק
   const source = envelope.sourceId.replace(/[^A-Za-z0-9._-]/g, "_");
-  return `media/mail/${source}/${prepared.part.index}.${extensionOf(prepared.mimeType)}`;
-}
-
-/**
- * הסיומת נגזרת מהסוג שנפתר. מסמך מההתכתבות מקבל את הסיומת האמיתית שלו
- * (`.docx`, ולא `vndopenxmlformats…` שנגזר מתת-הסוג); למדיה המפתחות נשארים
- * כפי שהיו, כדי שריצה חוזרת תכתוב לאותו מפתח.
- */
-function extensionOf(mimeType: string): string {
-  if (isCorrespondenceDocumentType(mimeType)) return extensionForType(mimeType) ?? "bin";
-  const subtype = mimeType.split("/")[1]?.split(";")[0]?.replace(/[^a-z0-9]/gi, "").toLowerCase() ?? "";
-  return subtype || "bin";
-}
-
-/**
- * הודעת המדיה בשרשור, ורשומת `MediaFile` לכל קובץ שנכנס לטיוטה.
- *
- * הודעה אחת לכל הקבצים ולא הודעה לקובץ, כמו ב-`attachInitialMedia`:
- * השולח תיאר אירוע אחד. `uploaded: true` כי הבתים כבר באחסון — כאן אין
- * דפדפן שעלול להיקטע באמצע.
- */
-async function writeMedia(
-  tx: Tx,
-  ticketId: string,
-  authorUserId: string,
-  parts: readonly PreparedPart[],
-): Promise<Map<number, string>> {
-  const created = new Map<number, string>();
-  // רק מה שנשמר **כמדיה**: מסמך Word שנשמר בהתכתבות יש לו מפתח, ואסור
-  // שיהפוך לקובץ בטיוטה — ואיתו לנמענים ולג׳וב AI
-  const media = parts.filter((part) => part.storageKey !== null && part.storeAs === "media");
-  if (media.length === 0) return created;
-
-  const message = await tx.message.create({
-    data: { ticketId, kind: "MEDIA", authorUserId },
-    select: { id: true },
-  });
-
-  for (const part of media) {
-    const file = await tx.mediaFile.create({
-      data: {
-        messageId: message.id,
-        storageKey: part.storageKey as string,
-        mimeType: part.mimeType,
-        sizeBytes: part.bytes?.byteLength ?? part.part.sizeBytes,
-        originalName: part.part.filename,
-        uploaderUserId: authorUserId,
-        uploaded: true,
-      },
-      select: { id: true },
-    });
-    created.set(part.part.index, file.id);
-
-    const jobType = aiJobFor(part.mimeType);
-    if (jobType) await enqueue(tx, jobType, { mediaId: file.id });
-    // בלי סוג מתאים (וידאו) הרשומה מסומנת מיד כמדולגת ולא נשארת "ממתינה"
-    // לנצח — הממשק היה מציג עליה "קורא את הטקסט…" שלא ייגמר.
-    else await tx.mediaFile.update({ where: { id: file.id }, data: { aiStatus: "SKIPPED" } });
-  }
-
-  return created;
+  return `media/mail/${source}/${prepared.part.index}.${storageExtension(prepared.mimeType)}`;
 }
 
 /**
@@ -2019,7 +1216,7 @@ async function writeMedia(
 async function writeMailboxAttachments(
   tx: Tx,
   messageId: string,
-  parts: readonly PreparedPart[],
+  parts: readonly MailPreparedPart[],
   mediaIds: ReadonlyMap<number, string>,
 ): Promise<void> {
   for (const part of parts) {
@@ -2041,20 +1238,6 @@ async function writeMailboxAttachments(
   }
 }
 
-/**
- * איזה עיבוד AI מתאים לקובץ.
- *
- * **שכפול מודע** של `aiJobFor` ב-`services/media.ts`, שאינו מיוצא ואינו
- * קובץ של המודול הזה. שני הכללים חייבים להישאר זהים; ראה הדוח — הפתרון
- * הוא ייצוא אחד משותף.
- */
-function aiJobFor(mimeType: string): JobType | null {
-  const base = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
-  if (base.startsWith("audio/")) return JOB_TYPES.transcribe;
-  if (canExtractText(base)) return JOB_TYPES.extract;
-  return null;
-}
-
 // ─────────────────────────────── עזרים ───────────────────────────────
 
 /**
@@ -2069,6 +1252,14 @@ function mailboxAddress(envelope: MailEnvelope): string | null {
   const configured = env.gmailUser();
   if (configured) return normalizeEmail(configured);
   return envelope.to[0]?.address ?? null;
+}
+
+/**
+ * הטקסט שהמחלץ קרא — הכותרת והגוף. מולו נבדק כל ערך שסומן כמופיע בטקסט
+ * (`quotedText` ב-`intake-draft.ts`).
+ */
+function haystackOf(envelope: MailEnvelope, body: string): string {
+  return `${envelope.subject}\n${body}`;
 }
 
 function bodyTextOf(envelope: MailEnvelope): string {

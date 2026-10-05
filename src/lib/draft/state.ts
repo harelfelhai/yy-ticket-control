@@ -6,7 +6,7 @@ import {
   type DraftRecipient,
   type DraftState,
   type DraftValues,
-  type EmailValue,
+  type ChannelValue,
   type FieldMeta,
   type RecipientRef,
   activeRecipients,
@@ -42,10 +42,10 @@ export interface DraftTicketRow {
 /** שורת `DraftField` כפי שהיא חוזרת מהמסד */
 export interface DraftFieldRow {
   field: DraftFieldName;
-  fromEmail: boolean;
+  fromChannel: boolean;
   systemEditedAt: Date | null;
   conflict: boolean;
-  emailValue: unknown;
+  channelValue: unknown;
   emailMessageId: string | null;
 }
 
@@ -65,22 +65,22 @@ export function toDraftState(ticket: DraftTicketRow, rows: readonly DraftFieldRo
   const meta: DraftMeta = emptyDraftMeta();
   for (const row of rows) {
     meta[row.field] = {
-      fromEmail: row.fromEmail,
+      fromChannel: row.fromChannel,
       systemEditedAt: row.systemEditedAt,
       conflict: row.conflict,
-      emailValue: parseEmailValue(row.field, row.emailValue),
-      emailMessageId: row.emailMessageId,
+      channelValue: parseChannelValue(row.field, row.channelValue),
+      channelMessageId: row.emailMessageId,
     };
   }
   return { values: draftValuesOf(ticket), meta };
 }
 
 /**
- * קורא את `DraftField.emailValue`. ‏JSON מהמסד אינו מבטיח צורה, וערך פגום
+ * קורא את `DraftField.channelValue`. JSON מהמסד אינו מבטיח צורה, וערך פגום
  * נקרא כ-null: סתירה בלי ערך מהמייל נשארת פתוחה (המנוע אינו ממציא ערך), ומי
  * שעורך את השדה בטופס עדיין סוגר אותה.
  */
-export function parseEmailValue(field: DraftFieldName, raw: unknown): EmailValue | null {
+export function parseChannelValue(field: DraftFieldName, raw: unknown): ChannelValue | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Record<string, unknown>;
   if (value.field !== field) return null;
@@ -183,11 +183,11 @@ function recipientsForStorage(recipients: readonly DraftRecipient[]): DraftRecip
 
 function sameMeta(x: FieldMeta, y: FieldMeta): boolean {
   return (
-    x.fromEmail === y.fromEmail &&
+    x.fromChannel === y.fromChannel &&
     x.conflict === y.conflict &&
-    x.emailMessageId === y.emailMessageId &&
+    x.channelMessageId === y.channelMessageId &&
     (x.systemEditedAt?.getTime() ?? null) === (y.systemEditedAt?.getTime() ?? null) &&
-    JSON.stringify(x.emailValue) === JSON.stringify(y.emailValue)
+    JSON.stringify(x.channelValue) === JSON.stringify(y.channelValue)
   );
 }
 
@@ -205,8 +205,8 @@ export function conflictsVersion(state: DraftState): string {
     conflictFields(state.meta).map((field) => [
       field,
       fieldValue(state.values, field),
-      state.meta[field].emailValue,
-      state.meta[field].emailMessageId,
+      state.meta[field].channelValue,
+      state.meta[field].channelMessageId,
     ]),
   );
 }
@@ -223,7 +223,7 @@ export function conflictsVersion(state: DraftState): string {
  */
 export function fieldVersion(state: DraftState, field: DraftFieldName): string {
   const meta = state.meta[field];
-  return JSON.stringify([fieldValue(state.values, field), meta.conflict, meta.emailValue, meta.emailMessageId]);
+  return JSON.stringify([fieldValue(state.values, field), meta.conflict, meta.channelValue, meta.channelMessageId]);
 }
 
 /** הספירות של שורת הסיבה בלוח (EM-S1-02) ושל הודעת הסתירה במסך 7 */

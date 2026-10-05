@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { activeRecipients, parseDraftRecipients } from "@/lib/draft/fields";
-import { applySystemEdit, mergeEmailIntoDraft } from "@/lib/draft/merge";
+import { applySystemEdit, mergeChannelIntoDraft } from "@/lib/draft/merge";
 import { conflictsVersion, fieldVersion, toDraftState } from "@/lib/draft/state";
 import { he } from "@/lib/he";
 import {
@@ -109,11 +109,11 @@ async function manualDraft(overrides: Record<string, unknown> = {}) {
 /** מדמה תשובה במייל שמוזגה לטיוטה: כותב את מה שהמנוע החזיר */
 async function mergeReply(
   ticketId: string,
-  proposal: Parameters<typeof mergeEmailIntoDraft>[0]["proposal"],
+  proposal: Parameters<typeof mergeChannelIntoDraft>[0]["proposal"],
   receivedAt = new Date(),
 ) {
   const state = await loadDraftState(ticketId);
-  const merged = mergeEmailIntoDraft({ state, proposal, receivedAt, messageId: `m-${receivedAt.getTime()}` });
+  const merged = mergeChannelIntoDraft({ state, proposal, receivedAt, messageId: `m-${receivedAt.getTime()}` });
   const values = merged.state.values;
   await db.ticket.update({
     where: { id: ticketId },
@@ -130,10 +130,10 @@ async function mergeReply(
   for (const field of ["SITE", "BUILDING", "APARTMENT", "ROOM", "DOMAIN", "DESCRIPTION", "RECIPIENTS"] as const) {
     const meta = merged.state.meta[field];
     const data = {
-      fromEmail: meta.fromEmail,
+      fromChannel: meta.fromChannel,
       systemEditedAt: meta.systemEditedAt,
       conflict: meta.conflict,
-      emailValue: (meta.emailValue ?? undefined) as never,
+      channelValue: (meta.channelValue ?? undefined) as never,
       emailMessageId: null,
     };
     await db.draftField.upsert({
@@ -166,14 +166,14 @@ describe("פנייה שאינה קיימת — lockAndLoadDraft מחזירה nul
 describe("EM-C05 — עריכה במערכת: מה נכתב, ומה יורד", () => {
   it("שדה שמולא מהמייל ונערך במערכת מאבד את התג ונרשם כעריכה", async () => {
     const ticket = await emailDraft({ domainId });
-    await db.draftField.create({ data: { ticketId: ticket.id, field: "DOMAIN", fromEmail: true } });
+    await db.draftField.create({ data: { ticketId: ticket.id, field: "DOMAIN", fromChannel: true } });
 
     await updateDraftFields(toViewer(admin), ticket.id, { domainId: otherDomainId });
 
     const row = await db.draftField.findUniqueOrThrow({
       where: { ticketId_field: { ticketId: ticket.id, field: "DOMAIN" } },
     });
-    expect(row.fromEmail).toBe(false);
+    expect(row.fromChannel).toBe(false);
     expect(row.systemEditedAt).not.toBeNull();
     expect(row.conflict).toBe(false);
     expect((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).domainId).toBe(otherDomainId);
@@ -193,7 +193,7 @@ describe("EM-C05 — עריכה במערכת: מה נכתב, ומה יורד", (
 
     const state = await loadDraftState(ticket.id);
     expect(state.meta.DOMAIN.conflict).toBe(false);
-    expect(state.meta.DOMAIN.emailValue).toBeNull();
+    expect(state.meta.DOMAIN.channelValue).toBeNull();
     expect(state.values.domainId).toBe(domainId);
     // אף אחת מהעריכות לא שינתה ערך (התחום נקבע כבר ביצירה), ולכן אין אירוע
     // בשרשור — "עודכנו: תחום" על שמירה שלא שינתה דבר הוא רעש בהיסטוריה
@@ -269,7 +269,7 @@ describe("EM-C10 — איפוס בשרת", () => {
     const state = await loadDraftState(ticket.id);
     expect(state.values.buildingId).toBe(otherBuildingId);
     expect(state.meta.BUILDING.conflict).toBe(false);
-    expect(state.meta.BUILDING.fromEmail).toBe(true);
+    expect(state.meta.BUILDING.fromChannel).toBe(true);
 
     // החצי השני של אותה שורה: השינוי שנעשה במערכת נרשם בשרשור, כולל
     // השדות שהתאפסו בעקבותיו
@@ -296,7 +296,7 @@ describe("EM-C10 — איפוס בשרת", () => {
     const state = await loadDraftState(ticket.id);
     expect(state.values.apartmentId).toBe(secondApartment.id);
     expect(state.meta.APARTMENT.conflict).toBe(false);
-    expect(state.meta.APARTMENT.fromEmail).toBe(true);
+    expect(state.meta.APARTMENT.fromChannel).toBe(true);
   });
 });
 
@@ -374,7 +374,7 @@ describe("EM-16 — שיגור", () => {
         domainId,
         createdById: admin.id,
         description: "נזילה",
-        draftRecipients: [{ kind: "professional", id: professionalId, origin: "EMAIL" }] as never,
+        draftRecipients: [{ kind: "professional", id: professionalId, origin: "CHANNEL" }] as never,
       },
     });
   }
@@ -479,8 +479,8 @@ describe("EM-16 — שיגור", () => {
             where: { id: ticket.id },
             data: {
               draftRecipients: [
-                { kind: "professional", id: professionalId, origin: "EMAIL" },
-                { kind: "professional", id: second.id, origin: "EMAIL" },
+                { kind: "professional", id: professionalId, origin: "CHANNEL" },
+                { kind: "professional", id: second.id, origin: "CHANNEL" },
               ] as never,
             },
           })
@@ -517,12 +517,12 @@ describe("EM-C09 — הכרעת סתירות (מסך 7א)", () => {
   it("בחירת 'מהמייל' כותבת את הערך, סוגרת את הסתירה, ונחשבת עריכה במערכת", async () => {
     const { ticket, version } = await conflicted();
 
-    await resolveDraftConflicts(toViewer(admin), ticket.id, { DOMAIN: "email" }, version);
+    await resolveDraftConflicts(toViewer(admin), ticket.id, { DOMAIN: "channel" }, version);
 
     const state = await loadDraftState(ticket.id);
     expect(state.values.domainId).toBe(otherDomainId);
     expect(state.meta.DOMAIN.conflict).toBe(false);
-    expect(state.meta.DOMAIN.fromEmail).toBe(false);
+    expect(state.meta.DOMAIN.fromChannel).toBe(false);
     expect(state.meta.DOMAIN.systemEditedAt).not.toBeNull();
   });
 
@@ -542,7 +542,7 @@ describe("EM-C09 — הכרעת סתירות (מסך 7א)", () => {
     await mergeReply(ticket.id, { domain: third.id }, new Date(Date.now() + 1000));
 
     await expect(
-      resolveDraftConflicts(toViewer(admin), ticket.id, { DOMAIN: "email" }, version),
+      resolveDraftConflicts(toViewer(admin), ticket.id, { DOMAIN: "channel" }, version),
     ).rejects.toThrow(he.emailDraft.conflictsChanged);
 
     const state = await loadDraftState(ticket.id);
@@ -567,13 +567,13 @@ describe("EM-C09 — הכרעת סתירות (מסך 7א)", () => {
     await db.draftField.upsert({
       where: { ticketId_field: { ticketId: ticket.id, field: "SITE" } },
       create: { ticketId: ticket.id, field: "SITE", systemEditedAt: new Date(Date.now() - 60_000) },
-      update: { systemEditedAt: new Date(Date.now() - 60_000), fromEmail: false, conflict: false },
+      update: { systemEditedAt: new Date(Date.now() - 60_000), fromChannel: false, conflict: false },
     });
     await mergeReply(ticket.id, { site: otherSiteId });
     const version = conflictsVersion(await loadDraftState(ticket.id));
 
     await expect(
-      resolveDraftConflicts(toViewer(manager), ticket.id, { SITE: "email" }, version),
+      resolveDraftConflicts(toViewer(manager), ticket.id, { SITE: "channel" }, version),
     ).rejects.toThrow(he.common.notAllowed);
     expect((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).siteId).toBe(siteId);
   });
@@ -581,11 +581,11 @@ describe("EM-C09 — הכרעת סתירות (מסך 7א)", () => {
   it("סתירה שהערך מהמייל בה פגום — ההכרעה אינה ממציאה ערך, ועריכה ישירה סוגרת אותה", async () => {
     const ticket = await emailDraft({ domainId });
     await db.draftField.create({
-      data: { ticketId: ticket.id, field: "DOMAIN", conflict: true, emailValue: { field: "DOMAIN" }, systemEditedAt: new Date() },
+      data: { ticketId: ticket.id, field: "DOMAIN", conflict: true, channelValue: { field: "DOMAIN" }, systemEditedAt: new Date() },
     });
     const version = conflictsVersion(await loadDraftState(ticket.id));
 
-    await resolveDraftConflicts(toViewer(admin), ticket.id, { DOMAIN: "email" }, version);
+    await resolveDraftConflicts(toViewer(admin), ticket.id, { DOMAIN: "channel" }, version);
     const stuck = await loadDraftState(ticket.id);
     expect(stuck.values.domainId).toBe(domainId);
     expect(stuck.meta.DOMAIN.conflict).toBe(true);

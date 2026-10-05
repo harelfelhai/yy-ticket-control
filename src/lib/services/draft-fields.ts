@@ -76,9 +76,13 @@ export const DRAFT_TICKET_SELECT = {
 
 export type DraftTicket = Prisma.TicketGetPayload<{ select: typeof DRAFT_TICKET_SELECT }>;
 
-/** טיוטה שנפתחה במייל — היחידה שמחזיקה מטא של שדות ושיכולה להיות בסתירה */
-export function isEmailDraft(ticket: { isDraft: boolean; channel: string }): boolean {
-  return ticket.isDraft && ticket.channel === "EMAIL";
+/**
+ * טיוטה שנפתחה בערוץ (מייל, ובאפיון 1.4 גם וואטסאפ) — היחידה שמחזיקה מטא של
+ * שדות ושיכולה להיות בסתירה. טיוטה נוצרת רק בצינור קליטה, ולכן ערוץ אחר עם
+ * `isDraft` אינו קיים.
+ */
+export function isChannelDraft(ticket: { isDraft: boolean; channel: string }): boolean {
+  return ticket.isDraft && (ticket.channel === "EMAIL" || ticket.channel === "WHATSAPP");
 }
 
 /**
@@ -151,11 +155,11 @@ export async function writeDraftState(
 
   for (const { field, meta } of write.fields) {
     const data = {
-      fromEmail: meta.fromEmail,
+      fromChannel: meta.fromChannel,
       systemEditedAt: meta.systemEditedAt,
       conflict: meta.conflict,
-      emailValue: (meta.emailValue ?? Prisma.DbNull) as Prisma.InputJsonValue | typeof Prisma.DbNull,
-      emailMessageId: meta.emailMessageId,
+      channelValue: (meta.channelValue ?? Prisma.DbNull) as Prisma.InputJsonValue | typeof Prisma.DbNull,
+      emailMessageId: meta.channelMessageId,
     };
     await tx.draftField.upsert({
       where: { ticketId_field: { ticketId, field } },
@@ -248,7 +252,7 @@ export async function updateDraftFields(
     for (const edit of edits) next = applySystemEdit(next, edit, now);
 
     await assertDraftValues(tx, next, state);
-    const changed = await writeDraftState(tx, ticketId, state, next, isEmailDraft(ticket));
+    const changed = await writeDraftState(tx, ticketId, state, next, isChannelDraft(ticket));
     await recordFieldsEdited(tx, ticketId, viewer, changed);
   });
 }
@@ -275,14 +279,14 @@ export async function resolveDraftConflicts(
     // ראה ההערה ב-`updateDraftFields`: השעון אחרי הנעילה
     const now = clock ?? new Date();
     denyUnless(canEditTicketFields(viewer, ticket));
-    denyUnless(isEmailDraft(ticket));
+    denyUnless(isChannelDraft(ticket));
     if (conflictsVersion(state) !== version) throw new DraftError(he.emailDraft.conflictsChanged);
 
     const open = conflictFields(state.meta);
     if (open.length === 0) return;
     // שדה בסתירה בלי בחירה היה נשאר פתוח, ו"החל את הבחירה" היה מסיים בלי
     // לומר שדבר לא קרה. הממשק אינו מאפשר זאת, והשרת אינו סומך עליו
-    denyUnless(open.every((field) => choices[field] === "email" || choices[field] === "system"));
+    denyUnless(open.every((field) => choices[field] === "channel" || choices[field] === "system"));
 
     const next = resolveChoices(state, choices, now);
     if (next.values.siteId !== state.values.siteId && next.values.siteId !== null) {
@@ -337,7 +341,7 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
     denyUnless(canEditTicketFields(viewer, ticket));
     // אחרי השיגור המדיה חוזרת לכלל "הוספה בלבד" (§3.2), וטיוטה ידנית לא
     // צריכה הסרה — מי שצירף קובץ בעצמו לא קיבל לוגו של חתימה
-    denyUnless(isEmailDraft(ticket));
+    denyUnless(isChannelDraft(ticket));
     // וגם בטיוטה ממייל — רק מה שהגיע במייל ונשאר בהתכתבות (§7 שורה 87)
     denyUnless(media.mailboxAttachment !== null);
 

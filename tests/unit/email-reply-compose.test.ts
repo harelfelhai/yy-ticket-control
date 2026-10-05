@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  composeIntakeReply,
-  selectTemplate,
-  type ComposeIntakeReplyInput,
-  type DraftSummary,
-  type ReplyTemplate,
-} from "@/lib/email-intake/reply/compose";
-import type { IntakeReport } from "@/lib/email-intake/types";
+import { composeIntakeReply, type ComposeIntakeReplyInput } from "@/lib/email-intake/reply/compose";
+import { selectTemplate, type DraftSummary, type ReplyTemplate } from "@/lib/intake/reply-model";
+import type { IntakeReport } from "@/lib/intake/types";
 import { he } from "@/lib/he";
 
 /**
@@ -110,7 +105,7 @@ describe("selectTemplate — איזה מייל יוצא", () => {
     ["EM-L01 — חסר שדה", draft({ missing: ["APARTMENT"] }), "L01"],
     [
       "EM-L04 — סתירה פתוחה משאירה את הנוסח הכללי גם כשלא חסר דבר",
-      draft({ conflicts: [{ field: "APARTMENT", emailValue: "14", systemValue: "12" }] }),
+      draft({ conflicts: [{ field: "APARTMENT", channelValue: "14", systemValue: "12" }] }),
       "L01",
     ],
     ["EM-L01 — `missing` שלא הועבר אינו נחשב 'לא חסר דבר'", draft({ missing: undefined }), "L01"],
@@ -155,7 +150,7 @@ describe("EM-L01 — המייל הכללי", () => {
       draft({
         isReply: true,
         missing: ["RECIPIENTS"],
-        conflicts: [{ field: "APARTMENT", emailValue: "14", systemValue: "12" }],
+        conflicts: [{ field: "APARTMENT", channelValue: "14", systemValue: "12" }],
         report: report({
           updated: [{ field: "ROOM", before: "מטבח", after: "חדר רחצה" }],
           notFound: [{ field: "DOMAIN", written: "מיזוג", options: ["חשמל"] }],
@@ -432,8 +427,8 @@ describe("סותר את מה שנקבע במערכת", () => {
     const { text } = composeIntakeReply(
       draft({
         conflicts: [
-          { field: "ROOM", emailValue: "מטבח", systemValue: "" },
-          { field: "APARTMENT", emailValue: "14", systemValue: "12" },
+          { field: "ROOM", channelValue: "מטבח", systemValue: "" },
+          { field: "APARTMENT", channelValue: "14", systemValue: "12" },
         ],
       }),
     );
@@ -500,7 +495,7 @@ describe("HTML", () => {
     isReply: true,
     missing: ["SITE", "RECIPIENTS"],
     siteOptions: ["נווה שאנן"],
-    conflicts: [{ field: "APARTMENT", emailValue: "14", systemValue: "12" }],
+    conflicts: [{ field: "APARTMENT", channelValue: "14", systemValue: "12" }],
     report: report({
       updated: [{ field: "ROOM", before: "מטבח", after: "חדר רחצה" }],
       notFound: [{ field: "DOMAIN", written: "מיזוג", options: ["חשמל"] }],
@@ -548,7 +543,7 @@ describe("HTML", () => {
         recipientName: attack,
         isReply: true,
         summary: { ...FULL, description: attack, recipients: [attack] },
-        conflicts: [{ field: "APARTMENT", emailValue: attack, systemValue: "12" }],
+        conflicts: [{ field: "APARTMENT", channelValue: attack, systemValue: "12" }],
         report: report({
           updated: [{ field: "ROOM", before: attack, after: "מטבח" }],
           notFound: [{ field: "DOMAIN", written: attack, options: [attack] }],
@@ -614,7 +609,7 @@ describe("קלט שחסר לתבנית — כשל רועש ולא מייל שב�
       draft({ missing: ["RECIPIENTS"], report: report({ ambiguous: [{ field: "RECIPIENTS", written: "יוסי", matches: ["יוסי כהן"] }] }) }),
     ],
   ])("EM-%s — זורק", (_name, input) => {
-    expect(() => composeIntakeReply(input)).toThrow(/composeIntakeReply/);
+    expect(() => composeIntakeReply(input)).toThrow(/buildReplyBody/);
   });
 
   it("EM-L01 — שם נמען ריק אינו מפיל: 'שלום,' בלי רווח יתום", () => {

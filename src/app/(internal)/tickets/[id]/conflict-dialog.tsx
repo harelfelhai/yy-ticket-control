@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormError } from "@/components/ui/message";
 import type { DraftFieldDisplay } from "@/lib/draft/display";
+import type { Choice } from "@/lib/draft/merge";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
 import { DIALOG_SCROLL_BODY, DIALOG_WIDE, ROW_LIST } from "@/lib/ui";
@@ -32,7 +33,6 @@ import { resolveDraftConflictsAction } from "./actions";
  * אינה משנה דבר — הסתירות נשארות (EM-S7A-05).
  */
 
-type Choice = "system" | "email";
 type Choices = Partial<Record<DraftFieldName, Choice>>;
 
 interface ConflictDialogProps {
@@ -204,10 +204,10 @@ function ConflictRow({
         <div className="flex min-w-0 flex-col gap-1">
           <ChoiceOption
             name={name}
-            value="email"
+            value="channel"
             source={he.emailDraft.columnEmail}
-            text={field.emailText ?? he.emailIntake.empty}
-            checked={choice === "email"}
+            text={field.channelText ?? he.emailIntake.empty}
+            checked={choice === "channel"}
             disabled={disabled || !emailAllowed}
             onChoose={onChoose}
           />
@@ -262,7 +262,7 @@ function ChoiceOption({
  * שדה שאינו בסתירה — לקריאה בלבד, ובדסקטופ בלבד (בטלפון הוא גלוי במסך 7
  * שמאחור).
  *
- * **עמודת "מהמייל" מלאה רק כשהערך ידוע.** בשדה שערכו הגיע מהמייל (`fromEmail`)
+ * **עמודת "מהמייל" מלאה רק כשהערך ידוע.** בשדה שערכו הגיע מהמייל (`fromChannel`)
  * הערך במערכת **הוא** הערך מהמייל, והוא מוצג בשתי העמודות: תא ריק תחת
  * "מהמייל" היה נקרא "המייל לא נתן כלום", דווקא בשדה שכולו מהמייל. בשדה
  * שנערך במערכת התא ריק: ערך מהמייל נשמר רק בסתירה, ו"—" היה טוען שלמייל
@@ -273,7 +273,7 @@ function ReadOnlyRow({ field }: { field: DraftFieldDisplay }) {
     <li className={`hidden md:grid ${COLUMNS} min-h-8 items-center gap-x-3 px-3 py-1 text-sm text-muted`}>
       <span>{field.label}</span>
       <span className={VALUE}>{field.systemText}</span>
-      <span className={VALUE}>{field.fromEmail ? field.systemText : null}</span>
+      <span className={VALUE}>{field.fromChannel ? field.systemText : null}</span>
     </li>
   );
 }

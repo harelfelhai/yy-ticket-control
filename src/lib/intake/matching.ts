@@ -2,10 +2,11 @@ import type { Room } from "@/generated/prisma/enums";
 import { he } from "@/lib/he";
 import { normalizeApartmentNumber } from "@/lib/normalize";
 import { ROOMS } from "@/lib/rooms";
-import { normalizeHebrew } from "./subject";
+import { normalizeHebrew } from "./keyword";
 
 /**
- * התאמת ערך שנכתב במייל לרשומה קיימת (אפיון §2.6 שלב 3, EM-07, EM-08).
+ * התאמת ערך שנכתב בהודעה — במייל או בוואטסאפ — לרשומה קיימת (אפיון §2.6 שלב 3,
+ * EM-07, EM-08).
  *
  * המחלץ מחזיר טקסט כפי שנכתב ("לחשמל", "יוסי", "א'") ולעולם לא מזהה, וההתאמה
  * נעשית כאן, בקוד: מודל שפה שמתבקש "לבחור מהרשימה" בוחר גם כשהקלט אינו מתאים
