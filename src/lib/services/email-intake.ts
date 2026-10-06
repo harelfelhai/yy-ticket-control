@@ -28,13 +28,16 @@ import type { MediaStorage } from "@/lib/storage";
 import { MAX_FILE_BYTES, isCorrespondenceDocumentType, selectStorage } from "@/lib/storage";
 import { DRAFT_TICKET_SELECT, type DraftTicket, lockAndLoadDraft, writeDraftState } from "./draft-fields";
 import {
+  type KnownShas,
   type PreparedPart,
   type SenderUser,
   buildReplyProposal,
   classifyBytes,
   decideReplyVerdict,
   extractionAttachments,
+  knownShas,
   loadGazetteer,
+  markDuplicateParts,
   planDraft,
   skippedPart,
   storageExtension,
@@ -870,7 +873,7 @@ async function applyEmailReply(
     // EM-25 (קובץ שהוסר) ו-EM-A05/§7 #74 (קובץ שעדיין פעיל בטיוטה, ולא
     // הוסר מעולם) — שתיהן נקראות **תחת הנעילה**, מהסיבה שבהערה למעלה.
     const dedup = await loadThreadAttachmentShas(tx, threadId);
-    const finalParts = markDedupedAttachments(stored, dedup);
+    const finalParts = markDuplicateParts(stored, dedup);
 
     let report = emptyReport();
     if (extraction.value) {
@@ -883,7 +886,7 @@ async function applyEmailReply(
       });
       report = built.report;
       report.updated = await toUpdatedItems(tx, merged.changes);
-      await writeDraftState(tx, ticketId, state, merged.state, true);
+      await writeDraftState(tx, locked.ticket, state, merged.state);
     }
     // חילוץ שאינו זמין (REPLY_STORED_UNPROCESSED): אין הצעה ואין מיזוג —
     // הטקסט החדש נשמר על השורה (למטה) ואינו נענה מחדש כשהשירות חוזר.
@@ -962,67 +965,17 @@ async function loadPriorBodies(threadId: string, excludeMessageId: string): Prom
     .map((row) => row.text);
 }
 
-/** חתימות (sha256) של קבצי הטיוטה הזו, לפי מה שכבר קיים בשרשרת */
-interface ThreadAttachmentShas {
-  /** הוסרו במפורש (מסך 7, `removeDraftMedia`) — EM-25 */
-  removed: ReadonlySet<string>;
-  /** עדיין פעילים בטיוטה (יש להם `MediaFile`, ולא הוסרו) — EM-A05, §7 #74 */
-  active: ReadonlySet<string>;
-}
-
 /**
  * חתימות הקבצים של השרשרת הזו — מכל הודעה בה, לא רק מהראשונה: לוגו יכול
- * להגיע גם בתשובה שנייה או שלישית. **נקראת תחת הנעילה** (`tx`), לא לפניה:
- * ראה ההערה ב-`applyEmailReply` על מירוץ מול הסרה במסך 7 (ממצא ביקורת S7
- * #3) — הכרעת הכפילות חייבת לשקף את המצב שקיים כשננעלת השורה.
- *
- * שאילתה אחת, לא שתיים: לכל שורת `MailboxAttachment` עם חתימה יש בדיוק
- * שתי אפשרויות — הוסרה (`removedFromDraftAt` קיים) או עדיין מצביעה על
- * `MediaFile` פעיל (`mediaFileId` קיים). כפילות שכבר דוללה בעבר (העתק שני
- * של אותו לוגו, `mediaFileId: null` ו-`removedFromDraftAt: null`) אינה אף
- * אחת מהשתיים, ובכך לא נכנסת לאף קבוצה — נכון, כי היא לא "עדיין פעילה"
- * ולא "הוסרה", היא פשוט לא הייתה מעולם.
+ * להגיע גם בתשובה שנייה או שלישית. **נקראת תחת הנעילה** (`tx`) — ראה
+ * `knownShas`, שמסווג אותן לשני הערוצים.
  */
-async function loadThreadAttachmentShas(tx: Tx, threadId: string): Promise<ThreadAttachmentShas> {
+async function loadThreadAttachmentShas(tx: Tx, threadId: string): Promise<KnownShas> {
   const rows = await tx.mailboxAttachment.findMany({
     where: { message: { threadId }, sha256: { not: null } },
     select: { sha256: true, removedFromDraftAt: true, mediaFileId: true },
   });
-
-  const removed = new Set<string>();
-  const active = new Set<string>();
-  for (const row of rows) {
-    if (!row.sha256) continue;
-    if (row.removedFromDraftAt) removed.add(row.sha256);
-    else if (row.mediaFileId) active.add(row.sha256);
-  }
-  return { removed, active };
-}
-
-/**
- * מסמנת חלק שכבר קיים בשרשרת הזו, לפי חתימה: לא ייכתב לאחסון ולא יהפוך
- * למדיה (וממילא לא לג׳וב AI כפול על אותם בתים), אבל עדיין יקבל שורת
- * `MailboxAttachment` משלו על ההודעה הנוכחית — ההתכתבות שומרת כל הופעה.
- *
- * שתי סיבות שונות, אותה תוצאה: **הוסר** (EM-25, "removed_before") —
- * המצבה המקורית נשארת "הוסרה", וההופעה החדשה אינה מחזירה אותה. **עדיין
- * פעיל** (EM-A05/§7 #74, "already_in_draft") — לוגו שאיש לא הסיר מעולם
- * אינו נכפל בכל תשובה. הוסר גובר על פעיל (הם לעולם לא חופפים לאותה חתימה
- * בו-זמנית — ראה `loadThreadAttachmentShas`), כך שסדר הבדיקה אינו קובע
- * בפועל; הוא נשמר מפורש לקריאות. חלק שנפסל מסיבה אחרת (`skippedReason` כבר
- * קיים) אינו כאן: ל-`skipped()` תמיד `sha256: null`.
- */
-function markDedupedAttachments(parts: readonly MailPreparedPart[], shas: ThreadAttachmentShas): MailPreparedPart[] {
-  return parts.map((part) => {
-    if (!part.sha256) return part;
-    if (shas.removed.has(part.sha256)) {
-      return { ...part, bytes: null, storageKey: null, storeAs: null, skippedReason: "removed_before" };
-    }
-    if (shas.active.has(part.sha256)) {
-      return { ...part, bytes: null, storageKey: null, storeAs: null, skippedReason: "already_in_draft" };
-    }
-    return part;
-  });
+  return knownShas(rows);
 }
 
 // ─────────────────────────────── החילוץ ───────────────────────────────

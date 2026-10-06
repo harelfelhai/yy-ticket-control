@@ -162,8 +162,11 @@ export async function sendWaReply({ waMessageId }: WaReplyJobPayload, deps: WaRe
   });
 
   logInfo("wa.reply.sent", { waMessageId: outbound.id, ticketId: ticket?.id ?? null, template: composed.template, latencySec });
-  // ההבטחה נמדדת ולא מוצהרת: בלי הלוג הזה החמרה הדרגתית לא הייתה נראית (MONITORING.md)
-  if (latencySec !== null && latencySec > LATE_REPLY_SEC) {
+  // ההבטחה נמדדת ולא מוצהרת: בלי הלוג הזה החמרה הדרגתית לא הייתה נראית (MONITORING.md).
+  // היא חלה על אישור של דיווח (§7 שורה 94). ההסבר החד-פעמי עונה להודעה בלי "תקלה",
+  // שמוכרעת רק בתקרה של 10 דקות (§7 שורה 93) — אצלו "איחור" הוא התכנון, ורישום שלו
+  // היה הופך את האות לרעש קבוע
+  if (kind !== "HINT" && latencySec !== null && latencySec > LATE_REPLY_SEC) {
     logWarn("wa.reply.late", { waMessageId: outbound.id, ticketId: ticket?.id ?? null, latencySec, limitSec: LATE_REPLY_SEC });
   }
   return { kind: KIND, status: "sent", template: composed.template, latencySec };
@@ -196,11 +199,17 @@ export async function markWaReplyFailed({ waMessageId }: WaReplyJobPayload, erro
  *
  * `switch` ממצה בלי `default`, כדי שהכרעה חדשה ב-`WaOutcome` תפיל את הקומפילציה
  * ותידרש להחליט — בדיוק כמו `replyKindOf` של המייל.
+ *
+ * **`IGNORED_NO_KEYWORD` הוא ההסבר החד-פעמי (WA-L10).** ההודעה עצמה לא נקלטה, ושורה
+ * יוצאת עליה נוצרת רק כשהשולח זכאי להסבר (`wa-intake.ts`) — לכן ההכרעה מספיקה כדי
+ * לדעת מה לשלוח, בלי סימון נוסף על השורה.
  */
 function replyKindOf(outcome: WaOutcome | null): ReplyKind | null {
   switch (outcome) {
     case "NO_SITE":
       return "NO_SITE";
+    case "IGNORED_NO_KEYWORD":
+      return "HINT";
     case "REPLY_NOT_PERMITTED":
       return "NOT_PERMITTED";
     case "REPLY_AFTER_DISPATCH":
@@ -218,7 +227,6 @@ function replyKindOf(outcome: WaOutcome | null): ReplyKind | null {
     case "IGNORED_UNSUPPORTED":
     case "IGNORED_UNAUTHORIZED":
     case "IGNORED_UNIDENTIFIED":
-    case "IGNORED_NO_KEYWORD":
     case null:
       return null;
   }
@@ -238,9 +246,11 @@ async function composeInput(kind: ReplyKind, inbound: InboundRow, ticket: ReplyT
   switch (kind) {
     case "NO_SITE":
     case "AFTER_DELETION":
-      return base;
+    case "HINT":
+    // הנוסח של וואטסאפ אינו מזכיר את השולח המקורי (§7 שורה 105) — ולכן גם טיוטה
+    // שנמחקה בינתיים אינה מונעת את ההודעה, שנכונה גם אז
     case "NOT_PERMITTED":
-      return { ...base, senderName: ticket?.createdBy.name ?? "" };
+      return base;
     case "AFTER_DISPATCH":
       return { ...base, ticketSeq: ticket?.seq, ticketLink: ticket ? ticketUrl(ticket.id) : undefined };
     case "DRAFT": {

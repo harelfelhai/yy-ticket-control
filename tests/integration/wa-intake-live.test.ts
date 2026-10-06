@@ -1,15 +1,33 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Transcriber } from "@/lib/ai/types";
-import { AiRequestError, type AiErrorKind } from "@/lib/ai/gemini";
 import { JOB_TYPES } from "@/jobs/types";
 import { db } from "@/lib/db";
 import { MAX_DEFER_ATTEMPTS } from "@/lib/intake/defer-policy";
-import { type WaIntakeDeps, handleWaIntake } from "@/lib/services/wa-intake";
+import { handleWaIntake } from "@/lib/services/wa-intake";
 import { BURST_CEILING_MS, BURST_QUIET_MS } from "@/lib/whatsapp/burst";
 import { WaApiError } from "@/lib/whatsapp/errors";
 import { aiError, fakeFieldExtractor } from "../helpers/fake-field-extractor";
-import { type FakeMedia, fakeWaApi } from "../helpers/fake-wa-api";
+import { fakeWaApi } from "../helpers/fake-wa-api";
 import { resetDb } from "../helpers/reset-db";
+import {
+  AFTER_QUIET,
+  DOCX,
+  DOMAIN,
+  FULL_REPORT,
+  type InboundSpec,
+  JPEG,
+  PRO,
+  SEC,
+  type WaUser,
+  type WaWorld,
+  at,
+  fakeTranscriber,
+  inbound as inboundRow,
+  liveDeps,
+  makeWaUser,
+  rowOf,
+  seedWaWorld,
+  voice,
+} from "../helpers/wa-live";
 
 /**
  * קליטת וואטסאפ **במצב live** (W6, אפיון §2.7 שלבים 1–4): טיוטה מדיווח, מדיה,
@@ -20,46 +38,19 @@ import { resetDb } from "../helpers/reset-db";
  * שהשורה היוצאת והג׳וב נוצרו, באותה טרנזאקציה של ההכרעה.
  */
 
-const T0 = new Date("2026-10-05T10:00:00Z").getTime();
-const at = (ms: number) => new Date(T0 + ms);
-const SEC = 1000;
-const AFTER_QUIET = at(BURST_QUIET_MS);
-
-const SITE = "נווה שאנן";
-const BUILDING = "בניין א";
-const APARTMENT = "12";
-const DOMAIN = "אינסטלציה";
-const PRO = "יוסי כהן";
-
-/** תמונה: חתימת JPEG ואחריה בתים — כך הסיווג מזהה אותה מהתוכן, כמו בקובץ אמיתי */
-const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from("jpeg-bytes")]);
-/** מסמך Word: חתימת ZIP (`docx`) */
-const DOCX = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from("docx-bytes")]);
-/** הקלטה: התמלול המזויף קורא את מה שאחרי `VOICE:` */
-const voice = (said: string): FakeMedia => ({ bytes: Buffer.from(`VOICE:${said}`), mimeType: "audio/ogg" });
-
+let world: WaWorld;
 let numberId: string;
 let siteId: string;
 let buildingId: string;
 let apartmentId: string;
 let domainId: string;
 let professionalId: string;
-let seq = 0;
 
 beforeEach(async () => {
   await resetDb();
-  seq = 0;
   vi.stubEnv("WHATSAPP_INTAKE_PILOT_PHONES", "");
-  numberId = (
-    await db.waNumber.create({
-      data: { phoneNumberId: "300000000000002", wabaId: "1", displayPhone: "1", tokenCipher: "x", activatedAt: at(-3600 * SEC) },
-    })
-  ).id;
-  siteId = (await db.site.create({ data: { name: SITE } })).id;
-  buildingId = (await db.building.create({ data: { siteId, name: BUILDING } })).id;
-  apartmentId = (await db.apartment.create({ data: { buildingId, number: APARTMENT } })).id;
-  domainId = (await db.domain.create({ data: { name: DOMAIN } })).id;
-  professionalId = (await db.professional.create({ data: { name: PRO, phone: "0501110000" } })).id;
+  world = await seedWaWorld();
+  ({ numberId, siteId, buildingId, apartmentId, domainId, professionalId } = world);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -67,97 +58,8 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-// ─────────────────────────────── עזרים ───────────────────────────────
-
-async function makeUser(overrides: { role?: "ADMIN" | "SITE_MANAGER"; siteId?: string | null; name?: string } = {}) {
-  const phone = `05000000${10 + seq++}`;
-  const user = await db.user.create({
-    data: { role: "ADMIN", name: overrides.name ?? "דנה כהן", phone, passwordHash: "x", ...overrides },
-  });
-  return { ...user, waId: `972${phone.slice(1)}` };
-}
-
-interface InboundSpec {
-  text?: string | null;
-  media?: { id: string; mimeType: string; voice?: boolean; filename?: string };
-  contextWamid?: string;
-  forwarded?: boolean;
-}
-
-/** שורה ממתינה, כפי שהרישום משאיר הודעה של משתמש מורשה */
-async function inbound(user: { id: string; waId: string }, offsetMs: number, spec: InboundSpec) {
-  const type = spec.media ? (spec.media.voice ? "audio" : spec.media.mimeType.split("/")[0] === "image" ? "image" : "document") : "text";
-  return db.waMessage.create({
-    data: {
-      direction: "INBOUND",
-      state: "PENDING",
-      numberId,
-      authorUserId: user.id,
-      waId: user.waId,
-      type,
-      text: spec.text ?? null,
-      receivedAt: at(offsetMs),
-      nextAttemptAt: at(offsetMs + BURST_QUIET_MS),
-      wamid: `wamid.in-${seq++}`,
-      contextWamid: spec.contextWamid ?? null,
-      forwarded: spec.forwarded ?? false,
-      ...(spec.media
-        ? {
-            media: {
-              create: {
-                waMediaId: spec.media.id,
-                mimeType: spec.media.mimeType,
-                filename: spec.media.filename ?? null,
-                voice: spec.media.voice ?? false,
-              },
-            },
-          }
-        : {}),
-    },
-  });
-}
-
-/** מנוע תמלול מזויף: מחזיר את מה ש"נאמר" בהקלטה, ורושם כל קריאה */
-function fakeTranscriber(options: { fail?: AiErrorKind; failTimes?: number } = {}): Transcriber & { calls: number } {
-  let remaining = options.fail ? (options.failTimes ?? Number.POSITIVE_INFINITY) : 0;
-  const transcriber = {
-    name: "fake",
-    calls: 0,
-    async transcribe(audio: Buffer) {
-      transcriber.calls += 1;
-      if (options.fail && remaining > 0) {
-        remaining -= 1;
-        throw new AiRequestError(`תמלול נכשל (${options.fail})`, options.fail);
-      }
-      return audio.toString("utf8").replace(/^VOICE:/, "");
-    },
-  };
-  return transcriber;
-}
-
-/** "תקלה" עם כל הפרטים, כתובים מילולית — שומר ההזיה בודק שהם בטקסט */
-const FULL_REPORT = `תקלה בדירה ${APARTMENT}, ${BUILDING}, באתר ${SITE}. התחום ${DOMAIN}, לשלוח את ${PRO}`;
-const FULL_EXTRACTION = {
-  site: SITE,
-  building: BUILDING,
-  apartment: APARTMENT,
-  domain: DOMAIN,
-  description: "נזילה מהתקרה",
-  recipientsAdd: [PRO],
-} as const;
-
-function liveDeps(overrides: Partial<WaIntakeDeps> & { media?: Record<string, FakeMedia> } = {}) {
-  const { media, ...rest } = overrides;
-  const api = fakeWaApi({ media: media ?? {} });
-  const extractor = fakeFieldExtractor({ result: FULL_EXTRACTION });
-  const transcriber = fakeTranscriber();
-  const deps: WaIntakeDeps = { mode: "live", api, extractor, transcriber, ...rest };
-  return { deps, api, extractor, transcriber };
-}
-
-async function rowOf(id: string) {
-  return db.waMessage.findUniqueOrThrow({ where: { id }, include: { media: true } });
-}
+const makeUser = makeWaUser;
+const inbound = (user: WaUser, offsetMs: number, spec: InboundSpec) => inboundRow(world, user, offsetMs, spec);
 
 // ─────────────────────────────── טיוטה חדשה ───────────────────────────────
 
@@ -386,23 +288,6 @@ describe("WA-L11 / WA-L09 — מה נענה ומה לא", () => {
     expect(await db.job.count({ where: { type: JOB_TYPES.waReply } })).toBe(1);
   });
 
-  it("תגובה לשיחה של טיוטה — ההכרעה נרשמת, והמיזוג וההודעה הם של W7", async () => {
-    const user = await makeUser();
-    const draft = await db.ticket.create({
-      data: { createdById: user.id, channel: "WHATSAPP", isDraft: true, siteId, description: "נזילה" },
-    });
-    const thread = await db.waThread.create({ data: { ticketId: draft.id } });
-    await db.waMessage.create({
-      data: { direction: "OUTBOUND", state: "SENT", numberId, type: "text", wamid: "wamid.ACK", threadId: thread.id },
-    });
-    const reply = await inbound(user, 0, { text: "דירה 14", contextWamid: "wamid.ACK" });
-    const { deps } = liveDeps();
-
-    await handleWaIntake({ waMessageId: reply.id }, { ...deps, now: AFTER_QUIET });
-    expect(await rowOf(reply.id)).toMatchObject({ outcome: "REPLY_APPLIED", shadow: true, text: "דירה 14" });
-    expect(await db.waMessage.count({ where: { direction: "OUTBOUND", state: "PENDING" } })).toBe(0);
-  });
-
   it("shadow — אותה הכרעה, ושום דבר אינו מבוצע (גם כשההקלטה תומללה)", async () => {
     const user = await makeUser();
     const row = await inbound(user, 0, { media: { id: "m-voice", mimeType: "audio/ogg", voice: true } });
@@ -590,5 +475,54 @@ describe("הדיווח נבדק שוב בתוך הנעילה", () => {
     const again = await handleWaIntake({ waMessageId: first.id }, { ...deps, now: at(30 * SEC + BURST_QUIET_MS) });
     expect(again).toMatchObject({ units: [{ size: 2, outcome: "DRAFT_CREATED" }] });
     expect(await db.ticket.count()).toBe(1);
+  });
+
+  /** מחלץ "איטי": בזמן שהוא רץ, מנהל המערכת משנה את השולח */
+  function slowExtractor(meanwhile: () => Promise<unknown>) {
+    const extractor = fakeFieldExtractor({ result: { description: "נזילה", apartment: "12", building: "בניין א" } });
+    return {
+      extractor,
+      slow: {
+        ...extractor,
+        async extract(input: Parameters<typeof extractor.extract>[0]) {
+          if (extractor.calls.length === 0) await meanwhile();
+          return extractor.extract(input);
+        },
+      },
+    };
+  }
+
+  it("§5.ה5 כלל 9 — השולח הושבת בזמן החילוץ: אין טיוטה ואין הודעה, וההכרעה מחדש היא IGNORED_UNAUTHORIZED", async () => {
+    const user = await makeUser();
+    const row = await inbound(user, 0, { text: "תקלה בדירה 12" });
+    const { slow } = slowExtractor(() => db.user.update({ where: { id: user.id }, data: { active: false } }));
+    const { deps } = liveDeps({ extractor: slow });
+
+    expect(await handleWaIntake({ waMessageId: row.id }, { ...deps, now: AFTER_QUIET })).toMatchObject({ units: [] });
+    expect(await db.ticket.count()).toBe(0);
+    expect(await db.job.count({ where: { type: JOB_TYPES.waIntake, runAt: AFTER_QUIET } })).toBe(1);
+
+    await handleWaIntake({ waMessageId: row.id }, { ...deps, now: AFTER_QUIET });
+    expect(await rowOf(row.id)).toMatchObject({ outcome: "IGNORED_UNAUTHORIZED", text: null });
+    expect(await db.ticket.count()).toBe(0);
+    expect(await db.waMessage.count({ where: { direction: "OUTBOUND" } })).toBe(0);
+  });
+
+  it("מנהל עבודה שעבר לאתר אחר בזמן החילוץ: הטיוטה נפתחת באתר החדש, ולא באתר שהיה", async () => {
+    const otherSite = await db.site.create({ data: { name: "רמת אביב" } });
+    const manager = await makeUser({ role: "SITE_MANAGER", siteId });
+    const row = await inbound(manager, 0, { text: "תקלה בדירה 12" });
+    const { slow, extractor } = slowExtractor(() =>
+      db.user.update({ where: { id: manager.id }, data: { siteId: otherSite.id } }),
+    );
+    const { deps } = liveDeps({ extractor: slow });
+
+    await handleWaIntake({ waMessageId: row.id }, { ...deps, now: AFTER_QUIET });
+    expect(await db.ticket.count()).toBe(0);
+    await handleWaIntake({ waMessageId: row.id }, { ...deps, now: AFTER_QUIET });
+
+    expect(await db.ticket.findFirstOrThrow()).toMatchObject({ siteId: otherSite.id, createdById: manager.id });
+    // החילוץ רץ שוב, מול הרשימות של האתר החדש
+    expect(extractor.calls).toHaveLength(2);
   });
 });

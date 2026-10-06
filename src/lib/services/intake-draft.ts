@@ -764,6 +764,68 @@ export function classifyBytes<P extends PartRef>(
   return base;
 }
 
+// ─────────────────────────────── כפילות בתשובה ───────────────────────────────
+
+/** חתימות (sha256) של הקבצים שכבר הגיעו בשיחה של הטיוטה, לפי מה שקרה להם */
+export interface KnownShas {
+  /** הוסרו במפורש מהטיוטה (מסך 7, `removeDraftMedia`) — EM-25 */
+  removed: ReadonlySet<string>;
+  /** עדיין פעילים בטיוטה — EM-A05, §7 שורה 74 */
+  active: ReadonlySet<string>;
+}
+
+/** קובץ בהתכתבות של ערוץ (`MailboxAttachment`, `WaMedia`) — מה שנדרש כדי לסווג אותו */
+export interface ChannelFileRow {
+  sha256: string | null;
+  removedFromDraftAt: Date | null;
+  mediaFileId: string | null;
+}
+
+/**
+ * מסווג את קבצי השיחה לפי חתימה. לכל קובץ עם חתימה יש בדיוק שתי אפשרויות — הוסר
+ * (`removedFromDraftAt`), או עדיין מצביע על `MediaFile` פעיל. קובץ שכבר דולל בעבר
+ * כהעתק (`mediaFileId` ו-`removedFromDraftAt` ריקים) אינו באף קבוצה, וזה נכון: הוא
+ * לא "עדיין פעיל" ולא "הוסר", הוא פשוט לא נכנס מעולם.
+ *
+ * **הקורא טוען את השורות תחת נעילת הפנייה**, לא לפניה: הסרה במסך 7 יכולה לקרות
+ * בדיוק בזמן שההורדה והחילוץ רצים (ממצא ביקורת S7 #3), וההכרעה חייבת לשקף את מה
+ * שקיים כשהשורה ננעלת.
+ */
+export function knownShas(rows: readonly ChannelFileRow[]): KnownShas {
+  const removed = new Set<string>();
+  const active = new Set<string>();
+  for (const row of rows) {
+    if (!row.sha256) continue;
+    if (row.removedFromDraftAt) removed.add(row.sha256);
+    else if (row.mediaFileId) active.add(row.sha256);
+  }
+  return { removed, active };
+}
+
+/**
+ * מסמן חלק שכבר קיים בשיחה: לא ייכתב כקובץ בטיוטה ולא יהפוך לג׳וב AI כפול על
+ * אותם בתים — אבל עדיין נרשם בהתכתבות, שמתעדת כל הופעה.
+ *
+ * שתי סיבות, אותה תוצאה: **הוסר** (EM-25, `removed_before`) — ההופעה החדשה אינה
+ * מחזירה אותו; **עדיין פעיל** (EM-A05, `already_in_draft`) — לוגו שאיש לא הסיר אינו
+ * נכפל בכל תשובה. חלק שנפסל מסיבה אחרת אינו כאן: לחלק מדולג אין חתימה.
+ */
+export function markDuplicateParts<P extends PartRef>(
+  parts: readonly PreparedPart<P>[],
+  shas: KnownShas,
+): PreparedPart<P>[] {
+  return parts.map((part) => {
+    if (!part.sha256) return part;
+    if (shas.removed.has(part.sha256)) {
+      return { ...part, bytes: null, storageKey: null, storeAs: null, skippedReason: "removed_before" };
+    }
+    if (shas.active.has(part.sha256)) {
+      return { ...part, bytes: null, storageKey: null, storeAs: null, skippedReason: "already_in_draft" };
+    }
+    return part;
+  });
+}
+
 /** הקבצים שנכנסים לקריאת החילוץ — רק מה שהבתים שלו בידינו */
 export function extractionAttachments(parts: readonly PreparedPart[]): ExtractionAttachment[] {
   return parts.flatMap((part) =>

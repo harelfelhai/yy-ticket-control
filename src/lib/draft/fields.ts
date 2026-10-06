@@ -131,7 +131,11 @@ export interface FieldMeta {
   systemEditedAt: Date | null;
   conflict: boolean;
   channelValue: ChannelValue | null;
-  /** שורת היומן של ההודעה שהציעה את `channelValue` (`MailboxMessage.id` בטיוטה ממייל) */
+  /**
+   * שורת היומן של ההודעה שהציעה את `channelValue` — `MailboxMessage.id` בטיוטה ממייל,
+   * `WaMessage.id` בטיוטה מוואטסאפ. במסד אלה שתי עמודות (`emailMessageId`, `waMessageId`),
+   * כי כל אחת מפתח זר ליומן של הערוץ שלה; כאן זה מזהה אחד, כי המנוע אינו יודע מאיזה ערוץ.
+   */
   channelMessageId: string | null;
 }
 

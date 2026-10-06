@@ -425,6 +425,9 @@ async function composeInput(args: {
       return { ...base, senderName };
     case "AFTER_DISPATCH":
       return { ...base, ticketSeq: ticket?.seq, ticketLink: ticket ? ticketUrl(ticket.id) : undefined };
+    case "HINT":
+      // `replyKindOf` של המייל אינו מחזיר אותו — ההסבר החד-פעמי הוא של וואטסאפ בלבד
+      throw new Error("sendEmailReply: למייל אין הסבר חד-פעמי (WA-L10)");
     case "DRAFT": {
       if (!ticket) throw new Error("sendEmailReply: נוסח טיוטה בלי פנייה");
       return {
