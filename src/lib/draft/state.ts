@@ -47,6 +47,7 @@ export interface DraftFieldRow {
   conflict: boolean;
   channelValue: unknown;
   emailMessageId: string | null;
+  waMessageId: string | null;
 }
 
 export function draftValuesOf(ticket: DraftTicketRow): DraftValues {
@@ -69,7 +70,8 @@ export function toDraftState(ticket: DraftTicketRow, rows: readonly DraftFieldRo
       systemEditedAt: row.systemEditedAt,
       conflict: row.conflict,
       channelValue: parseChannelValue(row.field, row.channelValue),
-      channelMessageId: row.emailMessageId,
+      // לכל היותר אחת מהשתיים מלאה — זו של ערוץ הטיוטה (`writeDraftState`)
+      channelMessageId: row.emailMessageId ?? row.waMessageId,
     };
   }
   return { values: draftValuesOf(ticket), meta };

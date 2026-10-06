@@ -5,7 +5,7 @@ import { applySystemEdit, mergeChannelIntoDraft } from "@/lib/draft/merge";
 import { conflictsVersion, fieldVersion, toDraftState } from "@/lib/draft/state";
 import { he } from "@/lib/he";
 import {
-  emailMediaIds,
+  channelMediaIds,
   loadDraftState,
   lockTicket,
   removeDraftMedia,
@@ -689,7 +689,7 @@ describe("EM-S7-05 — הסרת מדיה מטיוטת מייל", () => {
     expect(await db.message.findUnique({ where: { id: message.id } })).not.toBeNull();
   });
 
-  it("EM-A16 — emailMediaIds: רק הקבצים שהגיעו במייל, ורק של הפנייה הזו", async () => {
+  it("EM-A16 — channelMediaIds: רק הקבצים שהגיעו במייל, ורק של הפנייה הזו", async () => {
     const { ticket, media } = await withMedia();
     const thread = await db.message.create({
       data: { ticketId: ticket.id, kind: "MEDIA", authorUserId: manager.id },
@@ -733,7 +733,7 @@ describe("EM-S7-05 — הסרת מדיה מטיוטת מייל", () => {
       },
     });
 
-    expect(await emailMediaIds(ticket.id)).toEqual(new Set([media.id]));
+    expect(await channelMediaIds(ticket.id)).toEqual(new Set([media.id]));
   });
 
   it("בטיוטה ידנית אין הסרה — מי שצירף קובץ בעצמו לא קיבל לוגו של חתימה", async () => {

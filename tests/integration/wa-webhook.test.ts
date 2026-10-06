@@ -315,6 +315,60 @@ describe("processWebhookEvent — היומן וההכרעות הזולות", () 
     expect((await db.waMessage.findFirstOrThrow()).outcome).toBe("IGNORED_UNSUPPORTED");
   });
 
+  // המבנה לפי התיעוד של Meta (webhooks/reference/messages/edit, …/revoke — נבדק ב-6.10.2026):
+  // סוג משלו בשדה `messages`, וההודעה המקורית ב-`original_message_id`. לא נאסף בספייק —
+  // החשבון ננעל. המקרה המסוכן הוא עריכה שמוסיפה "תקלה": היא אינה הודעה חדשה.
+  it.each([
+    ["edit", { original_message_id: "wamid.ORIG", message: { type: "text", text: { body: "תקלה בדירה 12 — וגם בקיר" } } }],
+    ["revoke", { original_message_id: "wamid.ORIG" }],
+  ])(
+    "WA-20 — %s של הודעה שכבר בטיוטה: IGNORED_UNSUPPORTED, והטיוטה וההודעה המקורית אינן משתנות",
+    async (type, payload) => {
+      const number = await connectNumber();
+      const user = await makeUser();
+      const ticket = await db.ticket.create({
+        data: { createdById: user.id, channel: "WHATSAPP", isDraft: true, description: "נזילה מהתקרה" },
+      });
+      const thread = await db.waThread.create({ data: { ticketId: ticket.id } });
+      const original = await db.waMessage.create({
+        data: {
+          direction: "INBOUND",
+          state: "DONE",
+          outcome: "DRAFT_CREATED",
+          numberId: number.id,
+          authorUserId: user.id,
+          type: "text",
+          text: "תקלה — נזילה מהתקרה",
+          wamid: "wamid.ORIG",
+          threadId: thread.id,
+          receivedAt: ACTIVATED,
+        },
+      });
+
+      await deliver(
+        derivedBody("text-report", (value) => {
+          const message = (value.messages as Record<string, unknown>[])[0]!;
+          message.type = type;
+          delete message.text;
+          message[type] = payload;
+        }),
+      );
+
+      expect(await db.waMessage.findFirstOrThrow({ where: { id: { not: original.id } } })).toMatchObject({
+        state: "DONE",
+        outcome: "IGNORED_UNSUPPORTED",
+        text: null,
+        threadId: null,
+      });
+      expect(await db.waMessage.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({
+        text: "תקלה — נזילה מהתקרה",
+        outcome: "DRAFT_CREATED",
+      });
+      expect((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).description).toBe("נזילה מהתקרה");
+      expect(await db.job.count({ where: { type: JOB_TYPES.waIntake } })).toBe(0);
+    },
+  );
+
   it("תמונה עם כיתוב והקלטה: הקובץ נרשם לפי מזהה בלבד, וה-sha256 ב-hex", async () => {
     await connectNumber();
     await makeUser();

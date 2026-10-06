@@ -600,6 +600,8 @@ describe("קלט שחסר לתבנית — כשל רועש ולא מייל שב�
     ["L05 בלי קישור לפנייה", { kind: "AFTER_DISPATCH", recipientName: "דנה", originalSubject: "x", ticketSeq: 4 }],
     ["L08 בלי שם השולח", { kind: "NOT_PERMITTED", recipientName: "דנה", originalSubject: "x" }],
     ["L08 עם שם שולח ריק", { kind: "NOT_PERMITTED", recipientName: "דנה", originalSubject: "x", senderName: " " }],
+    // ההסבר החד-פעמי הוא של וואטסאפ בלבד (WA-L10): למייל אין נוסח כזה, ובקשה לו היא באג
+    ["L10 — אין הסבר חד-פעמי במייל", { kind: "HINT", recipientName: "דנה", originalSubject: "x" }],
     [
       "L03 — 'נמצאו כמה התאמות' בלי התאמות",
       draft({ missing: ["RECIPIENTS"], report: report({ ambiguous: [{ field: "RECIPIENTS", written: "יוסי", matches: [] }] }) }),

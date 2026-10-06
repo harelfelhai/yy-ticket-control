@@ -80,7 +80,8 @@ describe("הנוסח ב-spec-text הועתק מהאפיון כלשונו", () =>
     ["חילוץ לא זמין — תגובה", SPEC.extractionUnavailableReply("[קישור]")],
     ["אין הרשאה", SPEC.notPermitted],
     ["בלי אתר", SPEC.noSite],
-  ])("WA-L01…WA-L09 — %s", (_name, line) => {
+    ["הסבר חד-פעמי", SPEC.hint],
+  ])("WA-L01…WA-L10 — %s", (_name, line) => {
     expect(document).toContain(line);
   });
 });
@@ -208,14 +209,24 @@ describe("WA-L04, WA-L07, WA-L09 — הנוסחים של W6", () => {
   });
 });
 
-describe("WA-L05, WA-L06, WA-L08 — נוסחי התגובה (נשלחים מ-W7)", () => {
+describe("WA-L05, WA-L06, WA-L08, WA-L10 — נוסחי התגובה וההסבר (W7)", () => {
   it.each([
     ["WA-L05", { kind: "AFTER_DISPATCH", ticketSeq: 7, ticketLink: LINK } as const, SPEC.afterDispatch(7, LINK)],
     ["WA-L06", { kind: "AFTER_DELETION" } as const, SPEC.afterDeletion],
     ["WA-L07 — תגובה", { kind: "DRAFT", isReply: true, extractionUnavailable: true, draftLink: LINK } as const, SPEC.extractionUnavailableReply(LINK)],
-    ["WA-L08", { kind: "NOT_PERMITTED", senderName: "משה" } as const, SPEC.notPermitted],
+    // §7 שורה 105: הנוסח אינו מזכיר את השולח המקורי, ולכן אינו צריך את שמו
+    ["WA-L08", { kind: "NOT_PERMITTED" } as const, SPEC.notPermitted],
+    ["WA-L10", { kind: "HINT" } as const, SPEC.hint],
   ])("%s", (_name, input, line) => {
     expect(plain(textOf({ recipientName: "דנה", ...input }))).toBe(`שלום דנה, ${line}`);
+  });
+
+  it("WA-L08 — גם כשהשם הועבר, הוא אינו נכנס לנוסח", () => {
+    expect(plain(textOf({ kind: "NOT_PERMITTED", recipientName: "דנה", senderName: "משה" }))).not.toContain("משה");
+  });
+
+  it("WA-L10 — תבנית נפרדת, ולא הנוסח של טיוטה", () => {
+    expect(composeWhatsappReply({ kind: "HINT", recipientName: "דנה" }).template).toBe("L10");
   });
 });
 

@@ -44,10 +44,14 @@ export function paragraphText(paragraph: ReplyParagraph): string {
 
 // ─────────────────────────────── הקלט ───────────────────────────────
 
-export type ReplyKind = "DRAFT" | "NO_SITE" | "NOT_PERMITTED" | "AFTER_DISPATCH" | "AFTER_DELETION";
+/**
+ * `HINT` — ההסבר החד-פעמי של וואטסאפ (WA-L10, §7 שורה 98). למייל אין מקבילה:
+ * שם EM-L10 הוא הכלל "על מה לא נשלח מייל", ולכן המייל לעולם אינו מבקש אותו.
+ */
+export type ReplyKind = "DRAFT" | "NO_SITE" | "NOT_PERMITTED" | "AFTER_DISPATCH" | "AFTER_DELETION" | "HINT";
 
-/** מזהי הנוסחים במטריצת ההתאמה (EM-L01…EM-L09) */
-export type ReplyTemplate = "L01" | "L04" | "L05" | "L06" | "L07_FIRST" | "L07_REPLY" | "L08" | "L09";
+/** מזהי הנוסחים במטריצת ההתאמה (EM-L01…EM-L09, ו-WA-L10 של וואטסאפ בלבד) */
+export type ReplyTemplate = "L01" | "L04" | "L05" | "L06" | "L07_FIRST" | "L07_REPLY" | "L08" | "L09" | "L10";
 
 /** "מה יש בטיוטה עכשיו" — תוויות להצגה; null הוא שדה ריק ומוצג "—" (EM-A02) */
 export interface DraftSummary {
@@ -91,7 +95,7 @@ export interface IntakeReplyInput {
   ticketSeq?: number;
   /** EM-L05 */
   ticketLink?: string;
-  /** EM-L08 — "אפשר לפנות ל[שם השולח]" */
+  /** EM-L08 — "אפשר לפנות ל[שם השולח]". נדרש רק כשהנוסח של הערוץ מזכיר אותו. */
   senderName?: string;
 }
 
@@ -131,8 +135,14 @@ export interface IntakeReplyTexts {
   afterDeletion: string;
   extractionUnavailableFirst: (link: string) => string;
   extractionUnavailableReply: (link: string) => string;
-  notPermitted: (senderName: string) => string;
+  /**
+   * פונקציה — הנוסח מפנה לשולח המקורי בשמו (מייל, EM-L08); מחרוזת — הנוסח אינו
+   * מזכיר אותו (וואטסאפ, §7 שורה 105). השם נדרש מהקלט רק במקרה הראשון.
+   */
+  notPermitted: string | ((senderName: string) => string);
   noSite: string;
+  /** ההסבר החד-פעמי (WA-L10) — רק לערוץ שיש לו כזה */
+  hint?: string;
 }
 
 // ─────────────────────────────── הכללים ───────────────────────────────
@@ -147,6 +157,8 @@ export function selectTemplate(input: IntakeReplyInput): ReplyTemplate {
       return "L05";
     case "AFTER_DELETION":
       return "L06";
+    case "HINT":
+      return "L10";
     case "DRAFT":
       if (input.extractionUnavailable) return input.isReply ? "L07_REPLY" : "L07_FIRST";
       // "כל הפרטים זוהו" רק כשידוע שלא חסר דבר **וידוע** שאין סתירה. רשימה
@@ -191,10 +203,24 @@ function body(template: ReplyTemplate, input: IntakeReplyInput, t: IntakeReplyTe
       return [withLink(t.extractionUnavailableFirst, required(input.draftLink, template, "draftLink"))];
     case "L07_REPLY":
       return [withLink(t.extractionUnavailableReply, required(input.draftLink, template, "draftLink"))];
-    case "L08":
-      return [[text(t.notPermitted(required(input.senderName, template, "senderName")))]];
+    case "L08": {
+      const { notPermitted } = t;
+      return [
+        [
+          text(
+            typeof notPermitted === "string"
+              ? notPermitted
+              : notPermitted(required(input.senderName, template, "senderName")),
+          ),
+        ],
+      ];
+    }
     case "L09":
       return [[text(t.noSite)]];
+    case "L10":
+      // ערוץ בלי הסבר (המייל) אינו אמור לבקש אותו — ובקשה כזו היא באג, לא הודעה ריקה
+      if (!t.hint) throw contractError(template, "hint");
+      return [[text(t.hint)]];
   }
 }
 

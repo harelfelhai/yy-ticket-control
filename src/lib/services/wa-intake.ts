@@ -6,6 +6,7 @@ import { AiRequestError, selectTranscriber } from "@/lib/ai/gemini";
 import type { Transcriber } from "@/lib/ai/types";
 import { db } from "@/lib/db";
 import type { DraftFieldName } from "@/lib/draft/fields";
+import { mergeChannelIntoDraft } from "@/lib/draft/merge";
 import { classifyAttachment } from "@/lib/email-intake/mime";
 import { env } from "@/lib/env";
 import {
@@ -17,25 +18,29 @@ import {
 } from "@/lib/intake/defer-policy";
 import { type FieldExtractor, selectFieldExtractor } from "@/lib/intake/extraction";
 import { hasIntakeKeyword } from "@/lib/intake/keyword";
-import { type FieldExtraction, emptyReport } from "@/lib/intake/types";
+import { type FieldExtraction, type IntakeReport, emptyReport } from "@/lib/intake/types";
 import { normalizeText } from "@/lib/normalize";
 import { captureError, logError, logInfo, logWarn } from "@/lib/observability/log";
 import { MAX_FILE_BYTES, type MediaStorage, isCorrespondenceDocumentType, selectStorage } from "@/lib/storage";
 import type { WaApi } from "@/lib/whatsapp/api";
 import { type BurstMessage, type BurstUnit, planBurst } from "@/lib/whatsapp/burst";
-import { DRAFT_TICKET_SELECT } from "./draft-fields";
+import { DRAFT_TICKET_SELECT, lockAndLoadDraft, writeDraftState } from "./draft-fields";
 import {
   type PartRef,
   type PreparedPart,
   type SenderUser,
+  buildReplyProposal,
   classifyBytes,
   decideReplyVerdict,
   extractionAttachments,
+  knownShas,
   loadGazetteer,
+  markDuplicateParts,
   planDraft,
   skippedPart,
   storageExtension,
   storePreparedParts,
+  toUpdatedItems,
   unprocessedValues,
   writeMedia,
 } from "./intake-draft";
@@ -49,11 +54,12 @@ import { type WaNumberRef, onExternalFailure, waApiForNumber } from "./wa-client
  * ההודעות של משתמש מורשה ממתינות ביומן (`wa-webhook.ts`), והג׳וב הזה מקבץ אותן
  * לדיווחים (`whatsapp/burst.ts`) ומכריע על כל דיווח שהגיע זמנו, לפי הסדר של האפיון:
  *
- * 1. **תגובה (Reply) להודעה בשיחה של טיוטה** — מסלול ההשלמה (`decideReplyVerdict`).
- *    **הביצוע שלו הוא W7**: עד אז ההכרעה נרשמת כמו ב-shadow, גם במצב live.
+ * 1. **תגובה (Reply) להודעה בשיחה של טיוטה** — מסלול ההשלמה (`decideReplyVerdict`,
+ *    `applyWaReply`): מיזוג לטיוטה, או "נשלחה", "נמחקה", "אין הרשאה".
  * 2. **"תקלה" בדיווח** — בטקסט, בכיתוב או בהקלטה — טיוטה חדשה, או `NO_SITE` למנהל
  *    עבודה בלי אתר.
- * 3. **כל השאר** — `IGNORED_NO_KEYWORD`, והתוכן נמחק.
+ * 3. **כל השאר** — `IGNORED_NO_KEYWORD`, והתוכן נמחק. מי שיש לו טיוטה שאושרה ב-24
+ *    השעות האחרונות מקבל הסבר, פעם אחת לכל טיוטה (`scheduleHint`).
  *
  * **ההקלטות מתומללות לפני הקיבוץ.** בלי התמלול לא ידוע אם נאמרה "תקלה", ודיווח
  * שכולו הקלטה היה ממתין לתקרה של 10 דקות — מעבר לחמש הדקות שהובטחו לאישור (§7
@@ -61,8 +67,9 @@ import { type WaNumberRef, onExternalFailure, waApiForNumber } from "./wa-client
  *
  * **עבודה חיצונית מחוץ לנעילה, והמצב נבדק שוב בתוכה.** הורדת קבצים, תמלול וחילוץ
  * אורכים שניות, ובזמן הזה יכולה להגיע הודעה נוספת (משלוח מאוחר של Meta) או לרוץ
- * ג׳וב נוסף לאותו שולח. לכן כל כתיבה פותחת טרנזאקציה שנועלת את שורת המשתמש, מקבצת
- * מחדש את מה שממתין, וכותבת רק אם הדיווח זהה למה שהוכרע — הלקח מ-S4/S7 במייל.
+ * ג׳וב נוסף לאותו שולח, ומנהל המערכת יכול להשבית את השולח. לכן כל כתיבה פותחת
+ * טרנזאקציה שנועלת את שורת המשתמש, מקבצת מחדש את מה שממתין, קוראת שוב את השולח,
+ * וכותבת רק אם הדיווח והשולח זהים למה שהוכרע (`lockUnchanged`) — הלקח מ-S4/S7 במייל.
  *
  * **כשל זמני לעולם אינו הכרעה.** כשל מול Graph או מול מנוע ה-AI דוחה את **כל
  * ההודעות של השולח** (backoff), עם הג׳וב הבא בתור באותה טרנזאקציה — ובכך נשמר
@@ -214,15 +221,19 @@ export async function handleWaIntake(payload: WaIntakeJobPayload, deps: WaIntake
 
   for (const unit of plan.ready) {
     const rows = unit.messageIds.map((id) => pending.find((row) => row.id === id)).filter((row) => row !== undefined);
-    const outcome = await decideUnit(unit, sender);
-    const result = await executeUnit(ctx, unit, rows, sender, outcome);
+    const decision = await decideUnit(unit, sender);
+    const result = await executeUnit(ctx, unit, rows, sender, decision);
 
     if (result.kind === "deferred") return result.outcome;
     if (result.kind === "changed") {
-      // הדיווח השתנה בין ההכרעה לכתיבה (הודעה שהגיעה באיחור, ג׳וב מקביל). דבר לא
-      // נכתב; ג׳וב מיידי יקבץ מחדש את מה שממתין עכשיו
+      // הדיווח או השולח השתנו בין ההכרעה לכתיבה (הודעה שהגיעה באיחור, ג׳וב מקביל,
+      // משתמש שהושבת). דבר לא נכתב; ג׳וב מיידי מקבץ ומכריע מחדש לפי מה שנכון עכשיו
       await enqueue(db, JOB_TYPES.waIntake, { waMessageId: unit.messageIds[0] } satisfies WaIntakeJobPayload, now);
-      logInfo("wa.intake.unit_changed", { waMessageId: unit.messageIds[0], size: unit.messageIds.length });
+      logInfo("wa.intake.unit_changed", {
+        waMessageId: unit.messageIds[0],
+        size: unit.messageIds.length,
+        reason: result.reason,
+      });
       return { kind: KIND, status: "decided", units, waitUntil: null };
     }
 
@@ -257,10 +268,11 @@ export async function handleWaIntake(payload: WaIntakeJobPayload, deps: WaIntake
 
 /**
  * השולח כפי שהוא **עכשיו**, ולא כפי שהיה ברישום: ההרשאה נבדקת בזמן ההכרעה
- * (§5.ה5 כלל 9). null — הושבת, ההרשאה בוטלה, או שיצא מהפיילוט.
+ * (§5.ה5 כלל 9). null — הושבת, ההרשאה בוטלה, או שיצא מהפיילוט. בתוך טרנזאקציה
+ * שנעלה את שורת המשתמש — הקריאה עקבית מול השבתה מקבילה.
  */
-async function loadSender(userId: string): Promise<SenderUser | null> {
-  const user = await db.user.findUnique({
+async function loadSender(userId: string, client: Tx | typeof db = db): Promise<SenderUser | null> {
+  const user = await client.user.findUnique({
     where: { id: userId },
     select: { id: true, name: true, role: true, siteId: true, phone: true, active: true, whatsappIntakeEnabled: true },
   });
@@ -270,36 +282,76 @@ async function loadSender(userId: string): Promise<SenderUser | null> {
   return { id: user.id, name: user.name, role: user.role, siteId: user.siteId };
 }
 
-async function decideUnit(unit: BurstUnit, sender: SenderUser): Promise<WaOutcome> {
+/** השיחה של טיוטה שתגובה שייכת לה, והפנייה שהייתה מוצמדת אליה בזמן ההכרעה */
+interface QuotedThread {
+  id: string;
+  /** null — הטיוטה נמחקה (`WaThread.ticketId` מתאפס במחיקה) */
+  ticketId: string | null;
+}
+
+interface UnitDecision {
+  outcome: WaOutcome;
+  /** רק לתגובה בשיחה של טיוטה (`REPLY_*`) */
+  thread: QuotedThread | null;
+}
+
+async function decideUnit(unit: BurstUnit, sender: SenderUser): Promise<UnitDecision> {
   if (unit.contextWamid) {
     // תגובה להודעה **בשיחה של טיוטה** — שלנו או של השולח. תגובה להודעה אחרת
-    // בצ'אט (שיחה רגילה עם הצוות) אינה השלמה, ונבחנת כמו כל הודעה
+    // בצ'אט (שיחה רגילה עם הצוות, או ההסבר החד-פעמי) אינה השלמה, ונבחנת כמו כל הודעה
     const quoted = await db.waMessage.findFirst({
       where: { wamid: unit.contextWamid, threadId: { not: null } },
-      select: { thread: { select: { ticket: { select: DRAFT_TICKET_SELECT } } } },
+      select: { thread: { select: { id: true, ticket: { select: DRAFT_TICKET_SELECT } } } },
     });
     if (quoted?.thread) {
       const verdict = decideReplyVerdict(quoted.thread.ticket, sender);
-      return verdict === "merge" ? "REPLY_APPLIED" : verdict;
+      return {
+        outcome: verdict === "merge" ? "REPLY_APPLIED" : verdict,
+        thread: { id: quoted.thread.id, ticketId: quoted.thread.ticket?.id ?? null },
+      };
     }
   }
 
-  if (!unit.keyword) return "IGNORED_NO_KEYWORD";
-  if (sender.role === "SITE_MANAGER" && !sender.siteId) return "NO_SITE";
-  return "DRAFT_CREATED";
+  if (!unit.keyword) return { outcome: "IGNORED_NO_KEYWORD", thread: null };
+  if (sender.role === "SITE_MANAGER" && !sender.siteId) return { outcome: "NO_SITE", thread: null };
+  return { outcome: "DRAFT_CREATED", thread: null };
 }
 
 // ─────────────────────────────── הביצוע ───────────────────────────────
 
 type UnitResult =
   | { kind: "done"; unit: WaUnitResult; shadow: boolean }
-  /** הדיווח השתנה מאז ההכרעה — דבר לא נכתב */
-  | { kind: "changed" }
+  /** הדיווח או השולח השתנו מאז ההכרעה — דבר לא נכתב (`lockUnchanged`) */
+  | { kind: "changed"; reason: ChangeReason }
   | { kind: "deferred"; outcome: WaIntakeOutcome };
 
-/** הכרעות שאינן נקלטות — התוכן שלהן אינו נשמר אצלנו (§2.7 שלב 1) */
+/**
+ * הכרעות שאינן נקלטות — התוכן שלהן אינו נשמר אצלנו (§2.7 שלב 1). תגובה שלא מוזגה
+ * (הטיוטה נמחקה, שוגרה, או שהכותב אינו רשאי) גם היא לא נקלטה: היא אינה משנה דבר
+ * ואינה נכנסת לשרשור (§2.7 שלב 6), ולכן רק העובדה שהגיעה נשארת בשיחה.
+ *
+ * `switch` ממצה — הכרעה חדשה ב-`WaOutcome` תדרוש החלטה מפורשת אם תוכנה נשמר.
+ */
 function dropsContent(outcome: WaOutcome): boolean {
-  return outcome.startsWith("IGNORED_") || outcome === "NO_SITE";
+  switch (outcome) {
+    case "IGNORED_DISABLED":
+    case "IGNORED_BEFORE_ACTIVATION":
+    case "IGNORED_ECHO":
+    case "IGNORED_UNSUPPORTED":
+    case "IGNORED_UNAUTHORIZED":
+    case "IGNORED_UNIDENTIFIED":
+    case "IGNORED_NO_KEYWORD":
+    case "NO_SITE":
+    case "REPLY_AFTER_DELETION":
+    case "REPLY_AFTER_DISPATCH":
+    case "REPLY_NOT_PERMITTED":
+      return true;
+    case "DRAFT_CREATED":
+    case "DRAFT_CREATED_UNPROCESSED":
+    case "REPLY_APPLIED":
+    case "REPLY_STORED_UNPROCESSED":
+      return false;
+  }
 }
 
 async function executeUnit(
@@ -307,24 +359,63 @@ async function executeUnit(
   unit: BurstUnit,
   rows: PendingRow[],
   sender: SenderUser,
-  outcome: WaOutcome,
+  decision: UnitDecision,
 ): Promise<UnitResult> {
+  const { outcome, thread } = decision;
   const size = unit.messageIds.length;
-  // תגובה לשיחה של טיוטה — המיזוג וההודעות של W7. עד אז רק ההכרעה נרשמת.
-  const shadow = ctx.mode === "shadow" || outcome.startsWith("REPLY_");
+  const shadow = ctx.mode === "shadow";
 
   if (!shadow && outcome === "DRAFT_CREATED") return createWaDraft(ctx, unit, rows, sender);
+  if (!shadow && outcome === "REPLY_APPLIED") {
+    // `decideReplyVerdict` מחזירה "merge" רק כשיש טיוטה — אחרת זה באג, לא הכרעה
+    if (!thread?.ticketId) throw new Error("executeUnit: הכרעת מיזוג בלי טיוטה");
+    return applyWaReply(ctx, unit, rows, sender, { id: thread.id, ticketId: thread.ticketId });
+  }
+
+  const last = rows[rows.length - 1];
+  if (!last) throw new Error("executeUnit: דיווח בלי הודעות");
+  let hinted = 0;
 
   const written = await db.$transaction(async (tx) => {
-    if (!(await lockUnit(tx, ctx, unit))) return false;
-    await writeDecision(tx, unit, outcome, shadow);
-    // מנהל עבודה בלי אתר: אין טיוטה, ויש הודעה שמסבירה למה (§2.7 שלב 3)
-    if (!shadow && outcome === "NO_SITE") {
-      await scheduleReply(tx, ctx, unit.messageIds[unit.messageIds.length - 1], null, sender.id);
+    const changed = await lockUnchanged(tx, ctx, unit, sender);
+    if (changed) return changed;
+    // ב-shadow השורות אינן מוצמדות לשיחה: שום דבר מההכרעה אינו מבוצע
+    await writeDecision(tx, unit, outcome, shadow, shadow ? null : (thread?.id ?? null));
+    if (shadow) return null;
+
+    // מנהל עבודה בלי אתר (§2.7 שלב 3), ותגובה שלא מוזגה (שלב 6, §5.ה5 כלל 9):
+    // אין טיוטה ואין שינוי בה — ויש הודעה שמסבירה למה
+    if (outcome === "NO_SITE" || outcome.startsWith("REPLY_")) {
+      await scheduleReply(tx, ctx, last.id, thread?.id ?? null, sender.id);
     }
-    return true;
+    if (outcome === "IGNORED_NO_KEYWORD") hinted = await scheduleHint(tx, ctx, last, sender.id);
+    return null;
   });
-  return written ? { kind: "done", unit: { size, outcome }, shadow } : { kind: "changed" };
+  if (written) return { kind: "changed", reason: written };
+
+  if (hinted > 0) logInfo("wa.intake.hint", { waMessageId: last.id, drafts: hinted });
+  const ticketId = outcome.startsWith("REPLY_") ? thread?.ticketId : undefined;
+  return { kind: "done", unit: { size, outcome, ...(ticketId ? { ticketId } : {}) }, shadow };
+}
+
+/** מה השתנה בין ההכרעה לכתיבה — ולכן דבר לא נכתב, וההכרעה תיעשה מחדש */
+type ChangeReason = "unit" | "sender";
+
+/**
+ * נועל את השולח, ומאשר ששום דבר שההכרעה נשענה עליו לא השתנה מאז שהתקבלה: הדיווח
+ * עצמו (`lockUnit`), **והשולח** — מושבת, בלי הרשאה, או בתפקיד ובאתר אחרים. ההורדה,
+ * התמלול והחילוץ אורכים שניות, ובזמן הזה מנהל המערכת יכול להשבית משתמש או להעביר
+ * מנהל עבודה לאתר אחר. הכרעה שנשענה על מה שהיה הייתה פותחת טיוטה באתר הישן, או
+ * עונה למי שכבר אינו מורשה (§5.ה5 כלל 9).
+ *
+ * כשמשהו השתנה לא נכתב דבר, והקורא מתזמן ג׳וב מיידי שמכריע מחדש לפי מה שנכון
+ * **עכשיו** — כך מושבת באמצע מטופל בדיוק כמו מושבת מההתחלה, באותו מסלול.
+ */
+async function lockUnchanged(tx: Tx, ctx: Ctx, unit: BurstUnit, sender: SenderUser): Promise<ChangeReason | null> {
+  if (!(await lockUnit(tx, ctx, unit))) return "unit";
+  const fresh = await loadSender(ctx.authorUserId, tx);
+  if (!fresh || fresh.role !== sender.role || fresh.siteId !== sender.siteId) return "sender";
+  return null;
 }
 
 /**
@@ -351,8 +442,17 @@ async function lockUnit(tx: Tx, ctx: Ctx, unit: BurstUnit): Promise<boolean> {
 /**
  * ההכרעה על השורות של הדיווח. דיווח שאינו נקלט מאבד את התוכן שלו — הטקסט, השם
  * והתמלול: הוא אינו נוגע למערכת (§2.7 שלב 1).
+ *
+ * `threadId` — תגובה בשיחה של טיוטה. גם כשלא מוזגה היא נשארת בשיחה, בלי התוכן:
+ * השיחה מציגה שהתגובה הגיעה, וההודעה שעונה לה (`WA_REPLY`) מוצאת דרכה את הפנייה.
  */
-async function writeDecision(tx: Tx, unit: BurstUnit, outcome: WaOutcome, shadow: boolean): Promise<void> {
+async function writeDecision(
+  tx: Tx,
+  unit: BurstUnit,
+  outcome: WaOutcome,
+  shadow: boolean,
+  threadId: string | null = null,
+): Promise<void> {
   const drop = dropsContent(outcome);
   await tx.waMessage.updateMany({
     where: { id: { in: unit.messageIds } },
@@ -362,6 +462,7 @@ async function writeDecision(tx: Tx, unit: BurstUnit, outcome: WaOutcome, shadow
       shadow,
       nextAttemptAt: null,
       detail: null,
+      ...(threadId ? { threadId } : {}),
       ...(drop ? { text: null, profileName: null } : {}),
     },
   });
@@ -395,6 +496,58 @@ async function scheduleReply(
     select: { id: true },
   });
   await enqueue(tx, JOB_TYPES.waReply, { waMessageId: outbound.id } satisfies WaReplyJobPayload);
+}
+
+/** "ב-24 השעות האחרונות" של ההסבר החד-פעמי (§7 שורה 98) — מההודעה של השולח */
+const HINT_WINDOW_MS = 24 * 60 * 60_000;
+
+/** ההכרעות שהאישור עליהן מתאר טיוטה — "טיוטה שאושרה" (§7 שורה 98) */
+const DRAFT_ACK_OUTCOMES = [
+  "DRAFT_CREATED",
+  "DRAFT_CREATED_UNPROCESSED",
+  "REPLY_APPLIED",
+  "REPLY_STORED_UNPROCESSED",
+] satisfies WaOutcome[];
+
+/**
+ * ההסבר החד-פעמי (§7 שורה 98, WA-L10): הודעה בלי תגובה ובלי "תקלה" ממי שיש לו
+ * טיוטה מוואטסאפ שאושרה ב-24 השעות שלפני ההודעה. בלי ההסבר השתיקה הייתה מטעה
+ * דווקא את מי שנמצא באמצע השלמה; בלי ההגבלה המערכת הייתה מתערבת בכל שיחה רגילה.
+ *
+ * **"שאושרה"** — אישור שמתאר את הטיוטה יצא בפועל אל השולח (`SENT`), והיא **עדיין
+ * טיוטה**: על פנייה ששוגרה או נמחקה אין מה להשלים. **"פעם אחת לכל טיוטה"** —
+ * `hintSentAt` נקבע לכל השיחות שעומדות בתנאי, ולא רק לאחת: ההסבר כללי, ושתי טיוטות
+ * פתוחות אינן סיבה לשלוח אותו פעמיים ברצף. טיוטה **חדשה** מזכה בהסבר חדש.
+ *
+ * ההודעה עונה להודעה שלא נקלטה, ואינה חלק משיחה של טיוטה (`threadId` ריק): ההודעה
+ * שהיא מסבירה לא נכנסה לשום טיוטה. מחזיר כמה טיוטות זיכו בה (0 — לא נשלח דבר).
+ */
+async function scheduleHint(tx: Tx, ctx: Ctx, last: PendingRow, userId: string): Promise<number> {
+  const since = new Date((last.receivedAt ?? ctx.now).getTime() - HINT_WINDOW_MS);
+  const threads = await tx.waThread.findMany({
+    where: {
+      hintSentAt: null,
+      ticket: { isDraft: true },
+      messages: {
+        some: {
+          direction: "OUTBOUND",
+          state: "SENT",
+          authorUserId: userId,
+          sentAt: { gte: since },
+          repliesTo: { is: { outcome: { in: DRAFT_ACK_OUTCOMES } } },
+        },
+      },
+    },
+    select: { id: true },
+  });
+  if (threads.length === 0) return 0;
+
+  await tx.waThread.updateMany({
+    where: { id: { in: threads.map((thread) => thread.id) } },
+    data: { hintSentAt: ctx.now },
+  });
+  await scheduleReply(tx, ctx, last.id, null, userId);
+  return threads.length;
 }
 
 /**
@@ -531,14 +684,11 @@ async function createWaDraft(
     : { values: unprocessedValues(text, sender), filled: ["DESCRIPTION"] as DraftFieldName[], report: emptyReport() };
   const outcome: WaOutcome = extraction.value ? "DRAFT_CREATED" : "DRAFT_CREATED_UNPROCESSED";
 
-  const stored = await storePreparedParts(
-    collected.parts,
-    (prepared) => `media/wa/${prepared.part.waMessageId}/${prepared.part.index}.${storageExtension(prepared.mimeType)}`,
-    ctx.deps.storage ?? selectStorage(),
-  );
+  const stored = await storePreparedParts(collected.parts, waStorageKey, ctx.deps.storage ?? selectStorage());
 
-  const ticketId = await db.$transaction(async (tx) => {
-    if (!(await lockUnit(tx, ctx, unit))) return null;
+  const written = await db.$transaction(async (tx): Promise<{ changed: ChangeReason } | { ticketId: string }> => {
+    const changed = await lockUnchanged(tx, ctx, unit, sender);
+    if (changed) return { changed };
 
     const ticket = await tx.ticket.create({
       data: {
@@ -575,30 +725,15 @@ async function createWaDraft(
       data: { report: plan.report as unknown as Prisma.InputJsonValue },
     });
 
-    const transcripts = new Map(
-      stored.flatMap((part) => (part.part.transcript === null ? [] : [[part.part.index, part.part.transcript] as const])),
-    );
-    const mediaIds = await writeMedia(tx, ticket.id, sender.id, stored, transcripts);
-    for (const part of stored) {
-      await tx.waMedia.update({
-        where: { id: part.part.waMediaRowId },
-        data: {
-          mimeType: part.mimeType,
-          sizeBytes: part.bytes?.byteLength ?? (part.part.sizeBytes || null),
-          sha256: part.sha256,
-          storageKey: part.storageKey,
-          isMedia: part.isMedia,
-          skippedReason: part.skippedReason,
-          mediaFileId: mediaIds.get(part.part.index) ?? null,
-        },
-      });
-    }
+    const mediaIds = await writeMedia(tx, ticket.id, sender.id, stored, transcriptsOf(stored));
+    await writeWaMedia(tx, stored, mediaIds);
 
     await scheduleReply(tx, ctx, last.id, thread.id, sender.id);
-    return ticket.id;
+    return { ticketId: ticket.id };
   });
 
-  if (!ticketId) return { kind: "changed" };
+  if ("changed" in written) return { kind: "changed", reason: written.changed };
+  const { ticketId } = written;
 
   logInfo("wa.intake.draft_created", {
     waMessageId: last.id,
@@ -611,6 +746,164 @@ async function createWaDraft(
     ambiguous: plan.report.ambiguous.length,
   });
   return { kind: "done", unit: { size: unit.messageIds.length, outcome, ticketId }, shadow: false };
+}
+
+/** המפתח באחסון — לפי ההודעה ומיקום הקובץ בדיווח, ולכן ריצה חוזרת כותבת לאותו מקום */
+function waStorageKey(prepared: WaPreparedPart): string {
+  return `media/wa/${prepared.part.waMessageId}/${prepared.part.index}.${storageExtension(prepared.mimeType)}`;
+}
+
+/** התמלולים שכבר נעשו לבדיקת המילה, לפי מיקום הקובץ — התמלול של הקובץ בטיוטה */
+function transcriptsOf(parts: readonly WaPreparedPart[]): Map<number, string> {
+  return new Map(parts.flatMap((part) => (part.part.transcript === null ? [] : [[part.part.index, part.part.transcript] as const])));
+}
+
+/**
+ * מה עלה בכל קובץ של הדיווח, על השורה שלו בשיחה — גם כשלא נכנס לטיוטה (גדול מדי,
+ * Word, זהה לקובץ שכבר בטיוטה): השיחה מתעדת כל קובץ שנשלח, כמו ההתכתבות במייל.
+ */
+async function writeWaMedia(
+  tx: Tx,
+  parts: readonly WaPreparedPart[],
+  mediaIds: ReadonlyMap<number, string>,
+): Promise<void> {
+  for (const part of parts) {
+    await tx.waMedia.update({
+      where: { id: part.part.waMediaRowId },
+      data: {
+        mimeType: part.mimeType,
+        sizeBytes: part.bytes?.byteLength ?? (part.part.sizeBytes || null),
+        sha256: part.sha256,
+        storageKey: part.storageKey,
+        isMedia: part.isMedia,
+        skippedReason: part.skippedReason,
+        mediaFileId: mediaIds.get(part.part.index) ?? null,
+      },
+    });
+  }
+}
+
+// ─────────────────────────────── השלמה בתגובה ───────────────────────────────
+
+/** מה שהטרנזאקציה של התגובה הכריעה — אחרי שהשולח והטיוטה נקראו מחדש תחת הנעילה */
+type ReplyWrite =
+  | { kind: "merged"; outcome: WaOutcome; ticketId: string; report: IntakeReport; mediaCount: number }
+  | { kind: "verdict"; outcome: WaOutcome }
+  | { kind: "changed"; reason: ChangeReason };
+
+/**
+ * מיישם תגובה (Reply) בשיחה של טיוטה — §2.7 שלב 5, המקבילה של `applyEmailReply`.
+ *
+ * **שני שלבים, כמו במייל.** הורדת הקבצים והחילוץ רצים לפני כל נעילה; רק הכתיבה,
+ * כשהכול כבר בידינו, רצה בטרנזאקציה שנועלת את **השולח** (`lockUnit`, ובה גם
+ * הבדיקה שהדיווח לא השתנה) **ואחריו** את **הפנייה** (`lockAndLoadDraft`). שניהם
+ * נקראים מחדש: בזמן שחיכינו לרשת הטיוטה יכלה להישלח או להימחק, והשולח יכול היה
+ * להיות מושבת או לאבד את ההרשאה — וההכרעה נכתבת לפי מה שנכון **עכשיו**.
+ *
+ * **T של המיזוג הוא ההודעה האחרונה בדיווח** (§5.ה4). עריכה במערכת באמצע הדיווח
+ * מוקדמת ממנו, ולכן ערך שונה פותח סתירה ואינו נזנח: ערך שנכתב בהודעה שאחרי העריכה
+ * לא היה ידוע למי שערך, וההכרעה עליו שייכת לאדם (מסך 7א).
+ *
+ * **הקבצים נכנסים גם כשהחילוץ אינו זמין** (§7 שורה 75), וקובץ שכבר בטיוטה או
+ * שהוסר ממנה אינו נכנס שוב (§7 שורות 69, 74) — לפי חתימה, תחת הנעילה.
+ */
+async function applyWaReply(
+  ctx: Ctx,
+  unit: BurstUnit,
+  rows: PendingRow[],
+  sender: SenderUser,
+  thread: { id: string; ticketId: string },
+): Promise<UnitResult> {
+  const last = rows[rows.length - 1];
+  if (!last) throw new Error("applyWaReply: תגובה בלי הודעות");
+
+  const collected = await collectMedia(ctx, rows);
+  if (collected.kind === "defer") {
+    return { kind: "deferred", outcome: await deferSender(ctx, last, unit.messageIds, "media", collected.detail) };
+  }
+
+  // בציטוט של וואטסאפ אין טקסט מצוטט בגוף ההודעה — כל הטקסט של הדיווח הוא חדש
+  const text = unitText(rows);
+  const extraction = await extract(ctx, last, sender, text, collected.parts, true);
+  if (extraction.kind === "defer") {
+    return {
+      kind: "deferred",
+      outcome: await deferSender(ctx, last, unit.messageIds, "extraction", extraction.detail, EXTRACTION_RETRY_MS),
+    };
+  }
+
+  // הבתים נכתבים לפני הנעילה (`storePreparedParts`), והכפילות מוכרעת בתוכה: קובץ
+  // שיתברר ככפול נשאר באחסון בלי הפניה — בזבוז, אבל נכון
+  const stored = await storePreparedParts(collected.parts, waStorageKey, ctx.deps.storage ?? selectStorage());
+  const outcome: WaOutcome = extraction.value ? "REPLY_APPLIED" : "REPLY_STORED_UNPROCESSED";
+  const receivedAt = last.receivedAt ?? ctx.now;
+
+  const written = await db.$transaction(async (tx): Promise<ReplyWrite> => {
+    // השולח קודם (`lockUnchanged`) ואחריו הפנייה — אותו סדר נעילה בכל מסלול
+    const changed = await lockUnchanged(tx, ctx, unit, sender);
+    if (changed) return { kind: "changed", reason: changed };
+    const locked = await lockAndLoadDraft(tx, thread.ticketId);
+
+    const verdict = decideReplyVerdict(locked?.ticket ?? null, sender);
+    if (verdict !== "merge") {
+      // הטיוטה נמחקה, שוגרה, או עברה לאתר שהכותב אינו רשאי בו — בזמן שחיכינו לרשת.
+      // ההכרעה היא של עכשיו, והיא סופית: אין טעם לחלץ שוב
+      await writeDecision(tx, unit, verdict, false, thread.id);
+      await scheduleReply(tx, ctx, last.id, thread.id, sender.id);
+      return { kind: "verdict", outcome: verdict };
+    }
+    if (!locked) throw new Error("applyWaReply: הכרעת מיזוג בלי טיוטה נעולה");
+    const { ticket, state } = locked;
+
+    const threadFiles = await tx.waMedia.findMany({
+      where: { message: { threadId: thread.id }, sha256: { not: null } },
+      select: { sha256: true, removedFromDraftAt: true, mediaFileId: true },
+    });
+    const parts = markDuplicateParts(stored, knownShas(threadFiles));
+
+    let report = emptyReport();
+    if (extraction.value) {
+      const built = await buildReplyProposal(tx, extraction.value, sender, text, state.values);
+      const merged = mergeChannelIntoDraft({ state, proposal: built.proposal, receivedAt, messageId: last.id });
+      report = built.report;
+      report.updated = await toUpdatedItems(tx, merged.changes);
+      await writeDraftState(tx, ticket, state, merged.state);
+    }
+    // החילוץ אינו זמין (REPLY_STORED_UNPROCESSED): אין מיזוג. הטקסט נשאר בשיחה ואינו
+    // מעובד מחדש כשהשירות חוזר — וההודעה לשולח אומרת זאת (WA-L07)
+
+    const mediaIds = await writeMedia(tx, ticket.id, sender.id, parts, transcriptsOf(parts));
+    await writeWaMedia(tx, parts, mediaIds);
+
+    await tx.waMessage.updateMany({
+      where: { id: { in: unit.messageIds } },
+      data: { state: "DONE", outcome, shadow: false, threadId: thread.id, nextAttemptAt: null, detail: null },
+    });
+    await tx.waMessage.update({ where: { id: last.id }, data: { report: report as unknown as Prisma.InputJsonValue } });
+
+    // §2.7 שלב 5: "אחרי כל תגובה נשלחת שוב הודעת אישור"
+    await scheduleReply(tx, ctx, last.id, thread.id, sender.id);
+    return { kind: "merged", outcome, ticketId: ticket.id, report, mediaCount: mediaIds.size };
+  });
+
+  if (written.kind === "changed") return { kind: "changed", reason: written.reason };
+  const size = unit.messageIds.length;
+  if (written.kind === "verdict") {
+    logInfo("wa.intake.reply_rejected", { waMessageId: last.id, outcome: written.outcome });
+    return { kind: "done", unit: { size, outcome: written.outcome }, shadow: false };
+  }
+
+  logInfo("wa.intake.reply_applied", {
+    waMessageId: last.id,
+    ticketId: written.ticketId,
+    outcome: written.outcome,
+    messages: rows.length,
+    mediaCount: written.mediaCount,
+    updated: written.report.updated.length,
+    notFound: written.report.notFound.length,
+    ambiguous: written.report.ambiguous.length,
+  });
+  return { kind: "done", unit: { size, outcome: written.outcome, ticketId: written.ticketId }, shadow: false };
 }
 
 /**
@@ -690,6 +983,9 @@ async function collectMedia(
 /**
  * החילוץ, בתקציב של EM-11 **מההודעה האחרונה בדיווח** — ההבטחה לאישור נמדדת ממנה
  * (§7 שורה 94). הקלטה שתומללה אינה נשלחת שוב כקובץ: התמלול שלה כבר בטקסט.
+ *
+ * `isReply` — תגובה בשיחה של טיוטה: מהטקסט מחולצות השלמות **ותיקונים**, והתיאור
+ * יכול להיות תוספת או החלפה (§2.7 שלב 5, §5.ה4).
  */
 async function extract(
   ctx: Ctx,
@@ -697,6 +993,7 @@ async function extract(
   sender: SenderUser,
   text: string,
   parts: readonly WaPreparedPart[],
+  isReply = false,
 ): Promise<{ kind: "ok"; value: FieldExtraction | null } | { kind: "defer"; detail: string }> {
   const extractor = ctx.deps.extractor !== undefined ? ctx.deps.extractor : selectFieldExtractor();
   if (!extractor) return { kind: "ok", value: null };
@@ -708,7 +1005,7 @@ async function extract(
       text,
       attachments: extractionAttachments(parts.filter((part) => part.part.transcript === null)),
       gazetteer: await loadGazetteer(sender),
-      isReply: false,
+      isReply,
     });
     return { kind: "ok", value };
   } catch (error) {

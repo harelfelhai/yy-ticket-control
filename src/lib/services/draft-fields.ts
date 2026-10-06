@@ -126,17 +126,19 @@ export async function lockAndLoadDraft(
  * `services/media.ts` מול `email-intake.ts` ב-`aiJobFor` — לא כאן, אבל אותו
  * לקח בדיוק): שני מקומות שאמורים לעשות את אותו דבר מתפצלים בשקט.
  *
- * `withMeta` מוגבל לטיוטת מייל: בטיוטה ידנית אין מקור אחר, ושורות `DraftField`
- * היו רק מקום נוסף להחזיק בו "נערך במערכת" בלי שמישהו ישאל.
+ * המטא נכתב רק בטיוטה מערוץ (`isChannelDraft`): בטיוטה ידנית אין מקור אחר,
+ * ושורות `DraftField` היו רק מקום נוסף להחזיק בו "נערך במערכת" בלי שמישהו
+ * ישאל. **ערוץ הפנייה קובע גם לאיזו עמודה נכתב מזהה ההודעה** — כל אחת מפתח זר
+ * ליומן של הערוץ שלה, ומזהה של הודעת וואטסאפ ב-`emailMessageId` היה נדחה במסד.
  */
 export async function writeDraftState(
   tx: Tx,
-  ticketId: string,
+  ticket: Pick<DraftTicket, "id" | "isDraft" | "channel">,
   before: DraftState,
   after: DraftState,
-  withMeta: boolean,
 ): Promise<DraftFieldName[]> {
-  const write = diffDraftState(before, after, withMeta);
+  const ticketId = ticket.id;
+  const write = diffDraftState(before, after, isChannelDraft(ticket));
   const { draftRecipients, ...columns } = write.ticket;
 
   if (Object.keys(columns).length > 0 || draftRecipients !== undefined) {
@@ -159,7 +161,9 @@ export async function writeDraftState(
       systemEditedAt: meta.systemEditedAt,
       conflict: meta.conflict,
       channelValue: (meta.channelValue ?? Prisma.DbNull) as Prisma.InputJsonValue | typeof Prisma.DbNull,
-      emailMessageId: meta.channelMessageId,
+      ...(ticket.channel === "WHATSAPP"
+        ? { waMessageId: meta.channelMessageId, emailMessageId: null }
+        : { emailMessageId: meta.channelMessageId, waMessageId: null }),
     };
     await tx.draftField.upsert({
       where: { ticketId_field: { ticketId, field } },
@@ -252,7 +256,7 @@ export async function updateDraftFields(
     for (const edit of edits) next = applySystemEdit(next, edit, now);
 
     await assertDraftValues(tx, next, state);
-    const changed = await writeDraftState(tx, ticketId, state, next, isChannelDraft(ticket));
+    const changed = await writeDraftState(tx, ticket, state, next);
     await recordFieldsEdited(tx, ticketId, viewer, changed);
   });
 }
@@ -294,22 +298,23 @@ export async function resolveDraftConflicts(
     }
 
     await assertDraftValues(tx, next, state);
-    const changed = await writeDraftState(tx, ticketId, state, next, true);
+    const changed = await writeDraftState(tx, ticket, state, next);
     await recordFieldsEdited(tx, ticketId, viewer, changed);
   });
 }
 
 /**
- * מסיר קובץ מדיה מטיוטה ממייל (מסך 7, EM-S7-05).
+ * מסיר קובץ מדיה מטיוטה מערוץ — מייל או וואטסאפ (מסך 7, EM-S7-05, WA-S7-03).
  *
- * **ההסרה חלה על הטיוטה בלבד:** הקובץ נשאר בהתכתבות — היא התיעוד של מה
- * שנשלח למערכת — ורשומת ה-`MediaFile` נמחקת, כך שהטקסט שחולץ ממנו יוצא
+ * **ההסרה חלה על הטיוטה בלבד:** הקובץ נשאר בהתכתבות או בשיחה — הן התיעוד של
+ * מה שנשלח למערכת — ורשומת ה-`MediaFile` נמחקת, כך שהטקסט שחולץ ממנו יוצא
  * מהחיפוש יחד איתו. האובייקט באחסון נשאר, כמו בכל מחיקה במערכת (Gate G5).
+ * הסימון `removedFromDraftAt` הוא מה שמונע מאותו קובץ לחזור בתשובה הבאה (EM-25).
  *
  * הצורך המיידי הוא לוגו בחתימת המייל, שנכנס כתמונה משובצת ובלי הסרה היה
  * מוצג לנמענים אחרי השיגור.
  *
- * **רק קובץ שהגיע במייל** (§7 שורה 87). בשרשור של טיוטה אפשר לצרף קבצים גם
+ * **רק קובץ שהגיע בערוץ** (§7 שורה 87). בשרשור של טיוטה אפשר לצרף קבצים גם
  * מתוך המערכת; הם אינם בהתכתבות, והסרה שלהם הייתה מחיקה בלי תיעוד — ולכן
  * הם נשארים בכלל "הוספה בלבד" (§3.2).
  */
@@ -335,6 +340,7 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
         messageId: true,
         message: { select: { id: true, ticketId: true, kind: true, text: true } },
         mailboxAttachment: { select: { id: true } },
+        waMedia: { select: { id: true } },
       },
     });
     if (!media) throw new DraftError(he.media.notFound);
@@ -342,13 +348,12 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
     // אחרי השיגור המדיה חוזרת לכלל "הוספה בלבד" (§3.2), וטיוטה ידנית לא
     // צריכה הסרה — מי שצירף קובץ בעצמו לא קיבל לוגו של חתימה
     denyUnless(isChannelDraft(ticket));
-    // וגם בטיוטה ממייל — רק מה שהגיע במייל ונשאר בהתכתבות (§7 שורה 87)
-    denyUnless(media.mailboxAttachment !== null);
+    // וגם בטיוטה מערוץ — רק מה שהגיע בערוץ ונשאר בהתכתבות (§7 שורה 87)
+    denyUnless(media.mailboxAttachment !== null || media.waMedia !== null);
 
-    await tx.mailboxAttachment.updateMany({
-      where: { mediaFileId: media.id },
-      data: { removedFromDraftAt: new Date(), mediaFileId: null },
-    });
+    const removed = { removedFromDraftAt: new Date(), mediaFileId: null };
+    await tx.mailboxAttachment.updateMany({ where: { mediaFileId: media.id }, data: removed });
+    await tx.waMedia.updateMany({ where: { mediaFileId: media.id }, data: removed });
     await tx.mediaFile.deleteMany({ where: { id: media.id } });
 
     // הודעת MEDIA שהתרוקנה לגמרי היא בועה ריקה בשרשור
@@ -363,16 +368,17 @@ export async function removeDraftMedia(viewer: Viewer, mediaFileId: string): Pro
 }
 
 /**
- * מזהי הקבצים בפנייה שהגיעו במייל — הקבצים היחידים ש"הסר קובץ" חל עליהם
- * (§7 שורה 87, ראה `removeDraftMedia`). נקרא ברינדור מסך 7, ולכן בלי נעילה:
- * ההסרה עצמה בודקת שוב.
+ * מזהי הקבצים בפנייה שהגיעו בערוץ — במייל או בוואטסאפ — הקבצים היחידים ש"הסר
+ * קובץ" חל עליהם (§7 שורה 87, WA-S7-03, ראה `removeDraftMedia`). נקרא ברינדור
+ * מסך 7, ולכן בלי נעילה: ההסרה עצמה בודקת שוב.
  */
-export async function emailMediaIds(ticketId: string, client: Tx | typeof db = db): Promise<Set<string>> {
-  const rows = await client.mailboxAttachment.findMany({
-    where: { mediaFile: { message: { ticketId } } },
-    select: { mediaFileId: true },
-  });
-  return new Set(rows.flatMap((row) => (row.mediaFileId ? [row.mediaFileId] : [])));
+export async function channelMediaIds(ticketId: string, client: Tx | typeof db = db): Promise<Set<string>> {
+  const where = { mediaFile: { message: { ticketId } } };
+  const [mail, whatsapp] = await Promise.all([
+    client.mailboxAttachment.findMany({ where, select: { mediaFileId: true } }),
+    client.waMedia.findMany({ where, select: { mediaFileId: true } }),
+  ]);
+  return new Set([...mail, ...whatsapp].flatMap((row) => (row.mediaFileId ? [row.mediaFileId] : [])));
 }
 
 /** מספר השדות שבסתירה — לחסימת השיגור ולשורת הסיבה */

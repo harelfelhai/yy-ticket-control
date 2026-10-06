@@ -4,6 +4,7 @@ import { enqueue } from "@/jobs/queue";
 import { JOB_TYPES } from "@/jobs/types";
 import { processNextJob } from "@/jobs/worker";
 import { db } from "@/lib/db";
+import * as log from "@/lib/observability/log";
 import { SERVICE_WINDOW_MS, markWaReplyFailed, sendWaReply } from "@/lib/services/wa-reply";
 import { BURST_QUIET_MS } from "@/lib/whatsapp/burst";
 import { WINDOW_CLOSED_CODE, WaApiError } from "@/lib/whatsapp/errors";
@@ -157,6 +158,80 @@ describe("WA-08 — הודעת אישור: באותו צ'אט, כתגובה לה
       reason: "not-pending",
     });
     expect(api.sent).toHaveLength(1);
+  });
+});
+
+describe("W7 — ההודעות על תגובה, וההסבר החד-פעמי", () => {
+  it("תגובה שמוזגה: הנוסח הכללי עם 'עודכן מהתגובה שלך', כתגובה לתגובה", async () => {
+    const { outbound, inbound } = await decided({ outcome: "REPLY_APPLIED", draft: true });
+    await db.waMessage.update({
+      where: { id: inbound.id },
+      data: { report: { updated: [{ field: "ROOM", before: "מטבח", after: "חדר רחצה" }], notFound: [], ambiguous: [] } },
+    });
+    const api = fakeWaApi();
+    expect(await sendWaReply({ waMessageId: outbound.id }, { api, now: NOW })).toMatchObject({ status: "sent", template: "L01" });
+    expect(plain(api.sent[0]!.body)).toContain(SPEC.updatedExample);
+    expect(api.sent[0]).toMatchObject({ contextWamid: "wamid.LAST" });
+  });
+
+  it("WA-L05 — אחרי השיגור: מספר הפנייה וקישור אליה", async () => {
+    const { outbound, ticketId } = await decided({ outcome: "REPLY_AFTER_DISPATCH", draft: true });
+    const ticket = await db.ticket.update({ where: { id: ticketId! }, data: { isDraft: false } });
+    const api = fakeWaApi();
+    expect(await sendWaReply({ waMessageId: outbound.id }, { api, now: NOW })).toMatchObject({ status: "sent", template: "L05" });
+    expect(plain(api.sent[0]!.body)).toBe(`שלום דנה כהן, ${SPEC.afterDispatch(ticket.seq, `${BASE_URL}/tickets/${ticket.id}`)}`);
+  });
+
+  it("WA-L06 — הטיוטה נמחקה: ההודעה נשלחת גם כשאין עוד פנייה", async () => {
+    const { outbound, ticketId } = await decided({ outcome: "REPLY_AFTER_DELETION", draft: true });
+    await db.ticket.delete({ where: { id: ticketId! } });
+    const api = fakeWaApi();
+    expect(await sendWaReply({ waMessageId: outbound.id }, { api, now: NOW })).toMatchObject({ status: "sent", template: "L06" });
+    expect(plain(api.sent[0]!.body)).toBe(`שלום דנה כהן, ${SPEC.afterDeletion}`);
+  });
+
+  it("WA-L08 — אין הרשאה: מפנה למנהל המערכת, גם כשהטיוטה נמחקה מאז (הנוסח אינו מזכיר את השולח)", async () => {
+    const { outbound, ticketId } = await decided({ outcome: "REPLY_NOT_PERMITTED", draft: true });
+    await db.ticket.delete({ where: { id: ticketId! } });
+    const api = fakeWaApi();
+    expect(await sendWaReply({ waMessageId: outbound.id }, { api, now: NOW })).toMatchObject({ status: "sent", template: "L08" });
+    expect(plain(api.sent[0]!.body)).toBe(`שלום דנה כהן, ${SPEC.notPermitted}`);
+  });
+
+  it("WA-L10 — ההסבר החד-פעמי, כתגובה להודעה שלא נקלטה", async () => {
+    const { outbound } = await decided({ outcome: "IGNORED_NO_KEYWORD", draft: false });
+    const api = fakeWaApi();
+    expect(await sendWaReply({ waMessageId: outbound.id }, { api, now: NOW })).toMatchObject({ status: "sent", template: "L10" });
+    expect(plain(api.sent[0]!.body)).toBe(`שלום דנה כהן, ${SPEC.hint}`);
+    expect(api.sent[0]).toMatchObject({ contextWamid: "wamid.LAST" });
+  });
+
+  it("§7 שורה 113 — אישור של דיווח אחרי יותר מחמש דקות נרשם כאיחור; ההסבר, שיוצא בתקרה של 10 דקות בכוונה, לא", async () => {
+    const warn = vi.spyOn(log, "logWarn");
+    try {
+      const late = await decided({ outcome: "DRAFT_CREATED", receivedAt: new Date(NOW.getTime() - 400_000) });
+      await sendWaReply({ waMessageId: late.outbound.id }, { api: fakeWaApi(), now: NOW });
+      expect(warn).toHaveBeenCalledWith("wa.reply.late", expect.objectContaining({ latencySec: 400 }));
+
+      warn.mockClear();
+      await db.waMessage.deleteMany({});
+      const hint = await decided({ outcome: "IGNORED_NO_KEYWORD", draft: false, receivedAt: new Date(NOW.getTime() - 614_000) });
+      expect(await sendWaReply({ waMessageId: hint.outbound.id }, { api: fakeWaApi(), now: NOW })).toMatchObject({
+        status: "sent",
+        template: "L10",
+        latencySec: 614,
+      });
+      expect(warn).not.toHaveBeenCalledWith("wa.reply.late", expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("WA-L11 — שורה יוצאת על הכרעה אחרת של 'לא נקלט' אינה נשלחת: באג, לא הסבר", async () => {
+    const { outbound } = await decided({ outcome: "IGNORED_UNSUPPORTED", draft: false });
+    const api = fakeWaApi();
+    expect(await sendWaReply({ waMessageId: outbound.id }, { api, now: NOW })).toMatchObject({ status: "skipped", reason: "outcome" });
+    expect(api.sent).toHaveLength(0);
   });
 });
 

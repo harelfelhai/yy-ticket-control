@@ -24,7 +24,7 @@ import { missingRequiredFields, getTicketDetail, recipientName } from "@/lib/ser
 import { activeRecipients } from "@/lib/draft/fields";
 import { draftValuesOf, emailDraftCounts, toDraftState } from "@/lib/draft/state";
 import { describeDraftState } from "@/lib/services/draft-display";
-import { emailMediaIds, isChannelDraft } from "@/lib/services/draft-fields";
+import { channelMediaIds, isChannelDraft } from "@/lib/services/draft-fields";
 import { getTicketCorrespondence } from "@/lib/services/email-correspondence";
 import { canTagTicket } from "@/lib/permissions";
 import {
@@ -131,7 +131,7 @@ export default async function TicketPage(props: PageProps<"/tickets/[id]">) {
     ticket.channel === "EMAIL"
       ? getTicketCorrespondence(viewer, ticket.id, { before: dispatchedAt })
       : Promise.resolve(null),
-    emailDraftState && canEdit ? emailMediaIds(ticket.id) : Promise.resolve(new Set<string>()),
+    emailDraftState && canEdit ? channelMediaIds(ticket.id) : Promise.resolve(new Set<string>()),
   ]);
   const alreadyAssigned = new Set(
     ticket.assignments

@@ -34,7 +34,15 @@ function ticket(overrides: Partial<DraftTicketRow> = {}): DraftTicketRow {
 }
 
 function row(overrides: Partial<DraftFieldRow> & Pick<DraftFieldRow, "field">): DraftFieldRow {
-  return { fromChannel: false, systemEditedAt: null, conflict: false, channelValue: null, emailMessageId: null, ...overrides };
+  return {
+    fromChannel: false,
+    systemEditedAt: null,
+    conflict: false,
+    channelValue: null,
+    emailMessageId: null,
+    waMessageId: null,
+    ...overrides,
+  };
 }
 
 describe("toDraftState", () => {
@@ -54,6 +62,13 @@ describe("toDraftState", () => {
       channelMessageId: "m-1",
     });
     expect(state.meta.APARTMENT).toEqual(emptyMeta());
+  });
+
+  it("WA-C01 — בטיוטה מוואטסאפ מזהה ההודעה מגיע מהעמודה של וואטסאפ", () => {
+    const state = toDraftState(ticket(), [
+      row({ field: "DOMAIN", conflict: true, channelValue: { field: "DOMAIN", domainId: "d-2" }, waMessageId: "wa-1" }),
+    ]);
+    expect(state.meta.DOMAIN.channelMessageId).toBe("wa-1");
   });
 
   it("EM-C08 — נמענים שנשמרו לפני 1.3 נקראים כמקור מערכת", () => {
