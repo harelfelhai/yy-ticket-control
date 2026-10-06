@@ -14,6 +14,7 @@ import {
   EXTRACTION_RETRY_MS,
   MAX_DEFER_ATTEMPTS,
   deferDelayMs,
+  extractionUnavailableDetail,
   shouldRetryExtraction,
 } from "@/lib/intake/defer-policy";
 import { type FieldExtractor, selectFieldExtractor } from "@/lib/intake/extraction";
@@ -722,7 +723,7 @@ async function createWaDraft(
     // הדיווח נשמר על ההודעה שהאישור עונה לה — שם `WA_REPLY` קורא אותו
     await tx.waMessage.update({
       where: { id: last.id },
-      data: { report: plan.report as unknown as Prisma.InputJsonValue },
+      data: { report: plan.report as unknown as Prisma.InputJsonValue, detail: extraction.unavailable ?? null },
     });
 
     const mediaIds = await writeMedia(tx, ticket.id, sender.id, stored, transcriptsOf(stored));
@@ -879,7 +880,10 @@ async function applyWaReply(
       where: { id: { in: unit.messageIds } },
       data: { state: "DONE", outcome, shadow: false, threadId: thread.id, nextAttemptAt: null, detail: null },
     });
-    await tx.waMessage.update({ where: { id: last.id }, data: { report: report as unknown as Prisma.InputJsonValue } });
+    await tx.waMessage.update({
+      where: { id: last.id },
+      data: { report: report as unknown as Prisma.InputJsonValue, detail: extraction.unavailable ?? null },
+    });
 
     // §2.7 שלב 5: "אחרי כל תגובה נשלחת שוב הודעת אישור"
     await scheduleReply(tx, ctx, last.id, thread.id, sender.id);
@@ -994,9 +998,14 @@ async function extract(
   text: string,
   parts: readonly WaPreparedPart[],
   isReply = false,
-): Promise<{ kind: "ok"; value: FieldExtraction | null } | { kind: "defer"; detail: string }> {
+): Promise<
+  | { kind: "ok"; value: FieldExtraction; unavailable?: undefined }
+  /** החילוץ אינו זמין (EM-11) — והסיבה, לאבחון על השורה */
+  | { kind: "ok"; value: null; unavailable: string }
+  | { kind: "defer"; detail: string }
+> {
   const extractor = ctx.deps.extractor !== undefined ? ctx.deps.extractor : selectFieldExtractor();
-  if (!extractor) return { kind: "ok", value: null };
+  if (!extractor) return { kind: "ok", value: null, unavailable: extractionUnavailableDetail(null) };
 
   try {
     const value = await extractor.extract({
@@ -1022,7 +1031,7 @@ async function extract(
     // מכאן זו הכרעה ולא כשל: המסלול המלא קיים (EM-11), והשולח יקבל הודעה שאומרת
     // בדיוק מה קרה
     logWarn("wa.intake.extraction_unavailable", { waMessageId: last.id, kind: error.kind, attempts: attemptsSoFar });
-    return { kind: "ok", value: null };
+    return { kind: "ok", value: null, unavailable: extractionUnavailableDetail(error) };
   }
 }
 

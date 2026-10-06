@@ -434,6 +434,40 @@ describe("WA-17 — כשל זמני דוחה, ואינו הופך ל\"לא נק�
     expect(extractor.calls).toHaveLength(2);
   });
 
+  it("§7 שורה 114 — תשובה פגומה פעם אחת: ניסיון אחד נוסף, ואז טיוטה עם הפרטים", async () => {
+    const user = await makeUser();
+    const row = await inbound(user, 0, { text: FULL_REPORT });
+    const extractor = fakeFieldExtractor({ result: { description: "נזילה", domain: DOMAIN } });
+    extractor.failNext(aiError("malformed"));
+    const { deps } = liveDeps({ extractor });
+
+    expect(await handleWaIntake({ waMessageId: row.id }, { ...deps, now: AFTER_QUIET })).toMatchObject({
+      status: "deferred",
+      reason: "extraction",
+    });
+    const retryAt = (await rowOf(row.id)).nextAttemptAt!;
+    expect(await handleWaIntake({ waMessageId: row.id }, { ...deps, now: retryAt })).toMatchObject({
+      units: [{ outcome: "DRAFT_CREATED" }],
+    });
+    expect((await db.ticket.findFirstOrThrow()).domainId).toBe(domainId);
+    expect((await rowOf(row.id)).detail).toBeNull();
+  });
+
+  it("§7 שורה 114 — תשובה פגומה פעמיים: החילוץ אינו זמין, והסיבה על ההודעה שהאישור עונה לה", async () => {
+    const user = await makeUser();
+    const row = await inbound(user, 0, { text: FULL_REPORT });
+    const extractor = fakeFieldExtractor({ error: aiError("malformed", "תשובת החילוץ אינה עומדת בסכימה: room") });
+    const { deps } = liveDeps({ extractor });
+
+    await handleWaIntake({ waMessageId: row.id }, { ...deps, now: AFTER_QUIET });
+    const retryAt = (await rowOf(row.id)).nextAttemptAt!;
+    expect(await handleWaIntake({ waMessageId: row.id }, { ...deps, now: retryAt })).toMatchObject({
+      units: [{ outcome: "DRAFT_CREATED_UNPROCESSED" }],
+    });
+    expect(extractor.calls).toHaveLength(2);
+    expect((await rowOf(row.id)).detail).toBe("החילוץ אינו זמין — malformed: תשובת החילוץ אינה עומדת בסכימה: room");
+  });
+
   it("מיצוי הניסיונות: ההודעה נעצרת בלי הכרעה, וג׳וב מיידי ממשיך עם השאר", async () => {
     const user = await makeUser();
     const row = await inbound(user, 0, { media: { id: "m-voice", mimeType: "audio/ogg", voice: true } });

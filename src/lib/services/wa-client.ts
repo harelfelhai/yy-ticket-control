@@ -58,6 +58,8 @@ export async function onExternalFailure(error: unknown, numberId: string): Promi
     }
     return "skip";
   }
+  // תשובה פגומה (`malformed`) נדחית ואינה נבלעת: התמלול (`ask`) אינו מייצר אותה היום,
+  // ואם ייצר — הקלטה שלא הובנה אינה "לא נאמרה המילה"
   if (error instanceof AiRequestError) return error.kind === "permanent" ? "skip" : "defer";
   throw error;
 }

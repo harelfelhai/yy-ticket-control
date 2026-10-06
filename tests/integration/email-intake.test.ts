@@ -652,6 +652,47 @@ describe("EM-11 — החילוץ אינו זמין", () => {
     expect(outcome).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED_UNPROCESSED" });
     expect(extractor.calls).toHaveLength(1);
     expect(await jobsOfType(JOB_TYPES.emailIntake)).toEqual([]);
+    // הסיבה נשמרת על השורה, לאבחון — בלעדיה הכרעה סופית הייתה נשארת בלי הסבר
+    expect((await rowOf(id)).detail).toMatch(/^החילוץ אינו זמין — permanent: /);
+  });
+
+  it("§7 שורה 114 — תשובה פגומה פעם אחת: ניסיון אחד נוסף, ואז טיוטה עם כל הפרטים", async () => {
+    const mail = firstMail({ text: HAPPY_TEXT });
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const extractor = fakeFieldExtractor({ result: HAPPY_EXTRACTION });
+    extractor.failNext(aiError("malformed"));
+    const id = await inbound(mail.envelope);
+
+    const first = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor, now: new Date(ARRIVED_AT.getTime() + 5_000) },
+    );
+    expect(first).toMatchObject({ status: "deferred", reason: "extraction" });
+
+    const second = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor, now: (await rowOf(id)).nextAttemptAt as Date },
+    );
+    expect(second).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED" });
+    expect(extractor.calls).toHaveLength(2);
+    expect((await rowOf(id)).detail).toBeNull();
+  });
+
+  it("§7 שורה 114 — תשובה פגומה פעמיים: החילוץ אינו זמין בלי ניסיון שלישי, והסיבה נרשמת על השורה", async () => {
+    const mail = firstMail({ text: HAPPY_TEXT });
+    const source = fakeMailSource({ messages: [mail], match: () => true });
+    const extractor = fakeFieldExtractor({ error: aiError("malformed", "תשובת Gemini אינה JSON: שלום") });
+    const id = await inbound(mail.envelope);
+
+    await handleEmailIntake({ mailboxMessageId: id }, { source, extractor, now: new Date(ARRIVED_AT.getTime() + 5_000) });
+    const second = await handleEmailIntake(
+      { mailboxMessageId: id },
+      { source, extractor, now: (await rowOf(id)).nextAttemptAt as Date },
+    );
+
+    expect(second).toMatchObject({ status: "decided", outcome: "DRAFT_CREATED_UNPROCESSED" });
+    expect(extractor.calls).toHaveLength(2);
+    expect((await rowOf(id)).detail).toBe("החילוץ אינו זמין — malformed: תשובת Gemini אינה JSON: שלום");
   });
 
   it("EM-A06 — קבצים מצורפים נכנסים לטיוטה גם כשהחילוץ אינו זמין", async () => {
