@@ -61,7 +61,16 @@ export interface Gazetteer {
   users: readonly string[];
 }
 
+/** הערוץ שממנו הגיעה ההודעה — קובע את נוסח ההוראות ואת צורת הטקסט שנשלח */
+export type ExtractionChannel = "email" | "whatsapp";
+
 export interface ExtractionInput {
+  /**
+   * ברירת המחדל — מייל. בוואטסאפ (§2.7 שלב 3) אין כותרת, והטקסט הוא כל ההודעות
+   * שבדיווח לפי הסדר: טקסט, כיתובים ותמלול של הקלטות.
+   */
+  channel?: ExtractionChannel;
+  /** כותרת המייל. בוואטסאפ אין כותרת — מחרוזת ריקה, והיא אינה נשלחת. */
   subject: string;
   /** גוף המייל. בתשובה — **הטקסט החדש בלבד**, אחרי `extractNewText` (EM-13) */
   text: string;
@@ -138,26 +147,61 @@ const EXTRACTION_JSON_SCHEMA = z.toJSONSchema(extractionSchema);
  *   ברשימה" על תחום שהשולח לא כתב (S0 ממצא 1, EM-A09, §7 שורה 78).
  */
 const BASE_INSTRUCTIONS = [
-  "אתה מחלץ פרטי פנייה על ליקוי בדירה מתוך מייל בעברית ומהקבצים המצורפים אליו.",
   "העתק כל ערך בדיוק כפי שנכתב או נאמר. אל תתקן, אל תשלים שם ואל תבחר מהרשימות — הן להקשר זיהוי בלבד.",
-  'source="text" רק אם הערך מופיע מילולית בכותרת או בגוף הטקסט; "attachment" אם הופיע רק בקובץ מצורף; "none" אם לא הוזכר כלל.',
   "recipients.add ו-recipients.remove — רק אנשים שנכתב במפורש לשלוח אליהם או להסיר אותם.",
   'domain רק כשנכתב שם של תחום עבודה ("אינסטלציה", "חשמל"). שם של בעל מקצוע ("אינסטלטור") אינו תחום — אז source="none".',
 ];
 
-/** מייל ראשון פותח תיאור; תשובה מוסיפה לו. ניחוש כאן מוחק תיאור קיים. */
-const FIRST_MAIL_INSTRUCTIONS = [
-  "זהו המייל הראשון בפנייה.",
-  'description.op="set" עם תיאור התקלה כפי שנכתב. אל תחזיר append או replace.',
-];
+/** תשובה מוסיפה לתיאור; הודעה ראשונה פותחת אותו (`first`). ניחוש כאן מוחק תיאור קיים. */
+const REPLY_DESCRIPTION =
+  'description.op="append" לתוספת לתיאור, "replace" רק כשנאמר במפורש להחליף את התיאור, "none" כשאין תוספת.';
 
-const REPLY_INSTRUCTIONS = [
-  "זוהי תשובה בשרשרת קיימת, והטקסט שלהלן הוא הטקסט החדש בלבד (הציטוט הוסר).",
-  'description.op="append" לתוספת לתיאור, "replace" רק כשנאמר במפורש להחליף את התיאור, "none" כשאין תוספת.',
-];
+/**
+ * מה שתלוי בערוץ: מה המודל קורא, מאיפה `source="text"`, ואיך נראה הטקסט.
+ *
+ * **הנוסח של המייל לא השתנה** כשנוסף הוואטסאפ — כל שורה בו נמדדה בניסוי S0, והמייל
+ * רץ בפרודקשן. בוואטסאפ הדיווח הוא כמה הודעות רצופות (§2.7 שלב 1), והקלטה מגיעה
+ * כתמלול שלה בתוך הטקסט: היא כבר תומללה כדי לבדוק את המילה (§7 שורה 95), וכך גם
+ * ערך שנאמר בה נבדק מול הטקסט שנקרא (`quotedText`) כמו ערך שנכתב.
+ */
+const CHANNEL_INSTRUCTIONS: Record<
+  ExtractionChannel,
+  {
+    intro: string;
+    source: string;
+    first: readonly string[];
+    reply: string;
+    block: (input: ExtractionInput) => string;
+  }
+> = {
+  email: {
+    intro: "אתה מחלץ פרטי פנייה על ליקוי בדירה מתוך מייל בעברית ומהקבצים המצורפים אליו.",
+    source:
+      'source="text" רק אם הערך מופיע מילולית בכותרת או בגוף הטקסט; "attachment" אם הופיע רק בקובץ מצורף; "none" אם לא הוזכר כלל.',
+    first: ["זהו המייל הראשון בפנייה.", 'description.op="set" עם תיאור התקלה כפי שנכתב. אל תחזיר append או replace.'],
+    reply: "זוהי תשובה בשרשרת קיימת, והטקסט שלהלן הוא הטקסט החדש בלבד (הציטוט הוסר).",
+    block: (input) => `כותרת: ${input.subject}\nגוף:\n${input.text}`,
+  },
+  whatsapp: {
+    intro:
+      "אתה מחלץ פרטי פנייה על ליקוי בדירה מתוך דיווח בוואטסאפ בעברית — הודעה אחת או כמה הודעות רצופות של אותו שולח — ומהקבצים שצורפו אליו. הקלטה קולית מופיעה בטקסט כתמלול שלה.",
+    source:
+      'source="text" רק אם הערך מופיע מילולית בטקסט ההודעות, כולל תמלול של הקלטה; "attachment" אם הופיע רק בקובץ שצורף; "none" אם לא הוזכר כלל.',
+    first: [
+      "זהו הדיווח הראשון בפנייה.",
+      'description.op="set" עם תיאור התקלה כפי שנכתב או נאמר. אל תחזיר append או replace.',
+    ],
+    reply: "זוהי תגובה (Reply) לדיווח קיים, והטקסט שלהלן הוא התגובה בלבד.",
+    block: (input) => `הודעות:\n${input.text}`,
+  },
+};
 
-function instructionsFor(isReply: boolean): string {
-  return [...BASE_INSTRUCTIONS, ...(isReply ? REPLY_INSTRUCTIONS : FIRST_MAIL_INSTRUCTIONS)].join("\n");
+function instructionsFor(input: ExtractionInput): string {
+  const channel = CHANNEL_INSTRUCTIONS[input.channel ?? "email"];
+  const [copy, ...rest] = BASE_INSTRUCTIONS;
+  const mode = input.isReply === true ? [channel.reply, REPLY_DESCRIPTION] : channel.first;
+  // הסדר של המייל נשמר כפי שנמדד: מבוא, העתקה, מקור, ואז שאר הכללים
+  return [channel.intro, copy, channel.source, ...rest, ...mode].join("\n");
 }
 
 /** `סלון=SALON, מטבח=KITCHEN, …` — מהרשימה הקבועה ומהתוויות של המערכת */
@@ -241,9 +285,9 @@ function buildParts(input: ExtractionInput, sent: readonly ExtractionAttachment[
   });
 
   return [
-    { type: "text", text: instructionsFor(input.isReply === true) },
+    { type: "text", text: instructionsFor(input) },
     { type: "text", text: gazetteerText(input.gazetteer) },
-    { type: "text", text: `כותרת: ${input.subject}\nגוף:\n${input.text}` },
+    { type: "text", text: CHANNEL_INSTRUCTIONS[input.channel ?? "email"].block(input) },
     ...files,
   ];
 }

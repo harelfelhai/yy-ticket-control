@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Role, Room } from "@/generated/prisma/enums";
 import { enqueue } from "@/jobs/queue";
+import { JOB_TYPES } from "@/jobs/types";
 import { db } from "@/lib/db";
 import type {
   DraftFieldName,
@@ -826,6 +827,13 @@ export async function writeMedia(
   ticketId: string,
   authorUserId: string,
   parts: readonly PreparedPart[],
+  /**
+   * תמלול שכבר נעשה, לפי מיקום החלק (`PartRef.index`). בוואטסאפ הקלטה מתומללת
+   * **לפני** ההכרעה, כדי לבדוק אם נאמרה בה המילה (§7 שורה 95) — והתמלול הזה הוא
+   * התמלול של הקובץ: אותו מנוע, אותה הנחיה. ג׳וב `TRANSCRIBE` שני היה משלם פעמיים
+   * על אותה הקלטה, ובזמן הריצה שלו הקובץ היה מוצג "מתמלל…" על תמלול שכבר קיים.
+   */
+  transcripts: ReadonlyMap<number, string> = new Map(),
 ): Promise<Map<number, string>> {
   const created = new Map<number, string>();
   // רק מה שנשמר **כמדיה**: מסמך Word שנשמר בהתכתבות יש לו מפתח, ואסור
@@ -839,6 +847,8 @@ export async function writeMedia(
   });
 
   for (const part of media) {
+    const jobType = aiJobFor(part.mimeType);
+    const transcript = jobType === JOB_TYPES.transcribe ? transcripts.get(part.part.index) : undefined;
     const file = await tx.mediaFile.create({
       data: {
         messageId: message.id,
@@ -848,12 +858,14 @@ export async function writeMedia(
         originalName: part.part.filename,
         uploaderUserId: authorUserId,
         uploaded: true,
+        // תמלול ריק הוא "לא נאמר דבר" — אותו ערך ש-`runTranscription` כותב
+        ...(transcript === undefined ? {} : { transcription: transcript || null, aiStatus: "DONE" as const }),
       },
       select: { id: true },
     });
     created.set(part.part.index, file.id);
 
-    const jobType = aiJobFor(part.mimeType);
+    if (transcript !== undefined) continue;
     if (jobType) await enqueue(tx, jobType, { mediaId: file.id });
     // בלי סוג מתאים (וידאו) הרשומה מסומנת מיד כמדולגת ולא נשארת "ממתינה"
     // לנצח — הממשק היה מציג עליה "קורא את הטקסט…" שלא ייגמר.

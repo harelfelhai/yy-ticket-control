@@ -190,6 +190,41 @@ describe("EM-05a — צורת הבקשה המובנית", () => {
     expect(promptOf(1)).not.toContain("תשובה בשרשרת");
     expect(promptOf(1)).toContain("המייל הראשון");
   });
+
+  it("WA-05 — דיווח בוואטסאפ: ההודעות בלי כותרת, והמודל יודע שהקלטה מגיעה כתמלול", async () => {
+    const spy = mockFetch(reply(JSON.stringify(EXTRACTED)));
+
+    await geminiFieldExtractor("k").extract({
+      ...INPUT,
+      channel: "whatsapp",
+      subject: "",
+      text: "תקלה בדירה 14\nנזילה מתחת לכיור",
+    });
+
+    const parts = requestBody(spy).input.map((part) => part.text ?? "");
+    const prompt = parts.join("\n");
+    expect(prompt).toContain("דיווח בוואטסאפ");
+    expect(prompt).toContain("כתמלול");
+    expect(prompt).toContain("הדיווח הראשון");
+    expect(parts).toContain("הודעות:\nתקלה בדירה 14\nנזילה מתחת לכיור");
+    // מה שאינו קיים בצ'אט אינו נשלח: לא כותרת ולא "מייל"
+    expect(prompt).not.toContain("כותרת:");
+    expect(prompt).not.toContain("מייל");
+    // הכללים המשותפים נשארים
+    expect(prompt).toContain("אל תשלים");
+    expect(prompt).toContain("אינסטלטור");
+  });
+
+  it("תגובה בוואטסאפ — 'תגובה (Reply)', והתיאור מתווסף ואינו נפתח מחדש", async () => {
+    const spy = mockFetch(reply(JSON.stringify({ ...EXTRACTED, description: { op: "append", text: "x" } })));
+    await geminiFieldExtractor("k").extract({ ...INPUT, channel: "whatsapp", subject: "", isReply: true });
+    const prompt = requestBody(spy)
+      .input.map((part) => part.text ?? "")
+      .join("\n");
+    expect(prompt).toContain("תגובה (Reply)");
+    expect(prompt).toContain('description.op="append"');
+    expect(prompt).not.toContain("הדיווח הראשון");
+  });
 });
 
 // ─────────────────────────────── קריאת התשובה ───────────────────────────────

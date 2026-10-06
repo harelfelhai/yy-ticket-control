@@ -1180,6 +1180,78 @@ export const he = {
   },
 
   /**
+   * הודעות האישור בוואטסאפ — "ההודעות היוצאות בוואטסאפ" (סוף §4, עדכון 1.4).
+   *
+   * **אותו מבנה כמו `emailIntake`, בנוסח של צ'אט**: הכללים — אילו חלקים, באיזה סדר
+   * ומתי — משותפים (`intake/reply-model.ts`), וכאן רק המילים. ההבדלים מהמייל הם
+   * של הערוץ: "תגובה (Reply)" במקום "תשובה", "בוואטסאפ" במקום "במייל", ו"אין לך
+   * הרשאה" שמפנה למנהל המערכת ולא לשולח (§7 שורה 105). ההדגשה היא של וואטסאפ,
+   * ומוספת ברינדור (`whatsapp/render.ts`), לא כאן.
+   */
+  whatsappIntake: {
+    /** בוואטסאפ הברכה פותחת את המשפט הראשון, באותה שורה — לא פסקה נפרדת כמו במייל */
+    greeting: (name: string) => (name ? `שלום ${name},` : "שלום,"),
+
+    // ── ההודעה הכללית ─────────────────────────────────────────────
+    received: `ההודעה שלך נשמרה כטיוטה במערכת ${APP_NAME}.`,
+    notSentYet: "הטיוטה עוד לא נשלחה לאיש.",
+    currentHeading: "בטיוטה עכשיו:",
+    empty: "—",
+    summaryItem: (label: string, value: string) => `${label}: ${value}`,
+    summarySeparator: " · ",
+    listSeparator: ", ",
+    updatedHeading: "עודכן מהתגובה שלך:",
+    updatedItem: (label: string, before: string, after: string) => `${label} (${before} ← ${after})`,
+    missingHeading: "חסר:",
+    missingRecipients: "נמענים (מי יטפל בתקלה)",
+    missingWithOptions: (fields: string, optionsSentence: string) => `${fields}. ${optionsSentence}`,
+    notFoundHeading: "לא נמצא ברשימה:",
+    notFoundItem: (label: string, written: string) => `${label}: כתבת "${written}".`,
+    existingOptions: {
+      SITE: "האתרים הקיימים",
+      BUILDING: "הבניינים הקיימים",
+      DOMAIN: "התחומים הקיימים",
+    },
+    optionsSentence: (heading: string, options: string) => `${heading}: ${options}.`,
+    ambiguousHeading: "נמצאו כמה התאמות:",
+    ambiguousItem: (label: string, written: string, matches: string) =>
+      `${label}: כתבת "${written}" — ${matches}.`,
+    ambiguousHint: "כתבו בתגובה את השם המלא.",
+    conflictHeading: "סותר את מה שנקבע במערכת:",
+    conflictItem: (label: string, channelValue: string, systemValue: string) =>
+      `${label}: בוואטסאפ ${channelValue}, במערכת ${systemValue}.`,
+    conflictHint: "ההכרעה תיעשה במערכת.",
+    howToHeading: "איך משלימים:",
+    howTo: (link: string) =>
+      `משיבים בתגובה (Reply) להודעה הזו וכותבים רק מה שחסר או צריך תיקון (למשל: "דירה 12, הנמען יוסי כהן"), או משלימים במערכת: ${link}`,
+    /** "כשלא חסר דבר ואין סתירה" — במקום "איך משלימים" */
+    ready: (link: string) =>
+      `כל הפרטים זוהו. כדי לשלוח את הפנייה לנמענים: ${link}. אם משהו לא נכון, השיבו בתגובה עם התיקון.`,
+
+    // ── מצבים מיוחדים ────────────────────────────────────────────────
+    afterDispatch: (seq: number, link: string) =>
+      `פנייה #${seq} כבר נשלחה לנמענים, ולכן התגובה הזו לא שינתה בה דבר. עדכונים לפנייה נכתבים במערכת: ${link}`,
+    afterDeletion:
+      "הטיוטה נמחקה במערכת, ולכן התגובה הזו לא נקלטה. לפתיחת פנייה חדשה שלחו הודעה חדשה שכוללת 'תקלה'.",
+    extractionUnavailableFirst: (link: string) =>
+      `ההודעה נשמרה כטיוטה, אבל הפרטים לא חולצו ממנה אוטומטית כי השירות אינו זמין כרגע. תוכן ההודעה נשמר כתיאור. את שאר הפרטים יש להשלים במערכת: ${link}`,
+    extractionUnavailableReply: (link: string) =>
+      `התגובה שלך נשמרה בשיחה של הטיוטה, אבל לא עובדה אוטומטית כי השירות אינו זמין כרגע. את השינויים יש להזין במערכת: ${link}`,
+    /**
+     * בצ'אט פרטי מי שעונה הוא השולח עצמו, ולכן ההפניה היא למנהל המערכת ולא
+     * "לשולח" כמו במייל (§7 שורה 105). הפרמטר נשאר בגלל החוזה המשותף.
+     */
+    notPermitted: () =>
+      "אין לך הרשאה לעדכן את הטיוטה הזו, ולכן התגובה שלך לא נקלטה. אפשר לפנות למנהל המערכת.",
+    noSite: "לא ניתן לפתוח פנייה מההודעה הזו, כי אינך משויך כרגע לאתר. פנה למנהל המערכת.",
+    /**
+     * תיאור שקוצר כדי שההודעה תיכנס בגג של וואטסאפ (4096 תווים, §7 שורה 112). התיאור
+     * המלא נשאר בטיוטה, ושם הקישור מוביל.
+     */
+    truncated: "…",
+  },
+
+  /**
    * טיוטה ממייל במערכת — מסכים 7 ו-7א (עדכון 1.3). המיילים עצמם ב-`emailIntake`.
    */
   emailDraft: {

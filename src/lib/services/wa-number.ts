@@ -52,7 +52,12 @@ export function selectWaAccountApi(): WaAccountApi | null {
   const app = env.whatsapp();
   const signup = env.whatsappSignup();
   if (!app || !signup) return null;
-  return graphWaAccountApi({ appId: signup.appId, appSecret: app.appSecret, version: app.graphVersion });
+  return graphWaAccountApi({
+    appId: signup.appId,
+    appSecret: app.appSecret,
+    version: app.graphVersion,
+    host: env.whatsappGraphHost(),
+  });
 }
 
 /**
@@ -330,16 +335,16 @@ export async function checkWhatsappConnection(deps: WaNumberDeps = {}): Promise<
   }
 
   const token = number.tokenCipher ? openWaToken(number.tokenCipher) : null;
-  if (!token) return reportIssue(number.id, { code: "token_unreadable" });
+  if (!token) return reportWaIssue(number.id, { code: "token_unreadable" });
 
   try {
     const subscription = await api.getSubscription(token, number.wabaId);
     if (!subscription || subscription.callbackUri !== webhookCallbackUrl()) {
-      return reportIssue(number.id, { code: "subscription_lost" });
+      return reportWaIssue(number.id, { code: "subscription_lost" });
     }
 
     const info = await api.getPhoneNumber(token, number.phoneNumberId);
-    if (number.coexistence && !info.onBusinessApp) return reportIssue(number.id, { code: "not_on_app" });
+    if (number.coexistence && !info.onBusinessApp) return reportWaIssue(number.id, { code: "not_on_app" });
     if (info.displayPhone !== number.displayPhone || info.verifiedName !== number.verifiedName) {
       // השם העסקי משתנה אצל Meta (אישור שם חדש) — המסך מציג את מה שמוצג בוואטסאפ
       await db.waNumber.update({
@@ -351,15 +356,15 @@ export async function checkWhatsappConnection(deps: WaNumberDeps = {}): Promise<
     const syncOpen = number.coexistence && (!number.contactsSyncedAt || !number.historySyncedAt);
     if (syncOpen) {
       if (now.getTime() - number.activatedAt.getTime() > SYNC_WINDOW_MS) {
-        return reportIssue(number.id, { code: "sync_overdue" });
+        return reportWaIssue(number.id, { code: "sync_overdue" });
       }
       await syncPending(number, api, token, now);
     }
     return { kind, status: "ok", synced: syncOpen };
   } catch (error) {
     if (!(error instanceof WaApiError)) throw error;
-    if (error.kind === "auth") return reportIssue(number.id, { code: "token_revoked" });
-    if (error.kind === "not_found") return reportIssue(number.id, { code: "number_missing" });
+    if (error.kind === "auth") return reportWaIssue(number.id, { code: "token_revoked" });
+    if (error.kind === "not_found") return reportWaIssue(number.id, { code: "number_missing" });
     logWarn("wa.health.unreachable", { numberId: number.id, kind: error.kind, code: error.code ?? null });
     return { kind, status: "unreachable" };
   }
@@ -369,7 +374,7 @@ export async function checkWhatsappConnection(deps: WaNumberDeps = {}): Promise<
  * מצב "תקלה" עם הקוד שלה. **Sentry רק במעבר** — מספר שכבר בתקלה נשאר בה עד
  * חיבור מחדש, וה-watchdog (`wa-subscription-intact`) מתריע עליו בכל סבב.
  */
-async function reportIssue(
+export async function reportWaIssue(
   numberId: string,
   issue: WaIssue,
   options: { replaceIssue?: boolean } = {},
@@ -412,7 +417,7 @@ export async function applyAccountUpdate(account: WaAccountEvent): Promise<"appl
   if (!number) return "ignored";
 
   if (account.event === "PARTNER_REMOVED" || account.event === "ACCOUNT_OFFBOARDED") {
-    await reportIssue(
+    await reportWaIssue(
       number.id,
       { code: "partner_removed", reason: account.event === "PARTNER_REMOVED" ? account.reason : null },
       { replaceIssue: true },
@@ -437,7 +442,7 @@ async function requireConnected(deps: WaNumberDeps) {
   if (!number) throw new WaNumberError(he.whatsappAdmin.errors.notConnected);
   const token = number.tokenCipher ? openWaToken(number.tokenCipher) : null;
   if (!token) {
-    await reportIssue(number.id, { code: "token_unreadable" });
+    await reportWaIssue(number.id, { code: "token_unreadable" });
     throw new WaNumberError(he.whatsappAdmin.issue.token_unreadable);
   }
   return { api, number, token };

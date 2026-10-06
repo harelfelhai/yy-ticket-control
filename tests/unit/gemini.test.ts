@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { canExtractText, geminiExtractor, geminiTranscriber } from "@/lib/ai/gemini";
+import { AiRequestError, canExtractText, geminiExtractor, geminiTranscriber } from "@/lib/ai/gemini";
 
 /**
  * המודול היחיד שמדבר עם ספק ה-AI. שלוש הנקודות שנבדקות כאן הן אלה
@@ -138,5 +138,44 @@ describe("גבול הבקשה המוטבעת", () => {
     await geminiExtractor("k").extract(Buffer.alloc(1024), "application/pdf");
 
     expect(spy).toHaveBeenCalledOnce();
+  });
+});
+
+describe("סיווג הכשל של תמלול וחילוץ טקסט", () => {
+  // הקליטה בוואטסאפ מתמללת הקלטה כדי לבדוק אם נאמרה "תקלה" (§7 שורה 95), ומכריעה
+  // לפי הסוג: חולף — לדחות ולנסות שוב; קבוע — ההקלטה אינה ניתנת לתמלול. כשל גולמי
+  // (`TypeError: fetch failed`) נראה לה כבאג, והג׳וב מת — כך נמצא בהרצה החיה של W6.
+  async function failure(run: () => Promise<unknown>): Promise<AiRequestError> {
+    try {
+      await run();
+    } catch (error) {
+      if (error instanceof AiRequestError) return error;
+      throw new Error(`ציפיתי ל-AiRequestError, וחזר: ${String(error)}`);
+    }
+    throw new Error("ציפיתי לכשל");
+  }
+
+  it("כשל רשת — חולף", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+    const error = await failure(() => geminiTranscriber("k").transcribe(Buffer.from("a"), "audio/ogg"));
+    expect(error.kind).toBe("transient");
+  });
+
+  it.each([
+    [503, "transient"],
+    [429, "quota"],
+    [401, "auth"],
+    [400, "permanent"],
+  ] as const)("HTTP %i — %s, והסטטוס בהודעה", async (status, kind) => {
+    mockFetch({ error: "x" }, false, status);
+    const error = await failure(() => geminiTranscriber("k").transcribe(Buffer.from("a"), "audio/ogg"));
+    expect(error).toMatchObject({ kind, status });
+    expect(error.message).toContain(String(status));
+  });
+
+  it("קובץ מעל הגג — קבוע: אותה בקשה תיכשל שוב", async () => {
+    mockFetch(reply("לא אמור להישלח"));
+    const error = await failure(() => geminiTranscriber("k").transcribe(Buffer.alloc(15 * 1024 * 1024), "audio/ogg"));
+    expect(error.kind).toBe("permanent");
   });
 });

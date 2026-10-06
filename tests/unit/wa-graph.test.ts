@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { graphWaApi } from "@/lib/whatsapp/api";
 import { WINDOW_CLOSED_CODE, WaApiError, classifyGraphError, parseGraphError } from "@/lib/whatsapp/errors";
-import type { GraphConfig } from "@/lib/whatsapp/graph";
+import { type GraphConfig, graphUrl } from "@/lib/whatsapp/graph";
 import { MAX_TEXT_LENGTH } from "@/lib/whatsapp/send";
 
 /**
@@ -94,12 +94,24 @@ describe("classifyGraphError", () => {
   });
 });
 
+describe("graphUrl", () => {
+  it("ברירת המחדל — Meta, בגרסה שנקבעה", () => {
+    expect(graphUrl({ version: "v25.0" }, "/123/messages")).toBe("https://graph.facebook.com/v25.0/123/messages");
+  });
+
+  it("כתובת חלופית (שרת מדומה בבדיקה מקומית) — בלי לוכסן כפול", () => {
+    expect(graphUrl({ version: "v25.0", host: "http://127.0.0.1:3199/" }, "123/messages")).toBe(
+      "http://127.0.0.1:3199/v25.0/123/messages",
+    );
+  });
+});
+
 // ─────────────────────────────── שליחה ───────────────────────────────
 
 describe("sendText", () => {
   it("טקסט בלבד, כתגובה להודעת השולח, מהמספר העסקי ועם הטוקן", async () => {
     const { api, calls } = fakeGraph(() => ({ json: { messages: [{ id: "wamid.SENT" }] } }));
-    const result = await api.sendText({ phoneNumberId: "300000000000002", to: "972500000002", body: "שלום", contextWamid: "wamid.IN" });
+    const result = await api.sendText({ phoneNumberId: "300000000000002", to: { phone: "972500000002" }, body: "שלום", contextWamid: "wamid.IN" });
 
     expect(result).toEqual({ wamid: "wamid.SENT" });
     expect(calls).toHaveLength(1);
@@ -118,39 +130,46 @@ describe("sendText", () => {
     });
   });
 
+  it("משתמש שהסתיר את הטלפון — המזהה בשדה `recipient`, ובלי `to`", async () => {
+    const { api, calls } = fakeGraph(() => ({ json: { messages: [{ id: "wamid.SENT" }] } }));
+    await api.sendText({ phoneNumberId: "1", to: { bsuid: "IL.1234567890" }, body: "שלום" });
+    expect(calls[0]?.body).toMatchObject({ recipient: "IL.1234567890" });
+    expect(calls[0]?.body).not.toHaveProperty("to");
+  });
+
   it("בלי הודעה לצטט — בלי `context`", async () => {
     const { api, calls } = fakeGraph(() => ({ json: { messages: [{ id: "wamid.SENT" }] } }));
-    await api.sendText({ phoneNumberId: "1", to: "972500000002", body: "שלום" });
+    await api.sendText({ phoneNumberId: "1", to: { phone: "972500000002" }, body: "שלום" });
     expect(calls[0]?.body).not.toHaveProperty("context");
   });
 
   it("חלון 24 השעות נסגר (131047) — הכרעה, עם הקוד לקורא", async () => {
     const { api } = fakeGraph(() => ({ status: 400, text: graphError(WINDOW_CLOSED_CODE) }));
-    const error = await caught(api.sendText({ phoneNumberId: "1", to: "972500000002", body: "שלום" }));
+    const error = await caught(api.sendText({ phoneNumberId: "1", to: { phone: "972500000002" }, body: "שלום" }));
     expect(error).toMatchObject({ kind: "permanent", status: 400, code: WINDOW_CLOSED_CODE });
   });
 
   it("טוקן שבוטל — עצירה ברעש, והטוקן אינו בהודעת השגיאה", async () => {
     const { api } = fakeGraph(() => ({ status: 401, text: graphError(190) }));
-    const error = await caught(api.sendText({ phoneNumberId: "1", to: "972500000002", body: "שלום" }));
+    const error = await caught(api.sendText({ phoneNumberId: "1", to: { phone: "972500000002" }, body: "שלום" }));
     expect(error.kind).toBe("auth");
     expect(error.message).not.toContain("test-token");
   });
 
   it("כשל רשת — חולף", async () => {
     const { api } = fakeGraph(() => ({ throws: new TypeError("fetch failed") }));
-    expect((await caught(api.sendText({ phoneNumberId: "1", to: "9725", body: "שלום" }))).kind).toBe("transient");
+    expect((await caught(api.sendText({ phoneNumberId: "1", to: { phone: "9725" }, body: "שלום" }))).kind).toBe("transient");
   });
 
   it("תשובה בלי מזהה הודעה — הכרעה: בלי המזהה תגובה עליה לא תחזור לטיוטה", async () => {
     const { api } = fakeGraph(() => ({ json: { messages: [] } }));
-    expect((await caught(api.sendText({ phoneNumberId: "1", to: "9725", body: "שלום" }))).kind).toBe("permanent");
+    expect((await caught(api.sendText({ phoneNumberId: "1", to: { phone: "9725" }, body: "שלום" }))).kind).toBe("permanent");
   });
 
   it("גוף ריק או ארוך מהגג נדחה לפני שנשלחת בקשה", async () => {
     const { api, calls } = fakeGraph(() => ({ json: { messages: [{ id: "x" }] } }));
-    expect((await caught(api.sendText({ phoneNumberId: "1", to: "9725", body: "  " }))).kind).toBe("permanent");
-    expect((await caught(api.sendText({ phoneNumberId: "1", to: "9725", body: "א".repeat(MAX_TEXT_LENGTH + 1) }))).kind).toBe(
+    expect((await caught(api.sendText({ phoneNumberId: "1", to: { phone: "9725" }, body: "  " }))).kind).toBe("permanent");
+    expect((await caught(api.sendText({ phoneNumberId: "1", to: { phone: "9725" }, body: "א".repeat(MAX_TEXT_LENGTH + 1) }))).kind).toBe(
       "permanent",
     );
     expect(calls).toHaveLength(0);
@@ -211,6 +230,29 @@ describe("downloadMedia", () => {
   it("401 בקפיצה השנייה — עצירה ברעש (הטוקן אינו תקף)", async () => {
     const { api } = mediaRoutes({ download: { status: 401, text: "" } });
     expect((await caught(api.downloadMedia("m", { maxBytes: 1024 }))).kind).toBe("auth");
+  });
+
+  it("שרת Graph מדומה (בדיקה מקומית): כתובת http מותרת רק כשהיא של אותו שרת", async () => {
+    const host = "http://127.0.0.1:3199";
+    const routes = (url: string) => {
+      const calls: string[] = [];
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        calls.push(href);
+        return href.includes("/v25.0/")
+          ? new Response(JSON.stringify({ url, mime_type: "image/jpeg", sha256: SHA }), { status: 200 })
+          : new Response(new Uint8Array(BYTES), { status: 200 });
+      }) satisfies typeof globalThis.fetch;
+      return { api: graphWaApi({ token: "t", version: "v25.0", host, fetch: fetchImpl }), calls };
+    };
+
+    const same = routes(`${host}/media-bytes/m`);
+    expect(await same.api.downloadMedia("m", { maxBytes: 1024 })).toMatchObject({ ok: true });
+    expect(same.calls).toEqual([`${host}/v25.0/m`, `${host}/media-bytes/m`]);
+
+    const other = routes("http://evil.example/x");
+    expect((await caught(other.api.downloadMedia("m", { maxBytes: 1024 }))).kind).toBe("permanent");
+    expect(other.calls).toHaveLength(1);
   });
 
   it("תשובה בלי כתובת https — הכרעה, בלי לפנות לכתובת אחרת", async () => {

@@ -21,6 +21,8 @@ export interface WaAppCredentials {
   appSecret: string;
   /** גרסת ה-Graph API (`WHATSAPP_GRAPH_VERSION`) */
   version: string;
+  /** כתובת חלופית ל-Graph, לבדיקה מקומית בלבד (`GraphConfig.host`) */
+  host?: string;
   /** מוזרק בבדיקות. ברירת המחדל — `fetch` של הסביבה. */
   fetch?: typeof fetch;
 }
@@ -98,7 +100,8 @@ export interface WaAccountApi {
 const PHONE_FIELDS = "id,display_phone_number,verified_name,is_on_biz_app,platform_type";
 
 export function graphWaAccountApi(app: WaAppCredentials): WaAccountApi {
-  const business = (token: string): GraphConfig => ({ token, version: app.version, fetch: app.fetch });
+  const config = (token: string | null): GraphConfig => ({ token, version: app.version, host: app.host, fetch: app.fetch });
+  const business = (token: string): GraphConfig => config(token);
   const enc = encodeURIComponent;
 
   return {
@@ -106,7 +109,7 @@ export function graphWaAccountApi(app: WaAppCredentials): WaAccountApi {
       // בלי טוקן: האפליקציה מזדהה במזהה ובסוד שלה. הכתובת אינה נרשמת בשום מקום —
       // לא בלוג ולא בהודעת השגיאה (`graph.ts`).
       const response = await graphJson<{ access_token?: unknown }>(
-        { token: null, version: app.version, fetch: app.fetch },
+        config(null),
         `oauth/access_token?client_id=${enc(app.appId)}&client_secret=${enc(app.appSecret)}&code=${enc(code)}`,
       );
       if (typeof response.access_token !== "string" || !response.access_token) {
@@ -117,7 +120,7 @@ export function graphWaAccountApi(app: WaAppCredentials): WaAccountApi {
 
     async inspectToken(token) {
       const response = await graphJson<{ data?: DebugTokenData }>(
-        { token: `${app.appId}|${app.appSecret}`, version: app.version, fetch: app.fetch },
+        config(`${app.appId}|${app.appSecret}`),
         `debug_token?input_token=${enc(token)}`,
       );
       return toTokenInfo(response.data ?? {});
