@@ -183,10 +183,17 @@ export type StructuredPart =
  *
  * `transient` — לנסות שוב עם השהיה (5xx, פסק זמן, רשת). `quota` — לנסות
  * שוב, אבל לאט ובידיעה שהמכסה נגמרה. `auth` — מפתח פסול או נשלל; ניסיון
- * חוזר לא יעזור ואדם צריך לדעת. `permanent` — הבקשה עצמה פסולה, או
- * שהתשובה אינה מה שהוסכם; ניסיון חוזר יחזיר בדיוק את אותו דבר.
+ * חוזר לא יעזור ואדם צריך לדעת. `permanent` — הבקשה עצמה פסולה (4xx, קלט
+ * גדול מדי); ניסיון חוזר יחזיר בדיוק את אותו דבר.
+ *
+ * `malformed` — התשובה הגיעה, אבל אינה במבנה שהוסכם: לא JSON, מעטפה שאינה
+ * מוכרת, או JSON שאינו עומד בסכימה. עד 6.10.2026 זה היה `permanent`, בהנחה
+ * שב-temperature 0 ניסיון חוזר יחזיר את אותה תשובה — אבל נמדד שהפלט משתנה בין
+ * קריאות זהות, ולכן תשובה פגומה יכולה להיות מקרית. מצד שני, שינוי במבנה התשובה
+ * אצל הספק יחזור בכל קריאה. לכן ניסיון **אחד** נוסף, לא יותר (§7 שורה 114,
+ * `shouldRetryExtraction`).
  */
-export type AiErrorKind = "transient" | "auth" | "quota" | "permanent";
+export type AiErrorKind = "transient" | "auth" | "quota" | "permanent" | "malformed";
 
 /**
  * שגיאה מסווגת מהספק.
@@ -320,16 +327,16 @@ export async function askStructured(
 
   const text = readJsonText(raw);
   if (!text) {
-    throw new AiRequestError(`תשובת Gemini אינה במבנה מוכר: ${raw.slice(0, 300)}`, "permanent");
+    throw new AiRequestError(`תשובת Gemini אינה במבנה מוכר: ${raw.slice(0, 300)}`, "malformed");
   }
 
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    // המודל החזיר פרוזה למרות ה-`response_format`. ניסיון חוזר יחזיר את
-    // אותו דבר, ולכן זה `permanent` — והצינור הופך אותו ל"החילוץ אינו
-    // זמין" (EM-11), הכרעה שנאמרת לשולח, ולא שתיקה.
-    throw new AiRequestError(`תשובת Gemini אינה JSON: ${text.slice(0, 300)}`, "permanent");
+    // המודל החזיר פרוזה למרות ה-`response_format`. `malformed`: ניסיון אחד נוסף,
+    // ואחריו הצינור הופך זאת ל"החילוץ אינו זמין" (EM-11) — הכרעה שנאמרת לשולח,
+    // ולא שתיקה
+    throw new AiRequestError(`תשובת Gemini אינה JSON: ${text.slice(0, 300)}`, "malformed");
   }
 }
 

@@ -248,6 +248,24 @@ describe("WA-09 — השלמה בתגובה (Reply) להודעה בשיחה של
     expect(await outboundFor(reply.id)).not.toBeNull();
   });
 
+  it("§7 שורה 114 — תשובה פגומה פעמיים בתגובה: REPLY_STORED_UNPROCESSED, והסיבה נרשמת", async () => {
+    const user = await makeWaUser();
+    const { ackWamid } = await openDraft(user);
+    const reply = await inbound(user, REPLY_AT, { text: "דירה 14", contextWamid: ackWamid });
+    const extractor = fakeFieldExtractor({ error: aiError("malformed", "תשובת Gemini אינה JSON: x") });
+    const { deps } = liveDeps({ extractor });
+
+    await handleWaIntake({ waMessageId: reply.id }, { ...deps, now: DECIDE_REPLY });
+    const retryAt = (await rowOf(reply.id)).nextAttemptAt!;
+    await handleWaIntake({ waMessageId: reply.id }, { ...deps, now: retryAt });
+
+    expect(await rowOf(reply.id)).toMatchObject({
+      outcome: "REPLY_STORED_UNPROCESSED",
+      detail: "החילוץ אינו זמין — malformed: תשובת Gemini אינה JSON: x",
+    });
+    expect(extractor.calls).toHaveLength(2);
+  });
+
   it("shadow — התגובה מוכרעת ונרשמת, ושום דבר אינו מבוצע", async () => {
     const user = await makeWaUser();
     const { ticket, ackWamid } = await openDraft(user, {

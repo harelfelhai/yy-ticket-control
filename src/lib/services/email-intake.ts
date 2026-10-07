@@ -17,6 +17,7 @@ import {
   EXTRACTION_RETRY_MS,
   MAX_DEFER_ATTEMPTS,
   deferDelayMs,
+  extractionUnavailableDetail,
   shouldRetryExtraction,
 } from "@/lib/intake/defer-policy";
 import type { FieldExtractor } from "@/lib/intake/extraction";
@@ -617,7 +618,7 @@ export async function createEmailDraft(
         state: "DONE",
         outcome,
         nextAttemptAt: null,
-        detail: null,
+        detail: extraction.unavailable ?? null,
         threadId: thread.id,
         authorUserId: sender.id,
         // התיבה שלנו: היא הנמענת, גם כשהיא רק בהעתק (§7 שורה 80)
@@ -900,7 +901,7 @@ async function applyEmailReply(
         state: "DONE",
         outcome,
         nextAttemptAt: null,
-        detail: null,
+        detail: extraction.unavailable ?? null,
         threadId,
         authorUserId: freshSender.id,
         subject: envelope.subject,
@@ -1000,9 +1001,14 @@ async function extract(input: {
   now: Date;
   /** תשובה בשרשרת (S7): `body` הוא הטקסט החדש בלבד, ו-`op` יכול להיות append/replace/none */
   isReply?: boolean;
-}): Promise<{ deferred: false; value: FieldExtraction | null } | { deferred: true; outcome: EmailIntakeOutcome }> {
+}): Promise<
+  | { deferred: false; value: FieldExtraction; unavailable?: undefined }
+  /** החילוץ אינו זמין (EM-11) — והסיבה, לאבחון על השורה */
+  | { deferred: false; value: null; unavailable: string }
+  | { deferred: true; outcome: EmailIntakeOutcome }
+> {
   const { row, envelope, sender, body, parts, deps, now, isReply = false } = input;
-  if (!deps.extractor) return { deferred: false, value: null };
+  if (!deps.extractor) return { deferred: false, value: null, unavailable: extractionUnavailableDetail(null) };
 
   try {
     const value = await deps.extractor.extract({
@@ -1042,7 +1048,7 @@ async function extract(input: {
       kind: error.kind,
       attempts: attemptsSoFar,
     });
-    return { deferred: false, value: null };
+    return { deferred: false, value: null, unavailable: extractionUnavailableDetail(error) };
   }
 }
 

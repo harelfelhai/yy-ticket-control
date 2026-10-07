@@ -87,7 +87,7 @@
 | `wa.intake.hint` | נשלח ההסבר החד-פעמי (§7 שורה 98) — `drafts`: כמה טיוטות שאושרו זיכו בו |
 | `wa.intake.deferred` (warn) | כשל זמני — תמלול, הורדת קובץ או חילוץ (`reason`) — והשולח נדחה כולו עד `nextAttemptAt`. בניסיון השישי גם issue ב-Sentry |
 | `wa.intake.exhausted` (error) | הודעות מיצו כיום של ניסיונות ונעצרו בלי הכרעה (`FAILED`) — issue ב-Sentry |
-| `wa.intake.extraction_unavailable` (warn) | החילוץ אינו זמין אחרי התקציב — טיוטה שתוכן ההודעות הוא התיאור שלה (EM-11) |
+| `wa.intake.extraction_unavailable` (warn) | החילוץ אינו זמין אחרי התקציב — טיוטה שתוכן ההודעות הוא התיאור שלה (EM-11). תשובה פגומה (`kind: malformed`) מקבלת קודם ניסיון אחד נוסף (§7 שורה 114). הסיבה נרשמת גם על ההודעה (`WaMessage.detail`; במייל `MailboxMessage.detail`), כי הלוג אינו נשמר בסביבת פיתוח |
 | `wa.intake.unit_changed` | הדיווח או השולח השתנו בין ההכרעה לכתיבה (`reason`: `unit` — הודעה שנמסרה באיחור; `sender` — הושבת, איבד את ההרשאה או עבר אתר) — לא נכתב דבר, וג׳וב מיידי מכריע מחדש |
 | `wa.intake.dropped` | הודעות שעוד המתינו אינן נקלטות, בלי עיבוד: המספר נותק (`IGNORED_DISABLED`), או שהשולח אינו מורשה עוד (`IGNORED_UNAUTHORIZED`) |
 | `wa.intake.voice_unavailable` · `wa.intake.voice_too_large` (warn) | הקלטה שאי אפשר לתמלל — נחשבת בלי "תקלה" |

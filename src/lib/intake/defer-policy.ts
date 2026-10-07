@@ -1,4 +1,4 @@
-import type { AiErrorKind } from "@/lib/ai/gemini";
+import type { AiErrorKind, AiRequestError } from "@/lib/ai/gemini";
 
 /**
  * מדיניות הדחייה של הודעה נכנסת — משותפת לכל ערוצי הקליטה.
@@ -75,11 +75,14 @@ export const MIN_EXTRACTION_ATTEMPTS = 2;
 
 /**
  * **הקו החד של EM-11:** האם כשל של המחלץ נדחה לניסיון נוסף, או הופך להכרעה
- * "החילוץ אינו זמין".
+ * "החילוץ אינו זמין". `extractionAttempts` כולל את הקריאה שנכשלה עכשיו.
  *
- * כשל זמני או מכסה נדחה כל עוד יש תקציב, או כל עוד לא נעשו שני ניסיונות.
- * כשל קבוע (4xx, תשובה שאינה עומדת בסכימה) הולך ישר להכרעה: אין מה לנסות
- * שוב. `extractionAttempts` כולל את הקריאה שנכשלה עכשיו.
+ * - **זמני או מכסה** — נדחה כל עוד יש תקציב, או כל עוד לא נעשו שני ניסיונות.
+ * - **תשובה פגומה** (`malformed`: לא JSON, או לא בסכימה) — ניסיון **אחד** נוסף,
+ *   בלי קשר לתקציב, ואז הכרעה (§7 שורה 114). הפלט של המודל משתנה בין קריאות,
+ *   ולכן תשובה פגומה יכולה להיות מקרית; אבל שינוי מבנה אצל הספק חוזר בכל
+ *   קריאה, וניסיונות עד סוף התקציב היו רק מכפילים קריאות ומעכבים כל דיווח.
+ * - **קבוע** (4xx, קלט גדול מדי) ו**הרשאה** — ישר להכרעה: אין מה לנסות שוב.
  */
 export function shouldRetryExtraction(input: {
   kind: AiErrorKind;
@@ -87,8 +90,19 @@ export function shouldRetryExtraction(input: {
   receivedAt: Date;
   extractionAttempts: number;
 }): boolean {
+  if (input.kind === "malformed") return input.extractionAttempts < MIN_EXTRACTION_ATTEMPTS;
   const retryable = input.kind === "transient" || input.kind === "quota";
   const inBudget =
     input.now.getTime() + EXTRACTION_RETRY_MS < input.receivedAt.getTime() + EXTRACTION_BUDGET_MS;
   return retryable && (inBudget || input.extractionAttempts < MIN_EXTRACTION_ATTEMPTS);
+}
+
+/**
+ * מה נרשם על ההודעה (`detail`) כשהוכרע "החילוץ אינו זמין" — **לאבחון בלבד**, לא
+ * לשולח. בלעדיו הסיבה הייתה רק בלוג, שבסביבת פיתוח אינו נשמר כלל, והכרעה סופית
+ * הייתה נשארת בלי הסבר (ריצה חיה של W7, 6.10.2026). `null` — אין מחלץ בסביבה.
+ */
+export function extractionUnavailableDetail(error: AiRequestError | null): string {
+  const reason = error ? `${error.kind}: ${error.message}` : "אין מנוע חילוץ בסביבה";
+  return `החילוץ אינו זמין — ${reason}`.slice(0, 1000);
 }

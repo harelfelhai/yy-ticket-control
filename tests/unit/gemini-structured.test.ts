@@ -273,19 +273,19 @@ describe("EM-05a — קריאת התשובה", () => {
     expect(toFieldExtraction(parsed).description).toEqual({ op: "none", text: "" });
   });
 
-  it("EM-11 — תשובה שאינה JSON נזרקת כ-permanent ולא הופכת לחילוץ ריק", async () => {
+  it("§7 שורה 114 — תשובה שאינה JSON נזרקת כ-malformed ולא הופכת לחילוץ ריק", async () => {
     mockFetch(reply("בוודאי! הנה הפרטים שמצאתי:"));
 
     await expect(geminiFieldExtractor("k").extract(INPUT)).rejects.toMatchObject({
-      kind: "permanent",
+      kind: "malformed",
     });
   });
 
-  it("EM-11 — JSON שאינו עומד בסכימה נזרק כ-permanent", async () => {
+  it("§7 שורה 114 — JSON שאינו עומד בסכימה נזרק כ-malformed", async () => {
     mockFetch(reply(JSON.stringify({ ...EXTRACTED, room: { value: "GARDEN", source: "text" } })));
 
     await expect(geminiFieldExtractor("k").extract(INPUT)).rejects.toMatchObject({
-      kind: "permanent",
+      kind: "malformed",
     });
   });
 
@@ -293,6 +293,8 @@ describe("EM-05a — קריאת התשובה", () => {
     mockFetch({ unexpected: true });
 
     await expect(geminiFieldExtractor("k").extract(INPUT)).rejects.toBeInstanceOf(AiRequestError);
+    mockFetch({ unexpected: true });
+    await expect(geminiFieldExtractor("k").extract(INPUT)).rejects.toMatchObject({ kind: "malformed" });
   });
 });
 

@@ -352,11 +352,11 @@ export function geminiFieldExtractor(apiKey: string): FieldExtractor {
 
       const parsed = extractionSchema.safeParse(payload);
       if (!parsed.success) {
-        // `permanent`: אותה בקשה תחזיר את אותה תשובה. הצינור הופך זאת
-        // למסלול "החילוץ אינו זמין" (EM-11) — הכרעה שנאמרת לשולח.
+        // `malformed`: ניסיון אחד נוסף — הפלט משתנה בין קריאות — ואחריו הצינור
+        // הופך זאת למסלול "החילוץ אינו זמין" (EM-11), הכרעה שנאמרת לשולח
         throw new AiRequestError(
           `תשובת החילוץ אינה עומדת בסכימה: ${parsed.error.message.slice(0, 300)}`,
-          "permanent",
+          "malformed",
         );
       }
 
