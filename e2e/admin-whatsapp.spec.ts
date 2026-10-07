@@ -122,6 +122,41 @@ test.describe("מסך 17 — חיבור וואטסאפ", () => {
     await expect(page.getByText("החיבור לוואטסאפ עוד לא הוגדר בשרת. יש לפנות למפתח המערכת.")).toBeVisible();
   });
 
+  test("WA-S1-02 — באנר בראש הלוח: למנהל המערכת, רק כשהחיבור נפל, והקישור טוען את מסך 17", async ({
+    page,
+    browser,
+  }) => {
+    const BANNER = "הוואטסאפ אינו מחובר — הודעות לא נקלטות.";
+    seedWhatsapp("error");
+    await loginAsAdmin(page);
+    await page.goto("/board");
+    const banner = page.getByRole("status").filter({ hasText: BANNER });
+    await expect(banner).toBeVisible();
+    const link = banner.getByRole("link", { name: "לחיבור" });
+    await expect(link).toHaveAttribute("href", "/admin/whatsapp");
+    // טעינת מסמך מלאה: ה-CSP של מסך 17 — היחיד שמתיר את ה-SDK — חל עליו
+    const [response] = await Promise.all([page.waitForResponse(/\/admin\/whatsapp$/), link.click()]);
+    expect(response.headers()["content-security-policy"]).toContain("https://connect.facebook.net");
+    await expect(page.getByText("תקלה", { exact: true })).toBeVisible();
+
+    // בעלים — אין באנר, גם כשהחיבור נפל
+    const context = await browser.newContext();
+    const owner = await context.newPage();
+    await owner.goto("/login");
+    await owner.getByLabel("טלפון או מייל").fill(WA_OWNER.phone);
+    await owner.getByLabel("סיסמה").fill(WA_OWNER.password);
+    await owner.getByRole("button", { name: "כניסה" }).click();
+    await expect(owner).toHaveURL(/\/board$/);
+    await expect(owner.getByText(BANNER)).toHaveCount(0);
+    await context.close();
+
+    // חיבור תקין — אין באנר: חיווי קבוע מלמד להפסיק לקרוא אותו
+    seedWhatsapp("connected");
+    await page.goto("/board");
+    // הלוח מרונדר בשרת: אחרי goto התוכן כבר שם, והיעדר הבאנר הוא תשובה ולא מרוץ
+    await expect(page.getByText(BANNER)).toHaveCount(0);
+  });
+
   test("ה-CSP מתיר את ה-SDK של Meta במסך 17 בלבד", async ({ page }) => {
     await loginAsAdmin(page);
     const screen = await page.goto("/admin/whatsapp");

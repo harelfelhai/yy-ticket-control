@@ -76,6 +76,21 @@ describe("WaConversation", () => {
     expect(within(ack).getByText(he.waConversation.systemSender)).toBeInTheDocument();
   });
 
+  it("קישור ארוך נשבר בתוך הבועה — `wrap-anywhere`, כי `break-word` אינו מקטין את רוחב הבועה", () => {
+    // נמדד בריצה החיה (W8): ב-390px בועת אישור עם הקישור לטיוטה יצאה מהכרטיס שמאלה
+    // ונחתכה. ב-RTL גלישה שמאלה אינה יוצרת גלילה, ולכן אין לה סימן אחר.
+    render(<WaConversation messages={[system("s", { text: "קישור: http://localhost:3100/tickets/cmuy8fnk2000p20etu1o6xxtp" })]} now={NOW} />);
+    expect(screen.getByText(/^קישור:/).className).toContain("wrap-anywhere");
+  });
+
+  it("ההדגשה של וואטסאפ מוצגת כהדגשה, ולא ככוכביות", () => {
+    render(<WaConversation messages={[system("s", { text: "*בטיוטה עכשיו:*\nאתר: נווה שאנן" })]} now={NOW} />);
+    const strong = screen.getByText("בטיוטה עכשיו:");
+    expect(strong.tagName).toBe("STRONG");
+    expect(screen.queryByText(/\*/)).not.toBeInTheDocument();
+    expect(strong.closest("p")).toHaveTextContent("בטיוטה עכשיו:\nאתר: נווה שאנן", { normalizeWhitespace: false });
+  });
+
   it("מצב מסירה תקין — מילה שקטה ליד השעה; 'לא נשלחה' — Chip אדום", () => {
     render(
       <WaConversation

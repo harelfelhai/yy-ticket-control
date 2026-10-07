@@ -5,6 +5,7 @@ import type { MediaView } from "@/lib/media-view";
 import type { WaConversationFile, WaConversationMessage } from "@/lib/services/wa-correspondence";
 import { buildThreadItems } from "@/lib/thread-items";
 import type { ThreadMessageView } from "@/lib/thread-view";
+import { whatsappBold } from "@/lib/whatsapp/format";
 import { CARD_LIST, LINK, ROW_LIST, TITLE_DESCRIPTIVE } from "@/lib/ui";
 
 /**
@@ -48,7 +49,7 @@ export function WaConversation({ messages, now }: { messages: WaConversationMess
             if (item.kind !== "message" || !message) return null;
             return (
               <li key={item.key} className="flex flex-col">
-                <ThreadBubble message={item.message} authorAlways status={deliveryOf(message)}>
+                <ThreadBubble message={item.message} authorAlways status={deliveryOf(message)} formatText={withWhatsappBold}>
                   <FileNotes files={message.files.filter(hasNote)} />
                   <OutcomeNote message={message} />
                 </ThreadBubble>
@@ -58,6 +59,22 @@ export function WaConversation({ messages, now }: { messages: WaConversationMess
         </ol>
       )}
     </section>
+  );
+}
+
+/**
+ * הטקסט כמו שהשולח ראה אותו בטלפון: `*…*` הוא הדגשה, ולא כוכביות (`whatsapp/format.ts`).
+ * משקל 600, כמו כל הדגשה בתוך טקסט במערכת.
+ */
+function withWhatsappBold(text: string) {
+  return whatsappBold(text).map((segment, index) =>
+    segment.bold ? (
+      <strong key={index} className="font-semibold">
+        {segment.text}
+      </strong>
+    ) : (
+      segment.text
+    ),
   );
 }
 

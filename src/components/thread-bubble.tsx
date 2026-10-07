@@ -28,11 +28,16 @@ interface ThreadBubbleProps {
   authorAlways?: boolean;
   /** לפני השעה, באותה שורה — מצב המסירה של הודעת מערכת בשיחת הוואטסאפ */
   status?: ReactNode;
+  /**
+   * הטקסט כפי שהוא מוצג — בשיחת הוואטסאפ, עם ההדגשה של וואטסאפ. המעטפת (`<p>`
+   * והשבירה) נשארת של הבועה; הקורא קובע רק מה בתוכה.
+   */
+  formatText?: (text: string) => ReactNode;
   /** אחרי המדיה — קבצים שלא נשמרו והערה במילים (שיחת הוואטסאפ) */
   children?: ReactNode;
 }
 
-export function ThreadBubble({ message, authorAlways = false, status, children }: ThreadBubbleProps) {
+export function ThreadBubble({ message, authorAlways = false, status, formatText, children }: ThreadBubbleProps) {
   /*
    * **ההבחנה עברה מהמילוי למסגרת, ובעל כורחה.**
    *
@@ -90,9 +95,16 @@ export function ThreadBubble({ message, authorAlways = false, status, children }
         <p className="text-xs font-medium text-muted">{message.authorName}</p>
       )}
 
-      {/* `wrap-break-word`: קישור הוא מילה אחת ברוחב מאות פיקסלים, ובלי שבירה
-          הוא דוחף את הבועה מעבר לתקרה וגולל את העמוד הצידה בטלפון */}
-      {message.text ? <p className="whitespace-pre-wrap wrap-break-word">{message.text}</p> : null}
+      {/*
+       * `wrap-anywhere` ולא `wrap-break-word`: קישור הוא מילה אחת ברוחב מאות
+       * פיקסלים. הבועה מתכווצת לתוכן, ורוחבה אינו קטן מהמילה הארוכה ביותר שבה —
+       * ו-`break-word` אינו משנה את המדידה הזו, רק את השבירה אחרי שהרוחב נקבע.
+       * ב-390px הבועה יצאה מהכרטיס שמאלה ונחתכה. ב-RTL גלישה שמאלה גם אינה
+       * יוצרת גלילה, ולכן אין לה שום סימן חוץ מהטקסט החתוך (נמדד, W8).
+       */}
+      {message.text ? (
+        <p className="whitespace-pre-wrap wrap-anywhere">{formatText ? formatText(message.text) : message.text}</p>
+      ) : null}
 
       <MediaAttachments media={message.media} />
 
