@@ -236,7 +236,7 @@ describe("הצינור המלא של תשובה — מקצה לקצה", () => {
     // השיגור" לבדיקת ההתנהגות המלאה של submitDraft עצמה; כאן רק מאמתים
     // שהמסלול מגיע לחסימה הזו בפועל, לא מדגימים אותה מחדש
     await expect(submitDraft(adminViewer(), ticketId)).rejects.toThrow(TicketError);
-    await expect(submitDraft(adminViewer(), ticketId)).rejects.toThrow(he.emailDraft.conflictBanner(1));
+    await expect(submitDraft(adminViewer(), ticketId)).rejects.toThrow(he.draft.channel.EMAIL.conflictBanner(1));
     expect((await db.ticket.findUniqueOrThrow({ where: { id: ticketId } })).isDraft).toBe(true);
     expect(await db.assignment.count({ where: { ticketId } })).toBe(0);
   });

@@ -113,9 +113,9 @@ describe("describeDraftFields — מסך 7 ומסך 7א", () => {
     expect(display.conflictCount).toBe(2);
     expect(by.BUILDING.conflict).toBe(true);
     // מזהה שאין לו שם — בניין שנמחק אחרי שהמייל הציע אותו — במילים, לא כמזהה
-    expect(by.BUILDING.channelText).toBe(he.emailDraft.unknownRecord);
+    expect(by.BUILDING.channelText).toBe(he.draft.unknownRecord);
     expect(by.RECIPIENTS.channelText).toBe(
-      `${he.emailDraft.recipientsAdd("דנה האינסטלטורית")}${he.emailIntake.summarySeparator}${he.emailDraft.recipientsRemove("יוסי החשמלאי")}`,
+      `${he.draft.recipientsAdd("דנה האינסטלטורית")}${he.emailIntake.summarySeparator}${he.draft.recipientsRemove("יוסי החשמלאי")}`,
     );
     expect(by.DESCRIPTION.conflict).toBe(false);
     expect(by.DESCRIPTION.channelText).toBeNull();

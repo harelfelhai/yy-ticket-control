@@ -8,7 +8,14 @@ import type { WaApi } from "@/lib/whatsapp/api";
 import { WINDOW_CLOSED_CODE, WaApiError } from "@/lib/whatsapp/errors";
 import { composeWhatsappReply } from "@/lib/whatsapp/render";
 import type { WaRecipient } from "@/lib/whatsapp/send";
-import { REPLY_TICKET_SELECT, type ReplyTicket, draftReplyContent, parseReport, ticketUrl } from "./intake-reply";
+import {
+  REPLY_TICKET_SELECT,
+  type ReplyTicket,
+  SKIPPED_AFTER_CLOSE,
+  draftReplyContent,
+  parseReport,
+  ticketUrl,
+} from "./intake-reply";
 import { waApiForNumber } from "./wa-client";
 import { reportWaIssue } from "./wa-number";
 
@@ -58,11 +65,6 @@ export type WaReplyOutcome = { kind: "wa-reply" } & (
 
 const KIND = "wa-reply" as const;
 
-/**
- * הסימון בסוף `detail` של אישור שדולג כי הטיוטה שוגרה או נמחקה לפני שיצא — אותו
- * כלל של המייל (§7 שורה 77), ואותו סימון (`SKIPPED_AFTER_CLOSE` ב-`email-reply.ts`).
- */
-const SKIPPED_AFTER_CLOSE = "(§7 שורה 77)";
 
 export async function sendWaReply({ waMessageId }: WaReplyJobPayload, deps: WaReplyDeps = {}): Promise<WaReplyOutcome> {
   const now = deps.now ?? new Date();

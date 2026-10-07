@@ -399,6 +399,26 @@ describe("getBoard — טיוטה ממייל", () => {
     const board = await getBoard(asUser(manager), {}, NOW);
     expect(reasonOf(board, ticket.id)).toBe("טיוטה — חסרים פרטים");
   });
+
+  /*
+   * WA-S1-01 — טיוטה מוואטסאפ: אותן שלוש שורות, באותו סדר, בשם הערוץ. לפני W8 היא
+   * הוצגה בלוח כ"טיוטה ממייל", כי שורת הסיבה לא ידעה מאיזה ערוץ הטיוטה.
+   */
+  it("WA-S1-01 — טיוטה מוואטסאפ נקראת בשם הערוץ, בשלוש השורות", async () => {
+    const conflicted = await emailDraft({ ...base, channel: "WHATSAPP" });
+    await db.draftField.create({ data: { ticketId: conflicted.id, field: "DOMAIN", conflict: true } });
+    const missing = await emailDraft({ channel: "WHATSAPP", domainId: base.domainId });
+    const ready = await emailDraft({
+      ...base,
+      channel: "WHATSAPP",
+      draftRecipients: [{ kind: "professional", id: electrician, origin: "CHANNEL" }] as never,
+    });
+
+    const board = await getBoard(asUser(manager), {}, NOW);
+    expect(reasonOf(board, conflicted.id)).toBe("טיוטה מוואטסאפ · סתירה ב-1 שדה");
+    expect(reasonOf(board, missing.id)).toBe("טיוטה מוואטסאפ · חסרים 3 פרטים");
+    expect(reasonOf(board, ready.id)).toBe("טיוטה מוואטסאפ · מוכנה לשליחה");
+  });
 });
 
 /**

@@ -89,8 +89,8 @@ describe("EmailCorrespondence", () => {
   it("מציג את ההתכתבות לפי הסדר, והמייל האחרון בלבד פתוח", () => {
     const { container } = render(<EmailCorrespondence messages={THREAD} />);
 
-    const section = screen.getByRole("region", { name: he.emailDraft.correspondence });
-    expect(within(section).getByRole("heading", { name: he.emailDraft.correspondence })).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: he.emailCorrespondence.correspondence });
+    expect(within(section).getByRole("heading", { name: he.emailCorrespondence.correspondence })).toBeInTheDocument();
 
     const panels = container.querySelectorAll("details");
     expect(panels).toHaveLength(3);
@@ -139,18 +139,18 @@ describe("EmailCorrespondence", () => {
   it("מייל יוצא מזוהה במילים — 'המערכת' והנמען — ולא בצבע", () => {
     const { container } = render(<EmailCorrespondence messages={THREAD} />);
     const outgoing = container.querySelectorAll("details")[1];
-    expect(outgoing).toHaveTextContent(he.emailDraft.systemSender);
-    expect(outgoing).toHaveTextContent(he.emailDraft.sentTo);
+    expect(outgoing).toHaveTextContent(he.emailCorrespondence.systemSender);
+    expect(outgoing).toHaveTextContent(he.emailCorrespondence.sentTo);
     expect(outgoing.querySelector('bdi[dir="ltr"]')).toHaveTextContent("dana@example.com");
   });
 
   it("מייל שלא נקלט נושא את הסיבה במילים; מייל שנקלט — בלי שורת הערה", () => {
     const { container } = render(<EmailCorrespondence messages={THREAD} />);
     const [created, , notPermitted] = container.querySelectorAll("details");
-    expect(within(notPermitted as HTMLElement).getByText(he.emailDraft.outcome.REPLY_NOT_PERMITTED)).toHaveClass(
+    expect(within(notPermitted as HTMLElement).getByText(he.emailCorrespondence.outcome.REPLY_NOT_PERMITTED)).toHaveClass(
       "text-danger",
     );
-    for (const note of Object.values(he.emailDraft.outcome)) {
+    for (const note of Object.values(he.emailCorrespondence.outcome)) {
       expect(created).not.toHaveTextContent(note);
     }
   });
@@ -160,10 +160,10 @@ describe("EmailCorrespondence", () => {
     expect(screen.getByRole("link", { name: "kitchen.jpg" })).toHaveAttribute("href", "/api/email-attachments/att-1");
     expect(screen.queryByRole("link", { name: "quote.xlsx" })).not.toBeInTheDocument();
     expect(screen.getByText("quote.xlsx")).toBeInTheDocument();
-    expect(screen.getByText(he.emailDraft.attachmentSkipped["not-media"])).toBeInTheDocument();
+    expect(screen.getByText(he.emailCorrespondence.attachmentSkipped["not-media"])).toBeInTheDocument();
     // גודל מעוגל כלפי מעלה: 300 בייט אינם "0 KB"
-    expect(screen.getByText(he.emailDraft.fileSize("1"))).toBeInTheDocument();
-    expect(screen.getByText(he.emailDraft.fileSize("200"))).toBeInTheDocument();
+    expect(screen.getByText(he.emailCorrespondence.fileSize("1"))).toBeInTheDocument();
+    expect(screen.getByText(he.emailCorrespondence.fileSize("200"))).toBeInTheDocument();
   });
 
   it("מסמך Word שנשמר בהתכתבות (§7 שורה 64): קישור הורדה, ולצדו שהוא לא נכנס לטיוטה", () => {
@@ -190,13 +190,13 @@ describe("EmailCorrespondence", () => {
     );
     expect(screen.getByRole("link", { name: "הצעת מחיר.docx" })).toHaveAttribute("href", "/api/email-attachments/att-8");
     // מי שמשלים את הטיוטה צריך לדעת שהקובץ לא יגיע לנמענים
-    expect(screen.getByText(he.emailDraft.attachmentSkipped["not-media"])).toBeInTheDocument();
+    expect(screen.getByText(he.emailCorrespondence.attachmentSkipped["not-media"])).toBeInTheDocument();
   });
 
   it("מדיה שנכנסה לטיוטה: קישור בלי שום תג", () => {
     render(<EmailCorrespondence messages={[message({ id: "m7", attachments: [THREAD[0].attachments[0]] })]} />);
     const row = screen.getByRole("link", { name: "kitchen.jpg" }).closest("li");
-    for (const text of [...Object.values(he.emailDraft.attachmentSkipped), he.emailDraft.attachmentUnavailable]) {
+    for (const text of [...Object.values(he.emailCorrespondence.attachmentSkipped), he.emailCorrespondence.attachmentUnavailable]) {
       expect(row).not.toHaveTextContent(text);
     }
   });
@@ -224,16 +224,16 @@ describe("EmailCorrespondence", () => {
       />,
     );
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    expect(screen.getByText(he.emailDraft.unnamedAttachment)).toBeInTheDocument();
-    expect(screen.getByText(he.emailDraft.attachmentUnavailable)).toBeInTheDocument();
+    expect(screen.getByText(he.emailCorrespondence.unnamedAttachment)).toBeInTheDocument();
+    expect(screen.getByText(he.emailCorrespondence.attachmentUnavailable)).toBeInTheDocument();
   });
 
   it("מייל יוצא שדולג: 'שוגרה או נמחקה' רק כשזו הסיבה, ובצבע של מידע ולא של תקלה", () => {
     const skipped = (id: string, skippedAfterClose: boolean) =>
       message({ id, direction: "OUTBOUND", state: "SKIPPED", outcome: null, fromName: null, skippedAfterClose });
     render(<EmailCorrespondence messages={[skipped("s1", true), skipped("s2", false)]} />);
-    expect(screen.getByText(he.emailDraft.sendSkipped)).toHaveClass("text-muted");
-    expect(screen.getByText(he.emailDraft.sendNotSent)).toHaveClass("text-danger");
+    expect(screen.getByText(he.emailCorrespondence.sendSkipped)).toHaveClass("text-muted");
+    expect(screen.getByText(he.emailCorrespondence.sendNotSent)).toHaveClass("text-danger");
   });
 
   it("כתובת בלי שם תצוגה מבודדת ב-<bdi dir='ltr'>, והנושא ב-<bdi>", () => {
@@ -246,7 +246,7 @@ describe("EmailCorrespondence", () => {
 
   it("בלי הודעות — שורה אחת ולא רשימה ריקה", () => {
     render(<EmailCorrespondence messages={[]} />);
-    expect(screen.getByText(he.emailDraft.noCorrespondence)).toBeInTheDocument();
+    expect(screen.getByText(he.emailCorrespondence.noCorrespondence)).toBeInTheDocument();
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 });

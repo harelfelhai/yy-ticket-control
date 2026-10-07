@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DraftFieldDisplay } from "@/lib/draft/display";
+import type { IntakeChannel } from "@/lib/draft/state";
 import { he } from "@/lib/he";
 
 /**
@@ -56,10 +57,13 @@ beforeEach(() => {
   actions.resolveDraftConflictsAction.mockResolvedValue({ ok: true as const, data: undefined });
 });
 
-async function open(fields = FIELDS, extra: { emailSiteAllowed?: boolean } = {}) {
+async function open(
+  fields = FIELDS,
+  extra: { channelSiteAllowed?: boolean; channel?: IntakeChannel } = {},
+) {
   const user = userEvent.setup();
-  const view = render(<ConflictDialog ticketId="t1" fields={fields} version="v1" {...extra} />);
-  await user.click(screen.getByRole("button", { name: he.emailDraft.compare }));
+  const view = render(<ConflictDialog ticketId="t1" channel="EMAIL" fields={fields} version="v1" {...extra} />);
+  await user.click(screen.getByRole("button", { name: he.draft.compare }));
   return { user, ...view };
 }
 
@@ -70,12 +74,12 @@ function group(name: string) {
 describe("ConflictDialog", () => {
   it("נפתח עם הכותרת מהאפיון, בלי בחירה מראש, ו'החל את הבחירה' מושבת", async () => {
     await open();
-    const dialog = screen.getByRole("dialog", { name: he.emailDraft.conflictsTitle });
+    const dialog = screen.getByRole("dialog", { name: he.draft.channel.EMAIL.conflictsTitle });
     const radios = within(dialog).getAllByRole("radio");
     expect(radios).toHaveLength(4);
     for (const radio of radios) expect(radio).not.toBeChecked();
-    expect(within(dialog).getByRole("button", { name: he.emailDraft.applyChoices })).toBeDisabled();
-    expect(within(dialog).getByText(he.emailDraft.chooseEverywhere)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: he.draft.applyChoices })).toBeDisabled();
+    expect(within(dialog).getByText(he.draft.chooseEverywhere)).toBeInTheDocument();
   });
 
   it("כל השדות בדסקטופ, רק הסתירות בטלפון — DOM אחד", async () => {
@@ -97,10 +101,21 @@ describe("ConflictDialog", () => {
     expect(apartment).not.toHaveTextContent(he.emailIntake.empty);
   });
 
+  it("WA-S7A-01 — בטיוטה מוואטסאפ הכותרת ועמודת המקור בשם הערוץ, וכל השאר זהה", async () => {
+    await open(FIELDS, { channel: "WHATSAPP" });
+    const words = he.draft.channel.WHATSAPP;
+    const dialog = screen.getByRole("dialog", { name: words.conflictsTitle });
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(4);
+    expect(within(group("בניין")).getByRole("radio", { name: `${words.sourceColumn}: בניין ב` })).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent(he.draft.channel.EMAIL.sourceColumn);
+    // אין בחירה מראש גם כאן (EM-S7A-04)
+    expect(within(dialog).getByRole("button", { name: he.draft.applyChoices })).toBeDisabled();
+  });
+
   it("'השווה ובחר' מושבת כשהטופס עסוק — לחיצה בזמן שמירה הייתה פותחת חלון על ערכים שעומדים להתחלף", async () => {
     const user = userEvent.setup();
-    render(<ConflictDialog ticketId="t1" fields={FIELDS} version="v1" disabled />);
-    const trigger = screen.getByRole("button", { name: he.emailDraft.compare });
+    render(<ConflictDialog ticketId="t1" channel="EMAIL" fields={FIELDS} version="v1" disabled />);
+    const trigger = screen.getByRole("button", { name: he.draft.compare });
     expect(trigger).toBeDisabled();
     await user.click(trigger);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -109,8 +124,8 @@ describe("ConflictDialog", () => {
   it("המקור נכלל בשם הנגיש של כל רדיו, ומוסתר בדסקטופ ב-sr-only ולא ב-hidden", async () => {
     await open();
     const building = group("בניין");
-    expect(within(building).getByRole("radio", { name: `${he.emailDraft.columnSystem}: בניין א` })).toBeInTheDocument();
-    const email = within(building).getByRole("radio", { name: `${he.emailDraft.columnEmail}: בניין ב` });
+    expect(within(building).getByRole("radio", { name: `${he.draft.columnSystem}: בניין א` })).toBeInTheDocument();
+    const email = within(building).getByRole("radio", { name: `${he.draft.channel.EMAIL.sourceColumn}: בניין ב` });
     const source = email.closest("label")?.querySelector("span span");
     expect(source?.className).toContain("md:sr-only");
     expect(source?.className).not.toContain("md:hidden");
@@ -118,13 +133,13 @@ describe("ConflictDialog", () => {
 
   it("האישור נפתח רק אחרי בחירה בכל שדה, ונשלח בשלב אחד עם הגרסה שהוצגה", async () => {
     const { user } = await open();
-    const apply = within(screen.getByRole("dialog")).getByRole("button", { name: he.emailDraft.applyChoices });
+    const apply = within(screen.getByRole("dialog")).getByRole("button", { name: he.draft.applyChoices });
 
     await user.click(within(group("בניין")).getByRole("radio", { name: /בניין א/ }));
     expect(apply).toBeDisabled();
     await user.click(within(group("נמענים")).getByRole("radio", { name: /להוסיף: דנה/ }));
     expect(apply).toBeEnabled();
-    expect(screen.queryByText(he.emailDraft.chooseEverywhere)).not.toBeInTheDocument();
+    expect(screen.queryByText(he.draft.chooseEverywhere)).not.toBeInTheDocument();
 
     await user.click(apply);
     expect(actions.resolveDraftConflictsAction).toHaveBeenCalledWith(
@@ -142,10 +157,10 @@ describe("ConflictDialog", () => {
 
     // תשובה חדשה במייל נקלטה והעמוד התרענן: ערך אחר מהמייל, גרסה אחרת
     const refreshed = FIELDS.map((f) => (f.field === "BUILDING" ? { ...f, channelText: "בניין ג" } : f));
-    rerender(<ConflictDialog ticketId="t1" fields={refreshed} version="v2" />);
+    rerender(<ConflictDialog ticketId="t1" channel="EMAIL" fields={refreshed} version="v2" />);
 
     expect(within(group("בניין")).queryByRole("radio", { name: /בניין ג/ })).not.toBeInTheDocument();
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: he.emailDraft.applyChoices }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: he.draft.applyChoices }));
     expect(actions.resolveDraftConflictsAction).toHaveBeenCalledWith(
       "t1",
       { BUILDING: "system", RECIPIENTS: "system" },
@@ -161,7 +176,7 @@ describe("ConflictDialog", () => {
     expect(actions.resolveDraftConflictsAction).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: he.emailDraft.compare }));
+    await user.click(screen.getByRole("button", { name: he.draft.compare }));
     for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
   });
 
@@ -171,26 +186,26 @@ describe("ConflictDialog", () => {
     const { user } = await open();
     await user.click(within(group("בניין")).getByRole("radio", { name: /בניין א/ }));
     await user.click(within(group("נמענים")).getByRole("radio", { name: /יוסי/ }));
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: he.emailDraft.applyChoices }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: he.draft.applyChoices }));
 
     await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    finish({ ok: false, error: he.emailDraft.conflictsChanged });
+    finish({ ok: false, error: he.draft.conflictsChanged });
     expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent(
-      he.emailDraft.conflictsChanged,
+      he.draft.conflictsChanged,
     );
   });
 
   it("סירוב של השרת (הסתירות השתנו) מוצג בחלון והחלון נשאר פתוח", async () => {
-    actions.resolveDraftConflictsAction.mockResolvedValue({ ok: false, error: he.emailDraft.conflictsChanged });
+    actions.resolveDraftConflictsAction.mockResolvedValue({ ok: false, error: he.draft.conflictsChanged });
     const { user } = await open();
     await user.click(within(group("בניין")).getByRole("radio", { name: /בניין א/ }));
     await user.click(within(group("נמענים")).getByRole("radio", { name: /יוסי/ }));
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: he.emailDraft.applyChoices }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: he.draft.applyChoices }));
 
     expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent(
-      he.emailDraft.conflictsChanged,
+      he.draft.conflictsChanged,
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
@@ -199,13 +214,13 @@ describe("ConflictDialog", () => {
     const fields = FIELDS.map((f) =>
       f.field === "SITE" ? { ...f, conflict: true, channelText: "אתר שני" } : f.field === "BUILDING" ? { ...f, conflict: false } : f,
     );
-    const { user } = await open(fields, { emailSiteAllowed: false });
+    const { user } = await open(fields, { channelSiteAllowed: false });
     const site = group("אתר");
     expect(within(site).getByRole("radio", { name: /אתר שני/ })).toBeDisabled();
-    expect(within(site).getByText(he.emailDraft.emailSiteNotAllowed)).toBeInTheDocument();
+    expect(within(site).getByText(he.draft.siteNotAllowed)).toBeInTheDocument();
 
     await user.click(within(site).getByRole("radio", { name: /אתר לדוגמה/ }));
     await user.click(within(group("נמענים")).getByRole("radio", { name: /יוסי/ }));
-    expect(within(screen.getByRole("dialog")).getByRole("button", { name: he.emailDraft.applyChoices })).toBeEnabled();
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: he.draft.applyChoices })).toBeEnabled();
   });
 });

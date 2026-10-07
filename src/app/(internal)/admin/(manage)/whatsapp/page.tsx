@@ -5,7 +5,8 @@ import { Banner } from "@/components/ui/message";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { he } from "@/lib/he";
-import { type TestDelivery, type WhatsappScreen, getWhatsappScreen } from "@/lib/services/wa-number";
+import { type WhatsappScreen, getWhatsappScreen } from "@/lib/services/wa-number";
+import type { WaDelivery } from "@/lib/whatsapp/delivery";
 import { CONTENT_WIDTH, LINK, PAGE_X, TITLE_DESCRIPTIVE } from "@/lib/ui";
 import type { WaIssue } from "@/lib/whatsapp/connection-issue";
 import { ConnectButton } from "./connect-button";
@@ -98,7 +99,7 @@ const STATUS_TONE: Record<"CONNECTED" | "DISCONNECTED" | "ERROR", ChipTone> = {
   ERROR: "danger",
 };
 
-const DELIVERY_TONE: Record<TestDelivery, ChipTone> = {
+const DELIVERY_TONE: Record<WaDelivery, ChipTone> = {
   sent: "neutral",
   delivered: "success",
   read: "success",

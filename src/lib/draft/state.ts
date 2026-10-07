@@ -1,4 +1,4 @@
-import type { Room } from "@/generated/prisma/enums";
+import type { Channel, Room } from "@/generated/prisma/enums";
 import {
   DRAFT_FIELDS,
   type DraftFieldName,
@@ -228,12 +228,26 @@ export function fieldVersion(state: DraftState, field: DraftFieldName): string {
   return JSON.stringify([fieldValue(state.values, field), meta.conflict, meta.channelValue, meta.channelMessageId]);
 }
 
-/** הספירות של שורת הסיבה בלוח (EM-S1-02) ושל הודעת הסתירה במסך 7 */
-export interface EmailDraftCounts {
+/**
+ * הערוצים שפותחים טיוטה מבחוץ — מייל (1.3) ווואטסאפ (1.4). טיוטה מאחד מהם היא
+ * היחידה שמחזיקה מטא של שדות ויכולה להיות בסתירה (`isChannelDraft`).
+ */
+export type IntakeChannel = Extract<Channel, "EMAIL" | "WHATSAPP">;
+
+/**
+ * הספירות של שורת הסיבה בלוח (EM-S1-02, WA-S1-01) ושל הודעת הסתירה במסך 7 —
+ * והערוץ, כי שתיהן אומרות את שמו ("טיוטה מוואטסאפ · …").
+ */
+export interface ChannelDraftCounts {
+  channel: IntakeChannel;
   conflictCount: number;
   missingCount: number;
 }
 
-export function emailDraftCounts(values: DraftValues, conflictCount: number): EmailDraftCounts {
-  return { conflictCount, missingCount: missingFields(values).length };
+export function channelDraftCounts(
+  channel: IntakeChannel,
+  values: DraftValues,
+  conflictCount: number,
+): ChannelDraftCounts {
+  return { channel, conflictCount, missingCount: missingFields(values).length };
 }

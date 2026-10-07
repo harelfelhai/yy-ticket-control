@@ -363,7 +363,7 @@ describe("אתר ונמענים — הרשאה והיקף", () => {
 });
 
 describe("EM-16 — שיגור", () => {
-  async function ready(channel: "EMAIL" | "SELF" = "EMAIL") {
+  async function ready(channel: "EMAIL" | "WHATSAPP" | "SELF" = "EMAIL") {
     return db.ticket.create({
       data: {
         channel,
@@ -385,10 +385,21 @@ describe("EM-16 — שיגור", () => {
     await mergeReply(ticket.id, { domain: otherDomainId });
 
     await expect(submitDraft(toViewer(admin), ticket.id)).rejects.toThrow(
-      he.emailDraft.conflictBanner(1),
+      he.draft.channel.EMAIL.conflictBanner(1),
     );
     expect((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).isDraft).toBe(true);
     expect(await db.assignment.count({ where: { ticketId: ticket.id } })).toBe(0);
+  });
+
+  it("WA-S7-02 — בטיוטה מוואטסאפ הסירוב לשגר נקרא בשם הערוץ", async () => {
+    const ticket = await ready("WHATSAPP");
+    await updateDraftFields(toViewer(admin), ticket.id, { domainId });
+    await mergeReply(ticket.id, { domain: otherDomainId });
+
+    await expect(submitDraft(toViewer(admin), ticket.id)).rejects.toThrow(
+      he.draft.channel.WHATSAPP.conflictBanner(1),
+    );
+    expect((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).isDraft).toBe(true);
   });
 
   it("בלי רשימת נמענים — משגר את הנמענים השמורים בטיוטה", async () => {
@@ -543,7 +554,7 @@ describe("EM-C09 — הכרעת סתירות (מסך 7א)", () => {
 
     await expect(
       resolveDraftConflicts(toViewer(admin), ticket.id, { DOMAIN: "channel" }, version),
-    ).rejects.toThrow(he.emailDraft.conflictsChanged);
+    ).rejects.toThrow(he.draft.conflictsChanged);
 
     const state = await loadDraftState(ticket.id);
     expect(state.values.domainId).toBe(domainId);
@@ -852,12 +863,23 @@ describe("EM-A15 — עריכה במסך 7 של שדה שהשתנה מאז שה�
 
     await expect(
       updateDraftFields(toViewer(admin), ticket.id, { domainId }, undefined, { DOMAIN: shown }),
-    ).rejects.toThrow(he.emailDraft.fieldChanged);
+    ).rejects.toThrow(he.draft.channel.EMAIL.fieldChanged);
 
     const row = await db.draftField.findUniqueOrThrow({
       where: { ticketId_field: { ticketId: ticket.id, field: "DOMAIN" } },
     });
     expect(row.conflict).toBe(true);
+  });
+
+  it("טיוטה מוואטסאפ — השמירה שנדחתה מדברת על תגובה בוואטסאפ, לא על מייל", async () => {
+    const ticket = await emailDraft({ channel: "WHATSAPP", domainId });
+    await updateDraftFields(toViewer(admin), ticket.id, { domainId }, new Date(Date.now() - 60_000));
+    const shown = fieldVersion(await loadDraftState(ticket.id), "DOMAIN");
+    await mergeReply(ticket.id, { domain: otherDomainId });
+
+    await expect(
+      updateDraftFields(toViewer(admin), ticket.id, { domainId }, undefined, { DOMAIN: shown }),
+    ).rejects.toThrow(he.draft.channel.WHATSAPP.fieldChanged);
   });
 
   it("נמען שהמייל הוסיף אחרי שהמסך נטען — שמירת הרשימה המלאה נדחית ואינו הופך למצבה", async () => {
@@ -868,7 +890,7 @@ describe("EM-A15 — עריכה במסך 7 של שדה שהשתנה מאז שה�
 
     await expect(
       updateDraftFields(toViewer(admin), ticket.id, { recipients: [] }, undefined, { RECIPIENTS: shown }),
-    ).rejects.toThrow(he.emailDraft.fieldChanged);
+    ).rejects.toThrow(he.draft.channel.EMAIL.fieldChanged);
 
     const stored = parseDraftRecipients(
       (await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).draftRecipients,

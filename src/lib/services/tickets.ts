@@ -37,7 +37,7 @@ import {
 } from "./directory";
 import { ensureAccessToken, revokeAccessIfOrphaned } from "./portal";
 import { type Tx, actorName, recordEvent, touchData } from "./ticket-activity";
-import { countDraftConflicts, isChannelDraft, lockTicket, updateDraftFields } from "./draft-fields";
+import { channelDraftOf, countDraftConflicts, lockTicket, updateDraftFields } from "./draft-fields";
 
 /**
  * יצירה ושיגור של פניות.
@@ -272,11 +272,12 @@ export async function submitDraft(
     await assertProfessionalsActive(professionalIds(unique), tx);
     await assertUsersAssignable(userIds(unique), tx);
 
-    if (isChannelDraft(fresh)) {
+    const channel = channelDraftOf(fresh);
+    if (channel) {
       // §2.6 שלב 6: שיגור חסום עד שכל הסתירות הוכרעו, אחרת לא ברור איזה ערך
-      // יגיע לנמען. אותו נוסח כמו ההודעה במסך 7 — זו אותה סיבה.
+      // יגיע לנמען. אותו נוסח כמו ההודעה במסך 7 — זו אותה סיבה, בשם הערוץ.
       const conflicts = await countDraftConflicts(tx, ticketId);
-      if (conflicts > 0) throw new TicketError(he.emailDraft.conflictBanner(conflicts));
+      if (conflicts > 0) throw new TicketError(he.draft.channel[channel].conflictBanner(conflicts));
     }
 
     const missing = missingRequiredFields({ ...fresh, recipients: unique });

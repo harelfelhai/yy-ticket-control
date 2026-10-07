@@ -35,6 +35,12 @@ export const REASON_EXAMPLES = {
   emailDraftMissing: (details: number) =>
     details === 1 ? "טיוטה ממייל · חסר 1 פרט" : `טיוטה ממייל · חסרים ${details} פרטים`,
   emailDraftReady: "טיוטה ממייל · מוכנה לשליחה",
+  /** מסך 1, טיוטה מוואטסאפ (עדכון 1.4, WA-S1-01) — אותן שלוש שורות, באותו סדר, בשם הערוץ */
+  waDraftConflicts: (fields: number) =>
+    fields === 1 ? "טיוטה מוואטסאפ · סתירה ב-1 שדה" : `טיוטה מוואטסאפ · סתירה ב-${fields} שדות`,
+  waDraftMissing: (details: number) =>
+    details === 1 ? "טיוטה מוואטסאפ · חסר 1 פרט" : `טיוטה מוואטסאפ · חסרים ${details} פרטים`,
+  waDraftReady: "טיוטה מוואטסאפ · מוכנה לשליחה",
 } as const;
 
 /** סטטוס ברמת השיוך — §3.4, שורות 141–146 */
@@ -167,6 +173,25 @@ export const EMAIL_DRAFT_SCREEN = {
   fromEmailTag: "מהמייל",
   compare: "השווה ובחר",
   removeFile: "הסר קובץ",
+} as const;
+
+/**
+ * טיוטה מוואטסאפ (עדכון 1.4) — מסך 7 ("טיוטה מוואטסאפ מתרחבת באותם מקומות…"), מסך 7א,
+ * "שיחת הוואטסאפ" (§3.2 שדה 20, מסך 2), והבאנר בראש הלוח (מסך 1, "כשהוואטסאפ התנתק").
+ */
+export const WHATSAPP_DRAFT_SCREEN = {
+  conversation: "שיחת הוואטסאפ",
+  fromTag: "מוואטסאפ",
+  conflictBanner: (fields: number) =>
+    fields === 1
+      ? "יש סתירה בין הוואטסאפ למערכת ב-1 שדה. לא ניתן לשגר עד שתוכרע."
+      : `יש סתירה בין הוואטסאפ למערכת ב-${fields} שדות. לא ניתן לשגר עד שתוכרע.`,
+  conflictsTitle: "סתירות בין הוואטסאפ למערכת",
+  sourceColumn: "מוואטסאפ",
+  /** מצב המסירה של הודעות המערכת בשיחה: "נשלחה · נמסרה · נקראה · לא נשלחה" */
+  delivery: { sent: "נשלחה", delivered: "נמסרה", read: "נקראה", failed: "לא נשלחה" },
+  disconnectedBanner: "הוואטסאפ אינו מחובר — הודעות לא נקלטות.",
+  connect: "לחיבור",
 } as const;
 
 /** מסך 7א — חלון הסתירות, שורות 457–480 */

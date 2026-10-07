@@ -32,37 +32,43 @@ beforeEach(() => {
 
 describe("DraftMediaList", () => {
   it("בלי קבצים — לא מרונדר כלום", () => {
-    const { container } = render(<DraftMediaList ticketId="t1" media={[]} />);
+    const { container } = render(<DraftMediaList ticketId="t1" channel="EMAIL" media={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("'הסר קובץ' קורא לפעולה עם מזהה הפנייה ומזהה הקובץ, בסדר הזה", async () => {
     const user = userEvent.setup();
-    render(<DraftMediaList ticketId="t1" media={[media("m1", "logo.png")]} />);
+    render(<DraftMediaList ticketId="t1" channel="EMAIL" media={[media("m1", "logo.png")]} />);
     await user.click(screen.getByRole("button", { name: `${he.media.remove}: logo.png` }));
     expect(actions.removeDraftMediaAction).toHaveBeenCalledWith("t1", "m1");
   });
 
   it("תמונה מוצגת כתמונה ממוזערת, וקובץ אחר — בשמו", () => {
-    render(<DraftMediaList ticketId="t1" media={[media("m1", "logo.png"), media("m2", "plan.pdf", "application/pdf")]} />);
+    render(<DraftMediaList ticketId="t1" channel="EMAIL" media={[media("m1", "logo.png"), media("m2", "plan.pdf", "application/pdf")]} />);
     expect(screen.getByRole("img", { name: "logo.png" })).toHaveAttribute("src", "/api/media/m1");
     expect(screen.getByText("plan.pdf")).toBeInTheDocument();
   });
 
   it("קבצים בלי שם מקבלים שם חלופי ממוספר — ושם נגיש שונה לכל אחד", () => {
-    render(<DraftMediaList ticketId="t1" media={[media("m1", ""), media("m2", "", "application/pdf")]} />);
-    expect(screen.getByRole("button", { name: `${he.media.remove}: ${he.emailDraft.unnamedAttachmentN(1)}` })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: `${he.media.remove}: ${he.emailDraft.unnamedAttachmentN(2)}` })).toBeInTheDocument();
+    render(<DraftMediaList ticketId="t1" channel="EMAIL" media={[media("m1", ""), media("m2", "", "application/pdf")]} />);
+    expect(screen.getByRole("button", { name: `${he.media.remove}: ${he.draft.unnamedFileN(1)}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `${he.media.remove}: ${he.draft.unnamedFileN(2)}` })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: he.media.imageAlt })).toBeInTheDocument();
-    expect(screen.getByText(he.emailDraft.unnamedAttachmentN(2))).toBeInTheDocument();
+    expect(screen.getByText(he.draft.unnamedFileN(2))).toBeInTheDocument();
   });
 
   it("המשפט מתחת לרשימה מדבר על קובץ שהגיע במייל, ושגיאת השרת מוצגת במקום הפעולה", async () => {
     actions.removeDraftMediaAction.mockResolvedValue({ ok: false, error: he.common.notAllowed });
     const user = userEvent.setup();
-    render(<DraftMediaList ticketId="t1" media={[media("m1", "logo.png")]} />);
-    expect(screen.getByText(he.emailDraft.mediaKept)).toBeInTheDocument();
+    render(<DraftMediaList ticketId="t1" channel="EMAIL" media={[media("m1", "logo.png")]} />);
+    expect(screen.getByText(he.draft.channel.EMAIL.mediaKept)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: `${he.media.remove}: logo.png` }));
     expect(await screen.findByRole("alert")).toHaveTextContent(he.common.notAllowed);
+  });
+
+  it("WA-S7-03 — בטיוטה מוואטסאפ המשפט מדבר על קובץ שהגיע בוואטסאפ ונשאר בשיחה", () => {
+    render(<DraftMediaList ticketId="t1" channel="WHATSAPP" media={[media("m1", "photo.jpg", "image/jpeg")]} />);
+    expect(screen.getByText(he.draft.channel.WHATSAPP.mediaKept)).toBeInTheDocument();
+    expect(screen.queryByText(he.draft.channel.EMAIL.mediaKept)).not.toBeInTheDocument();
   });
 });

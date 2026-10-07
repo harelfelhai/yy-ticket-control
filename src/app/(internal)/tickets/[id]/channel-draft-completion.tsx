@@ -23,11 +23,16 @@ import {
   createProfessionalAction,
 } from "../new/actions";
 import { deleteDraftAction, submitDraftAction, updateTicketFieldsAction } from "./actions";
+import type { IntakeChannel } from "@/lib/draft/state";
 import { ConflictDialog } from "./conflict-dialog";
 import type { BuildingWithApartments } from "./draft-completion";
 
 /**
- * השלמת טיוטה **ממייל** (מסך 7 באפיון, עדכון 1.3).
+ * השלמת טיוטה **מערוץ** — ממייל (מסך 7 באפיון, עדכון 1.3) או מוואטסאפ (1.4).
+ *
+ * **רכיב אחד לשני הערוצים.** האפיון קובע שטיוטה מוואטסאפ מתרחבת "באותם מקומות
+ * ובאותם כללים בדיוק", ושם הערוץ הוא ההבדל — בתג, בבאנר הסתירה ובחלון 7א. לכן
+ * הרכיב מקבל את `channel`, והמילים באות מ-`he.draft.channel`.
  *
  * רכיב נפרד מ-`DraftCompletion` של הטיוטה הידנית, ובכוונה (DESIGN.md § לא כל
  * כפילות היא רכיב): מה שמשותף — הבוררים, הפרימיטיבים, הפעולות — חולץ
@@ -54,7 +59,7 @@ import type { BuildingWithApartments } from "./draft-completion";
  * תחומים, נמענים) נגזרות מהאתר ומתאפסות כשהוא מתחלף — ראה `useResetOn`.
  */
 
-export interface EmailDraftValues {
+export interface ChannelDraftValues {
   buildingId: string | null;
   apartmentId: string | null;
   room: Room | null;
@@ -63,8 +68,10 @@ export interface EmailDraftValues {
   recipients: RecipientOption[];
 }
 
-interface EmailDraftCompletionProps {
+interface ChannelDraftCompletionProps {
   ticketId: string;
+  /** הערוץ שהטיוטה נפתחה בו — שמו בתגים, בבאנר הסתירה ובחלון 7א */
+  channel: IntakeChannel;
   /** נוסח הבאנר כפי שהשרת חישב — "חסרים פרטים" רק כשבאמת חסרים (EM-S7-06) */
   banner: string;
   display: DraftDisplay;
@@ -74,9 +81,9 @@ interface EmailDraftCompletionProps {
   buildings: BuildingWithApartments[];
   domains: LearnedOption[];
   recipientOptions: RecipientOption[];
-  values: EmailDraftValues;
-  /** האם הצופה רשאי לבחור בחלון הסתירות את האתר שהמייל הציע */
-  emailSiteAllowed: boolean;
+  values: ChannelDraftValues;
+  /** האם הצופה רשאי לבחור בחלון הסתירות את האתר שהערוץ הציע */
+  channelSiteAllowed: boolean;
 }
 
 type FieldsInput = Parameters<typeof updateTicketFieldsAction>[1];
@@ -115,8 +122,9 @@ function useResetOn<T>(server: T, key: unknown): [T, Dispatch<SetStateAction<T>>
   return [value, setValue];
 }
 
-export function EmailDraftCompletion({
+export function ChannelDraftCompletion({
   ticketId,
+  channel,
   banner,
   display,
   site,
@@ -125,9 +133,10 @@ export function EmailDraftCompletion({
   domains: initialDomains,
   recipientOptions,
   values,
-  emailSiteAllowed,
-}: EmailDraftCompletionProps) {
+  channelSiteAllowed,
+}: ChannelDraftCompletionProps) {
   const router = useRouter();
+  const words = he.draft.channel[channel];
   // רשימות שמתארכות בעקבות "צור חדש" מקומי, ומתאפסות כשהאתר מתחלף
   const [buildings, setBuildings] = useResetOn(initialBuildings, site?.id);
   const [domains, setDomains] = useResetOn(initialDomains, site?.id);
@@ -258,18 +267,19 @@ export function EmailDraftCompletion({
 
       {blocked ? (
         <Banner tone="danger" className="flex flex-wrap items-center gap-2">
-          <span>{he.emailDraft.conflictBanner(display.conflictCount)}</span>
+          <span>{words.conflictBanner(display.conflictCount)}</span>
           <ConflictDialog
             ticketId={ticketId}
+            channel={channel}
             fields={display.fields}
             version={display.version}
-            emailSiteAllowed={emailSiteAllowed}
+            channelSiteAllowed={channelSiteAllowed}
             disabled={busy}
           />
         </Banner>
       ) : null}
 
-      <FieldBlock display={byField.SITE}>
+      <FieldBlock display={byField.SITE} fromTag={words.fromTag}>
         {sites ? (
           // `LearnedSelect` ולא `<select>` נייטיב: הנייטיב מחליף ערך בכל חץ
           // במקלדת, וכאן החלפה היא שמירה שמאפסת בניין ודירה (כמו במסך 4)
@@ -296,7 +306,7 @@ export function EmailDraftCompletion({
         )}
       </FieldBlock>
 
-      <FieldBlock display={byField.BUILDING}>
+      <FieldBlock display={byField.BUILDING} fromTag={words.fromTag}>
         <LearnedSelect
           label={he.directory.building}
           options={buildings}
@@ -325,7 +335,7 @@ export function EmailDraftCompletion({
         />
       </FieldBlock>
 
-      <FieldBlock display={byField.APARTMENT}>
+      <FieldBlock display={byField.APARTMENT} fromTag={words.fromTag}>
         <LearnedSelect
           label={he.directory.apartment}
           options={selectedBuilding?.apartments ?? []}
@@ -357,7 +367,7 @@ export function EmailDraftCompletion({
         />
       </FieldBlock>
 
-      <FieldBlock display={byField.ROOM}>
+      <FieldBlock display={byField.ROOM} fromTag={words.fromTag}>
         {/* "לא חובה" בתווית, כמו בטופס היצירה — לא כערך ריק שנקרא כאילו נבחר */}
         <Field label={`${he.ticket.room} (${he.common.optional})`}>
           <Select
@@ -379,7 +389,7 @@ export function EmailDraftCompletion({
         </Field>
       </FieldBlock>
 
-      <FieldBlock display={byField.DOMAIN}>
+      <FieldBlock display={byField.DOMAIN} fromTag={words.fromTag}>
         <LearnedSelect
           label={he.directory.domain}
           options={domains}
@@ -400,7 +410,7 @@ export function EmailDraftCompletion({
         />
       </FieldBlock>
 
-      <FieldBlock display={byField.DESCRIPTION}>
+      <FieldBlock display={byField.DESCRIPTION} fromTag={words.fromTag}>
         <Field label={he.ticket.description}>
           <Textarea
             value={description}
@@ -420,7 +430,7 @@ export function EmailDraftCompletion({
         </Field>
       </FieldBlock>
 
-      <FieldBlock display={byField.RECIPIENTS}>
+      <FieldBlock display={byField.RECIPIENTS} fromTag={words.fromTag}>
         <RecipientPicker
           options={availableRecipients}
           value={recipients}
@@ -466,7 +476,16 @@ export function EmailDraftCompletion({
  * וגם תג: צבע אינו נשא מידע יחיד. `data-field` הוא עוגן לבדיקות, שבודקות
  * שהתג יושב ליד השדה הנכון ולא רק שקיים תג כזה במסך.
  */
-function FieldBlock({ display, children }: { display: DraftFieldDisplay; children: ReactNode }) {
+function FieldBlock({
+  display,
+  fromTag,
+  children,
+}: {
+  display: DraftFieldDisplay;
+  /** "מהמייל" או "מוואטסאפ" — ערך שמולא מהערוץ ואיש לא ערך במערכת (EM-M03, WA-M02) */
+  fromTag: string;
+  children: ReactNode;
+}) {
   const tags = display.fromChannel || display.conflict || display.missing;
   return (
     <div
@@ -476,9 +495,9 @@ function FieldBlock({ display, children }: { display: DraftFieldDisplay; childre
       {children}
       {tags ? (
         <p className="flex flex-wrap gap-1">
-          {display.missing ? <span className={chipClasses("danger")}>{he.emailDraft.missingTag}</span> : null}
-          {display.conflict ? <span className={chipClasses("danger")}>{he.emailDraft.conflictTag}</span> : null}
-          {display.fromChannel ? <span className={chipClasses("info")}>{he.emailDraft.fromEmailTag}</span> : null}
+          {display.missing ? <span className={chipClasses("danger")}>{he.draft.missingTag}</span> : null}
+          {display.conflict ? <span className={chipClasses("danger")}>{he.draft.conflictTag}</span> : null}
+          {display.fromChannel ? <span className={chipClasses("info")}>{fromTag}</span> : null}
         </p>
       ) : null}
     </div>

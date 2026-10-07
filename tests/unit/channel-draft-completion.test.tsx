@@ -1,7 +1,8 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmailDraftValues } from "@/app/(internal)/tickets/[id]/email-draft-completion";
+import type { ChannelDraftValues } from "@/app/(internal)/tickets/[id]/channel-draft-completion";
+import type { IntakeChannel } from "@/lib/draft/state";
 import type { DraftDisplay, DraftFieldDisplay } from "@/lib/draft/display";
 import { he } from "@/lib/he";
 
@@ -34,7 +35,7 @@ vi.mock("@/app/(internal)/tickets/[id]/actions", () => actions);
 vi.mock("@/app/(internal)/tickets/new/actions", () => newActions);
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
-const { EmailDraftCompletion } = await import("@/app/(internal)/tickets/[id]/email-draft-completion");
+const { ChannelDraftCompletion } = await import("@/app/(internal)/tickets/[id]/channel-draft-completion");
 
 function field(name: DraftFieldDisplay["field"], label: string, extra: Partial<DraftFieldDisplay> = {}): DraftFieldDisplay {
   return {
@@ -71,7 +72,7 @@ const BUILDINGS = [
   { id: "b1", label: "בניין א", apartments: [{ id: "a1", label: "12" }] },
   { id: "b2", label: "בניין ב", apartments: [] },
 ];
-const VALUES: EmailDraftValues = {
+const VALUES: ChannelDraftValues = {
   buildingId: "b1",
   apartmentId: "a1",
   room: null,
@@ -82,14 +83,16 @@ const VALUES: EmailDraftValues = {
 
 type Overrides = {
   conflicts?: boolean;
+  channel?: IntakeChannel;
   sites?: (typeof SITE)[] | null;
   site?: typeof SITE | null;
-  values?: Partial<EmailDraftValues>;
+  values?: Partial<ChannelDraftValues>;
 };
 
 function screenProps(overrides: Overrides = {}) {
   return {
     ticketId: "t1",
+    channel: overrides.channel ?? ("EMAIL" as IntakeChannel),
     banner: he.notices.draftBanner,
     display: display(overrides.conflicts ?? false),
     site: overrides.site === undefined ? SITE : overrides.site,
@@ -98,12 +101,12 @@ function screenProps(overrides: Overrides = {}) {
     domains: [{ id: "d1", label: "חשמל" }],
     recipientOptions: [],
     values: { ...VALUES, ...overrides.values },
-    emailSiteAllowed: true,
+    channelSiteAllowed: true,
   };
 }
 
 function renderScreen(overrides: Overrides = {}) {
-  return render(<EmailDraftCompletion {...screenProps(overrides)} />);
+  return render(<ChannelDraftCompletion {...screenProps(overrides)} />);
 }
 
 /** עוטף השדה — `data-field` — כדי שהבדיקה תדע ליד איזה שדה התג יושב */
@@ -119,31 +122,42 @@ beforeEach(() => {
   router.refresh.mockClear();
 });
 
-describe("EmailDraftCompletion — מה מוצג", () => {
+describe("ChannelDraftCompletion — מה מוצג", () => {
   it("כל השדות מוצגים, והתגים יושבים ליד השדה שהם מתארים", () => {
     renderScreen();
     for (const name of ["SITE", "BUILDING", "APARTMENT", "ROOM", "DOMAIN", "DESCRIPTION", "RECIPIENTS"]) {
       expect(block(name)).toBeInTheDocument();
     }
-    expect(within(block("DESCRIPTION")).getByText(he.emailDraft.fromEmailTag)).toBeInTheDocument();
-    expect(within(block("ROOM")).queryByText(he.emailDraft.fromEmailTag)).not.toBeInTheDocument();
+    expect(within(block("DESCRIPTION")).getByText(he.draft.channel.EMAIL.fromTag)).toBeInTheDocument();
+    expect(within(block("ROOM")).queryByText(he.draft.channel.EMAIL.fromTag)).not.toBeInTheDocument();
     // "חסר" — רק ליד שדות חובה ריקים; חדר אינו חובה
     for (const name of ["APARTMENT", "DOMAIN", "RECIPIENTS"]) {
-      expect(within(block(name)).getByText(he.emailDraft.missingTag)).toBeInTheDocument();
+      expect(within(block(name)).getByText(he.draft.missingTag)).toBeInTheDocument();
     }
-    expect(within(block("ROOM")).queryByText(he.emailDraft.missingTag)).not.toBeInTheDocument();
-    expect(screen.queryByText(he.emailDraft.conflictTag)).not.toBeInTheDocument();
+    expect(within(block("ROOM")).queryByText(he.draft.missingTag)).not.toBeInTheDocument();
+    expect(screen.queryByText(he.draft.conflictTag)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: he.ticket.submitDraftButton })).toBeEnabled();
   });
 
   it("סתירה: הודעה עם 'השווה ובחר', תג וקו ליד השדה שבסתירה, ו'שגר' חסום (EM-S7-04)", () => {
     renderScreen({ conflicts: true });
     const status = screen.getByRole("status");
-    expect(status).toHaveTextContent(he.emailDraft.conflictBanner(1));
+    expect(status).toHaveTextContent(he.draft.channel.EMAIL.conflictBanner(1));
     expect(status.className).toContain("text-danger");
-    expect(screen.getByRole("button", { name: he.emailDraft.compare })).toBeInTheDocument();
-    expect(within(block("BUILDING")).getByText(he.emailDraft.conflictTag)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: he.draft.compare })).toBeInTheDocument();
+    expect(within(block("BUILDING")).getByText(he.draft.conflictTag)).toBeInTheDocument();
     expect(block("BUILDING").className).toContain("border-s-danger");
+    expect(screen.getByRole("button", { name: he.ticket.submitDraftButton })).toBeDisabled();
+  });
+
+  it("WA-M02 / WA-S7-02 — בטיוטה מוואטסאפ התג והסתירה בשם הערוץ, וכל השאר זהה", () => {
+    renderScreen({ channel: "WHATSAPP", conflicts: true });
+    const words = he.draft.channel.WHATSAPP;
+    expect(within(block("DESCRIPTION")).getByText(words.fromTag)).toBeInTheDocument();
+    expect(screen.queryByText(he.draft.channel.EMAIL.fromTag)).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(words.conflictBanner(1));
+    expect(screen.getByRole("status")).not.toHaveTextContent("המייל");
+    expect(within(block("BUILDING")).getByText(he.draft.conflictTag)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: he.ticket.submitDraftButton })).toBeDisabled();
   });
 
@@ -170,10 +184,10 @@ describe("EmailDraftCompletion — מה מוצג", () => {
 
   it("החלפת אתר מאפסת את רשימת הבניינים לזו של האתר החדש — בלי לטעון את הטופס מחדש", async () => {
     const user = userEvent.setup();
-    const view = render(<EmailDraftCompletion {...screenProps()} />);
+    const view = render(<ChannelDraftCompletion {...screenProps()} />);
     // השרת התרענן אחרי החלפת האתר: אתר אחר, הבניינים שלו, בניין ודירה שאופסו
     view.rerender(
-      <EmailDraftCompletion
+      <ChannelDraftCompletion
         {...screenProps({ site: { id: "s2", label: "אתר שני" }, values: { buildingId: null, apartmentId: null } })}
         buildings={[{ id: "b9", label: "בניין ט", apartments: [] }]}
       />,
@@ -184,7 +198,7 @@ describe("EmailDraftCompletion — מה מוצג", () => {
   });
 });
 
-describe("EmailDraftCompletion — שמירה", () => {
+describe("ChannelDraftCompletion — שמירה", () => {
   it("שינוי בניין שולח את הבניין בלבד, עם טביעת השדה — השרת מאפס את הדירה בעצמו (§7 שורה 85)", async () => {
     const user = userEvent.setup();
     renderScreen();
@@ -240,13 +254,13 @@ describe("EmailDraftCompletion — שמירה", () => {
   });
 
   it("שמירה שנדחתה מחזירה את הפקד לערך השרת ומציגה את ההודעה", async () => {
-    actions.updateTicketFieldsAction.mockImplementation(async () => ({ ok: false, error: he.emailDraft.fieldChanged }));
+    actions.updateTicketFieldsAction.mockImplementation(async () => ({ ok: false, error: he.draft.channel.EMAIL.fieldChanged }));
     const user = userEvent.setup();
     renderScreen();
     const room = screen.getByLabelText(`${he.ticket.room} (${he.common.optional})`);
     await user.selectOptions(room, "KITCHEN");
     await user.tab();
-    expect(await screen.findByRole("alert")).toHaveTextContent(he.emailDraft.fieldChanged);
+    expect(await screen.findByRole("alert")).toHaveTextContent(he.draft.channel.EMAIL.fieldChanged);
     expect(room).toHaveValue("");
   });
 
@@ -276,8 +290,8 @@ describe("EmailDraftCompletion — שמירה", () => {
     const submit = screen.getByRole("button", { name: he.ticket.submitDraftButton });
     await user.click(submit);
 
-    await act(async () => finish({ ok: false, error: he.emailDraft.fieldChanged }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(he.emailDraft.fieldChanged);
+    await act(async () => finish({ ok: false, error: he.draft.channel.EMAIL.fieldChanged }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(he.draft.channel.EMAIL.fieldChanged);
     expect(actions.submitDraftAction).not.toHaveBeenCalled();
 
     await user.click(submit);
@@ -306,7 +320,7 @@ describe("EmailDraftCompletion — שמירה", () => {
   });
 });
 
-describe("EmailDraftCompletion — רענון ומיקוד", () => {
+describe("ChannelDraftCompletion — רענון ומיקוד", () => {
   it("חזרה ללשונית מרעננת את המסך — תשובה במייל יכלה להגיע בינתיים", () => {
     renderScreen();
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
@@ -317,9 +331,9 @@ describe("EmailDraftCompletion — רענון ומיקוד", () => {
   });
 
   it("כשהסתירה מוכרעת והכפתור שפתח את החלון נעלם, המיקוד עובר לטופס ולא נופל ל-body", () => {
-    const view = render(<EmailDraftCompletion {...screenProps({ conflicts: true })} />);
+    const view = render(<ChannelDraftCompletion {...screenProps({ conflicts: true })} />);
     expect(document.activeElement).toBe(document.body);
-    view.rerender(<EmailDraftCompletion {...screenProps({ conflicts: false })} />);
+    view.rerender(<ChannelDraftCompletion {...screenProps({ conflicts: false })} />);
     expect(document.activeElement?.tagName).toBe("SECTION");
   });
 });
