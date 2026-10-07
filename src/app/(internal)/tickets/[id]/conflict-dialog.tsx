@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormError } from "@/components/ui/message";
 import type { DraftFieldDisplay } from "@/lib/draft/display";
+import type { IntakeChannel } from "@/lib/draft/state";
 import type { Choice } from "@/lib/draft/merge";
 import { he } from "@/lib/he";
 import { useAction } from "@/lib/use-action";
@@ -13,10 +14,10 @@ import { DIALOG_SCROLL_BODY, DIALOG_WIDE, ROW_LIST } from "@/lib/ui";
 import { resolveDraftConflictsAction } from "./actions";
 
 /**
- * מסך 7א — סתירות בין המייל למערכת (אפיון 1.3).
+ * מסך 7א — סתירות בין הערוץ למערכת: המייל (אפיון 1.3) או הוואטסאפ (1.4).
  *
- * החלון מכריע, שדה אחר שדה, בין הערך שנקבע במערכת לבין הערך מהמייל
- * האחרון. דפוס האינטראקציה לקוח ממסך ההשוואה של EasyInv; העיצוב לא — ראה
+ * החלון מכריע, שדה אחר שדה, בין הערך שנקבע במערכת לבין הערך מההודעה
+ * האחרונה בערוץ. הכותרת ועמודת המקור נקראות בשם הערוץ, וכל השאר זהה. דפוס האינטראקציה לקוח ממסך ההשוואה של EasyInv; העיצוב לא — ראה
  * DESIGN.md § חלון הסתירות.
  *
  * **DOM אחד לשני הרוחבים.** בדסקטופ טבלת השוואה של **כל** השדות (שורות
@@ -37,16 +38,18 @@ type Choices = Partial<Record<DraftFieldName, Choice>>;
 
 interface ConflictDialogProps {
   ticketId: string;
+  /** הערוץ של הטיוטה — שמו בכותרת ובעמודת המקור (מסך 7א, WA-S7A-01) */
+  channel: IntakeChannel;
   /** כל שדות הטיוטה, בסדר `DRAFT_FIELDS` — לא רק אלה שבסתירה */
   fields: DraftFieldDisplay[];
   /** `conflictsVersion` של מה שמוצג; השרת דוחה הכרעה על ערכים שהשתנו בינתיים */
   version: string;
   /**
-   * האם הצופה רשאי לבחור את האתר שהמייל הציע. מנהל עבודה אינו יכול להוציא
+   * האם הצופה רשאי לבחור את האתר שהערוץ הציע. מנהל עבודה אינו יכול להוציא
    * טיוטה מהאתר שלו (`canCreateTicketInSite`), והשרת היה דוחה בחירה כזו
    * ב"אין הרשאה" כללי — לכן האפשרות מושבתת עם הסבר עוד לפני הלחיצה.
    */
-  emailSiteAllowed?: boolean;
+  channelSiteAllowed?: boolean;
   /**
    * הכפתור מושבת — ה-`busy` של מסך 7 (`useAction`): עד ה-hydration, שבלעדיו
    * לחיצה נבלעת בשקט, ובזמן ששמירה בטופס בדרך ועומדת לרענן את הערכים.
@@ -54,7 +57,7 @@ interface ConflictDialogProps {
   disabled?: boolean;
 }
 
-/** שלוש העמודות בדסקטופ: שם השדה, במערכת, מהמייל */
+/** שלוש העמודות בדסקטופ: שם השדה, במערכת, מהערוץ */
 const COLUMNS = "md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,2fr)]";
 
 /** ערך בתא: תיאור רב-שורות שומר על השורות, וקישור ארוך נשבר ואינו גולש לעמודה השכנה */
@@ -66,7 +69,7 @@ export function ConflictDialog({ disabled = false, ...props }: ConflictDialogPro
   return (
     <>
       <Button variant="secondary" size="compact" disabled={disabled} onClick={() => setOpen(true)}>
-        {he.emailDraft.compare}
+        {he.draft.compare}
       </Button>
       {/*
        * הפאנל הוא רכיב נפרד שנטען מחדש בכל פתיחה: כך הבחירות מתאפסות
@@ -79,14 +82,15 @@ export function ConflictDialog({ disabled = false, ...props }: ConflictDialogPro
 
 function ConflictPanel({
   ticketId,
+  channel,
   fields,
   version,
-  emailSiteAllowed = true,
+  channelSiteAllowed = true,
   onClose,
 }: ConflictDialogProps & { onClose: () => void }) {
   /*
    * **מה שהוצג בפתיחה — קפוא.** רענון של העמוד יכול להגיע בזמן שהחלון פתוח
-   * (שמירה אחרת בטופס, תשובה חדשה במייל), ואם הערכים והגרסה היו מתחלפים
+   * (שמירה אחרת בטופס, תשובה חדשה בערוץ), ואם הערכים והגרסה היו מתחלפים
    * מתחת לבחירות שכבר סומנו, השרת היה מקבל הכרעה על ערכים שאיש לא ראה —
    * בדיוק מה ש-§7 שורה 84 אוסר. כשהם קפואים, השרת דוחה והמשתמש פותח מחדש.
    */
@@ -94,6 +98,7 @@ function ConflictPanel({
   const [choices, setChoices] = useState<Choices>({});
   const { busy, error, run } = useAction();
 
+  const words = he.draft.channel[channel];
   const conflicts = shown.fields.filter((field) => field.conflict);
   const complete = conflicts.every((field) => choices[field.field] !== undefined);
 
@@ -104,7 +109,7 @@ function ConflictPanel({
   return (
     // סגירה בזמן שההכרעה בדרך הייתה מעלימה את התשובה שלה — גם שגיאה
     <Dialog
-      title={he.emailDraft.conflictsTitle}
+      title={words.conflictsTitle}
       width={DIALOG_WIDE}
       onClose={() => {
         if (!busy) onClose();
@@ -119,9 +124,9 @@ function ConflictPanel({
           aria-hidden="true"
           className={`hidden md:grid ${COLUMNS} gap-x-3 px-3 text-sm font-semibold text-muted`}
         >
-          <span>{he.emailDraft.columnField}</span>
-          <span>{he.emailDraft.columnSystem}</span>
-          <span>{he.emailDraft.columnEmail}</span>
+          <span>{he.draft.columnField}</span>
+          <span>{he.draft.columnSystem}</span>
+          <span>{words.sourceColumn}</span>
         </div>
 
         <ul className={ROW_LIST}>
@@ -132,7 +137,8 @@ function ConflictPanel({
                 field={field}
                 choice={choices[field.field]}
                 disabled={busy}
-                emailAllowed={field.field !== "SITE" || emailSiteAllowed}
+                source={words.sourceColumn}
+                channelAllowed={field.field !== "SITE" || channelSiteAllowed}
                 onChoose={(choice) => setChoices((prev) => ({ ...prev, [field.field]: choice }))}
               />
             ) : (
@@ -147,10 +153,10 @@ function ConflictPanel({
          * הכפתור מושבת ואינו מסביר בלחיצה (כמו "שגר" בזמן סתירה), ולכן ההסבר
          * יושב לצדו כל עוד הוא מושבת.
          */}
-        {complete ? null : <p className="text-xs text-muted">{he.emailDraft.chooseEverywhere}</p>}
+        {complete ? null : <p className="text-xs text-muted">{he.draft.chooseEverywhere}</p>}
         <div className="flex gap-2">
           <Button onClick={apply} disabled={busy || !complete}>
-            {he.emailDraft.applyChoices}
+            {he.draft.applyChoices}
           </Button>
         </div>
       </div>
@@ -170,13 +176,16 @@ function ConflictRow({
   field,
   choice,
   disabled,
-  emailAllowed,
+  source,
+  channelAllowed,
   onChoose,
 }: {
   field: DraftFieldDisplay;
   choice: Choice | undefined;
   disabled: boolean;
-  emailAllowed: boolean;
+  /** שם עמודת המקור — "מהמייל" או "מוואטסאפ" */
+  source: string;
+  channelAllowed: boolean;
   onChoose: (choice: Choice) => void;
 }) {
   const labelId = useId();
@@ -195,7 +204,7 @@ function ConflictRow({
         <ChoiceOption
           name={name}
           value="system"
-          source={he.emailDraft.columnSystem}
+          source={he.draft.columnSystem}
           text={field.systemText}
           checked={choice === "system"}
           disabled={disabled}
@@ -205,13 +214,13 @@ function ConflictRow({
           <ChoiceOption
             name={name}
             value="channel"
-            source={he.emailDraft.columnEmail}
+            source={source}
             text={field.channelText ?? he.emailIntake.empty}
             checked={choice === "channel"}
-            disabled={disabled || !emailAllowed}
+            disabled={disabled || !channelAllowed}
             onChoose={onChoose}
           />
-          {emailAllowed ? null : <p className="text-xs text-muted">{he.emailDraft.emailSiteNotAllowed}</p>}
+          {channelAllowed ? null : <p className="text-xs text-muted">{he.draft.siteNotAllowed}</p>}
         </div>
       </div>
     </li>

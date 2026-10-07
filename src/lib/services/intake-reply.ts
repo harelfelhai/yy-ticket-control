@@ -54,6 +54,14 @@ export const REPLY_TICKET_SELECT = {
 
 export type ReplyTicket = Prisma.TicketGetPayload<{ select: typeof REPLY_TICKET_SELECT }>;
 
+/**
+ * הסימון בסוף `detail` של הודעה חוזרת שדולגה כי הטיוטה שוגרה או נמחקה לפני
+ * שיצאה (§7 שורה 77) — מייל (`email-reply.ts`) או אישור בוואטסאפ (`wa-reply.ts`).
+ * ההתכתבות והשיחה מזהות לפיו את הדילוג הצפוי ומבדילות אותו מדילוג מסיבה אחרת,
+ * ולכן הוא מוגדר כאן פעם אחת: שני העתקים היו יכולים להיפרד בשקט.
+ */
+export const SKIPPED_AFTER_CLOSE = "(§7 שורה 77)";
+
 export function ticketUrl(ticketId: string): string {
   return `${env.appBaseUrl().replace(/\/+$/, "")}/tickets/${ticketId}`;
 }

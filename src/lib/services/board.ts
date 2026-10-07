@@ -4,8 +4,8 @@ import { db } from "@/lib/db";
 import { firstLine } from "@/lib/format";
 import type { SessionUser } from "@/lib/session";
 import { compareApartmentNumbers } from "@/lib/normalize";
-import { draftValuesOf, emailDraftCounts } from "@/lib/draft/state";
-import { isChannelDraft } from "@/lib/services/draft-fields";
+import { channelDraftCounts, draftValuesOf } from "@/lib/draft/state";
+import { channelDraftOf } from "@/lib/services/draft-fields";
 import { tagChatTextMatch } from "@/lib/services/tags";
 import type { DerivedTicketStatus } from "@/lib/ticket-status";
 import {
@@ -145,12 +145,13 @@ const TICKET_INCLUDE = {
 type BoardTicket = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
 
 /**
- * הספירות של שורת הסיבה — **רק לטיוטה ממייל** (§7 שורה 82): טיוטה ידנית
- * ממשיכה להציג "טיוטה — חסרים פרטים" גם כשהיא שלמה.
+ * הספירות של שורת הסיבה — **רק לטיוטה מערוץ**, ממייל או מוואטסאפ (§7 שורה 82):
+ * טיוטה ידנית ממשיכה להציג "טיוטה — חסרים פרטים" גם כשהיא שלמה.
  */
-function emailDraftCountsOf(ticket: BoardTicket) {
-  if (!isChannelDraft(ticket)) return null;
-  return emailDraftCounts(draftValuesOf(ticket), ticket.draftFields.length);
+function channelDraftCountsOf(ticket: BoardTicket) {
+  const channel = channelDraftOf(ticket);
+  if (!channel) return null;
+  return channelDraftCounts(channel, draftValuesOf(ticket), ticket.draftFields.length);
 }
 
 /** לוח ריק לחלוטין — לתרחיש ה-fail-closed של מנהל עבודה ללא אתר */
@@ -304,7 +305,7 @@ export async function getBoard(
       ...ticket,
       handlerName: ticket.handler?.name ?? null,
       awaitingReply,
-      emailDraft: emailDraftCountsOf(ticket),
+      channelDraft: channelDraftCountsOf(ticket),
     };
     const status = deriveTicketStatus(view, assignmentViews);
     // סינון הסטטוס כאן ולא ב-SQL — ראו `BoardFilters.status`.

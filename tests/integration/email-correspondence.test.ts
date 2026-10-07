@@ -7,7 +7,7 @@ import {
 import type { SessionUser } from "@/lib/session";
 import { toViewer } from "@/lib/session";
 import type { Viewer } from "@/lib/permissions";
-import { SKIPPED_AFTER_CLOSE } from "@/lib/services/email-reply";
+import { SKIPPED_AFTER_CLOSE } from "@/lib/services/intake-reply";
 import { resetDb } from "../helpers/reset-db";
 
 /**

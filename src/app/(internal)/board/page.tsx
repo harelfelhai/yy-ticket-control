@@ -19,6 +19,7 @@ import {
 } from "@/lib/board-view";
 import { he } from "@/lib/he";
 import { type BoardFilters as Filters, getBoard } from "@/lib/services/board";
+import { whatsappNeedsAttention } from "@/lib/services/wa-number";
 import type { BoardSection, DerivedTicketStatus } from "@/lib/ticket-status";
 import {
   FULL_WIDTH,
@@ -98,7 +99,12 @@ export default async function BoardPage(props: PageProps<"/board">) {
     to: asDate(single(params.to)),
   };
 
-  const board = await getBoard(user, filters, new Date());
+  // הבאנר "הוואטסאפ אינו מחובר" — למנהל המערכת בלבד (מסך 1, WA-S1-02); שאילתה
+  // רזה, במקביל ללוח
+  const [board, whatsappDown] = await Promise.all([
+    getBoard(user, filters, new Date()),
+    whatsappNeedsAttention(user),
+  ]);
 
   /**
    * תצוגת טבלה (אפיון מסך 1, הכרעת 0.3 §7 שורה 28).
@@ -172,6 +178,19 @@ export default async function BoardPage(props: PageProps<"/board">) {
 
   return (
     <div className={`flex flex-col gap-3 py-3 pb-24 ${PAGE_X} ${FULL_WIDTH}`}>
+      {whatsappDown ? (
+        <Banner tone="danger" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>{he.board.whatsappDown}</span>
+          {/*
+           * `<a>` ולא `Link`: ניווט צד-לקוח אינו טוען מסמך, ולכן גם לא את מדיניות
+           * האבטחה של מסך 17 — היחידה שמתירה את ה-SDK של Meta (DESIGN.md § הבאנר
+           * בראש הלוח). צמוד לטקסט, כמו "הצג הכול" בבאנר המיקוד.
+           */}
+          <a href="/admin/whatsapp" className="underline">
+            {he.board.whatsappConnect}
+          </a>
+        </Banner>
+      ) : null}
       {/*
        * תוכן הלוח יושב **בתוך** `BoardFilters` (כ-children, כלומר נשאר
        * רינדור-שרת): כך חיווי ה-pending של הרצועה יכול לעמעם אותו בזמן
@@ -253,8 +272,12 @@ export default async function BoardPage(props: PageProps<"/board">) {
         הכפתור הראשי (`bg-brand`, `text-brand-fg`, `px-6`), ולכן החמיץ כל
         שינוי בפרימיטיב — כולל את הפלטה החדשה ואת הצפיפות. `shadow-lg`
         וההצמדה נשארים כאן: הם תפקידו כאלמנט צף, לא צורתו ככפתור.
+
+        `z-10`: כותרת קבוצה דביקה (`z-[1]`) עוברת בגלילה בתחתית המסך, בפינה
+        הזו בדיוק, ובלי `z` היא מכסה את הכפתור ובולעת את הלחיצה (DESIGN.md §
+        סולם ה-z). E2E תפס זאת ב-W8.
       */}
-      <ButtonLink href="/tickets/new" className="fixed bottom-3 end-3 shadow-lg">
+      <ButtonLink href="/tickets/new" className="fixed bottom-3 end-3 z-10 shadow-lg">
         {he.ticket.newTicket}
       </ButtonLink>
     </div>

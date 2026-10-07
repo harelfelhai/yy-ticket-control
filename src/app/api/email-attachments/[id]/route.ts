@@ -6,7 +6,7 @@ import { captureError } from "@/lib/observability/log";
 import type { Viewer } from "@/lib/permissions";
 import { canViewCorrespondence } from "@/lib/services/email-correspondence";
 import { resolveViewer } from "@/lib/services/viewer";
-import { contentDisposition, selectStorage } from "@/lib/storage";
+import { serveStoredFile } from "@/lib/storage/serve";
 
 /**
  * הגשת קובץ מצורף מהתכתבות מייל (`MailboxAttachment`) — אחרי בדיקת הרשאה,
@@ -64,26 +64,12 @@ export async function GET(
   // אחרת טיפוסי Prisma (`string | null`) לא מצטמצמים דרך גבול הפונקציה.
   if (!attachment || !attachment.storageKey) return notFound();
 
-  // מדיה נפתחת בדפדפן (inline); מסמך Word/Excel מההתכתבות **יורד**, בשמו
-  // המקורי — גם בהפניה ל-R2, שם הכותרת נמסרת כפרמטר של הכתובת החתומה
-  const download = !attachment.isMedia;
-  const storage = selectStorage();
-  const directUrl = await storage.createDownloadUrl(
-    attachment.storageKey,
-    download ? { filename: attachment.filename ?? "file" } : undefined,
-  );
-  if (directUrl) return NextResponse.redirect(directUrl);
-
-  const body = await storage.read(attachment.storageKey);
-
-  return new NextResponse(new Uint8Array(body), {
-    headers: {
-      "Content-Type": attachment.mimeType,
-      "Content-Length": String(body.byteLength),
-      "Content-Disposition": contentDisposition(download ? "attachment" : "inline", attachment.filename),
-      // פרטי ולא ציבורי: הקובץ שייך לפנייה, ואסור שיישמר במטמון משותף.
-      "Cache-Control": "private, max-age=300",
-    },
+  // מדיה נפתחת בדפדפן (inline); מסמך Word/Excel מההתכתבות **יורד**, בשמו המקורי
+  return serveStoredFile({
+    storageKey: attachment.storageKey,
+    mimeType: attachment.mimeType,
+    filename: attachment.filename,
+    download: !attachment.isMedia,
   });
 }
 

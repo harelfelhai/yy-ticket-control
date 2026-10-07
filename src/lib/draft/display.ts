@@ -135,7 +135,7 @@ export function describeDraftFields(state: DraftState, labels: DraftLabels): Dra
  * ולא כמזהה גולמי: המזהה אינו אומר למשתמש דבר, ו"לא נמצא" אומר לו מה לעשות.
  */
 function nameOf(map: ReadonlyMap<string, string>, id: string): string {
-  return map.get(id) ?? he.emailDraft.unknownRecord;
+  return map.get(id) ?? he.draft.unknownRecord;
 }
 
 function namesOf(refs: readonly RecipientRef[], labels: DraftLabels): string {
@@ -181,9 +181,9 @@ function channelText(value: ChannelValue, labels: DraftLabels): string {
       return value.text.trim() || he.emailIntake.empty;
     case "RECIPIENTS": {
       const parts: string[] = [];
-      if (value.add.length > 0) parts.push(he.emailDraft.recipientsAdd(namesOf(value.add, labels)));
+      if (value.add.length > 0) parts.push(he.draft.recipientsAdd(namesOf(value.add, labels)));
       if (value.remove.length > 0) {
-        parts.push(he.emailDraft.recipientsRemove(namesOf(value.remove, labels)));
+        parts.push(he.draft.recipientsRemove(namesOf(value.remove, labels)));
       }
       return parts.length > 0 ? parts.join(he.emailIntake.summarySeparator) : he.emailIntake.empty;
     }

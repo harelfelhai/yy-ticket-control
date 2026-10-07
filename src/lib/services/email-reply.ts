@@ -10,7 +10,14 @@ import { env } from "@/lib/env";
 import { selectEmailTransport } from "@/lib/notifier/email";
 import type { EmailMessage, EmailTransport } from "@/lib/notifier/types";
 import { captureError, logInfo, logWarn } from "@/lib/observability/log";
-import { REPLY_TICKET_SELECT, type ReplyTicket, draftReplyContent, parseReport, ticketUrl } from "./intake-reply";
+import {
+  REPLY_TICKET_SELECT,
+  type ReplyTicket,
+  SKIPPED_AFTER_CLOSE,
+  draftReplyContent,
+  parseReport,
+  ticketUrl,
+} from "./intake-reply";
 
 /**
  * המייל החוזר לשולח — הצד השני של §2.6 שלב 4: "מייל חוזר תמיד, תוך 5 דקות
@@ -499,13 +506,6 @@ async function findInMailbox(source: MailSource, messageId: string, outboundId: 
  * `bug` מסמן מצב שלא היה אמור להיווצר (שורה יוצאת להכרעה שאין עליה מענה,
  * הודעה נכנסת בלי כתובת). הוא שקט מדי מכדי להישאר רק בשדה במסד.
  */
-/**
- * הסימון בסוף `detail` של מייל חוזר שדולג כי הטיוטה שוגרה או נמחקה לפני
- * שיצא (§7 שורה 77). ההתכתבות (`email-correspondence.ts`) מזהה לפיו את
- * הדילוג הצפוי ומבדילה אותו מדילוג מסיבה אחרת — שלושת המקומות כאן הם היחידים
- * שכותבים אותו.
- */
-export const SKIPPED_AFTER_CLOSE = "(§7 שורה 77)";
 
 async function skip(
   outbound: MailboxMessage,

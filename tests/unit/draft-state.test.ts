@@ -6,7 +6,7 @@ import {
   type DraftTicketRow,
   conflictsVersion,
   diffDraftState,
-  emailDraftCounts,
+  channelDraftCounts,
   parseChannelValue,
   toDraftState,
 } from "@/lib/draft/state";
@@ -189,10 +189,11 @@ describe("conflictsVersion", () => {
   });
 });
 
-describe("emailDraftCounts", () => {
+describe("channelDraftCounts", () => {
   it("EM-S1-02 — סופר שדות חובה חסרים (חדר אינו חובה) ומעביר את מספר הסתירות", () => {
     const values = toDraftState(ticket({ siteId: null, buildingId: null, apartmentId: null, draftRecipients: [] }), []).values;
     // אתר, בניין, דירה, תחום, נמענים
-    expect(emailDraftCounts(values, 2)).toEqual({ conflictCount: 2, missingCount: 5 });
+    expect(channelDraftCounts("EMAIL", values, 2)).toEqual({ channel: "EMAIL", conflictCount: 2, missingCount: 5 });
+    expect(channelDraftCounts("WHATSAPP", values, 0).channel).toBe("WHATSAPP");
   });
 });

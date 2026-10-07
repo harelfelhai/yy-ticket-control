@@ -1,10 +1,12 @@
+import type { ReactNode } from "react";
 import { formatTime } from "@/lib/format";
 import type { ThreadMessageView } from "@/lib/thread-view";
 import { MediaAttachments } from "./media-attachments";
 
 /**
  * בועת הודעה בשרשור — רכיב אחד לשלושת המקומות שמרנדרים שיחה:
- * מסך הפנייה הפנימי, פורטל הקבלן, וצ׳אט התגית.
+ * מסך הפנייה הפנימי, פורטל הקבלן, וצ׳אט התגית — וגם לשיחת הוואטסאפ (1.4), שמוסיפה
+ * לבועה מצב מסירה, קבצים שלא נשמרו והערה דרך שני חריצים (`status`, `children`).
  *
  * **למה זו כפילות אמיתית שראויה לרכיב.** התקן מזהיר במפורש ש"לא כל כפילות
  * היא רכיב", וארבעת הקומפוזרים נשארו נפרדים בכוונה. אבל כאן האפיון קובע
@@ -17,7 +19,25 @@ import { MediaAttachments } from "./media-attachments";
  *
  * הספציפיקציה ב-`docs/DESIGN.md` § בועת שרשור.
  */
-export function ThreadBubble({ message }: { message: ThreadMessageView }) {
+interface ThreadBubbleProps {
+  message: ThreadMessageView;
+  /**
+   * שם הכותב גם בבועה שבצד "שלי". בשרשור הצד הזה הוא הצופה, ושמו מיותר; בשיחת
+   * הוואטסאפ הוא המערכת, שאינה הצופה (DESIGN.md § שיחת הוואטסאפ).
+   */
+  authorAlways?: boolean;
+  /** לפני השעה, באותה שורה — מצב המסירה של הודעת מערכת בשיחת הוואטסאפ */
+  status?: ReactNode;
+  /**
+   * הטקסט כפי שהוא מוצג — בשיחת הוואטסאפ, עם ההדגשה של וואטסאפ. המעטפת (`<p>`
+   * והשבירה) נשארת של הבועה; הקורא קובע רק מה בתוכה.
+   */
+  formatText?: (text: string) => ReactNode;
+  /** אחרי המדיה — קבצים שלא נשמרו והערה במילים (שיחת הוואטסאפ) */
+  children?: ReactNode;
+}
+
+export function ThreadBubble({ message, authorAlways = false, status, formatText, children }: ThreadBubbleProps) {
   /*
    * **ההבחנה עברה מהמילוי למסגרת, ובעל כורחה.**
    *
@@ -71,24 +91,46 @@ export function ThreadBubble({ message }: { message: ThreadMessageView }) {
     <div
       className={`flex max-w-96 flex-col gap-1 rounded-lg border bg-surface px-2 py-1 ${surface}`}
     >
-      {message.own ? null : (
+      {message.own && !authorAlways ? null : (
         <p className="text-xs font-medium text-muted">{message.authorName}</p>
       )}
 
-      {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
+      {/*
+       * `wrap-anywhere` ולא `wrap-break-word`: קישור הוא מילה אחת ברוחב מאות
+       * פיקסלים. הבועה מתכווצת לתוכן, ורוחבה אינו קטן מהמילה הארוכה ביותר שבה —
+       * ו-`break-word` אינו משנה את המדידה הזו, רק את השבירה אחרי שהרוחב נקבע.
+       * ב-390px הבועה יצאה מהכרטיס שמאלה ונחתכה. ב-RTL גלישה שמאלה גם אינה
+       * יוצרת גלילה, ולכן אין לה שום סימן חוץ מהטקסט החתוך (נמדד, W8).
+       */}
+      {message.text ? (
+        <p className="whitespace-pre-wrap wrap-anywhere">{formatText ? formatText(message.text) : message.text}</p>
+      ) : null}
 
       <MediaAttachments media={message.media} />
 
-      {/* שעה היא מספר: `tabular-nums` מונע קפיצה בין שורות, ו-`dir="ltr"`
-          מונע היפוך של "16:45" ל-"45:16" בהקשר RTL. */}
-      <time
-        dateTime={message.createdAt.toISOString()}
-        dir="ltr"
-        className="self-end text-xs tabular-nums text-muted"
-      >
-        {formatTime(message.createdAt)}
-      </time>
+      {children}
+
+      {status ? (
+        <div className="flex flex-wrap items-center gap-2 self-end">
+          {status}
+          <BubbleTime at={message.createdAt} />
+        </div>
+      ) : (
+        <BubbleTime at={message.createdAt} className="self-end" />
+      )}
     </div>
+  );
+}
+
+/**
+ * שעה היא מספר: `tabular-nums` מונע קפיצה בין שורות, ו-`dir="ltr"` מונע היפוך של
+ * "16:45" ל-"45:16" בהקשר RTL.
+ */
+function BubbleTime({ at, className = "" }: { at: Date; className?: string }) {
+  return (
+    <time dateTime={at.toISOString()} dir="ltr" className={`${className} text-xs tabular-nums text-muted`.trim()}>
+      {formatTime(at)}
+    </time>
   );
 }
 

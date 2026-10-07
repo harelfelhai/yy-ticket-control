@@ -1,7 +1,7 @@
 import type { MailOutcome, MessageDirection, MessageState } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { type Viewer, type AssignmentAccessView, type TicketAccessView, canViewTicket } from "@/lib/permissions";
-import { SKIPPED_AFTER_CLOSE } from "./email-reply";
+import { SKIPPED_AFTER_CLOSE } from "./intake-reply";
 
 /**
  * התכתבות המייל של פנייה — קריאה בלבד (EM-M01, §3.1, §3.2 שדה 20).

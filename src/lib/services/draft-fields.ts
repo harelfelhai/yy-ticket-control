@@ -17,7 +17,7 @@ import {
   resolveChoices,
 } from "@/lib/draft/merge";
 import { DRAFT_FIELD_LABEL } from "@/lib/draft/labels";
-import { conflictsVersion, diffDraftState, fieldVersion, toDraftState } from "@/lib/draft/state";
+import { type IntakeChannel, conflictsVersion, diffDraftState, fieldVersion, toDraftState } from "@/lib/draft/state";
 import { he } from "@/lib/he";
 import { normalizeText } from "@/lib/normalize";
 import { type Viewer, canCreateTicketInSite, canEditTicketFields } from "@/lib/permissions";
@@ -82,7 +82,16 @@ export type DraftTicket = Prisma.TicketGetPayload<{ select: typeof DRAFT_TICKET_
  * `isDraft` אינו קיים.
  */
 export function isChannelDraft(ticket: { isDraft: boolean; channel: string }): boolean {
-  return ticket.isDraft && (ticket.channel === "EMAIL" || ticket.channel === "WHATSAPP");
+  return channelDraftOf(ticket) !== null;
+}
+
+/**
+ * הערוץ של טיוטה מערוץ, או null לכל פנייה אחרת — כולל פנייה מערוץ ששוגרה. מה
+ * שתלוי בו הוא המילים (`he.draft.channel`): "מהמייל" מול "מוואטסאפ".
+ */
+export function channelDraftOf(ticket: { isDraft: boolean; channel: string }): IntakeChannel | null {
+  if (!ticket.isDraft) return null;
+  return ticket.channel === "EMAIL" || ticket.channel === "WHATSAPP" ? ticket.channel : null;
 }
 
 /**
@@ -247,7 +256,8 @@ export async function updateDraftFields(
       for (const edit of edits) {
         const shown = expected[edit.field];
         if (shown !== undefined && shown !== fieldVersion(state, edit.field)) {
-          throw new DraftError(he.emailDraft.fieldChanged);
+          // רק מסך 7 של טיוטה מערוץ שולח `expected`; טיוטה ידנית אינה שולחת אותו
+          throw new DraftError(he.draft.channel[channelDraftOf(ticket) ?? "EMAIL"].fieldChanged);
         }
       }
     }
@@ -284,7 +294,7 @@ export async function resolveDraftConflicts(
     const now = clock ?? new Date();
     denyUnless(canEditTicketFields(viewer, ticket));
     denyUnless(isChannelDraft(ticket));
-    if (conflictsVersion(state) !== version) throw new DraftError(he.emailDraft.conflictsChanged);
+    if (conflictsVersion(state) !== version) throw new DraftError(he.draft.conflictsChanged);
 
     const open = conflictFields(state.meta);
     if (open.length === 0) return;

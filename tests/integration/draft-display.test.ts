@@ -86,6 +86,6 @@ describe("describeDraftState", () => {
   it("מזהה שאינו קיים עוד מוצג במילים ואינו מפיל את התצוגה", async () => {
     const display = await describeDraftState(state());
     const domain = display.fields.find((f) => f.field === "DOMAIN");
-    expect(domain?.channelText).toBe(he.emailDraft.unknownRecord);
+    expect(domain?.channelText).toBe(he.draft.unknownRecord);
   });
 });

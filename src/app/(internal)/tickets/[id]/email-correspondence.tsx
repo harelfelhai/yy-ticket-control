@@ -25,10 +25,10 @@ import { CARD_LIST, LINK, ROW_LIST, TITLE_DESCRIPTIVE } from "@/lib/ui";
  */
 export function EmailCorrespondence({ messages }: { messages: CorrespondenceMessage[] }) {
   return (
-    <section aria-label={he.emailDraft.correspondence} className="flex flex-col gap-2">
-      <h2 className={TITLE_DESCRIPTIVE}>{he.emailDraft.correspondence}</h2>
+    <section aria-label={he.emailCorrespondence.correspondence} className="flex flex-col gap-2">
+      <h2 className={TITLE_DESCRIPTIVE}>{he.emailCorrespondence.correspondence}</h2>
       {messages.length === 0 ? (
-        <p className="text-sm text-muted">{he.emailDraft.noCorrespondence}</p>
+        <p className="text-sm text-muted">{he.emailCorrespondence.noCorrespondence}</p>
       ) : (
         // כל מייל הוא כרטיס נפרד, ולכן ריתמוס של רשימת כרטיסים (§ ריתמוס)
         <ul className={CARD_LIST}>
@@ -75,10 +75,10 @@ function CorrespondenceItem({ message, open }: { message: CorrespondenceMessage;
           <InboundSender message={message} />
         ) : (
           <>
-            <span className={`${META} font-medium`}>{he.emailDraft.systemSender}</span>
+            <span className={`${META} font-medium`}>{he.emailCorrespondence.systemSender}</span>
             {message.toAddress ? (
               <span className={`${META} text-muted`}>
-                {he.emailDraft.sentTo} <bdi dir="ltr">{message.toAddress}</bdi>
+                {he.emailCorrespondence.sentTo} <bdi dir="ltr">{message.toAddress}</bdi>
               </span>
             ) : null}
           </>
@@ -95,7 +95,7 @@ function CorrespondenceItem({ message, open }: { message: CorrespondenceMessage;
       <div className="flex flex-col gap-2 pt-2">
         {message.subject ? (
           <p className="text-xs text-muted">
-            {he.emailDraft.subjectLabel} <bdi>{message.subject}</bdi>
+            {he.emailCorrespondence.subjectLabel} <bdi>{message.subject}</bdi>
           </p>
         ) : null}
         {message.bodyText ? (
@@ -103,10 +103,10 @@ function CorrespondenceItem({ message, open }: { message: CorrespondenceMessage;
           // פיקסלים, ובלי שבירה הוא גולל את כל העמוד הצידה בטלפון
           <p className="whitespace-pre-wrap wrap-break-word text-base leading-relaxed">{message.bodyText}</p>
         ) : (
-          <p className="text-sm text-muted">{he.emailDraft.emptyBody}</p>
+          <p className="text-sm text-muted">{he.emailCorrespondence.emptyBody}</p>
         )}
         {message.attachments.length > 0 ? (
-          <ul aria-label={he.emailDraft.attachments} className={ROW_LIST}>
+          <ul aria-label={he.emailCorrespondence.attachments} className={ROW_LIST}>
             {message.attachments.map((attachment) => (
               <AttachmentRow key={attachment.id} attachment={attachment} />
             ))}
@@ -157,9 +157,9 @@ function InboundSender({ message }: { message: CorrespondenceMessage }) {
  * הטיוטה צריך לדעת את זה לפני שהוא משגר.
  */
 function AttachmentRow({ attachment }: { attachment: CorrespondenceAttachment }) {
-  const name = attachment.filename ?? he.emailDraft.unnamedAttachment;
-  const skipped = attachment.skippedReason ? he.emailDraft.attachmentSkipped[attachment.skippedReason] : undefined;
-  const reason = skipped ?? (attachment.downloadable ? null : he.emailDraft.attachmentUnavailable);
+  const name = attachment.filename ?? he.emailCorrespondence.unnamedAttachment;
+  const skipped = attachment.skippedReason ? he.emailCorrespondence.attachmentSkipped[attachment.skippedReason] : undefined;
+  const reason = skipped ?? (attachment.downloadable ? null : he.emailCorrespondence.attachmentUnavailable);
 
   return (
     <li className="flex flex-wrap items-center gap-2 text-sm">
@@ -177,7 +177,7 @@ function AttachmentRow({ attachment }: { attachment: CorrespondenceAttachment })
         <span>{name}</span>
       )}
       <span className="text-xs text-muted tabular-nums" dir="ltr">
-        {he.emailDraft.fileSize(kilobytes(attachment.sizeBytes))}
+        {he.emailCorrespondence.fileSize(kilobytes(attachment.sizeBytes))}
       </span>
       {reason ? <span className={chipClasses("neutral")}>{reason}</span> : null}
     </li>
@@ -197,18 +197,18 @@ type Note = { text: string; tone: "danger" | "muted" };
 function noteOf(message: CorrespondenceMessage): Note | null {
   if (message.direction === "INBOUND") {
     if (!message.outcome) return null;
-    const text = (he.emailDraft.outcome as Partial<Record<MailOutcome, string>>)[message.outcome];
+    const text = (he.emailCorrespondence.outcome as Partial<Record<MailOutcome, string>>)[message.outcome];
     return text ? { text, tone: "danger" } : null;
   }
   switch (message.state) {
     case "SKIPPED":
       return message.skippedAfterClose
-        ? { text: he.emailDraft.sendSkipped, tone: "muted" }
-        : { text: he.emailDraft.sendNotSent, tone: "danger" };
+        ? { text: he.emailCorrespondence.sendSkipped, tone: "muted" }
+        : { text: he.emailCorrespondence.sendNotSent, tone: "danger" };
     case "FAILED":
-      return { text: he.emailDraft.sendFailed, tone: "danger" };
+      return { text: he.emailCorrespondence.sendFailed, tone: "danger" };
     case "SIMULATED":
-      return { text: he.emailDraft.sendSimulated, tone: "muted" };
+      return { text: he.emailCorrespondence.sendSimulated, tone: "muted" };
     default:
       return null;
   }

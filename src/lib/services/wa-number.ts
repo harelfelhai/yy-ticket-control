@@ -4,7 +4,8 @@ import { env } from "@/lib/env";
 import { he } from "@/lib/he";
 import { toWhatsAppNumber } from "@/lib/notifier/wa-share";
 import { captureError, logInfo, logWarn } from "@/lib/observability/log";
-import type { SessionUser } from "@/lib/session";
+import { canManageAdmin } from "@/lib/permissions";
+import { type SessionUser, toViewer } from "@/lib/session";
 import {
   type WaAccountApi,
   type WaPhoneNumberInfo,
@@ -12,6 +13,7 @@ import {
   graphWaAccountApi,
 } from "@/lib/whatsapp/account";
 import { type WaIssue, decodeIssue, encodeIssue } from "@/lib/whatsapp/connection-issue";
+import { type WaDelivery, waDelivery } from "@/lib/whatsapp/delivery";
 import { WaApiError } from "@/lib/whatsapp/errors";
 import type { WaAccountEvent } from "@/lib/whatsapp/webhook";
 import { SYSTEM_TEMPLATES, TEST_TEMPLATE } from "@/lib/whatsapp/system-templates";
@@ -550,8 +552,6 @@ export async function sendWhatsappTestMessage(
 
 // ─────────────────────────────── המסך ───────────────────────────────
 
-export type TestDelivery = "sent" | "delivered" | "read" | "failed";
-
 export interface WhatsappScreen {
   /** פרטי חלון החיבור לדפדפן, או null כשהחיבור אינו מוגדר בשרת */
   signup: { appId: string; configId: string; graphVersion: string } | null;
@@ -563,10 +563,24 @@ export interface WhatsappScreen {
     syncPending: boolean;
     lastMessageAt: Date | null;
     unidentified: number;
-    lastTest: { at: Date; delivery: TestDelivery; errorCode: number | null } | null;
+    lastTest: { at: Date; delivery: WaDelivery; errorCode: number | null } | null;
   } | null;
   /** הטלפון של מנהל המערכת — הנמען של הודעת הבדיקה */
   adminPhone: string;
+}
+
+/**
+ * האם להציג בראש הלוח "הוואטסאפ אינו מחובר" (מסך 1, WA-S1-02) — **למנהל המערכת
+ * בלבד, ורק כשמספר שחובר נמצא במצב "מנותק" או "תקלה"**. מספר שמעולם לא חובר — אין
+ * מה לנתק, ואין באנר; חיבור תקין — אין באנר (חיווי ירוק קבוע מלמד להפסיק לקרוא).
+ *
+ * אותו מספר שמסך 17 מציג: האחרון שחובר. שאילתה אחת, רזה, כי הלוח נטען לכל מנהל
+ * בכל כניסה — והיא רצה רק למנהל המערכת.
+ */
+export async function whatsappNeedsAttention(actor: SessionUser): Promise<boolean> {
+  if (!canManageAdmin(toViewer(actor))) return false;
+  const row = await db.waNumber.findFirst({ orderBy: { connectedAt: "desc" }, select: { status: true } });
+  return row !== null && row.status !== "CONNECTED";
 }
 
 /** מה שמסך 17 מציג — מהבסיס בלבד, בלי פנייה ל-Meta (התבניות נטענות בנפרד) */
@@ -621,14 +635,7 @@ export async function getWhatsappScreen(actor: SessionUser, now: Date = new Date
       lastTest: lastTest
         ? {
             at: lastTest.createdAt,
-            delivery:
-              lastTest.state === "FAILED"
-                ? "failed"
-                : lastTest.readAt
-                  ? "read"
-                  : lastTest.deliveredAt
-                    ? "delivered"
-                    : "sent",
+            delivery: waDelivery(lastTest),
             errorCode: lastTest.errorCode,
           }
         : null,

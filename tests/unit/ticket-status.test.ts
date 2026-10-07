@@ -330,7 +330,7 @@ describe("reasonText — למה הפנייה נמצאת כאן", () => {
   describe("EM-S1-02 — טיוטה ממייל: שלוש שורות, הראשונה שמתקיימת", () => {
     // מול הנוסח שהועתק מהאפיון, לא מול he.ts
     const draft = (conflictCount: number, missingCount: number) =>
-      reasonText(ticket({ isDraft: true, emailDraft: { conflictCount, missingCount } }), [], NOW);
+      reasonText(ticket({ isDraft: true, channelDraft: { channel: "EMAIL", conflictCount, missingCount } }), [], NOW);
 
     it("סתירה קודמת לחסרים — היא חוסמת שיגור", () => {
       expect(draft(2, 3)).toBe(REASON_EXAMPLES.emailDraftConflicts(2));
@@ -349,13 +349,33 @@ describe("reasonText — למה הפנייה נמצאת כאן", () => {
     });
 
     it("טיוטה ידנית שלמה נשארת עם שורת הסיבה הקיימת (§7 שורה 82)", () => {
-      expect(reasonText(ticket({ isDraft: true, emailDraft: null }), [], NOW)).toBe(he.reason.draft);
+      expect(reasonText(ticket({ isDraft: true, channelDraft: null }), [], NOW)).toBe(he.reason.draft);
     });
 
     it("הספירות אינן משנות את הסטטוס — עדיין טיוטה", () => {
-      expect(deriveTicketStatus(ticket({ isDraft: true, emailDraft: { conflictCount: 1, missingCount: 0 } }), [])).toBe(
-        "DRAFT",
-      );
+      expect(
+        deriveTicketStatus(ticket({ isDraft: true, channelDraft: { channel: "EMAIL", conflictCount: 1, missingCount: 0 } }), []),
+      ).toBe("DRAFT");
+    });
+  });
+
+  describe("WA-S1-01 — טיוטה מוואטסאפ: אותן שלוש שורות, באותו סדר, בשם הערוץ", () => {
+    // מול הנוסח שהועתק מהאפיון, לא מול he.ts
+    const draft = (conflictCount: number, missingCount: number) =>
+      reasonText(ticket({ isDraft: true, channelDraft: { channel: "WHATSAPP", conflictCount, missingCount } }), [], NOW);
+
+    it("סתירה קודמת לחסרים, ביחיד וברבים", () => {
+      expect(draft(2, 3)).toBe(REASON_EXAMPLES.waDraftConflicts(2));
+      expect(draft(1, 0)).toBe(REASON_EXAMPLES.waDraftConflicts(1));
+    });
+
+    it("בלי סתירה — החסרים, ביחיד וברבים", () => {
+      expect(draft(0, 2)).toBe(REASON_EXAMPLES.waDraftMissing(2));
+      expect(draft(0, 1)).toBe(REASON_EXAMPLES.waDraftMissing(1));
+    });
+
+    it("בלי סתירה ובלי חסר — מוכנה לשליחה", () => {
+      expect(draft(0, 0)).toBe(REASON_EXAMPLES.waDraftReady);
     });
   });
 

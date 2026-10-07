@@ -1,4 +1,5 @@
 import type { AssignmentStatus } from "@/generated/prisma/enums";
+import type { ChannelDraftCounts } from "./draft/state";
 import { he } from "./he";
 
 /**
@@ -52,14 +53,14 @@ export interface TicketView {
    */
   awaitingReply?: { recipientName: string } | null;
   /**
-   * טיוטה ממייל בלבד (עדכון 1.3): כמה שדות בסתירה וכמה שדות חובה חסרים.
-   * null או חסר בכל פנייה אחרת, כולל טיוטה ידנית — שורת הסיבה שלה אינה
-   * משתנה (§7 שורה 82).
+   * טיוטה מערוץ בלבד — ממייל (1.3) או מוואטסאפ (1.4): הערוץ, כמה שדות בסתירה
+   * וכמה שדות חובה חסרים. null או חסר בכל פנייה אחרת, כולל טיוטה ידנית — שורת
+   * הסיבה שלה אינה משתנה (§7 שורה 82).
    *
    * **דגל, לא סטטוס** (§3.5 "סתירה פתוחה"): הפנייה נשארת `DRAFT`, ומה
    * שמשתנה הוא ההסבר למה היא ב"דורש ממך".
    */
-  emailDraft?: { conflictCount: number; missingCount: number } | null;
+  channelDraft?: ChannelDraftCounts | null;
 }
 
 /** ההודעה האחרונה בשרשור, בשדות שנדרשים כדי לדעת מי כתב אותה */
@@ -212,13 +213,14 @@ export function reasonText(
 
   if (status === "CLOSED") return he.reason.closed;
   if (status === "DRAFT") {
-    // טיוטה ממייל: הראשונה שמתקיימת (מסך 1). סתירה קודמת — היא חוסמת שיגור
-    // גם כשלא חסר דבר, ו"מוכנה" הייתה אומרת אחרת.
-    const email = ticket.emailDraft;
-    if (!email) return he.reason.draft;
-    if (email.conflictCount > 0) return he.reason.emailDraftConflicts(email.conflictCount);
-    if (email.missingCount > 0) return he.reason.emailDraftMissing(email.missingCount);
-    return he.reason.emailDraftReady;
+    // טיוטה מערוץ: הראשונה שמתקיימת, בשם הערוץ (מסך 1). סתירה קודמת — היא
+    // חוסמת שיגור גם כשלא חסר דבר, ו"מוכנה" הייתה אומרת אחרת.
+    const draft = ticket.channelDraft;
+    if (!draft) return he.reason.draft;
+    const words = he.draft.channel[draft.channel];
+    if (draft.conflictCount > 0) return words.reasonConflicts(draft.conflictCount);
+    if (draft.missingCount > 0) return words.reasonMissing(draft.missingCount);
+    return words.reasonReady;
   }
 
   if (status === "AWAITING_OPENER_APPROVAL") return he.reason.allDone;
