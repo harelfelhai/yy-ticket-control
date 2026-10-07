@@ -272,8 +272,12 @@ export default async function BoardPage(props: PageProps<"/board">) {
         הכפתור הראשי (`bg-brand`, `text-brand-fg`, `px-6`), ולכן החמיץ כל
         שינוי בפרימיטיב — כולל את הפלטה החדשה ואת הצפיפות. `shadow-lg`
         וההצמדה נשארים כאן: הם תפקידו כאלמנט צף, לא צורתו ככפתור.
+
+        `z-10`: כותרת קבוצה דביקה (`z-[1]`) עוברת בגלילה בתחתית המסך, בפינה
+        הזו בדיוק, ובלי `z` היא מכסה את הכפתור ובולעת את הלחיצה (DESIGN.md §
+        סולם ה-z). E2E תפס זאת ב-W8.
       */}
-      <ButtonLink href="/tickets/new" className="fixed bottom-3 end-3 shadow-lg">
+      <ButtonLink href="/tickets/new" className="fixed bottom-3 end-3 z-10 shadow-lg">
         {he.ticket.newTicket}
       </ButtonLink>
     </div>
